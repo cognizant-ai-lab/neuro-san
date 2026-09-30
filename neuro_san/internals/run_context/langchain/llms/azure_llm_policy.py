@@ -91,6 +91,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         super().__init__(llm)
         self.logger: Logger = getLogger(self.__class__.__name__)
 
+    @override
     def create_client(self, config: Dict[str, Any]) -> Any:
         """
         Creates the web client to used by a BaseLanguageModel to be
@@ -147,6 +148,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         # to pass to the BaseLanguageModel constructor.
         return self.async_openai_client.chat.completions
 
+    @override
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel instance from the fully-specified llm config
@@ -284,17 +286,18 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :return: The base URL, ending in "/openai/v1/" when derived from a resource endpoint
         :raises OpenAIError: When neither an endpoint nor an explicit base URL is configured
         """
-        configured_endpoint: str = config.get("azure_endpoint")
+        # Blank values count as "not configured": the neuro-san Dockerfiles export
+        # AZURE_OPENAI_ENDPOINT="" so that the variable exists whether or not Azure is used,
+        # and a whitespace-only value would otherwise turn into the relative URL /openai/v1/.
+        configured_endpoint: str = (config.get("azure_endpoint") or "").strip()
         if configured_endpoint:
             return self.v1_base_url(configured_endpoint)
 
-        base_url: str = config.get("openai_api_base")
+        base_url: str = (config.get("openai_api_base") or "").strip()
         if base_url:
             return base_url
 
-        # An empty string counts as "not configured": the neuro-san Dockerfiles export
-        # AZURE_OPENAI_ENDPOINT="" so that the variable exists whether or not Azure is used.
-        env_endpoint: str = os.getenv("AZURE_OPENAI_ENDPOINT")
+        env_endpoint: str = (os.getenv("AZURE_OPENAI_ENDPOINT") or "").strip()
         if env_endpoint:
             return self.v1_base_url(env_endpoint)
 

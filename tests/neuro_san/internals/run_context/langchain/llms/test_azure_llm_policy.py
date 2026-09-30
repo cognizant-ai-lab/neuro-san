@@ -286,6 +286,22 @@ class TestAzureLlmPolicy(TestCase):
         hint: str = ApiKeyErrorCheck.check_for_api_key_exception(context.exception)
         self.assertIn("AZURE_OPENAI_ENDPOINT", hint)
 
+    def test_whitespace_only_endpoint_counts_as_missing(self) -> None:
+        """
+        A whitespace-only endpoint, in llm_config or the environment, is "not configured" too. Left alone
+        it would strip down to the relative URL /openai/v1/.
+        """
+        with self.assertRaises(OpenAIError) as configured:
+            self._build_policy({"azure_endpoint": "   "})
+        self.assertIn("AZURE_OPENAI_ENDPOINT", str(configured.exception))
+
+        with patch.dict(os.environ, {"AZURE_OPENAI_ENDPOINT": " \t"}):
+            with self.assertRaises(OpenAIError) as from_env:
+                self._build_policy({"azure_endpoint": None})
+        self.assertIn("AZURE_OPENAI_ENDPOINT", str(from_env.exception))
+        # Nothing to leak: the configuration is checked before the httpx client is opened.
+        self.assertIsNone(getattr(self.policies[-1], "http_client", None))
+
     def test_openai_api_base_from_llm_config_is_used_verbatim_without_an_endpoint(self) -> None:
         """
         A gateway in front of Azure is reached by giving its full base URL as openai_api_base.
