@@ -25,6 +25,22 @@
   },
   {
     "response": {
+      "content_blocks": {
+        "blocks": [
+          {
+            "extras": {
+              "signature": "mock-signature"
+            },
+            "reasoning": "Mock thinking.",
+            "type": "reasoning"
+          },
+          {
+            "text": "the answer",
+            "type": "text"
+          }
+        ],
+        "format": "langchain_v1"
+      },
       "origin": [
         {
           "instantiation_index": 1,
