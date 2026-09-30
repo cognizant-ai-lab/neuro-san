@@ -32,9 +32,7 @@ class TestTimedStreamingChat(TestCase):
     """Tests for TimedStreamingChat."""
 
     @staticmethod
-    def _stream(
-            message_count: int, message_interval: float, _request_dict: Dict[str, Any],
-    ) -> Iterator[Dict[str, Any]]:
+    def _stream(message_count: int, message_interval: float, _request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
         """
         Stand-in for a session's streaming_chat: one message per interval.
         Bound with functools.partial to the streaming_chat signature.
@@ -48,7 +46,7 @@ class TestTimedStreamingChat(TestCase):
             time.sleep(message_interval)
             yield {"index": index}
 
-    def _wrap(self, *, timeout: float, message_count: int, message_interval: float) -> TimedStreamingChat:
+    def _wrap(self, timeout: float, message_count: int, message_interval: float) -> TimedStreamingChat:
         """
         :param timeout: Cap in seconds passed to the wrapper
         :param message_count: Messages the fake stream yields

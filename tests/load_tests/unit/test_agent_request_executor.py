@@ -33,7 +33,7 @@ from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 class FakeSession:
     """Stand-in for HttpServiceAgentSession that streams on a timer."""
 
-    def __init__(self, *, message_count: int, message_interval: float, **_kwargs: Any):
+    def __init__(self, message_count: int, message_interval: float, **_kwargs: Any) -> None:
         """
         Constructor.
 
@@ -66,7 +66,7 @@ class FakeSession:
 class FakeProcessor:
     """Stand-in for StreamingInputProcessor that drains the stream."""
 
-    def __init__(self, *, session: FakeSession, **_kwargs: Any):
+    def __init__(self, session: FakeSession, **_kwargs: Any) -> None:
         """
         Constructor.
 
@@ -110,7 +110,7 @@ class TestAgentRequestExecutor(TestCase):
     """
 
     def _execute(
-            self, *, timeout: float, message_count: int, message_interval: float,
+            self, timeout: float, message_count: int, message_interval: float,
     ) -> Tuple[AgentRequestResult, FakeSession]:
         """
         Run one request against a stream with the given timing.
