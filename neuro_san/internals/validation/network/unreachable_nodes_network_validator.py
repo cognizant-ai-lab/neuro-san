@@ -97,8 +97,8 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         raw_down_chains: List[Any] = []
         coerced_tools: List[Any] = self.coerce_tools(agent_spec)
         coerced_args_tools: List[Any] = self.coerce_args_tools(agent_spec)
-        raw_down_chains = raw_down_chains.extend(coerced_tools)
-        raw_down_chains = raw_down_chains.extend(coerced_args_tools)
+        raw_down_chains.extend(coerced_tools)
+        raw_down_chains.extend(coerced_args_tools)
         safe_down_chains: List[str] = self.remove_dictionary_tools(raw_down_chains)
 
         traversable_down_chains: List[str] = []

@@ -98,6 +98,7 @@ class MissingNodesNetworkValidator(AbstractNetworkValidator):
 
                 # If tool is an agent reference but has no node in network, it's invalid
                 if tool not in name_to_spec.keys():
+                    # pylint: disable=consider-iterating-dictionary
                     if agent_name not in missing_nodes.keys():
                         missing_nodes[agent_name] = []
                     missing_nodes_entry: List[str] = missing_nodes[agent_name]
