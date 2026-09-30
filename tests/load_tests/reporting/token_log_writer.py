@@ -32,11 +32,9 @@ class TokenLogWriter:
     """
 
     @staticmethod
-    def log_token_summary(
-            results: List[Dict[str, Any]], *, output_dir: Optional[str] = None,
-            network_tokens: Optional[List[Dict[str, Any]]] = None,
-            validation_events: Optional[List[Dict[str, Any]]] = None,
-    ) -> None:
+    def log_token_summary(results: List[Dict[str, Any]], output_dir: Optional[str] = None,
+                          network_tokens: Optional[List[Dict[str, Any]]] = None,
+                          validation_events: Optional[List[Dict[str, Any]]] = None) -> None:
         """
         Log token usage summary to console, detail to file.
 
@@ -92,11 +90,9 @@ class TokenLogWriter:
             )
 
     @staticmethod
-    def _write_token_file(
-            results: List[Dict[str, Any]], output_dir: str, *,
-            network_tokens: Optional[List[Dict[str, Any]]] = None,
-            validation_events: Optional[List[Dict[str, Any]]] = None,
-    ) -> None:
+    def _write_token_file(results: List[Dict[str, Any]], output_dir: str,
+                          network_tokens: Optional[List[Dict[str, Any]]] = None,
+                          validation_events: Optional[List[Dict[str, Any]]] = None) -> None:
         """
         Write per-request token detail to server_tokens.log.
 
@@ -124,9 +120,7 @@ class TokenLogWriter:
         logger.info("  Detail:  %s", path)
 
     @staticmethod
-    def _group_network_tokens(
-            network_tokens: Optional[List[Dict[str, Any]]],
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    def _group_network_tokens(network_tokens: Optional[List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
         """
         Group network token entries by request_id.
 
@@ -140,9 +134,7 @@ class TokenLogWriter:
         return by_request
 
     @staticmethod
-    def _group_validation_events(
-            validation_events: Optional[List[Dict[str, Any]]],
-    ) -> Dict[str, Dict[str, Any]]:
+    def _group_validation_events(validation_events: Optional[List[Dict[str, Any]]]) -> Dict[str, Dict[str, Any]]:
         """
         Index validation events by request_id.
 
@@ -156,11 +148,8 @@ class TokenLogWriter:
         return by_request
 
     @staticmethod
-    def _write_token_request(
-            fh: TextIO, result: Dict[str, Any],
-            by_request: Dict[str, List[Dict[str, Any]]],
-            by_validation: Dict[str, Dict[str, Any]],
-    ) -> None:
+    def _write_token_request(fh: TextIO, result: Dict[str, Any], by_request: Dict[str, List[Dict[str, Any]]],
+                             by_validation: Dict[str, Dict[str, Any]]) -> None:
         """
         Write one request's token line with agent breakdown.
 
@@ -232,9 +221,7 @@ class TokenLogWriter:
             )
 
     @staticmethod
-    def _write_validation_detail(
-            fh: TextIO, rid: str, by_validation: Dict[str, Dict[str, Any]],
-    ) -> None:
+    def _write_validation_detail(fh: TextIO, rid: str, by_validation: Dict[str, Dict[str, Any]]) -> None:
         """
         Write per-request validation retry detail.
 

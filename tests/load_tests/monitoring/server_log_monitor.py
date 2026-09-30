@@ -32,6 +32,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import TextIO
 from typing import Tuple
 
 import psutil
@@ -592,21 +593,21 @@ class ServerLogMonitor:
                     f"request-{parent_idx + 1}"
                 )
 
-    # pylint: disable=too-many-arguments
-    def start_log_monitor(self, position,
-                          expected_count, fire_time: float, *,
-                          client_proc, primary_start_pattern,
-                          output_dir=None,
-                          ) -> Tuple[
-        Optional[threading.Event],
-        Optional[threading.Thread],
-        Optional[SharedRef],
-    ]:
-        """Start a background thread to monitor server log for request arrivals.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time: float,
+                          client_proc: Optional[psutil.Process], primary_start_pattern: str,
+                          output_dir: Optional[str] = None,
+                          ) -> Tuple[Optional[threading.Event], Optional[threading.Thread], Optional[SharedRef]]:
+        """
+        Start a background thread to monitor server log for request arrivals.
 
-        fire_time is a time.perf_counter() value taken when the stage fired.
-        Returns (stop_event, thread, peak_client_ref).
-        Returns (None, None, None) if monitoring is not available.
+        :param position: Server log offset to start reading from, or None
+        :param expected_count: Number of arrivals to wait for
+        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param primary_start_pattern: Regex for the log line of a primary agent request arriving
+        :param output_dir: Directory for server_receipts.log, or None for console only
+        :return: (stop_event, thread, peak_client_ref), or (None, None, None) if monitoring is not available
         """
         if self._server_log is None or position is None:
             return None, None, None
@@ -627,15 +628,24 @@ class ServerLogMonitor:
         monitor.start()
         return stop_event, monitor, peak_client_ref
 
-    # pylint: disable=too-many-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     @staticmethod
-    def _log_monitor_worker(server_log, position,
-                            expected_count, stop_event,
-                            fire_time: float, *, client_proc,
-                            peak_client_ref,
-                            primary_start_pattern,
-                            output_dir=None) -> None:
-        """Background worker that tails server log and reports arrivals."""
+    def _log_monitor_worker(server_log: str, position: int, expected_count: int, stop_event: threading.Event,
+                            fire_time: float, client_proc: Optional[psutil.Process], peak_client_ref: SharedRef,
+                            primary_start_pattern: str, output_dir: Optional[str] = None) -> None:
+        """
+        Background worker that tails server log and reports arrivals.
+
+        :param server_log: Path of the server log
+        :param position: Server log offset to start reading from
+        :param expected_count: Number of arrivals to wait for
+        :param stop_event: Set to stop tailing
+        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param peak_client_ref: Receives the client snapshot once all requests arrive
+        :param primary_start_pattern: Regex for the log line of a primary agent request arriving
+        :param output_dir: Directory for server_receipts.log, or None for console only
+        """
         pri_start_re = re.compile(primary_start_pattern)
         agent_label = primary_start_pattern.split("/")[0].split(" ")[-1]
         receipt_path = (
@@ -668,15 +678,24 @@ class ServerLogMonitor:
             return open(path, "w", encoding="utf-8")
         return _NullFile()
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def _tail_arrivals(
-            log_fh, stop_event, pri_start_re,
-            expected_count, fire_time: float, *,
-            agent_label, receipt_fh,
-            client_proc, peak_client_ref,
-    ) -> None:
-        """Tail log for arrivals, printing dots or full lines."""
+    def _tail_arrivals(log_fh: TextIO, stop_event: threading.Event, pri_start_re: re.Pattern, expected_count: int,
+                       fire_time: float, agent_label: str, receipt_fh: Optional[TextIO],
+                       client_proc: Optional[psutil.Process], peak_client_ref: SharedRef) -> None:
+        """
+        Tail log for arrivals, printing dots or full lines.
+
+        :param log_fh: Open server log, positioned where to start reading
+        :param stop_event: Set to stop tailing
+        :param pri_start_re: Matches the log line of a primary agent request arriving
+        :param expected_count: Number of arrivals to wait for
+        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param agent_label: Agent name shown in the receipt lines
+        :param receipt_fh: Open server_receipts.log, or None to log each receipt to the console
+        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param peak_client_ref: Receives the client snapshot once all requests arrive
+        """
         count = 0
         use_dots = receipt_fh is not None
         while not stop_event.is_set() and count < expected_count:
@@ -691,7 +710,7 @@ class ServerLogMonitor:
             ts = time.strftime(
                 "%H:%M:%S", time.localtime(),
             )
-            delta = now - fire_time
+            delta: float = now - fire_time
             detail = (
                 f"  [server] {agent_label} request"
                 f" {count}/{expected_count}"
