@@ -32,7 +32,7 @@ class TestCountResults(TestCase):
     result list and the totals.
     """
 
-    def test_each_status_is_counted(self):
+    def test_each_status_is_counted(self) -> None:
         """Every known status lands in its own bucket."""
         counts = OutputValidator.count_results([
             {"status": STATUS_CREATED},
@@ -47,7 +47,7 @@ class TestCountResults(TestCase):
         self.assertEqual(counts[STATUS_TIMEOUT], 1)
         self.assertEqual(counts[STATUS_KILLED], 1)
 
-    def test_no_results_counts_zero_not_empty(self):
+    def test_no_results_counts_zero_not_empty(self) -> None:
         """An aborted stage still reports every bucket, all zero."""
         counts = OutputValidator.count_results([])
 
@@ -61,7 +61,7 @@ class TestCountResults(TestCase):
             },
         )
 
-    def test_unknown_status_counts_as_failed(self):
+    def test_unknown_status_counts_as_failed(self) -> None:
         """An unrecognized status is a failure, never a success.
 
         Counting it anywhere else -- or dropping it -- would let a
@@ -72,13 +72,13 @@ class TestCountResults(TestCase):
         self.assertEqual(counts[STATUS_FAILED], 1)
         self.assertEqual(counts[STATUS_CREATED], 0)
 
-    def test_missing_status_counts_as_failed(self):
+    def test_missing_status_counts_as_failed(self) -> None:
         """A result with no status recorded is treated as a failure."""
         counts = OutputValidator.count_results([{}])
 
         self.assertEqual(counts[STATUS_FAILED], 1)
 
-    def test_totals_match_the_number_of_results(self):
+    def test_totals_match_the_number_of_results(self) -> None:
         """No request is lost or double-counted, whatever its status."""
         results = [
             {"status": STATUS_CREATED},
