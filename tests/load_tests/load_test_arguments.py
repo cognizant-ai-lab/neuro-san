@@ -39,7 +39,7 @@ class LoadTestArguments:
     """Defines and parses the load test's command-line arguments."""
 
     @staticmethod
-    def parse_args(epilog) -> argparse.Namespace:
+    def parse_args(epilog: str) -> argparse.Namespace:
         """Parse command-line arguments for the load test.
 
         The epilog is supplied by the caller so that ``--help``
@@ -441,7 +441,7 @@ class LoadTestArguments:
         return args
 
     @staticmethod
-    def _explicit_args(parser, args) -> Set[str]:
+    def _explicit_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Set[str]:
         """Return the dest names the user actually passed.
 
         Re-parses the command line with every default replaced by a

@@ -42,7 +42,7 @@ class OutputValidator:
     """Counts results and logs server-side request verification."""
 
     @staticmethod
-    def count_results(results) -> Dict[str, Any]:
+    def count_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Count results by status type."""
         counts: Dict[str, Any] = {
             STATUS_CREATED: 0,
@@ -57,11 +57,10 @@ class OutputValidator:
             counts[status] = counts.get(status, 0) + 1
         return counts
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def log_stage_results(actual_requests, counts, elapsed, *,
-                          timeout, idle_timeout,
-                          show_counts=True) -> None:
+    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed: float, timeout: int, idle_timeout: int,
+                          show_counts: bool = True) -> None:
         """Log per-stage summary of request results.
 
         When ``show_counts`` is False (single-stage runs, where the
@@ -97,9 +96,7 @@ class OutputValidator:
         )
 
     @staticmethod
-    def log_retry_activity(
-            retries, total_retries, actual_requests,
-    ) -> None:
+    def log_retry_activity(retries: Dict[str, int], total_retries: int, actual_requests: int) -> None:
         """Log retry activity from server log."""
         logger.info(
             "\n  Retry activity (from server log):",
@@ -121,9 +118,7 @@ class OutputValidator:
         )
 
     @staticmethod
-    def log_server_validation(
-            server_counts, actual_requests, agent_name,
-    ) -> None:
+    def log_server_validation(server_counts: Dict[str, Any], actual_requests: int, agent_name: str) -> None:
         """Log server-side request validation from log counts.
 
         Compares the number of requests the server received (from the
@@ -172,7 +167,7 @@ class OutputValidator:
             )
 
     @staticmethod
-    def log_disconnections(disconnections) -> None:
+    def log_disconnections(disconnections: List[Dict[str, str]]) -> None:
         """Log client disconnections detected in the current stage."""
         if not disconnections:
             return
@@ -194,7 +189,7 @@ class OutputValidator:
             )
 
     @staticmethod
-    def log_server_errors(server_errors) -> None:
+    def log_server_errors(server_errors: List[Dict[str, str]]) -> None:
         """Log server-side "Errors detected:" events for the stage."""
         if not server_errors:
             return
@@ -208,7 +203,7 @@ class OutputValidator:
             logger.warning("    %s: %s", req_id, message)
 
     @staticmethod
-    def log_tool_warnings(tool_warnings) -> None:
+    def log_tool_warnings(tool_warnings: List[Dict[str, str]]) -> None:
         """Log server-side tool-creation warnings for the stage.
 
         These mean a requested tool was unavailable to an agent; they
@@ -227,9 +222,7 @@ class OutputValidator:
             logger.warning("    %s: %s", req_id, message)
 
     @staticmethod
-    def check_permission_failures(
-            results: List[Dict[str, Any]], agent_name: str,
-    ) -> bool:
+    def check_permission_failures(results: List[Dict[str, Any]], agent_name: str) -> bool:
         """Check if all requests failed with a permissions error.
 
         When neuro-san-studio organizes agents under subdirectories
@@ -281,9 +274,7 @@ class OutputValidator:
         return True
 
     @staticmethod
-    def check_timeout_abort(
-            counts: Dict[str, Any],
-    ) -> bool:
+    def check_timeout_abort(counts: Dict[str, Any]) -> bool:
         """Check if any requests hit a timeout or were killed.
 
         Returns True if the test should abort because at least one

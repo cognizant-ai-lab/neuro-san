@@ -24,6 +24,7 @@ actual token usage before committing to a full run.
 import logging
 import os
 import sys
+from argparse import Namespace
 from typing import Any
 from typing import Dict
 from typing import List
@@ -38,6 +39,7 @@ from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.reporting.system_resources import SystemResources
+from tests.load_tests.traffic.runner import TrafficRunner
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ class InputValidator:
     them to every method.
     """
 
-    def __init__(self, args) -> None:
+    def __init__(self, args: Namespace) -> None:
         self._args = args
 
     def validate_agent_name(self) -> None:
@@ -160,7 +162,7 @@ class InputValidator:
             sys.exit(1)
         return [self._args.num_requests]
 
-    def resolve_max_requests(self, stages) -> int:
+    def resolve_max_requests(self, stages: List[int]) -> int:
         """Return the effective max-requests cap."""
         if self._args.num_rounds <= 0:
             logger.error(
@@ -178,11 +180,9 @@ class InputValidator:
             return self._args.max_requests
         return sum(stages) * self._args.num_rounds
 
-    # pylint: disable=too-many-arguments
-    def confirm_cost(
-            self, stages, total_cap, *, runner,
-            output_dir=None, stale_log_age=None,
-    ) -> Optional[Dict[str, Any]]:
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def confirm_cost(self, stages: List[int], total_cap: int, runner: TrafficRunner, output_dir: Optional[str] = None,
+                     stale_log_age: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
         The dry-run probe + cost confirmation runs by default at min
@@ -253,9 +253,7 @@ class InputValidator:
 
         return probe_result
 
-    def _print_summary_header(
-            self, stages, total_planned, capped,
-    ) -> None:
+    def _print_summary_header(self, stages: List[int], total_planned: int, capped: int) -> None:
         """Print the PRE-RUN SUMMARY header block."""
         args = self._args
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
@@ -301,9 +299,7 @@ class InputValidator:
         SystemResources.log_prerun()
 
     @staticmethod
-    def _estimate_stage_duration(
-            probe_elapsed, remaining,
-    ) -> float:
+    def _estimate_stage_duration(probe_elapsed: float, remaining: int) -> float:
         """Estimate stage wall time from probe duration.
 
         LLM is the bottleneck, so concurrent requests do not
@@ -312,13 +308,9 @@ class InputValidator:
         """
         return probe_elapsed * remaining
 
-    def _collect_warnings(
-            self, *, capped, total_planned,
-            stale_log_age=None,
-            est_stage_duration=None,
-            probe_tokens=None, probe_cost=None,
-            probe_model=None,
-    ) -> List[str]:
+    def _collect_warnings(self, capped: int, total_planned: int, stale_log_age: Optional[int] = None,
+                          est_stage_duration: Optional[float] = None, probe_tokens: Optional[int] = None,
+                          probe_cost: Optional[float] = None, probe_model: Optional[str] = None) -> List[str]:
         """Collect all pre-run warnings as a list of strings."""
         warnings: List[str] = []
 
@@ -408,7 +400,7 @@ class InputValidator:
         ]
 
     @staticmethod
-    def _check_memory_headroom(num_requests) -> Optional[str]:
+    def _check_memory_headroom(num_requests: int) -> Optional[str]:
         """Warn if available memory looks insufficient.
 
         Uses a conservative per-request estimate based on
@@ -434,7 +426,7 @@ class InputValidator:
         return None
 
     @staticmethod
-    def _print_warnings(warnings) -> None:
+    def _print_warnings(warnings: List[str]) -> None:
         """Print numbered warnings or 'No warnings'."""
         if not warnings:
             logger.info("\n  No warnings.")
@@ -449,9 +441,8 @@ class InputValidator:
             for line in lines[1:]:
                 logger.warning("  %s", line)
 
-    def _run_cost_probe(
-            self, runner, output_dir,
-    ) -> Tuple[Dict[str, Any], dict]:
+    def _run_cost_probe(self, runner: TrafficRunner,
+                        output_dir: Optional[str]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Fire one probe request and return results.
 
         Fires a single request (tokens are enabled by default)
