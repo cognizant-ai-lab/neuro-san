@@ -124,7 +124,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         default_headers: Dict[str, str] = self.build_default_headers(config)
         # The deployment is checked here for the same reason: create_llm() would only find it
         # missing once this client exists.
-        self.resolve_deployment_name(config, self.model_name_from_config(config))
+        self.resolve_deployment_name(config, self.get_model_name(config))
 
         self.create_http_client(config)
 
@@ -247,17 +247,6 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         )
 
         return llm
-
-    @staticmethod
-    def model_name_from_config(config: Dict[str, Any]) -> Optional[str]:
-        """
-        Reads the model name the way LlmPolicy.create_llm_resources_components() does before it calls
-        create_llm(), so that create_client() checks the deployment against the same value.
-
-        :param config: The fully specified llm config
-        :return: model_name, model or model_id from the config, whichever is set first; None when none is
-        """
-        return config.get("model_name") or config.get("model") or config.get("model_id")
 
     @staticmethod
     def build_accounting_metadata(deployment_name: str, model_name: Optional[str]) -> Dict[str, Any]:
