@@ -18,19 +18,21 @@ export AGENT_MANIFEST_FILE=./neuro_san/registries/manifest.hocon
 
 ## Quick start
 
-Terminal 1: set your OpenAI key and start the server. Keep its log in `logs/server.log`:
+Terminal 1: set your OpenAI key and start the server:
 
 ```bash
 export OPENAI_API_KEY=<your key>
-mkdir -p logs
-python -m neuro_san.service.main_loop.server_main_loop 2>&1 | tee logs/server.log
+python -m neuro_san.service.main_loop.server_main_loop
 ```
 
 Terminal 2: run the load test against the `hello_world` agent:
 
 ```bash
-python -m tests.load_tests.load_test_cli --agent hello_world --client-only
+python -m tests.load_tests.load_test_cli --agent hello_world --client-only --fixtures-hocon-dir
 ```
+
+The prompts come from the test hocon files in `tests/fixtures/load_tests/hello_world/`
+(see [Prompts and checks](#prompts-and-checks)).
 
 It first sends one probe request, shows what the full run will cost, and asks
 before sending the rest. A good run ends with `LOAD TEST PASSED`. Results are
@@ -46,15 +48,15 @@ python -m tests.load_tests.load_test_cli --help
 
 ```bash
 # 100 requests, 10 at a time
-python -m tests.load_tests.load_test_cli --agent hello_world --client-only \
+python -m tests.load_tests.load_test_cli --agent hello_world --client-only --fixtures-hocon-dir \
     --num-requests 100 --max-workers 10
 
 # Step up the load: 2, then 4, then 8 requests at once
-python -m tests.load_tests.load_test_cli --agent hello_world --client-only \
+python -m tests.load_tests.load_test_cli --agent hello_world --client-only --fixtures-hocon-dir \
     --ramp --stages 2,4,8
 
 # Server on another machine
-python -m tests.load_tests.load_test_cli --agent hello_world --client-only \
+python -m tests.load_tests.load_test_cli --agent hello_world --client-only --fixtures-hocon-dir \
     --host my-server.example.com --https
 ```
 
@@ -62,12 +64,8 @@ Add `--no-dry-run` to skip the probe and the cost question, for example in scrip
 
 ## Prompts and checks
 
-To pick the prompts and check each answer, add `--fixtures-hocon-dir`. It reads
-one test-case hocon file per prompt from `tests/fixtures/load_tests/<agent>/`:
-
-```bash
-python -m tests.load_tests.load_test_cli --agent hello_world --client-only --fixtures-hocon-dir
-```
+`--fixtures-hocon-dir` reads one test-case hocon file per prompt from `tests/fixtures/load_tests/<agent>/`.
+Each file has the prompt and the checks on its answer. hello_world has five.
 
 To use your own files, give the parent folder: `--fixtures-hocon-dir /my/fixtures`
 reads `/my/fixtures/hello_world/*.hocon`.
@@ -101,26 +99,29 @@ Without `--fixtures-hocon-dir`, prompts come from
 ## Watching the server too
 
 When the server runs on the same machine, drop `--client-only`. The load test
-then also tracks the server's memory and threads, and reads `logs/server.log`
+then also tracks the server's memory and threads, and reads the server log
 for retries and disconnections.
 
+Terminal 1: start the server with its log in `/tmp`:
+
 ```bash
-python -m tests.load_tests.load_test_cli --agent hello_world
+python -m neuro_san.service.main_loop.server_main_loop 2>&1 | tee /tmp/neuro_san_server.log
 ```
 
-Pick how much it measures with `--level`:
+Terminal 2:
 
-| What you get                                    | `norm` (default) | `adv` |
-|-------------------------------------------------|:----:|:---:|
-| Pass/fail per request, timings, tokens, cost    |  Y   |  Y  |
-| Server memory and threads                       |  Y   |  Y  |
-| Retries and disconnections (needs server log)   |  Y   |  Y  |
-| `summary.txt` report                            |      |  Y  |
-| Probe and cost question before the run          |  Y   |     |
-| Defaults: 50 requests x 3 rounds                |      |  Y  |
+```bash
+python -m tests.load_tests.load_test_cli --agent hello_world --fixtures-hocon-dir \
+    --server-log /tmp/neuro_san_server.log
+```
 
-If the server log isn't in `logs/server.log` next to the server, pass
-`--server-log PATH`, or `--no-server-log` to run without it.
+Both levels measure pass/fail per request, timings, tokens, cost, server memory and threads,
+and, with the server log, retries and disconnections. Pick one with `--level`:
+
+- `norm` (default): a short run. It sends one probe request first and asks before sending the rest.
+- `adv`: a longer run, 50 requests x 3 rounds unless you set them. No probe, and it writes a `summary.txt` report.
+
+Use `--no-server-log` to run without the server log.
 
 To watch a server on another machine, run the same command on both machines:
 `--server-only` on the server (watches it, sends nothing) and `--client-only`
