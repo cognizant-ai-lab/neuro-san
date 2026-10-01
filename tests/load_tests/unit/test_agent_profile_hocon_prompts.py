@@ -130,6 +130,15 @@ class TestAgentProfileHoconPrompts(TestCase):
             {"sly_data": {"agent_reservations": {"not_value": ""}, "agent_network_name": {"not_value": ""}}},
         )
 
+    def test_json_profile_not_an_object_exits_1(self) -> None:
+        """A JSON profile that is a list, not an object, aborts the run."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "hello_world.json"), "w", encoding="utf-8") as fh:
+                json.dump(["Hello"], fh)
+            with self.assertRaises(SystemExit) as ctx:
+                AgentProfileFactory().create("hello_world", profile_path=tmp)
+        self.assertEqual(ctx.exception.code, 1)
+
     def test_json_profile_not_needed_with_hocons(self) -> None:
         """An agent with no JSON profile loads fine from hocons alone."""
         with tempfile.TemporaryDirectory() as tmp:

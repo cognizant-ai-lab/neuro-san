@@ -61,7 +61,15 @@ class AgentProfileFactory:
             return AgentProfile(agent_name, self._profile_from_hocons(agent_name, hocon_files))
         path: str = self._find_json_profile(agent_name, profile_path, project_root)
         logger.info("Loaded agent profile: %s", path)
-        data: Dict[str, Any] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
+        data: Optional[Dict[str, Any]] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
+        if data is None:
+            # EasyJsonPersistence returns None when the JSON is a list or a single value.
+            logger.error(
+                "Agent profile must be a JSON object ({...}), not a list or a single value.\n"
+                "  File: %s\nAborting.",
+                path,
+            )
+            raise SystemExit(1)
         data["responses"] = [self._response_from_success_fields(data.get("success_fields", []))]
         return AgentProfile(agent_name, data)
 
