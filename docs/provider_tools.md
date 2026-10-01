@@ -68,7 +68,7 @@ table declare the `provider_tools` key; the stock file does this for `openai`, `
 
 When a network is read from the registry, deployed, or checked with the
 [hocon validator CLI](./hocon_validator_cli.md), the following `provider_tools` mistakes are reported as validation
-errors, so they surface then rather than as provider errors at request time:
+errors, so they surface at load time rather than as provider errors at request time:
 
 - `provider_tools` that is not a list, or a list containing something other than a non-empty dictionary.
 - Near-miss spellings such as `provider_tool`, `builtin_tools`, `built_in_tools`, or `server_tools`, which the
@@ -79,6 +79,8 @@ errors, so they surface then rather than as provider errors at request time:
   does not support it, such as `ollama` or `anthropic-bedrock`.
 - A fallback chain whose models resolve to more than one class while `provider_tools` is non-empty, since the same
   list is bound to every fallback and the runtime rejects such a chain.
+- `use_responses_api` set to `false` on an `openai` or `azure-openai` model that declares `provider_tools`, since
+  OpenAI built-in tools exist only on the Responses API.
 - A dictionary that does not match the provider: a Gemini entry with a `type` key, an OpenAI or Anthropic entry
   without a string `type`, or an Anthropic `type` that is not a server tool. Anthropic client-side tools (`bash_`,
   `text_editor_`, `computer_`, `memory_`) are reported here because neuro-san does not execute them.
@@ -86,7 +88,7 @@ errors, so they surface then rather than as provider errors at request time:
   declares `provider_tools` alongside other `tools`, or more than one Gemini built-in entry.
 
 A model whose short `class` or `model_name` is not in llm_info, or whose `class` is a dotted path, resolves to no
-llm_info class and is skipped by the last four rules. Coded tools and toolbox tools never build a model.
+llm_info class and is skipped by the last five rules. Coded tools and toolbox tools never build a model.
 
 ## Limitations
 

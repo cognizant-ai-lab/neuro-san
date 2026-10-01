@@ -543,7 +543,7 @@ OpenAI itself:
 - Azure offers the Responses API in most but not all regions and not for every model. An llm_config that hits
   either sets `"use_responses_api": false` to stay on Chat Completions, with the same Chat-Completions-only
   parameter rules as in the OpenAI section above. Staying on Chat Completions also rules out
-  [`provider_tools`](./provider_tools.md), which need the Responses API.
+  [`provider_tools`](./provider_tools.md), which needs the Responses API.
 - langchain's model-name rules see the deployment name, not the OpenAI model. It drops a `temperature` other
   than 1 only when that name starts with `gpt-5` (and `reasoning_effort` is not `none`); a gpt-5 deployment
   named any other way sends the value as given and Azure rejects it. Leave `temperature` unset for gpt-5

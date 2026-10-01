@@ -273,6 +273,50 @@ class TestProviderToolsFitChecker(TestCase):
 
         self.assertEqual([self._unsupported(self.AGENT, self.OLLAMA_MODEL, "ollama")], errors)
 
+    # ---- Responses API switched off ------------------------------------------------------------------
+
+    def test_use_responses_api_false_with_provider_tools_is_reported(self) -> None:
+        """
+        An OpenAI model that turns the Responses API off cannot bind built-in tools.
+        """
+        errors: List[str] = self._check({"model_name": self.OPENAI_MODEL, "use_responses_api": False,
+                                         "provider_tools": [self.WEB_SEARCH]})
+
+        self.assertEqual([self.AGENT + " sets use_responses_api to false for model '" + self.OPENAI_MODEL + "' but"
+                          " declares provider_tools; OpenAI built-in tools need the Responses API."], errors)
+
+    def test_use_responses_api_true_with_provider_tools_passes(self) -> None:
+        """
+        An explicit true, or no setting at all, leaves the Responses API on and nothing is reported.
+        """
+        errors: List[str] = self._check({"model_name": self.OPENAI_MODEL, "use_responses_api": True,
+                                         "provider_tools": [self.WEB_SEARCH]})
+
+        self.assertEqual([], errors)
+
+    def test_use_responses_api_false_in_one_fallback_names_that_model(self) -> None:
+        """
+        The setting is read per model, so only the fallback that turns it off is reported.
+        """
+        errors: List[str] = self._check({
+            "provider_tools": [self.WEB_SEARCH],
+            "fallbacks": [{"model_name": self.OPENAI_MODEL},
+                          {"model_name": self.SECOND_OPENAI_MODEL, "use_responses_api": False}],
+        })
+
+        self.assertEqual([self.AGENT + " sets use_responses_api to false for model '" + self.SECOND_OPENAI_MODEL
+                          + "' but declares provider_tools; OpenAI built-in tools need the Responses API."], errors)
+
+    def test_use_responses_api_false_on_azure_is_reported(self) -> None:
+        """
+        azure-openai is of the OpenAI family, so the same rule applies to it.
+        """
+        errors: List[str] = self._check({"model_name": self.AZURE_MODEL, "use_responses_api": False,
+                                         "provider_tools": [self.WEB_SEARCH]})
+
+        self.assertEqual([self.AGENT + " sets use_responses_api to false for model '" + self.AZURE_MODEL + "' but"
+                          " declares provider_tools; OpenAI built-in tools need the Responses API."], errors)
+
     # ---- Part 2: one provider per fallback chain -------------------------------------------------------
 
     def test_openai_and_anthropic_fallbacks_are_mixed_providers(self) -> None:

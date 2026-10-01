@@ -41,6 +41,8 @@ class ProviderToolsFitChecker:
         args cannot use the list at all, so it is reported and skipped by the shape rules.
       - One provider: the runtime binds the same list to every fallback and rejects a
         chain whose models use different provider classes, so mixed classes are reported.
+      - Responses API: an OpenAI-family model that sets use_responses_api to false cannot
+        reach the built-in tools, which exist only on the Responses API.
       - Shape: each dictionary must look like what the family expects. Gemini built-ins
         are keyed by tool name, OpenAI and Anthropic entries carry a string `type`, and an
         Anthropic `type` must be a server tool, since neuro-san does not execute the
@@ -112,13 +114,14 @@ class ProviderToolsFitChecker:
         inherited_count: int = 0
 
         for agent_name, agent, llm_config in candidates:
-            models: List[Tuple[str, str, str, bool]] = self.resolve_models(llm_config)
+            models: List[Tuple[str, str, str, bool, Dict[str, Any]]] = self.resolve_models(llm_config)
             label: str = self.message_label(agent_name, llm_config, inherited)
             provider_tools: List[Any] = llm_config.get(self.KEY)
 
             errors.extend(self.check_support(label, models))
             errors.extend(self.check_single_provider(label, models))
             errors.extend(self.check_shapes(label, provider_tools, models))
+            errors.extend(self.check_responses_api(label, models))
 
             if not self.resolves_to_gemini(models):
                 continue
@@ -140,18 +143,19 @@ class ProviderToolsFitChecker:
 
         return self.dedupe(errors)
 
-    def resolve_models(self, llm_config: Dict[str, Any]) -> List[Tuple[str, str, str, bool]]:
+    def resolve_models(self, llm_config: Dict[str, Any]) -> List[Tuple[str, str, str, bool, Dict[str, Any]]]:
         """
         Resolves every model an llm_config would build to what the rules need to know about it.
 
         :param llm_config: The agent's merged llm_config
-        :return: One (model label, class name, family, declares) tuple per model whose class
-                is in the llm_info "classes" table: the model_name (or DEFAULT_MODEL_LABEL),
-                the lowercased class name, the root class it descends from, and whether the
-                class declares provider_tools support. A model with a non-string "class", or
-                one that resolves to no llm_info class, is left out, so no rule ever judges it.
+        :return: One (model label, class name, family, declares, model config) tuple per model
+                whose class is in the llm_info "classes" table: the model_name (or
+                DEFAULT_MODEL_LABEL), the lowercased class name, the root class it descends
+                from, whether the class declares provider_tools support, and the llm_config
+                dictionary that becomes the model. A model with a non-string "class", or one
+                that resolves to no llm_info class, is left out, so no rule ever judges it.
         """
-        resolved: List[Tuple[str, str, str, bool]] = []
+        resolved: List[Tuple[str, str, str, bool, Dict[str, Any]]] = []
         for model_config in self.collect_model_configs(llm_config):
             class_value: Any = model_config.get("class")
             if class_value and not isinstance(class_value, str):
@@ -170,7 +174,7 @@ class ProviderToolsFitChecker:
                 # A dotted user class is not in the classes table, so there is nothing to check it against.
                 continue
             declares: bool = self.factory.declares_provider_tools(class_name)
-            resolved.append((self._model_label(model_config), class_name, family, declares))
+            resolved.append((self._model_label(model_config), class_name, family, declares, model_config))
         return resolved
 
     @staticmethod
@@ -186,7 +190,7 @@ class ProviderToolsFitChecker:
             return ProviderToolsFitChecker.DEFAULT_MODEL_LABEL
         return str(model_name)
 
-    def check_support(self, label: str, models: List[Tuple[str, str, str, bool]]) -> List[str]:
+    def check_support(self, label: str, models: List[Tuple[str, str, str, bool, Dict[str, Any]]]) -> List[str]:
         """
         Reports every model whose class does not support provider_tools.
 
@@ -195,14 +199,14 @@ class ProviderToolsFitChecker:
         :return: A list of error messages
         """
         errors: List[str] = []
-        for model_label, class_name, _, declares in models:
+        for model_label, class_name, _, declares, _ in models:
             if not declares:
                 errors.append(f"{label} declares provider_tools for model '{model_label}' whose class '{class_name}'"
                               f" does not support them; in the stock llm_info only the openai, azure-openai,"
                               f" anthropic and gemini classes do.")
         return errors
 
-    def check_single_provider(self, label: str, models: List[Tuple[str, str, str, bool]]) -> List[str]:
+    def check_single_provider(self, label: str, models: List[Tuple[str, str, str, bool, Dict[str, Any]]]) -> List[str]:
         """
         Reports a fallback chain whose models use more than one llm_info class.
 
@@ -215,7 +219,7 @@ class ProviderToolsFitChecker:
         :return: A list with one error message, or an empty list
         """
         class_names: List[str] = []
-        for _, class_name, _, _ in models:
+        for _, class_name, _, _, _ in models:
             if class_name not in class_names:
                 class_names.append(class_name)
         if len(class_names) <= 1:
@@ -228,7 +232,7 @@ class ProviderToolsFitChecker:
     def check_shapes(self,
                      label: str,
                      provider_tools: List[Any],
-                     models: List[Tuple[str, str, str, bool]]) -> List[str]:
+                     models: List[Tuple[str, str, str, bool, Dict[str, Any]]]) -> List[str]:
         """
         Checks every provider_tools dictionary against the family of each supporting model.
 
@@ -239,7 +243,7 @@ class ProviderToolsFitChecker:
                 until check() drops the duplicates
         """
         errors: List[str] = []
-        for _, _, family, declares in models:
+        for _, _, family, declares, _ in models:
             if not declares:
                 # Already reported by check_support(); its shapes are beside the point.
                 continue
@@ -247,6 +251,27 @@ class ProviderToolsFitChecker:
                 if isinstance(entry, dict) and len(entry) > 0:
                     # Anything else was already reported by the validator's shape check.
                     errors.extend(self.check_entry_shape(label, index, entry, family))
+        return errors
+
+    def check_responses_api(self, label: str, models: List[Tuple[str, str, str, bool, Dict[str, Any]]]) -> List[str]:
+        """
+        Reports an OpenAI-family model that turns the Responses API off while binding provider_tools.
+
+        OpenAI built-in tools exist only on the Responses API. langchain-openai routes a
+        request with a built-in tool there automatically, unless use_responses_api is set to
+        false, in which case the tool goes to Chat Completions and OpenAI rejects it.
+
+        :param label: The agent name, or NETWORK_LABEL for an inherited setup
+        :param models: The resolved models from resolve_models()
+        :return: A list of error messages
+        """
+        errors: List[str] = []
+        for model_label, _, family, declares, model_config in models:
+            if family != self.OPENAI_FAMILY or not declares:
+                continue
+            if model_config.get("use_responses_api") is False:
+                errors.append(f"{label} sets use_responses_api to false for model '{model_label}' but declares"
+                              f" provider_tools; OpenAI built-in tools need the Responses API.")
         return errors
 
     def check_entry_shape(self, label: str, index: int, entry: Dict[str, Any], family: str) -> List[str]:
@@ -455,7 +480,7 @@ class ProviderToolsFitChecker:
         return (f"{label} declares {count} Gemini provider_tools;"
                 f" Gemini supports one built-in entry per agent in this release.")
 
-    def resolves_to_gemini(self, models: List[Tuple[str, str, str, bool]]) -> bool:
+    def resolves_to_gemini(self, models: List[Tuple[str, str, str, bool, Dict[str, Any]]]) -> bool:
         """
         Tells whether any model the agent would build is a Gemini model that takes provider_tools.
 
@@ -463,7 +488,7 @@ class ProviderToolsFitChecker:
         :return: True when at least one model is of the gemini family and its class
                 declares provider_tools support
         """
-        for _, _, family, declares in models:
+        for _, _, family, declares, _ in models:
             if family == self.GEMINI_FAMILY and declares:
                 return True
         return False
