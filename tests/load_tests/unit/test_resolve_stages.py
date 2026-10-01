@@ -32,7 +32,14 @@ class TestResolveStages(TestCase):
 
     @staticmethod
     def _validator(ramp: bool = False, stages: Optional[str] = None, num_requests: int = 3) -> InputValidator:
-        """Build a validator with only the args these methods read."""
+        """
+        Build a validator with only the args these methods read.
+
+        :param ramp: --ramp value
+        :param stages: --stages CSV; None when not given
+        :param num_requests: --num-requests value
+        :return: Validator over those args
+        """
         return InputValidator(Namespace(
             ramp=ramp,
             stages=stages,
