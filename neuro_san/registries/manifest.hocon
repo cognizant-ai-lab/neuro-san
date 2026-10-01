@@ -43,7 +43,9 @@
     },
     "music_nerd_pro_llm_anthropic.hocon": true,
     "music_nerd_pro_llm_gemini.hocon": true,
-    "music_nerd_pro_llm_azure.hocon": true,
+    # Off by default: the Azure example names a deployment ("gpt-5-2") that has to exist on your
+    # Azure resource. Set deployment_name in the hocon to match yours, then change this to true.
+    "music_nerd_pro_llm_azure.hocon": false,
     "music_nerd_pro_llm_ollama.hocon": true,
     "music_nerd_pro_multi_agents.hocon": true,
     "music_nerd_pro_llm_bedrock_claude.hocon": true,

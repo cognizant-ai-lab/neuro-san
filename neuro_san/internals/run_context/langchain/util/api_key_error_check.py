@@ -43,23 +43,35 @@ API_KEY_EXCEPTIONS: Dict[str, List[str]] = {
                            "Missing Authentication header", "No auth credentials found",
                            "Insufficient credits", "openrouter.ai/settings/credits"],
 
-    # Azure OpenAI requires several parameters; all can be set via environment variables
-    # except "deployment_name", which must be provided explicitly.
-    "AZURE_OPENAI_API_KEY": ["invalid subscription key", "wrong API endpoint"],
-    "AZURE_OPENAI_ENDPOINT": ["base_url", "azure_endpoint", "AZURE_OPENAI_ENDPOINT"],
-    "OPENAI_API_VERSION": ["api_version", "OPENAI_API_VERSION"],
-    "AZURE_OPENAI_DEPLOYMENT_NAME": ["API deployment for this resource does not exist"],
+    # Azure OpenAI. AzureLlmPolicy raises an openai.OpenAIError that names both the llm_config key and
+    # the environment variable when the endpoint, credential or deployment cannot be resolved, which
+    # is what the *_ENDPOINT / *_API_KEY / *_DEPLOYMENT_NAME and azure_endpoint strings match.
+    # "invalid subscription key", "wrong API endpoint", "DeploymentNotFound" and "API deployment for this
+    # resource does not exist" are texts Azure itself answers with (the last two are the code and message
+    # of the v1 API's 404 for an unknown deployment). Azure's v1 API takes no api-version, so there is no
+    # OPENAI_API_VERSION entry.
+    "AZURE_OPENAI_API_KEY": ["AZURE_OPENAI_API_KEY", "invalid subscription key", "wrong API endpoint"],
+    "AZURE_OPENAI_ENDPOINT": ["azure_endpoint", "AZURE_OPENAI_ENDPOINT"],
+    "AZURE_OPENAI_DEPLOYMENT_NAME": ["AZURE_OPENAI_DEPLOYMENT_NAME", "DeploymentNotFound",
+                                     "API deployment for this resource does not exist"],
 }
 
-AZURE_DOCUMENTATION: str = "https://learn.microsoft.com/en-us/azure/ai-services/openai/"
-"chatgpt-quickstart?tabs=keyless%2Ctypescript-keyless%2Cpython-new%2Ccommand-line&pivots=programming-language-python"
+AZURE_DOCUMENTATION: str = ("https://learn.microsoft.com/en-us/azure/ai-services/openai/"
+                            "chatgpt-quickstart?tabs=keyless%2Ctypescript-keyless%2Cpython-new%2Ccommand-line"
+                            "&pivots=programming-language-python")
 
 # Dictionary with provider key env var -> link to documentation
 API_KEY_DOCUMENTATION: Dict[str, str] = {
     "AZURE_OPENAI_API_KEY": AZURE_DOCUMENTATION,
     "AZURE_OPENAI_ENDPOINT": AZURE_DOCUMENTATION,
-    "OPENAI_API_VERSION": AZURE_DOCUMENTATION,
     "AZURE_OPENAI_DEPLOYMENT_NAME": AZURE_DOCUMENTATION,
+}
+
+# How a matched key is named in the guidance when plain "X must be set" would mislead: Azure accepts
+# any one of three credentials, so the guidance lists them as alternatives.
+API_KEY_ALTERNATIVES: Dict[str, str] = {
+    "AZURE_OPENAI_API_KEY": "AZURE_OPENAI_API_KEY (or AZURE_OPENAI_AD_TOKEN for a Microsoft Entra token; "
+                            "OPENAI_API_KEY is accepted as a fallback)",
 }
 
 INTERNAL_ERRORS_LIST: List[str] = ["bound to a different event loop"]
@@ -92,8 +104,16 @@ class ApiKeyErrorCheck:
                     # No need to check the remaining strings for this key
                     break
 
+        # "AZURE_OPENAI_API_KEY" contains "OPENAI_API_KEY", so an Azure credential error matches the generic
+        # OpenAI row too. It is one situation, not two variables to set.
+        if "AZURE_OPENAI_API_KEY" in matched_keys and "OPENAI_API_KEY" in matched_keys:
+            matched_keys.remove("OPENAI_API_KEY")
+
         if matched_keys:
-            keys_str = ", ".join(matched_keys)
+            key_names: List[str] = []
+            for matched_key in matched_keys:
+                key_names.append(API_KEY_ALTERNATIVES.get(matched_key, matched_key))
+            keys_str = ", ".join(key_names)
             return f"""
 A value for the {keys_str} environment variable must be correctly set in the neuro-san
 server or run-time environment in order to use this agent network.

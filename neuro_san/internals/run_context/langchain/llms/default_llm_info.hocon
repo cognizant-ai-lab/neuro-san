@@ -593,7 +593,14 @@
     },
 
     # Azure models
+    #
+    # Shorthand entries for Azure deployments of the OpenAI models above. An llm_config can instead say
+    # "class": "azure-openai" with any OpenAI model_name from this file and its own deployment_name, which
+    # works for every model, not only the ones listed here. See neuro_san/registries/music_nerd_pro_llm_azure.hocon.
 
+    # Shorthand for the "gpt-3.5-turbo" entry above; drop it when that entry goes. Azure does not list
+    # gpt-35-turbo on its model retirement schedule or among the models its Responses API serves, so expect
+    # this entry to fail on Azure.
     "azure-gpt-3.5-turbo": {
         "class": "azure-openai",
         "use_model_name": "gpt-3.5-turbo-0125",
@@ -619,6 +626,9 @@
         "use_model_name": "gpt-5.4-pro-2026-03-05",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2C-global-standard&pivots=azure-openai#gpt-54"
     },
+    # Shorthand for the "gpt-4" entry above; drop it when that entry goes. Azure does not list the original
+    # gpt-4 on its model retirement schedule or among the models its Responses API serves, so expect this
+    # entry to fail on Azure.
     "azure-gpt-4": {
         "class": "azure-openai",
         "use_model_name": "gpt-4-0613",
@@ -1703,26 +1713,52 @@
             }
         },
         "azure-openai": {
+            # OpenAI models served by an Azure OpenAI resource, reached through Azure's v1 API at
+            # {AZURE_OPENAI_ENDPOINT}/openai/v1/. That API serves the OpenAI wire format for both Chat Completions
+            # and the Responses API without an api-version, so this class extends "openai" and inherits every
+            # argument and default above, including "use_responses_api": true, "store": false and "include": null;
+            # all of them are forwarded. The inherited "openai_api_key" falls back to AZURE_OPENAI_API_KEY,
+            # then OPENAI_API_KEY; a Microsoft Entra token can be given as "azure_ad_token" instead.
+            # The usual llm_config names this class, the OpenAI model_name behind the deployment and the
+            # deployment_name; see neuro_san/registries/music_nerd_pro_llm_azure.hocon.
+            # Two Azure-specific caveats for the Responses default: Azure offers the Responses API in most but
+            # not all regions, and not for every model.
+            # An llm_config that hits either sets "use_responses_api": false to stay on Chat Completions, with the
+            # same Chat-Completions-only parameter rules as for the "openai" class.
+            # https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses
+            # https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle
             "extends": "openai",
-            # The use_responses_api, store and include values inherited from "openai" are not forwarded by
-            # AzureLlmPolicy, so they have no effect here. Azure requests follow langchain's own inference instead:
-            # Chat Completions for most models, but a Responses-only model name (such as the gpt-5.4-pro snapshot
-            # behind azure-gpt-5.4-pro) auto-routes to the Responses API, which AzureLlmPolicy does not support yet.
-            # Tracked in https://github.com/cognizant-ai-lab/neuro-san/issues/1307
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
-                # See https://python.langchain.com/api_reference/openai/chat_models/langchain_openai.chat_models.azure.AzureChatOpenAI.html
-                "azure_endpoint": null,
-                "deployment_name": null,
-                "openai_api_version": null,
-                "openai_api_type": "azure",
 
-                # AD here means "ActiveDirectory"
+                # The resource endpoint, https://<resource>.openai.azure.com. When null, the inherited
+                # "openai_api_base" is used verbatim as the full base URL (for an OpenAI-compatible gateway), and
+                # when that is null too the AZURE_OPENAI_ENDPOINT environment variable supplies the endpoint.
+                "azure_endpoint": null,
+                # Azure routes by deployment, so this is the chat model's model and what goes in the "model"
+                # field of every request. Falls back to AZURE_OPENAI_DEPLOYMENT_NAME, then to the model id the
+                # model_name resolves to (gpt-4o resolves to gpt-4o-2024-08-06), which rarely matches a real
+                # deployment. Token costs are priced by the model_name behind the deployment: give one (e.g.
+                # "gpt-5.2") next to the deployment_name, or usage on the Responses API is reported under the
+                # deployment name with no price. langchain's model-name rules see the deployment name: a
+                # temperature other than 1 is dropped only when that name starts with "gpt-5", so leave
+                # "temperature" unset for gpt-5 deployments named any other way; Azure rejects other values.
+                "deployment_name": null,
+
+                # AD here means "ActiveDirectory": a Microsoft Entra access token, sent as the Bearer token
+                # instead of the API key when set. Falls back to AZURE_OPENAI_AD_TOKEN. neuro-san does not
+                # refresh it.
                 "azure_ad_token": null,
-                "model_version": "",
+
+                # Accepted for backward compatibility only. These selected and described the dated Azure
+                # api-version routes, which the v1 API replaced. They are ignored, with one warning logged
+                # when an llm_config still sets them. The OPENAI_API_VERSION environment variable is not read
+                # either.
+                "openai_api_version": null,
+                "openai_api_type": null,
+                "model_version": null,
                 # streaming defaults to off; set "streaming": true in llm_config to enable.
                 "streaming": false,
-                # n is always 1.  neuro-san will only ever consider a single chat completion.
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
