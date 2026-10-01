@@ -349,6 +349,17 @@ class TestProviderToolsFitChecker(TestCase):
 
         self.assertEqual([], errors)
 
+    def test_anthropic_undated_type_must_match_exactly(self) -> None:
+        """
+        mcp_toolset has no date suffix, so a longer spelling is not a server tool.
+        """
+        errors: List[str] = self._check({"model_name": self.ANTHROPIC_ALIAS,
+                                         "provider_tools": [{"type": "mcp_toolset_typo"}]})
+
+        self.assertEqual(["front 'llm_config.provider_tools[0]' type 'mcp_toolset_typo' is not an Anthropic server"
+                          " tool; supported families are web_search_, web_fetch_, code_execution_,"
+                          " tool_search_ and mcp_toolset."], errors)
+
     def test_anthropic_dict_without_type(self) -> None:
         """
         An Anthropic entry with no type at all gets the Anthropic example, not the OpenAI one.

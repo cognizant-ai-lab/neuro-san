@@ -68,9 +68,11 @@ class ProviderToolsFitChecker:
     ANTHROPIC_FAMILY: str = "anthropic"
     GEMINI_FAMILY: str = "gemini"
 
-    # Prefixes of Anthropic tool types that run on Anthropic's servers.
-    ANTHROPIC_SERVER_PREFIXES: List[str] = ["web_search_", "web_fetch_", "code_execution_", "tool_search_",
-                                            "mcp_toolset"]
+    # Prefixes of the dated Anthropic tool types that run on Anthropic's servers, e.g. web_search_20250305.
+    ANTHROPIC_SERVER_PREFIXES: List[str] = ["web_search_", "web_fetch_", "code_execution_", "tool_search_"]
+
+    # Undated Anthropic server tool types, which must match exactly.
+    ANTHROPIC_SERVER_TYPES: List[str] = ["mcp_toolset"]
 
     # Prefixes of Anthropic tool types that expect the client to execute them.
     ANTHROPIC_CLIENT_PREFIXES: List[str] = ["bash_", "text_editor_", "computer_", "memory_"]
@@ -311,17 +313,32 @@ class ProviderToolsFitChecker:
             return [f"{label} 'llm_config.provider_tools[{index}]' has no string 'type';"
                     ' Anthropic server tools look like {"type": "web_search_20250305", "name": "web_search"}.']
 
-        server_families: str = ", ".join(self.ANTHROPIC_SERVER_PREFIXES)
+        families: List[str] = self.ANTHROPIC_SERVER_PREFIXES + self.ANTHROPIC_SERVER_TYPES
+        server_families: str = ", ".join(families)
         if self._starts_with_any(tool_type, self.ANTHROPIC_CLIENT_PREFIXES):
             return [f"{label} 'llm_config.provider_tools[{index}]' type '{tool_type}' is an Anthropic client-side"
                     f" tool, which neuro-san does not execute; only server tools ({server_families}) are supported."]
 
-        if not self._starts_with_any(tool_type, self.ANTHROPIC_SERVER_PREFIXES):
+        if not self._is_anthropic_server_tool(tool_type):
             # The last family is joined with "and" so the message reads as a sentence.
-            listed: str = ", ".join(self.ANTHROPIC_SERVER_PREFIXES[:-1])
+            listed: str = ", ".join(families[:-1])
             return [f"{label} 'llm_config.provider_tools[{index}]' type '{tool_type}' is not an Anthropic server"
-                    f" tool; supported families are {listed} and {self.ANTHROPIC_SERVER_PREFIXES[-1]}."]
+                    f" tool; supported families are {listed} and {families[-1]}."]
         return []
+
+    def _is_anthropic_server_tool(self, tool_type: str) -> bool:
+        """
+        Tells whether an Anthropic tool type names a server tool.
+
+        Dated families match by prefix, so a new date suffix still passes. Undated types such
+        as mcp_toolset must match exactly, so a misspelling is caught here instead of by Anthropic.
+
+        :param tool_type: The "type" string of a provider_tools entry
+        :return: True when the type is a server tool neuro-san can bind
+        """
+        if tool_type in self.ANTHROPIC_SERVER_TYPES:
+            return True
+        return self._starts_with_any(tool_type, self.ANTHROPIC_SERVER_PREFIXES)
 
     @staticmethod
     def _starts_with_any(value: str, prefixes: List[str]) -> bool:
