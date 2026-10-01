@@ -8,17 +8,13 @@ The load test makes real LLM calls, so every run costs money.
 
 ## Before you start
 
-Everything below runs from the root of your neuro-san checkout.
+Run everything below from the root of your neuro-san checkout. In each terminal you use, set up the environment:
 
-1. Set up the environment in each terminal you use:
-
-   ```bash
-   export PYTHONPATH=$(pwd)
-   export AGENT_TOOL_PATH=./neuro_san/coded_tools
-   export AGENT_MANIFEST_FILE=./neuro_san/registries/manifest.hocon
-   ```
-
-2. Make sure `OPENAI_API_BASE` is not set (see [Troubleshooting](#troubleshooting)).
+```bash
+export PYTHONPATH=$(pwd)
+export AGENT_TOOL_PATH=./neuro_san/coded_tools
+export AGENT_MANIFEST_FILE=./neuro_san/registries/manifest.hocon
+```
 
 ## Quick start
 
