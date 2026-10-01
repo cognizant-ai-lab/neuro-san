@@ -149,11 +149,54 @@ Each run gets its own folder, `/tmp/load_test_<you>/<level>/<time>_<host>_<reque
 | `server_tokens.log`   | Per-request token breakdown                   |
 | `requests/`           | Output of each request; errors in `request_N_stderr.txt` |
 
-At the end of each run you also get:
+### What a run prints
 
-- **Completion timeline**: how many requests had come back by when.
-- **Round-over-round latency**: whether the same load got slower each round.
-- **Concurrency chart**: how many requests were really in flight over time.
+At the end of a client-only run you see something like this (10 requests):
+
+```text
+============================================================
+  OVERALL RESULTS
+============================================================
+  Total requests: 10
+    Created:   10
+    Failed:    0
+    Timed out: 0
+    Killed:    0
+  Total wall time: 6.91s
+  Time to first response: 2s min / 3s avg / 4s max
+  Request duration: 3s min / 5s avg / 7s max
+
+============================================================
+  LLM & TOKEN USAGE
+============================================================
+  Client (HTTP token_accounting):
+    LLM calls: 10 total  (1 / 1 / 1 min/avg/max)
+    Tokens:    9,900 total  (900 / 990 / 1,080 min/avg/max),  7,000 prompt + 2,900 completion
+  Server log: not available
+  LLM models: gpt-4o (10)
+
+============================================================
+  LATENCY ANALYSIS
+============================================================
+
+  Completion percentiles (Round 1, 10 requests): p0 3.2s / p50 5.1s / p90 6.3s / p95 6.6s / p100 6.9s
+
+LOAD TEST PASSED: all 10 requests completed successfully
+```
+
+- **Created**: requests that got a full answer. **Failed**, **Timed out** and **Killed** are the ones that did not.
+- **Total wall time**: how long the whole run took.
+- **Time to first response**: how long a request waited before the first part of the answer came back.
+- **Request duration**: how long a request took from sending it to the full answer.
+- **Tokens**: what the run used, which is what you pay for. "Server log" is only filled in when you also
+  watch the server (see [Watching the server too](#watching-the-server-too)).
+- **Completion percentiles**: `pN` is the time by which N% of the requests had finished.
+  Above, `p50 5.1s` means half the requests finished within 5.1 seconds, and `p90 6.3s` means 9 out of 10
+  finished within 6.3 seconds. `p0` is the fastest request and `p100` the slowest.
+  If p100 is far above p90, a few requests were much slower than the rest.
+
+With more than 50 requests it also lists how many requests had finished by when. With more than one round
+at the same load, it shows whether the average time grew from round to round.
 
 The command exits with `0` when every request succeeded and `1` otherwise.
 
