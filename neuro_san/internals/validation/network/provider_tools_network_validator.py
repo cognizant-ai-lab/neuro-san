@@ -303,7 +303,7 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
     @staticmethod
     def validate_shape(label: str, provider_tools: Any) -> List[str]:
         """
-        Validate that provider_tools is absent, null, or a list of dicts.
+        Validate that provider_tools is absent, null, or a list of non-empty dicts.
 
         :param label: The agent name, or NETWORK_LABEL for the network-level llm_config
         :param provider_tools: The value of the provider_tools key
@@ -320,6 +320,9 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
             if not isinstance(entry, dict):
                 errors.append(f"{label} 'llm_config.provider_tools[{index}]' must be a dict,"
                               f" got {type(entry).__name__}.")
+            elif len(entry) == 0:
+                # No provider accepts a tool with neither a name nor a type.
+                errors.append(f"{label} 'llm_config.provider_tools[{index}]' is an empty dict.")
         return errors
 
     @staticmethod

@@ -70,7 +70,7 @@ When a network is read from the registry, deployed, or checked with the
 [hocon validator CLI](./hocon_validator_cli.md), the following `provider_tools` mistakes are reported as validation
 errors, so they surface then rather than as provider errors at request time:
 
-- `provider_tools` that is not a list, or a list containing something other than a dictionary.
+- `provider_tools` that is not a list, or a list containing something other than a non-empty dictionary.
 - Near-miss spellings such as `provider_tool`, `builtin_tools`, `built_in_tools`, or `server_tools`, which the
   runtime would otherwise ignore silently.
 - A `provider_tools` key inside a [fallbacks](./agent_hocon_reference.md#fallbacks) entry, which the runtime

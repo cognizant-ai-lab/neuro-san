@@ -127,9 +127,10 @@ class ProviderToolsFitChecker:
             errors.extend(self.validate_gemini_mixing(agent_name, agent))
 
             if len(provider_tools) > 1:
-                if self.is_inherited(llm_config, inherited, self.KEY):
-                    # Every agent that kept the network-level list would repeat this one,
-                    # so it is reported once under NETWORK_LABEL below.
+                if label == self.NETWORK_LABEL:
+                    # Every agent that kept the network's own model and list would repeat this
+                    # one, so it is reported once under NETWORK_LABEL below. An agent that moved
+                    # the inherited list onto its own Gemini model keeps its own name.
                     inherited_count = len(provider_tools)
                 else:
                     errors.append(self.gemini_count_message(agent_name, len(provider_tools)))
@@ -243,7 +244,7 @@ class ProviderToolsFitChecker:
                 # Already reported by check_support(); its shapes are beside the point.
                 continue
             for index, entry in enumerate(provider_tools):
-                if isinstance(entry, dict):
+                if isinstance(entry, dict) and len(entry) > 0:
                     # Anything else was already reported by the validator's shape check.
                     errors.extend(self.check_entry_shape(label, index, entry, family))
         return errors

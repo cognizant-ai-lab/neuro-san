@@ -222,6 +222,17 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         self.assertEqual(1, len(errors), str(errors))
         self.assertIn("'llm_config.provider_tools[1]' must be a dict, got str.", errors[0])
 
+    def test_provider_tools_empty_dict_element(self) -> None:
+        """
+        An empty dictionary is reported once by the shape check and not again by the provider rules.
+        """
+        validator: DictionaryValidator = self.create_validator()
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        self._network_llm_config(config)["provider_tools"] = [self.WEB_SEARCH, {}]
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(["network 'llm_config.provider_tools[1]' is an empty dict."], errors)
+
     def test_near_miss_key_at_network_level_reported_once(self) -> None:
         """
         A near-miss key on the network llm_config yields one error, even though both agents inherit it.

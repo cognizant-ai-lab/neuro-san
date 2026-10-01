@@ -570,6 +570,23 @@ class TestProviderToolsFitChecker(TestCase):
             self.GEMINI_MIXED_WITH_LEAF,
         ], errors)
 
+    def test_agent_moving_inherited_list_to_gemini_keeps_its_own_count_label(self) -> None:
+        """
+        The network runs OpenAI, so only the agent that switched to Gemini is subject to the one-entry
+        rule, and the message carries that agent's name rather than "network".
+        """
+        inherited: Dict[str, Any] = {"model_name": self.OPENAI_MODEL,
+                                     "provider_tools": [self.GOOGLE_SEARCH, self.CODE_EXECUTION]}
+        candidates: List[Tuple[str, Dict[str, Any], Dict[str, Any]]] = [
+            self._candidate(self.OTHER_AGENT, {"model_name": self.GEMINI_MODEL,
+                                               "provider_tools": [self.GOOGLE_SEARCH, self.CODE_EXECUTION]}),
+        ]
+
+        errors: List[str] = self._checker().check(candidates, inherited)
+
+        self.assertEqual([self.OTHER_AGENT + " declares 2 Gemini provider_tools;"
+                          " Gemini supports one built-in entry per agent in this release."], errors)
+
     def test_no_candidates_yield_no_messages(self) -> None:
         """
         With nothing to check, the checker says nothing.
