@@ -31,8 +31,12 @@ Terminal 2: run the load test against the `hello_world` agent:
 python -m tests.load_tests.load_test_cli --agent hello_world --client-only --fixtures-hocon-dir
 ```
 
-The prompts come from the test hocon files in `tests/fixtures/load_tests/hello_world/`
-(see [Prompts and checks](#prompts-and-checks)).
+`--fixtures-hocon-dir` with no folder looks for test cases in `tests/fixtures/load_tests/<agent>/`
+at the top of your neuro-san checkout. Each test case is one hocon file with a prompt and the
+checks on its answer. hello_world has five. To use test cases from another folder, see
+[Prompts and checks](#prompts-and-checks).
+
+By default it sends 3 requests, 3 at a time, so it runs three of the test cases.
 
 It first sends one probe request, shows what the full run will cost, and asks
 before sending the rest. A good run ends with `LOAD TEST PASSED`. Results are
@@ -45,6 +49,9 @@ python -m tests.load_tests.load_test_cli --help
 ```
 
 ## More load
+
+These run the same five `hello_world` test cases. Requests take them in turn and start over
+when all five are used, so 100 requests run each one 20 times. Every answer is checked against its test case.
 
 ```bash
 # 100 requests, 10 at a time
@@ -64,11 +71,11 @@ Add `--no-dry-run` to skip the probe and the cost question, for example in scrip
 
 ## Prompts and checks
 
-`--fixtures-hocon-dir` reads one test-case hocon file per prompt from `tests/fixtures/load_tests/<agent>/`.
-Each file has the prompt and the checks on its answer. hello_world has five.
+The load test works with any agent the server serves. Pass `--agent <name>` and put its test cases
+in `tests/fixtures/load_tests/<name>/`, one hocon file each.
 
-To use your own files, give the parent folder: `--fixtures-hocon-dir /my/fixtures`
-reads `/my/fixtures/hello_world/*.hocon`.
+To keep test cases somewhere else, give the parent folder: `--fixtures-hocon-dir /my/fixtures`
+reads `/my/fixtures/<name>/*.hocon`.
 
 For example, `tests/fixtures/load_tests/hello_world/greet_in_languages.hocon`:
 
