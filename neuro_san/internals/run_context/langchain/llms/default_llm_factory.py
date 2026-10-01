@@ -402,9 +402,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         Tells whether an llm_info class supports provider_tools.
 
         A class opts in by declaring the "provider_tools" key in its own "args"; the stock
-        file does this for openai, anthropic and gemini. The class's own args are read here
-        instead of get_chat_class_args(), because that merges the parent's args in through
-        "extends" and would make azure-openai look supported when only openai is.
+        file does this for openai, azure-openai, anthropic and gemini. The class's own args
+        are read here instead of get_chat_class_args(), because that merges the parent's args
+        in through "extends": support is the class's own choice, and anthropic-bedrock, which
+        extends anthropic without the key, must not look supported.
 
         :param chat_class_name: A "class" value from an llm_config or an llm_info entry, or None
         :return: True when the class is in the llm_info "classes" table (lowercased lookup)

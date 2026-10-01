@@ -81,8 +81,8 @@ class TestProviderToolsFitChecker(TestCase):
     ANTHROPIC_NOT_SERVER_TOOL: str = (" 'llm_config.provider_tools[0]' type 'web_search' is not an Anthropic server"
                                       " tool; supported families are web_search_, web_fetch_, code_execution_,"
                                       " tool_search_ and mcp_toolset.")
-    UNSUPPORTED_TAIL: str = (" does not support them; in the stock llm_info only the openai, anthropic and gemini"
-                             " classes do.")
+    UNSUPPORTED_TAIL: str = (" does not support them; in the stock llm_info only the openai, azure-openai,"
+                             " anthropic and gemini classes do.")
     GEMINI_MIXED_WITH_LEAF: str = (
         "front declares Gemini provider_tools together with other tools (leaf); Gemini rejects built-in tools"
         " mixed with function tools and mis-converts the other tools' schemas, so move the built-in to an agent"
@@ -221,14 +221,22 @@ class TestProviderToolsFitChecker(TestCase):
 
         self.assertEqual([self._unsupported(self.AGENT, self.OLLAMA_MODEL, "ollama")], errors)
 
-    def test_azure_openai_class_is_unsupported(self) -> None:
+    def test_azure_openai_accepts_openai_shape(self) -> None:
         """
-        azure-openai only inherits the marker through "extends", so it is unsupported, and the
-        Gemini-shaped dictionary is not judged against the OpenAI family it belongs to.
+        azure-openai declares the marker in its own args and extends openai, so an OpenAI dictionary fits.
+        """
+        errors: List[str] = self._check({"model_name": self.AZURE_MODEL, "provider_tools": [self.WEB_SEARCH]})
+
+        self.assertEqual([], errors)
+
+    def test_azure_openai_applies_openai_shape_rule(self) -> None:
+        """
+        A Gemini-shaped dictionary on azure-openai is judged by the OpenAI family rule it inherits.
         """
         errors: List[str] = self._check({"model_name": self.AZURE_MODEL, "provider_tools": [self.GOOGLE_SEARCH]})
 
-        self.assertEqual([self._unsupported(self.AGENT, self.AZURE_MODEL, "azure-openai")], errors)
+        self.assertEqual([self.AGENT + " 'llm_config.provider_tools[0]' has no string 'type';"
+                          ' OpenAI built-ins look like {"type": "web_search"}.'], errors)
 
     def test_anthropic_bedrock_class_is_unsupported(self) -> None:
         """
@@ -260,10 +268,10 @@ class TestProviderToolsFitChecker(TestCase):
         """
         A capitalized class is looked up and reported lowercased, the way the runtime treats it.
         """
-        errors: List[str] = self._check({"class": "Azure-OpenAI", "model_name": "gpt-4o",
+        errors: List[str] = self._check({"class": "Ollama", "model_name": self.OLLAMA_MODEL,
                                          "provider_tools": [self.WEB_SEARCH]})
 
-        self.assertEqual([self._unsupported(self.AGENT, "gpt-4o", "azure-openai")], errors)
+        self.assertEqual([self._unsupported(self.AGENT, self.OLLAMA_MODEL, "ollama")], errors)
 
     # ---- Part 2: one provider per fallback chain -------------------------------------------------------
 
@@ -292,7 +300,6 @@ class TestProviderToolsFitChecker(TestCase):
         })
 
         self.assertEqual([
-            self._unsupported(self.AGENT, self.AZURE_MODEL, "azure-openai"),
             "front 'llm_config.provider_tools' requires every fallback model to use the same provider;"
             " found classes azure-openai, openai.",
         ], errors)

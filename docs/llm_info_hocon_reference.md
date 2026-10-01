@@ -313,10 +313,11 @@ definitions.
 The arguments of the stock classes whose effect is not obvious from their name are described in
 [Provider-Specific Arguments](#provider-specific-arguments) below.
 
-Declaring the `provider_tools` key in a class's `args` (the stock `openai`, `anthropic` and `gemini` classes set it
-to `null`) marks that class as supporting [`provider_tools`](./provider_tools.md), and load-time validation reports
-an agent that binds the list to a class without it. The marker is read from the class's own `args` only, not
-inherited through `extends`, so a class that extends `openai` must declare it itself to opt in.
+Declaring the `provider_tools` key in a class's `args` (the stock `openai`, `azure-openai`, `anthropic` and `gemini`
+classes set it to `null`) marks that class as supporting [`provider_tools`](./provider_tools.md), and load-time
+validation reports an agent that binds the list to a class without it. The marker is read from the class's own
+`args` only, not inherited through `extends`, so a class that extends `openai` must declare it itself to opt in,
+as `azure-openai` does.
 
 #### `factories`
 
@@ -541,7 +542,8 @@ OpenAI itself:
   need a `deployment_name`.
 - Azure offers the Responses API in most but not all regions and not for every model. An llm_config that hits
   either sets `"use_responses_api": false` to stay on Chat Completions, with the same Chat-Completions-only
-  parameter rules as in the OpenAI section above.
+  parameter rules as in the OpenAI section above. Staying on Chat Completions also rules out
+  [`provider_tools`](./provider_tools.md), which need the Responses API.
 - langchain's model-name rules see the deployment name, not the OpenAI model. It drops a `temperature` other
   than 1 only when that name starts with `gpt-5` (and `reasoning_effort` is not `none`); a gpt-5 deployment
   named any other way sends the value as given and Azure rejects it. Leave `temperature` unset for gpt-5

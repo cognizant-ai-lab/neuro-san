@@ -570,16 +570,16 @@ class TestDefaultLlmFactory(TestCase):
 
     def test_declares_provider_tools_stock_supported_classes(self) -> None:
         """
-        The stock openai, anthropic and gemini classes declare provider_tools in their own args.
+        The stock openai, azure-openai, anthropic and gemini classes declare provider_tools in their own args.
         """
-        for class_name in ["openai", "anthropic", "gemini"]:
+        for class_name in ["openai", "azure-openai", "anthropic", "gemini"]:
             self.assertTrue(self.factory.declares_provider_tools(class_name), class_name)
 
     def test_declares_provider_tools_stock_unsupported_classes(self) -> None:
         """
         Classes that only inherit the key through "extends", or never had it, do not declare it.
         """
-        for class_name in ["azure-openai", "anthropic-bedrock", "ollama"]:
+        for class_name in ["anthropic-bedrock", "ollama"]:
             self.assertFalse(self.factory.declares_provider_tools(class_name), class_name)
 
     def test_declares_provider_tools_unknown_is_false(self) -> None:

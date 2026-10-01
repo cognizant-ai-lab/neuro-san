@@ -1730,6 +1730,9 @@
             # https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle
             "extends": "openai",
             "args": {
+                # Consumed by LangChainRunContext, not passed to the chat-model constructor. Declaring this key
+                # marks the class as supporting provider_tools (see docs/provider_tools.md).
+                "provider_tools": null,
                 # Note that we can only supply arguments that are "Just Data" in nature.
 
                 # The resource endpoint, https://<resource>.openai.azure.com. When null, the inherited

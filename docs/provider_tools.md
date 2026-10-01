@@ -45,15 +45,18 @@ it to the chat-model constructor.
 
 ## Supported shapes per provider
 
-`provider_tools` is available for the `openai`, `anthropic`, and `gemini` classes. A class supports
-`provider_tools` when its own `args` in the llm_info [`classes`](./llm_info_hocon_reference.md#classes) table declare
-the `provider_tools` key; the stock file does this for `openai`, `anthropic` and `gemini`, and a class in a user
-`llm_info_file` can opt in the same way. The key is not inherited through `extends`, which is why `azure-openai`
-and `anthropic-bedrock` are not supported even though they extend classes that are.
+`provider_tools` is available for the `openai`, `azure-openai`, `anthropic`, and `gemini` classes. A class
+supports `provider_tools` when its own `args` in the llm_info [`classes`](./llm_info_hocon_reference.md#classes)
+table declare the `provider_tools` key; the stock file does this for `openai`, `azure-openai`, `anthropic` and
+`gemini`, and a class in a user `llm_info_file` can opt in the same way. The key is not inherited through `extends`:
+`azure-openai` declares it itself and, because it extends `openai`, takes the OpenAI dictionaries, while
+`anthropic-bedrock` does not declare it and is not supported.
 
 - OpenAI accepts Responses API built-ins such as `{"type": "web_search"}` and
   `{"type": "code_interpreter", "container": {"type": "auto"}}`. Provider tools require the Responses API; do
-  not set `use_responses_api` to `false`.
+  not set `use_responses_api` to `false`. The same dictionaries apply to `azure-openai`, which reaches Azure's
+  Responses API through the v1 endpoint. On Azure, web search is Grounding with Bing, billed separately, and a
+  subscription admin can block it; not every OpenAI built-in is offered on Azure.
 - Anthropic accepts server tools such as
   `{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}`. Supported server-side families include
   `web_search_`, `web_fetch_`, `code_execution_`, `tool_search_`, and `mcp_toolset`. Client-side tools such as
@@ -73,7 +76,7 @@ errors, so they surface then rather than as provider errors at request time:
 - A `provider_tools` key inside a [fallbacks](./agent_hocon_reference.md#fallbacks) entry, which the runtime
   ignores; declare it at the top level of the `llm_config` so it applies to every fallback.
 - `provider_tools` on an LLM agent whose `model_name`, short `class` value, or any fallback resolves to a class that
-  does not support it, such as `ollama` or `azure-openai`.
+  does not support it, such as `ollama` or `anthropic-bedrock`.
 - A fallback chain whose models resolve to more than one class while `provider_tools` is non-empty, since the same
   list is bound to every fallback and the runtime rejects such a chain.
 - A dictionary that does not match the provider: a Gemini entry with a `type` key, an OpenAI or Anthropic entry
@@ -92,5 +95,5 @@ billing for searches, code execution, or other built-ins is separate from neuro-
 API keys or other secrets inside provider tool dictionaries; use the provider's normal credential configuration.
 
 OpenAI built-in tools are available only through the Responses API, so `use_responses_api: false` cannot be used
-with `provider_tools`. The `azure-openai`, `anthropic-bedrock`, `bedrock`, `ollama`, `nvidia`, and `openrouter`
-classes do not support `provider_tools`; a network that declares it for one of them is reported at load time.
+with `provider_tools`. The `anthropic-bedrock`, `bedrock`, `ollama`, `nvidia`, and `openrouter` classes do not
+support `provider_tools`; a network that declares it for one of them is reported at load time.

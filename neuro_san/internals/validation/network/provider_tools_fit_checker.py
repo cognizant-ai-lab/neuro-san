@@ -195,8 +195,8 @@ class ProviderToolsFitChecker:
         for model_label, class_name, _, declares in models:
             if not declares:
                 errors.append(f"{label} declares provider_tools for model '{model_label}' whose class '{class_name}'"
-                              f" does not support them; in the stock llm_info only the openai, anthropic and gemini"
-                              f" classes do.")
+                              f" does not support them; in the stock llm_info only the openai, azure-openai,"
+                              f" anthropic and gemini classes do.")
         return errors
 
     def check_single_provider(self, label: str, models: List[Tuple[str, str, str, bool]]) -> List[str]:
