@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Iterator
 from typing import List
 from typing import Set
 
@@ -63,7 +64,8 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         # Find unreachable agents (only meaningful if we have exactly one front man agent)
         unreachable_agents: Set[str] = set()
         if len(front_man_agents) == 1:
-            front_man_agent: str = next(iter(front_man_agents))
+            front_man_iter: Iterator[str] = iter(front_man_agents)
+            front_man_agent: str = next(front_man_iter)
             unreachable_agents = self.find_unreachable_agents(name_to_spec, front_man_agent)
             if unreachable_agents:
                 errors.append(f"Unreachable agents found: {sorted(unreachable_agents)}")
@@ -92,7 +94,11 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         :param agent_spec: The agent specification dictionary
         :return: List of agent-name strings reachable from this spec.
         """
-        raw_down_chains: List[Any] = self.coerce_tools(agent_spec) + self.coerce_args_tools(agent_spec)
+        raw_down_chains: List[Any] = []
+        coerced_tools: List[Any] = self.coerce_tools(agent_spec)
+        coerced_args_tools: List[Any] = self.coerce_args_tools(agent_spec)
+        raw_down_chains.extend(coerced_tools)
+        raw_down_chains.extend(coerced_args_tools)
         safe_down_chains: List[str] = self.remove_dictionary_tools(raw_down_chains)
 
         traversable_down_chains: List[str] = []
@@ -118,7 +124,9 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
                 all_down_chains.update(down_chains)
 
         # Potential front man agents are agents that have down-chains but are not down-chains of others
-        front_man_agents: Set[str] = has_down_chains - all_down_chains
+        front_man_agents: Set[str] = set()
+        front_man_agents.update(has_down_chains)
+        front_man_agents = front_man_agents.difference(all_down_chains)
 
         # Special case: If there's only one agent in the network, it's always a front man agent
         if len(front_man_agents) == 0 and len(name_to_spec) == 1:
@@ -149,7 +157,9 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         all_agents: Set[str] = set(name_to_spec.keys())
 
         # Step 5: Calculate unreachable agents by subtracting reachable from all agents
-        unreachable_agents: Set[str] = all_agents - reachable_agents
+        unreachable_agents: Set[str] = set()
+        unreachable_agents.update(all_agents)
+        unreachable_agents = unreachable_agents.difference(reachable_agents)
 
         # Step 6: Return the set of agents that cannot be reached from front man agent
         return unreachable_agents

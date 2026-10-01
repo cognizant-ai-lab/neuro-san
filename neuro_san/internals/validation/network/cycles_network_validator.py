@@ -102,7 +102,12 @@ class CyclesNetworkValidator(AbstractNetworkValidator):
         if state[agent] == GraphVisitationState.CURRENTLY_BEING_PROCESSED:
             # Cycle detected! The agent is already in our current processing path
             cycle_start_idx: int = path.index(agent)  # Find where the cycle starts in our path
-            cycle_agents: Set[str] = set(path[cycle_start_idx:] + [agent])  # Extract all agents in the cycle
+
+            # extract all agents in the cycle
+            path_partial: List[str] = path[cycle_start_idx:]  # Extract the cycle from our path
+            cycle_agents: Set[str] = set(path_partial)
+            cycle_agents.add(agent)
+
             cyclical_agents.update(cycle_agents)  # Add them to our result set
             return
 

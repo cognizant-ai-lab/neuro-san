@@ -42,11 +42,22 @@ class LatencyAnalyzer:
     """Analyse per-request latency data across stages."""
 
     def __init__(self, stage_summaries: List[Dict[str, Any]]) -> None:
+        """
+        Constructor.
+
+        :param stage_summaries: Per-stage summaries collected during the run
+        """
         self._summaries = stage_summaries
 
     @staticmethod
     def _percentile(sorted_values: List[float], pct: float) -> float:
-        """Compute the pct-th percentile from pre-sorted values."""
+        """
+        Compute the pct-th percentile from pre-sorted values.
+
+        :param sorted_values: Values sorted in ascending order
+        :param pct: Percentile to compute, 0 to 100
+        :return: The interpolated percentile, or 0.0 when there are no values
+        """
         if not sorted_values:
             return 0.0
         idx = (pct / 100.0) * (len(sorted_values) - 1)
@@ -62,7 +73,11 @@ class LatencyAnalyzer:
     # ----------------------------------------------------------
 
     def log_latency_analysis(self, is_ramp: bool = True) -> None:
-        """Log completion timeline for each stage."""
+        """
+        Log completion timeline for each stage.
+
+        :param is_ramp: True to label each stage, False to label each round
+        """
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  LATENCY ANALYSIS")
         logger.info("=" * SEPARATOR_WIDTH)
@@ -70,7 +85,11 @@ class LatencyAnalyzer:
         self._log_completion_timeline(is_ramp=is_ramp)
 
     def _log_completion_timeline(self, is_ramp: bool) -> None:
-        """Log completion latency percentiles per stage on one line."""
+        """
+        Log completion latency percentiles per stage on one line.
+
+        :param is_ramp: True to label each stage, False to label each round
+        """
         for summary in self._summaries:
             latencies = self._extract_latencies(summary)
             if not latencies:
@@ -102,7 +121,11 @@ class LatencyAnalyzer:
 
     @staticmethod
     def _log_count_milestones(sorted_latencies: List[float]) -> None:
-        """Log completion times at round-number request counts."""
+        """
+        Log completion times at round-number request counts.
+
+        :param sorted_latencies: Request latencies in seconds, sorted in ascending order
+        """
         total = len(sorted_latencies)
         if total <= COUNT_MILESTONE_STEP:
             return
@@ -128,7 +151,11 @@ class LatencyAnalyzer:
     # ----------------------------------------------------------
 
     def log_degradation(self, is_ramp: bool = True) -> None:  # pylint: disable=unused-argument
-        """Compare avg latency across rounds/stages at same concurrency."""
+        """
+        Compare avg latency across rounds/stages at same concurrency.
+
+        :param is_ramp: Not used
+        """
         if len(self._summaries) < 2:
             return
 
@@ -196,7 +223,12 @@ class LatencyAnalyzer:
 
     @staticmethod
     def _extract_latencies(summary: Dict[str, Any]) -> List[float]:
-        """Extract elapsed times from stage results."""
+        """
+        Extract elapsed times from stage results.
+
+        :param summary: One stage summary
+        :return: Elapsed seconds of each result, leaving out results with no elapsed time
+        """
         results = summary.get("results", [])
         return [
             r.get("elapsed", 0)
@@ -205,7 +237,11 @@ class LatencyAnalyzer:
         ]
 
     def _group_by_concurrency(self) -> Dict[int, List[Dict[str, Any]]]:
-        """Group stage summaries by their concurrency level."""
+        """
+        Group stage summaries by their concurrency level.
+
+        :return: Concurrency level to the stage summaries run at that level
+        """
         groups: Dict[int, List[Dict[str, Any]]] = {}
         for s in self._summaries:
             conc = s.get("concurrent", 0)
@@ -217,6 +253,9 @@ class LatencyAnalyzer:
         """Build a concurrency-over-time timeline from results.
 
         Returns list of (relative_seconds, in_flight_count) tuples.
+
+        :param results: Request results with start_time and end_time
+        :return: (seconds since the first start, requests in flight) after each start and end
         """
         events: List[Tuple[float, int]] = []
         for r in results:
@@ -238,7 +277,11 @@ class LatencyAnalyzer:
 
     @staticmethod
     def _log_timeline_chart(timeline: List[Tuple[float, int]]) -> None:
-        """Log a simple ASCII chart of concurrency over time."""
+        """
+        Log a simple ASCII chart of concurrency over time.
+
+        :param timeline: Timeline from _build_timeline
+        """
         if not timeline:
             return
         max_conc = max(c for _, c in timeline)

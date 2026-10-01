@@ -82,8 +82,7 @@ class AgentProfileFactory:
             return {}
         return {"sly_data": sly_checks}
 
-    def _find_json_profile(self, agent_name: str, profile_path: Optional[str],
-                           project_root: Optional[str]) -> str:
+    def _find_json_profile(self, agent_name: str, profile_path: Optional[str], project_root: Optional[str]) -> str:
         """Return the path of the JSON profile.
 
         Search order:

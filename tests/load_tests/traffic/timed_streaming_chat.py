@@ -40,7 +40,7 @@ class TimedStreamingChat:
             streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]],
             start: float,
             timeout: float,
-    ):
+    ) -> None:
         """
         Constructor.
 

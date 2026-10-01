@@ -39,6 +39,7 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from neuro_san.message.utils.content_utils import ContentUtils
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -50,7 +51,8 @@ class TestDirectAgentSessionGoldenParity(TestCase):
 
     Issue #1222 made the message pipeline safe for LangChain content blocks
     while promising that the dicts a client receives for text traffic do not
-    change. This test locks that promise end to end: it drives the
+    change, and the content_blocks wrapper is added only to messages whose
+    content says more than its text. This test locks both end to end: it drives the
     chat_mock_llm_echo network through DirectAgentSession.streaming_chat with
     the MAXIMAL filter, so nothing is filtered out, and compares the complete
     stream of response dicts with a golden file under golden/.
@@ -64,7 +66,8 @@ class TestDirectAgentSessionGoldenParity(TestCase):
     into the second turn and also passes on main as it was before the first
     #1222 PR (7fbebb1b), and one turn for each provider marker of the mock
     (Anthropic thinking, OpenAI reasoning, Gemini thinking), whose block
-    content must reach the wire as the text alone.
+    content reaches the wire as the text plus the content_blocks wrapper while
+    every other message in the stream stays as it was.
 
     time_taken_in_seconds values are zeroed before comparing, and the empty
     keep-alive dicts are dropped. Each conversation also checks that no
@@ -238,14 +241,17 @@ class TestDirectAgentSessionGoldenParity(TestCase):
             expected: List[Dict[str, Any]] = loads(golden_file.read())
         self.assertEqual(expected, actual)
 
-    def assert_text_only_wire(self, stream: List[Dict[str, Any]]) -> None:
+    def assert_wire_contract(self, stream: List[Dict[str, Any]]) -> None:
         """
-        Asserts the Phase 1 wire contract on every message: no content-block key
-        leaks through, and text, where present, is a plain string. Presence is
-        not required here on purpose. BaseMessageDictionaryConverter omits the
-        text key for a message whose content is an empty list, so that such a
-        message cannot become answer-eligible, and the golden comparison already
-        locks exactly which messages carry text (in these goldens, all of them).
+        Asserts the wire contract on every message: no raw content key leaks
+        through, text, where present, is a plain string, and content_blocks,
+        where present, is the langchain_v1 wrapper whose blocks flatten to that
+        text. Text presence is not required here on purpose: the converter
+        omits text for empty-list content, and the golden comparison locks
+        exactly which messages carry which keys. Today the history copies
+        inside chat_context are text-only (OriginatingJournal appends a text
+        projection of block-content AI messages), so they carry no
+        content_blocks; restoring blocks from chat_context will revisit this.
 
         :param stream: The normalized response dicts.
         """
@@ -255,6 +261,15 @@ class TestDirectAgentSessionGoldenParity(TestCase):
             self.assertNotIn("content", message)
             if "text" in message:
                 self.assertIsInstance(message.get("text"), str)
+            if "content_blocks" in message:
+                wrapper: Dict[str, Any] = message.get("content_blocks")
+                self.assertEqual(wrapper.get("format"), ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1)
+                self.assertIsInstance(wrapper.get("blocks"), list)
+                self.assertGreater(len(wrapper.get("blocks")), 0)
+                self.assertEqual(ContentUtils.flatten_to_text(wrapper.get("blocks")), message.get("text"))
+            for history in message.get("chat_context", {}).get("chat_histories", []):
+                for history_message in history.get("messages", []):
+                    self.assertNotIn("content_blocks", history_message)
 
     def test_echo_two_turns_match_golden(self) -> None:
         """
@@ -263,39 +278,40 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         """
         actual: List[Dict[str, Any]] = self.run_conversation(["hello there", "second turn"])
 
-        self.assert_text_only_wire(actual)
+        self.assert_wire_contract(actual)
         self.check_against_golden("echo_two_turns_maximal.json", actual)
 
     def test_anthropic_thinking_marker_answer_matches_golden(self) -> None:
         """
         An answer the mock emits as [thinking, text] blocks reaches the wire as
-        the text alone, in exactly the golden stream, so block content never
-        changes what a text-only client sees.
+        the text plus a content_blocks wrapper carrying the reasoning block, in
+        exactly the golden stream; every other message is unchanged.
         """
         actual: List[Dict[str, Any]] = self.run_conversation(["emit anthropic thinking: the answer"])
 
-        self.assert_text_only_wire(actual)
+        self.assert_wire_contract(actual)
         self.check_against_golden("echo_anthropic_thinking_marker_maximal.json", actual)
 
     def test_openai_reasoning_marker_answer_matches_golden(self) -> None:
         """
         An answer the mock emits as an OpenAI Responses reasoning item followed
-        by a text item reaches the wire as the text alone, in exactly the golden
-        stream, so the OpenAI reasoning shape never changes what a client sees.
+        by a text item reaches the wire as the text plus a content_blocks
+        wrapper with one reasoning block per summary part, in exactly the golden
+        stream; every other message is unchanged.
         """
         actual: List[Dict[str, Any]] = self.run_conversation(["emit openai reasoning: the answer"])
 
-        self.assert_text_only_wire(actual)
+        self.assert_wire_contract(actual)
         self.check_against_golden("echo_openai_reasoning_marker_maximal.json", actual)
 
     def test_gemini_thinking_marker_answer_matches_golden(self) -> None:
         """
         An answer the mock emits as a Gemini thinking block followed by a
-        signed text block reaches the wire as the text alone, in exactly the
-        golden stream, so the Gemini thinking shape never changes what a client
-        sees and the signature in the text block's extras never leaks.
+        signed text block reaches the wire as the text plus a content_blocks
+        wrapper, thought signature included in the text block's extras, in
+        exactly the golden stream; every other message is unchanged.
         """
         actual: List[Dict[str, Any]] = self.run_conversation(["emit gemini thinking: the answer"])
 
-        self.assert_text_only_wire(actual)
+        self.assert_wire_contract(actual)
         self.check_against_golden("echo_gemini_thinking_marker_maximal.json", actual)

@@ -89,6 +89,42 @@ A neuro-san server uses HTTP under the hood. You can check out the protobufs def
 API under neuro_san/api/grpc.  The place to start is agent.proto for the service definitions.
 The next most important file there is chat.proto for the chat message definitions.
 
+A chat message carries its visible text in `text`. When a message's content carries information beyond that
+text (model reasoning or thinking summaries, images, files, several text blocks, provider extras such as
+signatures or a text block's phase), the message also carries `content_blocks`: a `format` string and a
+`blocks` list. The first format is `langchain_v1`, LangChain's standard content blocks. Whenever
+`content_blocks` is present, `text` holds the flattened text of the blocks, so a client that does not
+recognize the format can ignore the blocks. Today this applies to the AI message of the agent whose model
+returned the blocks, and to the AGENT_TOOL_RESULT message of a tool that returned content blocks; clients
+receive both under the MAXIMAL chat filter. The final AGENT_FRAMEWORK answer that MINIMAL clients receive
+stays text-only for now, and sending attachments from a client is not supported yet: the server reads only the
+`text` of the message a client sends. A message whose content is a plain string, the shape every existing
+client receives today, has no `content_blocks` key, so existing clients see no change.
+
+### Content block shapes
+
+The blocks are plain JSON objects, each with a `type` key, so no library is needed to read them. In the
+`langchain_v1` format these are the shapes a client will see:
+
+```json
+{"type": "text", "text": "the answer"}
+{"type": "reasoning", "reasoning": "the model's thinking summary"}
+{"type": "image", "base64": "<base64 data>", "mime_type": "image/png"}
+{"type": "audio", "base64": "<base64 data>", "mime_type": "audio/wav"}
+{"type": "file", "base64": "<base64 data>", "mime_type": "application/pdf"}
+{"type": "non_standard", "value": {"...": "the provider's own block"}}
+```
+
+Today the blocks a model produces are `text` and `reasoning`, with one exception: an Anthropic
+`redacted_thinking` block arrives as `non_standard`. Any block may carry provider details in an `extras`
+object, such as a thinking signature, and a text block from OpenAI may carry a `phase`. The `image`,
+`audio` and `file` shapes are how attachments travel. Today they can only come from a tool that returns
+content blocks, on an AGENT_TOOL_RESULT message; models do not produce them yet, and a client cannot send
+them yet. Their binary data is a base64 string in `base64` next to a `mime_type`, never raw bytes.
+`non_standard` wraps a provider block that has no standard shape, with the provider's original block in
+`value`. The complete schema is LangChain's
+[standard content blocks](https://docs.langchain.com/oss/python/langchain/messages#message-content).
+
 ### Using curl to interact with a neuro-san server
 
 In one window start up a neuro-san server:

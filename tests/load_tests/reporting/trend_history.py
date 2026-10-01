@@ -42,6 +42,12 @@ class TrendHistory:
     """Reads history JSONL records and logs them in run order."""
 
     def __init__(self, path: str, agent_filter: Optional[List[str]] = None) -> None:
+        """
+        Constructor.
+
+        :param path: History JSONL file, or a directory holding it
+        :param agent_filter: Agent names to include; None or empty includes every agent
+        """
         self._path = path
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
@@ -90,6 +96,8 @@ class TrendHistory:
         Accepts either the file itself or a directory holding the
         default-named history file, so the path printed at the end of a
         run and its parent output directory both work.
+
+        :return: Path of the history file, or None when absent
         """
         if os.path.isfile(self._path):
             return self._path
@@ -105,6 +113,9 @@ class TrendHistory:
         A partially written final line is expected when a run is
         interrupted, so a bad line is reported and skipped rather than
         losing every earlier record.
+
+        :param history_path: Path of the history JSONL file
+        :return: Every record that is a JSON object, in file order; empty when the file cannot be read
         """
         records: List[Dict[str, Any]] = []
         skipped = 0
@@ -137,7 +148,11 @@ class TrendHistory:
 
     @staticmethod
     def _header() -> List[str]:
-        """Return the table header, including a column per threshold."""
+        """
+        Return the table header, including a column per threshold.
+
+        :return: Column names
+        """
         header = [
             "timestamp", "neuro-san", "agent", "mode", "via",
             "reqs", "done",
@@ -159,6 +174,9 @@ class TrendHistory:
 
         The transport is shown so historical transport values remain
         distinguishable in the same file.
+
+        :param record: One history record
+        :return: Cell values in _header order
         """
         mode = record.get("mode", "client")
         requests = record.get(
@@ -197,7 +215,12 @@ class TrendHistory:
 
     @staticmethod
     def _fmt_timestamp(timestamp: str) -> str:
-        """Shorten an ISO timestamp to "YYYY-MM-DD HH:MM"."""
+        """
+        Shorten an ISO timestamp to "YYYY-MM-DD HH:MM".
+
+        :param timestamp: ISO timestamp, or empty
+        :return: e.g. '2026-09-30 01:54', or '-' when empty
+        """
         if not timestamp:
             return "-"
         text = str(timestamp).replace("T", " ")
@@ -205,7 +228,12 @@ class TrendHistory:
 
     @staticmethod
     def _fmt_seconds(value: Optional[float]) -> str:
-        """Format a seconds value, rendering absent or zero as "-"."""
+        """
+        Format a seconds value, rendering absent or zero as "-".
+
+        :param value: Seconds, or None
+        :return: e.g. '12.3s', or '-' when absent or 0
+        """
         if not isinstance(value, (int, float)) or value <= 0:
             return "-"
         return f"{value:.1f}s"

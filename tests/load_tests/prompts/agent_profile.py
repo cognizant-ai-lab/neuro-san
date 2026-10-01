@@ -123,8 +123,7 @@ class AgentProfile:
         """
         return self._profile.get("failure_patterns", [])
 
-    def get_prompt(self, request_id: int, same_prompt: bool = False,
-                   allow_caching: bool = False) -> str:
+    def get_prompt(self, request_id: int, same_prompt: bool = False, allow_caching: bool = False) -> str:
         """
         Return the prompt for a given request.
 

@@ -38,7 +38,7 @@ class AgentRequestResult:
             response_text: str,
             time_to_first_response: float,
             token_accounting: Dict[str, Any],
-    ):
+    ) -> None:
         """
         Constructor.
 

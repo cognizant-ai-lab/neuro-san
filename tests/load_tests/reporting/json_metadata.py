@@ -31,7 +31,11 @@ class JsonMetadata:
 
     @staticmethod
     def schema() -> Dict[str, str]:
-        """Return field descriptions for every non-obvious JSON field."""
+        """
+        Return field descriptions for every non-obvious JSON field.
+
+        :return: Dotted JSON field path to its description
+        """
         return {
             "test_metadata.timestamp":
                 "ISO 8601 test start time with timezone.",
@@ -176,7 +180,11 @@ class JsonMetadata:
 
     @staticmethod
     def thresholds() -> Dict[str, object]:
-        """Return health thresholds for automated analysis."""
+        """
+        Return health thresholds for automated analysis.
+
+        :return: Threshold name to its value
+        """
         return {
             "amplification_warning": 1.2,
             "amplification_critical": 1.5,
@@ -198,7 +206,11 @@ class JsonMetadata:
 
     @staticmethod
     def analysis_hints() -> List[str]:
-        """Return diagnostic patterns to check."""
+        """
+        Return diagnostic patterns to check.
+
+        :return: One sentence per pattern
+        """
         return [
             "Compare thread counts across rounds — growth "
             "without reclaiming suggests a thread leak.",
@@ -231,7 +243,11 @@ class JsonMetadata:
 
     @staticmethod
     def units() -> Dict[str, str]:
-        """Return unit labels for numeric fields."""
+        """
+        Return unit labels for numeric fields.
+
+        :return: Field name to its unit
+        """
         return {
             "elapsed": "seconds",
             "duration": "seconds",
@@ -257,7 +273,11 @@ class JsonMetadata:
 
     @staticmethod
     def reporting_instructions() -> str:
-        """Return instructions for LLM-based analysis."""
+        """
+        Return instructions for LLM-based analysis.
+
+        :return: The instructions as one string
+        """
         return (
             "Report ALL checks explicitly, including clean "
             "results (e.g. '0 errors found', '0 retries', "
@@ -271,7 +291,11 @@ class JsonMetadata:
 
     @staticmethod
     def build() -> Dict[str, object]:
-        """Return the complete metadata block for raw_results.json."""
+        """
+        Return the complete metadata block for raw_results.json.
+
+        :return: The _schema, _thresholds, _analysis_hints, _units and _reporting_instructions blocks
+        """
         return {
             "_schema": JsonMetadata.schema(),
             "_thresholds": JsonMetadata.thresholds(),
