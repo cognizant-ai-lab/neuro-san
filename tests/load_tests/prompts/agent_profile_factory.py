@@ -16,13 +16,13 @@
 
 """Factory that builds an AgentProfile from a JSON profile or test-case hocons."""
 
-import json
 import logging
 import os
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
@@ -61,7 +61,7 @@ class AgentProfileFactory:
             return AgentProfile(agent_name, self._profile_from_hocons(agent_name, hocon_files))
         path: str = self._find_json_profile(agent_name, profile_path, project_root)
         logger.info("Loaded agent profile: %s", path)
-        data: Dict[str, Any] = self._read_json(path)
+        data: Dict[str, Any] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
         data["responses"] = [self._response_from_success_fields(data.get("success_fields", []))]
         return AgentProfile(agent_name, data)
 
@@ -174,7 +174,7 @@ class AgentProfileFactory:
               hands each block to the data-driven AgentEvaluators, see
               docs/test_case_hocon_reference.md)
         Agent-wide, may appear in any file and are merged across files:
-          failure_patterns             -> union, in first-seen order
+          failure_patterns             -> union, sorted
           estimated_tokens_per_request -> max
 
         Aborts when no text is found in any file.
@@ -185,7 +185,7 @@ class AgentProfileFactory:
         """
         prompts: List[str] = []
         responses: List[Dict[str, Any]] = []
-        failure_patterns: List[str] = []
+        failure_patterns: Set[str] = set()
         estimated_tokens: Optional[int] = None
         for path in hocon_files:
             test_case: Dict[str, Any] = self._read_load_test_hocon(agent_name, path)
@@ -196,7 +196,7 @@ class AgentProfileFactory:
                 prompts.append(text)
                 responses.append(response)
             self._warn_empty_checks(path, response)
-            self._extend_unique(failure_patterns, test_case.get("failure_patterns", []))
+            failure_patterns.update(test_case.get("failure_patterns", []))
             tokens: Optional[int] = test_case.get("estimated_tokens_per_request")
             if tokens is not None:
                 estimated_tokens = max(tokens, estimated_tokens or 0)
@@ -221,7 +221,7 @@ class AgentProfileFactory:
         data: Dict[str, Any] = {
             "prompts": prompts,
             "responses": responses,
-            "failure_patterns": failure_patterns,
+            "failure_patterns": sorted(failure_patterns),
         }
         if estimated_tokens is not None:
             data["estimated_tokens_per_request"] = estimated_tokens
@@ -294,29 +294,3 @@ class AgentProfileFactory:
                     "use { \"not_value\": \"\" } to require a non-empty value",
                     path, key,
                 )
-
-    @staticmethod
-    def _extend_unique(target: List[str], items: List[str]) -> None:
-        """
-        Append items not already in target, preserving order.
-
-        :param target: List appended to in place
-        :param items: Items to append
-        """
-        for item in items:
-            if item not in target:
-                target.append(item)
-
-    def _read_json(self, path: str) -> Dict[str, Any]:
-        """
-        Read profile data from a JSON file via leaf-common persistence.
-
-        :param path: Path to the JSON profile file
-        :return: The profile data
-        """
-        try:
-            data: Dict[str, Any] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
-            return data
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.error("Failed to load profile %s: %s\nAborting.", path, exc)
-            raise SystemExit(1) from exc
