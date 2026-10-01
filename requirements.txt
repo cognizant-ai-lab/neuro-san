@@ -64,14 +64,14 @@ pydantic>=2.9.2,<3.0
 langchain-openai>=1.4.0,<2.0
 
 # Pinned explicitly (it is otherwise only a transitive dependency of langchain-openai).
-# Floor 2.45.0 matches langchain-openai's own requirement. Ceiling <3 (temporary): openai 3.0
-# (2026-08-12) switched its HTTP stack to httpx2 and no longer installs httpx. OpenAILlmPolicy
-# and AzureLlmPolicy build an httpx.AsyncClient (proxy, timeout, connection limits) and pass it
-# as http_client, which openai 3.x accepts only through a runtime-only escape hatch its migration
-# guide calls temporary. Stay on 2.x until those clients are migrated to httpx2; that migration
-# lifts this ceiling.
-openai>=2.45.0,<3
+# Floor 2.45.0 matches langchain-openai's own requirement; the <4 ceiling is langchain-openai's too.
+# openai 3.x is built on httpx2 instead of httpx. OpenAILlmPolicy builds its http client from the
+# SDK's own client class, so either major works.
+openai>=2.45.0,<4
 
+# The http library behind openai 2.x; openai 3.x brings httpx2 instead and does not need this.
+# The floor guarantees the proxy= keyword that OpenAILlmPolicy passes. langchain-core installs
+# httpx regardless.
 httpx>=0.28.1
 
 psutil>=7.0.0

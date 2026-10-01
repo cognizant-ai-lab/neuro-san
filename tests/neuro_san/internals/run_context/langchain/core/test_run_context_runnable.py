@@ -21,12 +21,12 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Tuple
+from types import ModuleType
 
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-import httpx
 
 from langchain_core.agents import AgentFinish
 from langchain_core.messages.ai import AIMessage
@@ -40,6 +40,7 @@ from openai import RateLimitError
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
+from neuro_san.internals.run_context.langchain.util.openai_httpx import OpenAIHttpx
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -357,8 +358,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         sensitive_logger = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
 
-        request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
-        response = httpx.Response(429, request=request)
+        # The SDK's error types carry request/response objects of the httpx library behind the SDK.
+        sdk_httpx: ModuleType = OpenAIHttpx.module()
+        request: Any = sdk_httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+        response: Any = sdk_httpx.Response(429, request=request)
         rate_limit_error = RateLimitError("rate limited", response=response, body=None)
 
         agent_chain = MagicMock()
