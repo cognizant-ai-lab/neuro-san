@@ -51,6 +51,8 @@ class ToolNameNetworkValidator(AbstractNetworkValidator):
         errors: List[str] = []
 
         # Be sure all agent names are valid per the regex above.
+        agent_name: str = None
+        agent: Dict[str, Any] = None
         for agent_name, agent in name_to_spec.items():
             spec_name: str = agent.get("name")
             if not re.match(self.TOOL_NAME_PATTERN, agent_name) or \

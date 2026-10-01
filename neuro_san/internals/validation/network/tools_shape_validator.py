@@ -107,9 +107,13 @@ class ToolsShapeValidator(AbstractNetworkValidator):
         :return: A list of error messages
         """
         args: Any = agent.get("args")
-        if not isinstance(args, dict) or "tools" not in args:
+        if not isinstance(args, dict):
             return []
-        args_tools: Any = args.get("tools")
+
+        args_dict: Dict[str, Any] = args
+        if "tools" not in args_dict.keys():
+            return []
+        args_tools: Any = args_dict.get("tools")
         if not isinstance(args_tools, (dict, list)):
             return [
                 f"{agent_name} 'args.tools' must be a dict or list,"

@@ -206,10 +206,9 @@ class ConnectivityReporter:
         # convention). coerce_* keep the result tolerant to malformed shapes;
         # remove_dictionary_tools drops non-string entries (e.g., inline MCP
         # configs) so the dedup set sees only agent-name strings.
-        combined: List[Any] = (
-            AbstractNetworkValidator.coerce_tools(agent_spec) +
-            AbstractNetworkValidator.coerce_args_tools(agent_spec)
-        )
+        coerced_tools: List[Any] = AbstractNetworkValidator.coerce_tools(agent_spec)
+        coerced_args_tools: List[Any] = AbstractNetworkValidator.coerce_args_tools(agent_spec)
+        combined: List[Any] = coerced_tools + coerced_args_tools
 
         # Keep a set of the combined sources of tools,
         # so connectivity only gets reported once.
