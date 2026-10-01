@@ -175,9 +175,14 @@ class TestContentUtils(TestCase):
     def test_is_trivial(self):
         """
         Exactly one text block with no annotations/extras is trivial;
-        anything else is not.
+        anything else is not. Empty annotations/extras do not count, but any
+        other key with a value (an OpenAI Responses "phase") does.
         """
         self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi"}]))
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": [], "extras": {}}]))
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": None, "extras": ""}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "final_answer"}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "commentary"}]))
         self.assertFalse(ContentUtils.is_trivial([]))
         self.assertFalse(ContentUtils.is_trivial([{"type": "reasoning", "reasoning": "r"}]))
         self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]))
@@ -394,6 +399,46 @@ class TestContentUtils(TestCase):
         the collapse deliberately drops those keys.
         """
         self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "id": "msg_1", "index": 0}]))
+
+    def test_wrap_content_blocks(self) -> None:
+        """
+        The wire wrapper is the format tag plus the blocks list, as-is.
+        """
+        blocks = [{"type": "text", "text": "hi"}]
+        self.assertEqual(ContentUtils.wrap_content_blocks(blocks), {"format": "langchain_v1", "blocks": blocks})
+
+    def test_unwrap_content_blocks(self) -> None:
+        """
+        unwrap returns the blocks of a langchain_v1 wrapper as-is, an empty
+        list for an empty wrapper whatever its format, and None for anything
+        that is not a wrapper this code knows.
+        """
+        blocks = [{"type": "text", "text": "hi"}]
+        self.assertIs(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": blocks}), blocks)
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": []}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "langchain_v1"}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "somebody_elses_v2", "blocks": []}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({}), [])
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"format": "somebody_elses_v2", "blocks": blocks}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"blocks": blocks}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": 42}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks(blocks))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks(42))
+
+    def test_is_empty_value(self) -> None:
+        """
+        None, "", [] and {} are empty; anything with content, and other
+        types, are not.
+        """
+        self.assertTrue(ContentUtils.is_empty_value(None))
+        self.assertTrue(ContentUtils.is_empty_value(""))
+        self.assertTrue(ContentUtils.is_empty_value([]))
+        self.assertTrue(ContentUtils.is_empty_value({}))
+        self.assertFalse(ContentUtils.is_empty_value("final_answer"))
+        self.assertFalse(ContentUtils.is_empty_value([{"type": "citation"}]))
+        self.assertFalse(ContentUtils.is_empty_value({"signature": "s"}))
+        self.assertFalse(ContentUtils.is_empty_value(0))
+        self.assertFalse(ContentUtils.is_empty_value(False))
 
     def test_history_safe_text_references_data_blocks(self):
         """
