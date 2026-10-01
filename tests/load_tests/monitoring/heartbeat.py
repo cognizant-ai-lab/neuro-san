@@ -79,7 +79,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         self._client_proc: Optional[psutil.Process] = client_proc
         self._output_dir: Optional[str] = output_dir
         self._total_system_ram: int = psutil.virtual_memory().total
-        self._oom_warned: bool = False
+        self._out_of_memory_warned: bool = False
         self._swap_warned: bool = False
         self._peak_sys_cpu: float = 0.0
         self._console_started: bool = False
@@ -172,12 +172,12 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :param progress_file: Open progress.log, or None
         """
-        if self._oom_warned:
+        if self._out_of_memory_warned:
             return
         mem = psutil.virtual_memory()
         used_pct = mem.percent / 100.0
         if used_pct >= OOM_WARNING_THRESHOLD:
-            self._oom_warned = True
+            self._out_of_memory_warned = True
             total_gb = mem.total / (1024 ** 3)
             avail_gb = mem.available / (1024 ** 3)
             warning = (
@@ -438,13 +438,13 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Durations in seconds of the finished requests
         """
         durations: List[float] = []
-        for fut in futures:
-            if not fut.done() or fut.cancelled():
+        for future in futures:
+            if not future.done() or future.cancelled():
                 continue
             try:
-                if fut.exception() is not None:
+                if future.exception() is not None:
                     continue
-                result = fut.result()
+                result = future.result()
             except (CancelledError, FutureTimeoutError):
                 continue
             dur = result.get("elapsed", result.get("duration"))
