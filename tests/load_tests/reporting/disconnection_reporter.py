@@ -33,6 +33,11 @@ class DisconnectionReporter:
     """
 
     def __init__(self, stage_summaries: List[Dict[str, Any]]) -> None:
+        """
+        Constructor.
+
+        :param stage_summaries: Per-stage summaries collected during the run
+        """
         self._summaries = stage_summaries
 
     def log_disconnection_summary(self) -> None:

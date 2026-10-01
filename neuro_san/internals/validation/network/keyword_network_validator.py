@@ -98,8 +98,10 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
                     f"{agent_name} 'function.description' must be a str,"
                     f" got {type(description).__name__}."
                 )
-            elif description.strip() == "":
-                errors.append(f"{agent_name} 'function.description' cannot be empty.")
+            else:
+                description_string: str = description
+                if description_string.strip() == "":
+                    errors.append(f"{agent_name} 'function.description' cannot be empty.")
         return errors
 
     @staticmethod
@@ -119,6 +121,8 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
                     f"{agent_name} 'instructions' must be a str,"
                     f" got {type(instructions).__name__}."
                 )
-            elif instructions.strip() == "":
-                errors.append(f"{agent_name} 'instructions' cannot be empty.")
+            else:
+                instructions_string: str = instructions
+                if instructions_string.strip() == "":
+                    errors.append(f"{agent_name} 'instructions' cannot be empty.")
         return errors

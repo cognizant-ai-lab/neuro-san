@@ -47,12 +47,23 @@ class SummaryReporter:
 
     def __init__(self, stage_summaries: List[Dict[str, Any]], neuro_san_version: Optional[str] = None,
                  client_token_source: str = "HTTP token_accounting") -> None:
+        """
+        Constructor.
+
+        :param stage_summaries: Per-stage summaries collected during the run
+        :param neuro_san_version: Installed neuro-san version, or None when unknown
+        :param client_token_source: Where the client token counts came from, shown in the token usage block
+        """
         self._summaries = stage_summaries
         self._neuro_san_version = neuro_san_version
         self._client_token_source = client_token_source
 
     def log_ramp_summary(self, is_ramp: bool = True) -> None:
-        """Log the ramp-up summary table across all stages."""
+        """
+        Log the ramp-up summary table across all stages.
+
+        :param is_ramp: True to label each row by stage, False by round
+        """
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         title = "RAMP-UP SUMMARY" if is_ramp else "ROUND SUMMARY"
         logger.info("  %s", title)
@@ -217,6 +228,11 @@ class SummaryReporter:
         ``client`` and ``server`` are token-stat dicts (from
         ``aggregate_token_entries``) or None when that side is
         unavailable.  Prints nothing when both are None.
+
+        :param client: Client token stats, or None
+        :param server: Server log token stats, or None
+        :param client_source: Where the client token counts came from
+        :return: True if the block was logged, False when both are None
         """
         if client is None and server is None:
             return False
@@ -233,7 +249,12 @@ class SummaryReporter:
 
     @staticmethod
     def _log_token_source(label: str, stats: Optional[Dict[str, int]]) -> None:
-        """Log one source's LLM/token lines, or 'not available'."""
+        """
+        Log one source's LLM/token lines, or 'not available'.
+
+        :param label: Source name shown before its lines
+        :param stats: Token stats from aggregate_token_entries, or None
+        """
         if stats is None:
             logger.info("  %s: not available", label)
             return
@@ -253,7 +274,12 @@ class SummaryReporter:
 
     @staticmethod
     def _log_token_match(client: Dict[str, int], server: Dict[str, int]) -> None:
-        """Log whether client and server-log totals agree."""
+        """
+        Log whether client and server-log totals agree.
+
+        :param client: Client token stats
+        :param server: Server log token stats
+        """
         calls_ok = client["calls_total"] == server["calls_total"]
         tok_ok = client["tok_total"] == server["tok_total"]
         if calls_ok and tok_ok:
@@ -273,6 +299,9 @@ class SummaryReporter:
         Each entry needs total_tokens, prompt_tokens,
         completion_tokens, and llm_calls.  Entries with zero total
         tokens are ignored.
+
+        :param entries: Per-request token dicts
+        :return: calls_* and tok_* min/avg/max/total, prompt_total and comp_total; None when no entry has tokens
         """
         calls = []
         toks = []
@@ -303,7 +332,11 @@ class SummaryReporter:
         }
 
     def _has_client_token_copy(self) -> bool:
-        """True if results carry a preserved client-side token copy."""
+        """
+        True if results carry a preserved client-side token copy.
+
+        :return: True if any result has client_total_tokens
+        """
         for summary in self._summaries:
             for result in summary.get("results", []):
                 if "client_total_tokens" in result:
@@ -311,7 +344,12 @@ class SummaryReporter:
         return False
 
     def _token_stats(self, prefix: str) -> Optional[Dict[str, int]]:
-        """Aggregate per-request token fields (optionally prefixed)."""
+        """
+        Aggregate per-request token fields (optionally prefixed).
+
+        :param prefix: Prefix on the token field names: "client_", or "" for none
+        :return: Token stats from aggregate_token_entries, or None when no result has tokens
+        """
         entries = []
         for summary in self._summaries:
             for result in summary.get("results", []):
@@ -345,6 +383,9 @@ class SummaryReporter:
         ``before`` takes the first stage's start values; ``after``
         takes the last stage's end values.  Returns None when no
         system data was collected.
+
+        :param edge: "before" or "after"
+        :return: The snapshot, or None when no stage has system data
         """
         prefix = f"{edge}_sys_"
         chosen = None
@@ -364,7 +405,11 @@ class SummaryReporter:
         return chosen
 
     def _sys_peak_snapshot(self) -> Optional[SysSnapshot]:
-        """Build the whole-system peak snapshot (per-metric max)."""
+        """
+        Build the whole-system peak snapshot (per-metric max).
+
+        :return: Highest value of each metric across stages, or None when no stage has peak data
+        """
         peak_pct = None
         peak_avail = None
         peak_cpu = None
@@ -391,7 +436,11 @@ class SummaryReporter:
         }
 
     def _request_duration_stats(self) -> Optional[Dict[str, float]]:
-        """Compute min/avg/max elapsed time across requests."""
+        """
+        Compute min/avg/max elapsed time across requests.
+
+        :return: min, avg and max elapsed seconds; None when there are no results
+        """
         durations = []
         for summary in self._summaries:
             for result in summary.get("results", []):
@@ -488,7 +537,11 @@ class SummaryReporter:
             self._log_top_errors(all_errors)
 
     def _log_validation_time_impact(self, events: List[Dict[str, Any]]) -> None:
-        """Log avg duration of requests with/without fixes."""
+        """
+        Log avg duration of requests with/without fixes.
+
+        :param events: Validation events from every stage
+        """
         fix_rids = {e.get("request_id") for e in events}
         with_fixes = []
         without_fixes = []
@@ -512,7 +565,11 @@ class SummaryReporter:
 
     @staticmethod
     def _log_top_errors(all_errors: List[str]) -> None:
-        """Log the most common validation errors."""
+        """
+        Log the most common validation errors.
+
+        :param all_errors: Every validation error, repeats included
+        """
         counts = Counter(all_errors)
         top = counts.most_common(3)
         parts = [
@@ -524,7 +581,11 @@ class SummaryReporter:
         )
 
     def _collect_validation_events(self) -> List[Dict[str, Any]]:
-        """Gather all validation events across stages."""
+        """
+        Gather all validation events across stages.
+
+        :return: Validation events from every stage, in stage order
+        """
         events = []
         for summary in self._summaries:
             events.extend(

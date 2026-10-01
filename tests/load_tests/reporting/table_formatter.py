@@ -29,7 +29,12 @@ class TableFormatter:
 
     @staticmethod
     def log_table(header: List[str], rows: Sequence[Sequence[Any]]) -> None:
-        """Log an aligned table given a header list and rows."""
+        """
+        Log an aligned table given a header list and rows.
+
+        :param header: Column names
+        :param rows: Rows of cell values, one per column
+        """
         col_widths = [len(h) for h in header]
         for row in rows:
             for i, val in enumerate(row):

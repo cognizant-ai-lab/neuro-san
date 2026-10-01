@@ -22,6 +22,7 @@ from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
@@ -96,6 +97,15 @@ class AbstractCallableActivation(CallableActivation):
                                             of the tool is being dealt with.
         """
         return self.run_context.get_origin()
+
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        # Do nothing by default for easier implementation inheritance
 
     async def close_of_work(self, parent_resource: RunContext = None):
         """

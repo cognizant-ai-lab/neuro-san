@@ -29,8 +29,48 @@
         ]
     },
     "llm_config": {
-        "model_name": "azure-gpt-4o",
-        "deployment_name": "gpt-4o",
+        # Azure OpenAI serves OpenAI models under deployment names that you pick when you
+        # deploy a model in your Azure resource. Use the "azure-openai" class and give both names.
+        #
+        # "deployment_name" is what matters to Azure: it is what goes in every request, and it
+        # must match a deployment on your resource exactly. This example calls it "gpt-5-2", with
+        # a "-", to make it visible that the deployment name and the model name are two different
+        # things. Change it to whatever your deployment is called.
+        #
+        # "model_name" is the OpenAI model behind the deployment, spelled as in the OpenAI entries
+        # of default_llm_info.hocon (e.g. "gpt-5.2"). With a deployment name given, it is not sent
+        # to Azure: it only prices the tokens for cost reporting. Without it, usage on the
+        # Responses API is reported under the deployment name with no price.
+        #
+        # Connection settings
+        # -------------------
+        # Requests go to https://<resource>.openai.azure.com/openai/v1/, Azure's v1 API, which
+        # takes no api-version. An endpoint and one credential are also required. They are usually
+        # read from the environment, but each can also be given as a key in this llm_config:
+        #   * Endpoint:          AZURE_OPENAI_ENDPOINT   or "azure_endpoint"
+        #   * Credential, one of:
+        #       API key:         AZURE_OPENAI_API_KEY    or "openai_api_key"
+        #       Entra token:     AZURE_OPENAI_AD_TOKEN   or "azure_ad_token"
+        # AZURE_OPENAI_DEPLOYMENT_NAME can supply the deployment name in the same way. With neither
+        # the key nor the variable, the model id that model_name resolves to is sent instead (here
+        # "gpt-5.2-2025-12-11"), which is rarely a deployment name, so keep deployment_name.
+        # Do not check real secrets into source control: prefer env vars or sly_data (see the
+        # Client-Provided API Keys section of docs/agent_hocon_reference.md) for credentials in
+        # checked-in files.
+        #
+        # Every argument of the "openai" class is accepted here too ("reasoning_effort",
+        # "streaming", ...). Leave "temperature" unset for a gpt-5 deployment. langchain applies its
+        # model rules to the deployment name: it drops a temperature other than 1 only when that name
+        # starts with "gpt-5" (as "gpt-5-2" does); for any other name the value is sent as given and
+        # Azure rejects it. Requests use the Responses API by default; if your region or model does
+        # not offer it, add "use_responses_api": false to stay on Chat Completions.
+        #
+        # default_llm_info.hocon also has "azure-*" entries (e.g. "model_name": "azure-gpt-4o")
+        # as a shorthand, but only for some models. The "class" form works for any OpenAI entry
+        # in that file, with any deployment name.
+        "class": "azure-openai",
+        "model_name": "gpt-5.2",
+        "deployment_name": "gpt-5-2",
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which

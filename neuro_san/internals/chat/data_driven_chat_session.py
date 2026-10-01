@@ -46,7 +46,6 @@ from neuro_san.internals.run_context.factory.run_context_factory import RunConte
 from neuro_san.internals.run_context.factory.master_tracing_context_factory import MasterTracingContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.processors.answer_message_processor import AnswerMessageProcessor
-from neuro_san.message.processors.message_processor import MessageProcessor
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
@@ -358,7 +357,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         """
         # OK if this is None
         max_message_history: int = self.front_man.get_agent_tool_spec().get("max_message_history")
-        processor: MessageProcessor = ChatHistoryMessageProcessor(max_message_history)
+        processor = ChatHistoryMessageProcessor(max_message_history)
         processor.process_messages(chat_message_history)
 
         chat_history: Dict[str, Any] = {
@@ -397,7 +396,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         """
         Close any sly data value that can be closed.
         """
-        if self.sly_data is None or len(self.sly_data) == 0:
+        if self.sly_data is None or len(self.sly_data.keys()) == 0:
             # Nothing to close
             return
 
