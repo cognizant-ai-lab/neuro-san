@@ -85,7 +85,7 @@ class TestAgentProfileHoconPrompts(TestCase):
         :param name: File name
         :param agent: Value of the test case's agent key
         :param texts: One interaction per text
-        :param extra: Extra top-level test-case keys, such as failure_patterns
+        :param extra: Extra or replacement top-level test-case keys, such as failure_patterns or interactions
         :return: Path of the written file
         """
         path: str = os.path.join(folder, name)
