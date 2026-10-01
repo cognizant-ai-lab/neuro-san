@@ -17,7 +17,7 @@
 # pylint: disable=too-many-lines
 """Generic load-test orchestrator for neuro-san agent networks.
 
-See tests/load_tests/README.md for prerequisites, test levels, and
+See tests/load_tests/load_tests.md for prerequisites, test levels, and
 usage examples.
 """
 
