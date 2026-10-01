@@ -44,12 +44,24 @@ class SummaryFileWriter:
 
     def __init__(self, stage_summaries: List[Dict[str, Any]], args: Namespace,
                  server_chat_timing: Optional[List[Dict[str, Any]]] = None) -> None:
+        """
+        Constructor.
+
+        :param stage_summaries: Per-stage summaries collected during the run
+        :param args: Parsed load-test command line
+        :param server_chat_timing: Per-agent timing entries from the server log, or None
+        """
         self._summaries = stage_summaries
         self._args = args
         self._server_timing = server_chat_timing or []
 
     def write(self, output_dir: str) -> str:
-        """Write summary.txt and return the file path."""
+        """
+        Write summary.txt and return the file path.
+
+        :param output_dir: Directory to write summary.txt into
+        :return: Path of summary.txt
+        """
         lines = []
         self._write_header(lines)
         self._write_request_results(lines)
@@ -63,7 +75,11 @@ class SummaryFileWriter:
         return path
 
     def _write_header(self, lines: List[str]) -> None:
-        """Write the test configuration header."""
+        """
+        Write the test configuration header.
+
+        :param lines: Summary lines, appended to in place
+        """
         total_requests = sum(
             len(s.get("results", []))
             for s in self._summaries
@@ -149,7 +165,11 @@ class SummaryFileWriter:
         return values
 
     def _write_rss_trajectory(self, lines: List[str]) -> None:
-        """Write server RSS start/peak/end if available."""
+        """
+        Write server RSS start/peak/end if available.
+
+        :param lines: Summary lines, appended to in place
+        """
         start_rss = None
         end_rss = None
         peak_rss = None
@@ -174,7 +194,11 @@ class SummaryFileWriter:
         )
 
     def _write_client_rss_trajectory(self, lines: List[str]) -> None:
-        """Write client RSS start/peak/end if available."""
+        """
+        Write client RSS start/peak/end if available.
+
+        :param lines: Summary lines, appended to in place
+        """
         start_rss = None
         end_rss = None
         peak_rss = None
@@ -199,7 +223,11 @@ class SummaryFileWriter:
         )
 
     def _write_sys_mem_trajectory(self, lines: List[str]) -> None:
-        """Write system memory start/peak/end if available."""
+        """
+        Write system memory start/peak/end if available.
+
+        :param lines: Summary lines, appended to in place
+        """
         start_pct = None
         end_pct = None
         peak_pct = None
@@ -235,7 +263,11 @@ class SummaryFileWriter:
         )
 
     def _write_validation_summary(self, lines: List[str]) -> None:
-        """Write validation retry summary if any events exist."""
+        """
+        Write validation retry summary if any events exist.
+
+        :param lines: Summary lines, appended to in place
+        """
         all_events = []
         for summary in self._summaries:
             all_events.extend(
@@ -273,7 +305,12 @@ class SummaryFileWriter:
             )
 
     def _write_validation_time_impact(self, lines: List[str], events: List[Dict[str, Any]]) -> None:
-        """Write avg duration with/without validation fixes."""
+        """
+        Write avg duration with/without validation fixes.
+
+        :param lines: Summary lines, appended to in place
+        :param events: Validation events from every stage
+        """
         fix_rids = {e.get("request_id") for e in events}
         with_fixes = []
         without_fixes = []
@@ -298,7 +335,11 @@ class SummaryFileWriter:
             )
 
     def _write_request_results(self, lines: List[str]) -> None:
-        """Write per-request result table."""
+        """
+        Write per-request result table.
+
+        :param lines: Summary lines, appended to in place
+        """
         all_results = []
         for summary in self._summaries:
             all_results.extend(summary.get("results", []))
@@ -315,7 +356,12 @@ class SummaryFileWriter:
         self._format_result_totals(lines, all_results)
 
     def _format_result_line(self, lines: List[str], result: Dict[str, Any]) -> None:
-        """Format a single request result line."""
+        """
+        Format a single request result line.
+
+        :param lines: Summary lines, appended to in place
+        :param result: One request result
+        """
         rid = result.get("request_id", "?")
         elapsed = result.get("elapsed", 0)
         status = result.get("status", "?")
@@ -333,7 +379,12 @@ class SummaryFileWriter:
 
     @staticmethod
     def _format_result_totals(lines: List[str], all_results: List[Dict[str, Any]]) -> None:
-        """Format overall totals for request results."""
+        """
+        Format overall totals for request results.
+
+        :param lines: Summary lines, appended to in place
+        :param all_results: Every request result
+        """
         passed = sum(
             1 for r in all_results
             if r.get("status") == STATUS_CREATED
@@ -358,7 +409,11 @@ class SummaryFileWriter:
         lines.append("")
 
     def _write_completion_timeline(self, lines: List[str]) -> None:
-        """Write cumulative completion timeline."""
+        """
+        Write cumulative completion timeline.
+
+        :param lines: Summary lines, appended to in place
+        """
         all_latencies = []
         for summary in self._summaries:
             for result in summary.get("results", []):
@@ -394,7 +449,12 @@ class SummaryFileWriter:
 
     @staticmethod
     def _write_count_milestones(lines: List[str], sorted_latencies: List[float]) -> None:
-        """Write completion times at round-number request counts."""
+        """
+        Write completion times at round-number request counts.
+
+        :param lines: Summary lines, appended to in place
+        :param sorted_latencies: Request latencies in seconds, sorted in ascending order
+        """
         total = len(sorted_latencies)
         step = 50
         if total <= step:
@@ -412,7 +472,11 @@ class SummaryFileWriter:
             )
 
     def _write_server_timing(self, lines: List[str]) -> None:
-        """Write per-request server timing breakdown."""
+        """
+        Write per-request server timing breakdown.
+
+        :param lines: Summary lines, appended to in place
+        """
         if not self._server_timing:
             return
 
@@ -444,7 +508,11 @@ class SummaryFileWriter:
         lines.append("")
 
     def _collect_client_times(self) -> List[Dict[str, Any]]:
-        """Collect client start/end times from all results."""
+        """
+        Collect client start/end times from all results.
+
+        :return: id, start and end of each result that has both times
+        """
         results: List[Dict[str, Any]] = []
         for summary in self._summaries:
             for result in summary.get("results", []):
@@ -461,7 +529,13 @@ class SummaryFileWriter:
 
     @staticmethod
     def _match_client(server_start_ts: float, client_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Find the client request whose window contains the ts."""
+        """
+        Find the client request whose window contains the ts.
+
+        :param server_start_ts: Start time of the top-level server timing entry
+        :param client_results: Client times from _collect_client_times
+        :return: The matching client entry, or {} when none matches
+        """
         for client in client_results:
             if (client.get("start", 0)
                     <= server_start_ts
@@ -472,7 +546,14 @@ class SummaryFileWriter:
     @staticmethod
     def _format_request_timing(lines: List[str], rid: str, entries: List[Dict[str, Any]],
                                client: Dict[str, Any]) -> None:
-        """Format timing breakdown for a single request."""
+        """
+        Format timing breakdown for a single request.
+
+        :param lines: Summary lines, appended to in place
+        :param rid: Request label: the client request id, or the server id when no client matched
+        :param entries: Server timing entries of the request, sorted by start time; the first is the top-level agent
+        :param client: Matching client entry, or {} when none matched
+        """
         top = entries[0]
         top_agent = top.get("agent", "?")
         c_start = client.get("start", 0)
@@ -504,7 +585,13 @@ class SummaryFileWriter:
 
     @staticmethod
     def _format_sub_agents(lines: List[str], entries: List[Dict[str, Any]], top_agent: str) -> None:
-        """Format sub-agent timing lines."""
+        """
+        Format sub-agent timing lines.
+
+        :param lines: Summary lines, appended to in place
+        :param entries: Server timing entries of the request
+        :param top_agent: Name of the top-level agent, left out of the list
+        """
         sub_agents = [
             e for e in entries
             if e.get("agent") != top_agent
@@ -523,7 +610,12 @@ class SummaryFileWriter:
 
     @staticmethod
     def _extract_detail(result: Dict[str, Any]) -> str:
-        """Extract a human-readable detail from parsed fields."""
+        """
+        Extract a human-readable detail from parsed fields.
+
+        :param result: One request result
+        :return: Network name or reservation id, then failure reason; empty when neither is set
+        """
         parts = []
         for key in ("agent_network_name", "reservation_id"):
             val = result.get(key, "")

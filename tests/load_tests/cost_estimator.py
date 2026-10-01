@@ -37,6 +37,11 @@ class CostEstimator:
         Looks up per-model pricing by substring match, then computes
         cost as (tokens / 1M) * rate for prompt and completion
         separately.
+
+        :param prompt_tokens: Prompt tokens used
+        :param completion_tokens: Completion tokens used
+        :param model: Model name matched against MODEL_PRICING; DEFAULT_PRICING when none match
+        :return: Estimated cost in USD
         """
         pricing = DEFAULT_PRICING
         for key in sorted(MODEL_PRICING, key=len, reverse=True):

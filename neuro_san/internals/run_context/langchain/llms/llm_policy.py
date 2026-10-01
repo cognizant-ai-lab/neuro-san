@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 from typing import Tuple
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -138,13 +139,24 @@ class LlmPolicy(EnvironmentConfiguration):
             # We will handle this in the None-client case below.
             client = None
 
-        # Check for key "model_name", "model", and "model_id" to use as model name
-        # If the config is from default_llm_info, this is always "model_name"
-        # but with user-specified config, it is possible to have the other keys will be specifed instead.
-        model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
+        model_name: Optional[str] = self.get_model_name(config)
 
         llm: BaseLanguageModel = self.create_llm(config, model_name, client)
         if client is None:
             self.llm = llm
 
         return llm, self
+
+    @staticmethod
+    def get_model_name(config: Dict[str, Any]) -> Optional[str]:
+        """
+        Reads the model name from an llm config.
+
+        A config built from llm_info always carries "model_name", but a user-specified
+        config can name the model under "model" or "model_id" instead, so all three are accepted.
+
+        :param config: The fully specified llm config
+        :return: The value of "model_name", "model" or "model_id", whichever is set first,
+                or None when none of them is
+        """
+        return config.get("model_name") or config.get("model") or config.get("model_id")

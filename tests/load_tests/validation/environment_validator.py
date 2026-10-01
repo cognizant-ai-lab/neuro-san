@@ -90,7 +90,13 @@ class EnvironmentValidator:
 
     @staticmethod
     def is_port_open(host: str, port: int) -> bool:
-        """Check if a TCP port is accepting connections."""
+        """
+        Check if a TCP port is accepting connections.
+
+        :param host: Server host name or address
+        :param port: TCP port to check
+        :return: True if a connection succeeds within SOCKET_CHECK_TIMEOUT, False otherwise
+        """
         try:
             with socket.create_connection(
                 (host, port), timeout=SOCKET_CHECK_TIMEOUT,
@@ -105,6 +111,9 @@ class EnvironmentValidator:
 
         Searches by process keyword first, then falls back to port
         ownership.  Returns the process or None.
+
+        :param args: Parsed arguments; host and port are used
+        :return: The server process, or None when it is not found locally
         """
         if not EnvironmentValidator.is_port_open(args.host, args.port):
             logger.error(
@@ -151,6 +160,9 @@ class EnvironmentValidator:
         for the default (unrequested) auto-detect so that remote or
         no-server runs degrade quietly to no server-log analysis
         instead of failing.
+
+        :param args: Parsed arguments; host and port are used
+        :return: Path to logs/server.log in the server's working directory, or None when it cannot be found
         """
         if not EnvironmentValidator.is_port_open(
                 args.host, args.port,
@@ -184,6 +196,9 @@ class EnvironmentValidator:
         Looks for logs/server.log relative to the server's working
         directory.  Aborts with sys.exit(1) when auto-detection
         fails because the user explicitly requested --server-log.
+
+        :param server_proc: Local server process, or None when it was not found
+        :return: Path to logs/server.log in the server's working directory
         """
         if server_proc is None:
             logger.error(
