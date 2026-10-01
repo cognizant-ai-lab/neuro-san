@@ -57,12 +57,14 @@ class ToolboxNetworkValidator(AbstractNetworkValidator):
             if agent_dict.get("instructions") is None:  # This is a toolbox agent
                 if self.tools is None or not isinstance(self.tools, Dict):
                     errors.append(f"Toolbox is unavailable. Cannot create Toolbox agent '{agent_name}'.")
-                    return errors
+                    continue
 
                 tools_dict: Dict[str, Any] = self.tools
                 if agent_name not in tools_dict.keys():
                     errors.append(f"Toolbox agent '{agent_name}' has no matching tool in toolbox.")
-                    return errors
+                    continue
+
+                # The agent has a matching tool in the toolbox
                 if agent_dict.get("tools"):
                     errors.append(
                         "Toolbox agent cannot have 'tools'. "
