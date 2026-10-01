@@ -44,7 +44,11 @@ class TestResolvePath(TestCase):
         os.rmdir(self._dir)
 
     def _create_history(self) -> str:
-        """Create a default-named history file in the scratch directory."""
+        """
+        Create a default-named history file in the scratch directory.
+
+        :return: Path of the created file
+        """
         path = os.path.join(self._dir, HISTORY_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(json.dumps({"agent": "one"}) + "\n")

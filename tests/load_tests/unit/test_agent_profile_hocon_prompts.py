@@ -43,26 +43,51 @@ class TestAgentProfileHoconPrompts(TestCase):
 
     @staticmethod
     def _fixture_hocons(agent: str) -> List[str]:
-        """Sorted hocon paths under the default fixtures dir for one agent."""
+        """
+        Sorted hocon paths under the default fixtures dir for one agent.
+
+        :param agent: Agent name, also the fixtures subfolder
+        :return: Sorted *.hocon paths in that subfolder
+        """
         return sorted(glob.glob(TOP_LEVEL_DIR.get_file_in_basis(
             os.path.join("..", DEFAULT_FIXTURES_HOCON_DIR, agent, "*.hocon"),
         )))
 
     @classmethod
     def _load_fixtures(cls, agent: str) -> AgentProfile:
-        """Load the profile from the checked-in fixtures of one agent."""
+        """
+        Load the profile from the checked-in fixtures of one agent.
+
+        :param agent: Agent name, also the fixtures subfolder
+        :return: Profile built from that agent's fixture hocons
+        """
         return cls._load(agent, cls._fixture_hocons(agent))
 
     @staticmethod
     def _load(agent: str, hocon_files: List[str]) -> AgentProfile:
-        """Load the profile from the given hocons."""
+        """
+        Load the profile from the given hocons.
+
+        :param agent: Agent name passed to AgentProfileFactory
+        :param hocon_files: Test-case hocon paths to read prompts from
+        :return: Profile built from those hocons
+        """
         return AgentProfileFactory().create(
             agent, project_root=PROJECT_ROOT, hocon_files=hocon_files,
         )
 
     @staticmethod
     def _write_hocon(folder: str, name: str, agent: str, texts: List[str], **extra: Any) -> str:
-        """Write a minimal test-case hocon (JSON is valid hocon) and return its path."""
+        """
+        Write a minimal test-case hocon (JSON is valid hocon) and return its path.
+
+        :param folder: Directory to write the file in
+        :param name: File name
+        :param agent: Value of the test case's agent key
+        :param texts: One interaction per text
+        :param extra: Extra or replacement top-level test-case keys, such as failure_patterns or interactions
+        :return: Path of the written file
+        """
         path: str = os.path.join(folder, name)
         test_case: Dict[str, Any] = {
             "agent": agent,

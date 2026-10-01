@@ -41,7 +41,12 @@ class TestRebuiltAggregates(TestCase):
         os.makedirs(os.path.join(self._dir, "requests"))
 
     def _build_run(self, elapsed_by_id: Dict[int, float]) -> Dict[str, Any]:
-        """Rebuild a run of successful requests with the given timings."""
+        """
+        Rebuild a run of successful requests with the given timings.
+
+        :param elapsed_by_id: Elapsed seconds per request id
+        :return: Aggregates read back from raw_results.json
+        """
         lines = []
         for req_id, elapsed in elapsed_by_id.items():
             path = os.path.join(

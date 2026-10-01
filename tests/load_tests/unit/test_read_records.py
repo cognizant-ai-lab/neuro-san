@@ -41,7 +41,11 @@ class TestReadRecords(TestCase):
         self.addCleanup(os.unlink, self._path)
 
     def _write(self, text: str) -> None:
-        """Write the given text to the scratch history file."""
+        """
+        Write the given text to the scratch history file.
+
+        :param text: History file contents
+        """
         with open(self._path, "w", encoding="utf-8") as handle:
             handle.write(text)
 

@@ -45,7 +45,14 @@ class TestValidateFixturesHoconDir(TestCase):
     def _validator(agent: str = "hello_world",
                    fixtures_hocon_dir: Optional[str] = None,
                    project_root: Optional[str] = PROJECT_ROOT) -> InputValidator:
-        """Build a validator with only the args this method reads."""
+        """
+        Build a validator with only the args this method reads.
+
+        :param agent: --agent value
+        :param fixtures_hocon_dir: --fixtures-hocon-dir value; None when not given
+        :param project_root: --project-root value
+        :return: Validator over those args
+        """
         return InputValidator(Namespace(
             agent=agent,
             fixtures_hocon_dir=fixtures_hocon_dir,

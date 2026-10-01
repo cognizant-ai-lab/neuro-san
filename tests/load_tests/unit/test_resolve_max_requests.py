@@ -32,7 +32,13 @@ class TestResolveMaxRequests(TestCase):
 
     @staticmethod
     def _validator(num_rounds: int = 1, max_requests: Optional[int] = None) -> InputValidator:
-        """Build a validator with only the args these methods read."""
+        """
+        Build a validator with only the args these methods read.
+
+        :param num_rounds: --num-rounds value
+        :param max_requests: --max-requests value; None when not given
+        :return: Validator over those args
+        """
         return InputValidator(Namespace(
             num_rounds=num_rounds,
             max_requests=max_requests,

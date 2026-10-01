@@ -53,10 +53,16 @@ class TestParseTokenAccountingSince(TestCase):
 
     @staticmethod
     def _reporting_record(request_id: str, total: int = 1500, model: str = "gpt-4o") -> str:
-        """Render one 'Request reporting' record as the server writes it.
+        """
+        Render one 'Request reporting' record as the server writes it.
 
         Prompt and completion tokens are split 4:1 out of ``total`` so
         the three counts stay consistent with one another.
+
+        :param request_id: Request id in the log record
+        :param total: Total tokens
+        :param model: caller_model value
+        :return: One formatted log record
         """
         prompt = total * 4 // 5
         payload = {
@@ -74,7 +80,11 @@ class TestParseTokenAccountingSince(TestCase):
         )
 
     def _write(self, text: str) -> None:
-        """Write the given log text to the scratch log file."""
+        """
+        Write the given log text to the scratch log file.
+
+        :param text: Log text to write
+        """
         with open(self._log_path, "w", encoding="utf-8") as handle:
             handle.write(text)
 

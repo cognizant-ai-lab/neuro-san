@@ -48,7 +48,11 @@ class TestExportRawJsonAggregates(TestCase):
         self.addCleanup(shutil.rmtree, self._dir)
 
     def _orchestrator(self) -> LoadTestOrchestrator:
-        """Build an orchestrator with only what the export reads."""
+        """
+        Build an orchestrator with only what the export reads.
+
+        :return: Orchestrator that writes to the scratch directory
+        """
         orchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
         orchestrator._output_dir = self._dir
         orchestrator._server_ns_version = "0.6.92"
@@ -72,7 +76,12 @@ class TestExportRawJsonAggregates(TestCase):
         return orchestrator
 
     def _export(self, elapsed_values: List[float]) -> Dict[str, Any]:
-        """Export one stage of successful requests and read it back."""
+        """
+        Export one stage of successful requests and read it back.
+
+        :param elapsed_values: Elapsed seconds, one per request
+        :return: Aggregates read back from raw_results.json
+        """
         results: List[Dict[str, Any]] = []
         for index, elapsed in enumerate(elapsed_values, start=1):
             results.append({

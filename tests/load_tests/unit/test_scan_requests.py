@@ -45,7 +45,11 @@ class TestScanRequests(TestCase):
         os.makedirs(os.path.join(self._dir, "requests"))
 
     def _write_request(self, req_id: int) -> None:
-        """Write stdout for a request that got as far as reserving."""
+        """
+        Write stdout for a request that got as far as reserving.
+
+        :param req_id: Request id used in the file name and reservation id
+        """
         path = os.path.join(
             self._dir, "requests", f"request_{req_id}_stdout.txt",
         )
@@ -56,13 +60,21 @@ class TestScanRequests(TestCase):
             )
 
     def _write_log(self, text: str) -> None:
-        """Write the run log the rebuild reads timing from."""
+        """
+        Write the run log the rebuild reads timing from.
+
+        :param text: Log text to write
+        """
         path = os.path.join(self._dir, "load_test.log")
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
 
     def _rebuild(self) -> Dict[str, Dict[str, Any]]:
-        """Rebuild the run and return results keyed by request id."""
+        """
+        Rebuild the run and return results keyed by request id.
+
+        :return: Results keyed by request id
+        """
         rebuilder = ResultsRebuilder(self._dir)
         results = rebuilder._scan_requests(
             os.path.join(self._dir, "requests"), rebuilder._parse_timing(),
