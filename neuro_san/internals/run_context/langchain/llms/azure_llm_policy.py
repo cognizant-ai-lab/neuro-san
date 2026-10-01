@@ -431,7 +431,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             return
 
         AzureLlmPolicy.legacy_keys_warned = True
-        self.logger.warning("Ignoring llm_config key(s) %s: AzureLlmPolicy sends requests to Azure OpenAI's "
-                            "v1 API, which takes no api-version. Remove them from the llm_config; "
-                            "the OPENAI_API_VERSION environment variable is no longer read either.",
+        self.logger.warning("Ignoring llm_config key(s) %s: Azure OpenAI's v1 API takes no api-version, "
+                            "so these keys have no effect. Remove these keys from the llm_config. "
+                            "The OPENAI_API_VERSION environment variable is no longer read either.",
                             ", ".join(legacy_present))

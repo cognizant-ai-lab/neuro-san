@@ -1717,7 +1717,7 @@
             # {AZURE_OPENAI_ENDPOINT}/openai/v1/. That API serves the OpenAI wire format for both Chat Completions
             # and the Responses API without an api-version, so this class extends "openai" and inherits every
             # argument and default above, including "use_responses_api": true, "store": false and "include": null;
-            # AzureLlmPolicy forwards them all. The inherited "openai_api_key" falls back to AZURE_OPENAI_API_KEY,
+            # all of them are forwarded. The inherited "openai_api_key" falls back to AZURE_OPENAI_API_KEY,
             # then OPENAI_API_KEY; a Microsoft Entra token can be given as "azure_ad_token" instead.
             # The usual llm_config names this class, the OpenAI model_name behind the deployment and the
             # deployment_name; see neuro_san/registries/music_nerd_pro_llm_azure.hocon.
@@ -1751,7 +1751,7 @@
                 "azure_ad_token": null,
 
                 # Accepted for backward compatibility only. These selected and described the dated Azure
-                # api-version routes, which the v1 API replaced. AzureLlmPolicy ignores them and logs one warning
+                # api-version routes, which the v1 API replaced. They are ignored, with one warning logged
                 # when an llm_config still sets them. The OPENAI_API_VERSION environment variable is not read
                 # either.
                 "openai_api_version": null,
