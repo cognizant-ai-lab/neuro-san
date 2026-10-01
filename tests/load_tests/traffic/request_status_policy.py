@@ -17,19 +17,21 @@
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
+from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 
 
 class RequestStatusPolicy:
     """
-    Decides the status recorded for one load-test request.
+    Decides the status recorded for one load-test request, and which
+    recorded statuses count as failures or carry a traceback.
 
     TIMEOUT when the request took at least --request-timeout, whether or not
     it raised; otherwise FAILED when it raised or produced no answer text,
     and CREATED when it produced one.
     """
 
-    def __init__(self, timeout: float):
+    def __init__(self, timeout: float) -> None:
         """
         Constructor.
 
@@ -60,3 +62,24 @@ class RequestStatusPolicy:
         if error_text or not answer_text:
             return STATUS_FAILED
         return STATUS_CREATED
+
+    @staticmethod
+    def is_failure(status: str) -> bool:
+        """
+        Tell whether a recorded status counts as a failure.
+
+        :param status: One of the STATUS_* values
+        :return: True for FAILED, TIMEOUT and KILLED
+        """
+        return status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED)
+
+    @staticmethod
+    def is_traceback(status: str, response_text: str) -> bool:
+        """
+        Tell whether a FAILED request carries the traceback of the exception it raised as its response text.
+
+        :param status: One of the STATUS_* values
+        :param response_text: Response text of the request
+        :return: True for a FAILED status with a response text
+        """
+        return status == STATUS_FAILED and bool(response_text)

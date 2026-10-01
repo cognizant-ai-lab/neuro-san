@@ -19,6 +19,7 @@ from unittest import TestCase
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
+from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.traffic.request_status_policy import RequestStatusPolicy
 
@@ -52,3 +53,16 @@ class TestRequestStatusPolicy(TestCase):
         """Answer text within the cap is CREATED."""
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
         self.assertEqual(policy.status_for(1.0, "answer"), STATUS_CREATED)
+
+    def test_is_failure(self) -> None:
+        """FAILED, TIMEOUT and KILLED are failures; CREATED is not."""
+        for status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
+            with self.subTest(status=status):
+                self.assertTrue(RequestStatusPolicy.is_failure(status))
+        self.assertFalse(RequestStatusPolicy.is_failure(STATUS_CREATED))
+
+    def test_is_traceback(self) -> None:
+        """Only a FAILED request with response text carries a traceback."""
+        self.assertTrue(RequestStatusPolicy.is_traceback(STATUS_FAILED, "Traceback ..."))
+        self.assertFalse(RequestStatusPolicy.is_traceback(STATUS_FAILED, ""))
+        self.assertFalse(RequestStatusPolicy.is_traceback(STATUS_CREATED, "answer"))

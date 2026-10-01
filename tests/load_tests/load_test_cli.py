@@ -78,9 +78,11 @@ from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
 from tests.load_tests.reporting.system_resources import SystemResources
+from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 from tests.load_tests.reporting.summary_file_writer import SummaryFileWriter
 from tests.load_tests.reporting.trend_history import TrendHistory
 from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.traffic.stage_plan import StagePlan
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.output_validator import OutputValidator
@@ -177,7 +179,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ServerLogMonitor(self.server_log)
             if self.server_log else None
         )
-        self.runner = TrafficRunner(args, self.profile)
+        self._cancel_event: threading.Event = threading.Event()
+        self.runner: TrafficRunner = TrafficRunner(args, self.profile, self._cancel_event)
         self.resource_reporter = ResourceReporter()
         self.probe_result = None
         self._output_dir = None
@@ -185,7 +188,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._test_log_handler = None
         self._aborted = False
         self._interrupted = False
-        self._cancel_event = threading.Event()
         self._server_ns_version = None
 
     def _profile_source(self) -> str:
@@ -354,7 +356,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             stop_event, monitor, _peak = (
                 self.log_monitor.start_log_monitor(
                     log_pos,
-                    stage_requests, time.time(),
+                    stage_requests, time.perf_counter(),
                     client_proc=client_proc,
                     primary_start_pattern=(
                         self.profile.get_primary_start_pattern()
@@ -366,22 +368,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         sys_before = SystemResources.snapshot()
         before_sys_mem_pct = sys_before["mem_pct"]
 
+        first_request_number: int = global_offset + (1 if probe_used else 0)
+        plan: StagePlan = StagePlan(stage_requests, stage_workers, first_request_number, self._output_dir)
         (elapsed, results, peak_threads, peak_client_rss,
          peak_server_rss, peak_sys_mem_pct, peak_sys_cpu,
          peak_sys_threads,
          server_died, interrupted) = (
             self.runner.run_stage(
-                stage_requests, stage_workers,
-                global_offset + (1 if probe_used else 0),
+                plan,
                 server_proc=self.server_proc,
                 client_proc=client_proc,
-                output_dir=self._output_dir,
-                stage_timeout=self.args.stage_timeout,
-                cancel_event=self._cancel_event,
                 log_monitor=self.log_monitor,
-                primary_start_pattern=(
-                    self.profile.get_primary_start_pattern()
-                ),
             )
         )
         if interrupted:
@@ -881,7 +878,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 logger.info(
                     "\n  Token usage (from server log):",
                 )
-                TrafficRunner.log_token_summary(
+                TokenLogWriter.log_token_summary(
                     results, output_dir=self._output_dir,
                     network_tokens=network_tokens,
                     validation_events=validation_events,
@@ -908,7 +905,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 logger.info(
                     "\n  Token usage (from %s):", token_source,
                 )
-                TrafficRunner.log_token_summary(
+                TokenLogWriter.log_token_summary(
                     results, output_dir=self._output_dir,
                 )
             if self.args.level != LEVEL_MIN:

@@ -647,6 +647,7 @@ tests/load_tests/
     summary.py                 SummaryReporter
     system_resources.py        SystemResources (whole-system mem/cpu/threads)
     table_formatter.py         TableFormatter
+    token_log_writer.py        TokenLogWriter (token totals, server_tokens.log)
     trend_history.py           TrendHistory (--trend output)
 
   traffic/
@@ -656,6 +657,7 @@ tests/load_tests/
     request_status_policy.py   RequestStatusPolicy (CREATED / FAILED / TIMEOUT decision)
     request_timeout_error.py   RequestTimeoutError (raised past --request-timeout)
     runner.py                  TrafficRunner (thread pool executor)
+    stage_plan.py              StagePlan (request count, workers, numbering, output dir of a stage)
     timed_streaming_chat.py    TimedStreamingChat (first-response timing, request-timeout check)
 
   validation/
