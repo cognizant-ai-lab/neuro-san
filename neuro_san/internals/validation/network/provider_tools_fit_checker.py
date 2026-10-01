@@ -41,8 +41,9 @@ class ProviderToolsFitChecker:
         args cannot use the list at all, so it is reported and skipped by the shape rules.
       - One provider: the runtime binds the same list to every fallback and rejects a
         chain whose models use different provider classes, so mixed classes are reported.
-      - Responses API: an OpenAI-family model that sets use_responses_api to false cannot
-        reach the built-in tools, which exist only on the Responses API.
+      - Responses API: an OpenAI-family model that ends up with use_responses_api false,
+        set in the llm_config or inherited from the class defaults, cannot reach the
+        built-in tools, which exist only on the Responses API.
       - Shape: each dictionary must look like what the family expects. Gemini built-ins
         are keyed by tool name, OpenAI and Anthropic entries carry a string `type`, and an
         Anthropic `type` must be a server tool, since neuro-san does not execute the
@@ -81,7 +82,7 @@ class ProviderToolsFitChecker:
 
     # The llm_config keys that decide which models are built and which list is bound to them.
     # An agent whose values all equal the network's is running the network's own setup.
-    MODEL_KEYS: List[str] = ["provider_tools", "model_name", "class", "fallbacks"]
+    MODEL_KEYS: List[str] = ["provider_tools", "model_name", "class", "fallbacks", "use_responses_api"]
 
     # The model label used in messages when a model config has no model_name.
     DEFAULT_MODEL_LABEL: str = "default"
@@ -255,11 +256,13 @@ class ProviderToolsFitChecker:
 
     def check_responses_api(self, label: str, models: List[Tuple[str, str, str, bool, Dict[str, Any]]]) -> List[str]:
         """
-        Reports an OpenAI-family model that turns the Responses API off while binding provider_tools.
+        Reports an OpenAI-family model that has the Responses API off while binding provider_tools.
 
         OpenAI built-in tools exist only on the Responses API. langchain-openai routes a
-        request with a built-in tool there automatically, unless use_responses_api is set to
-        false, in which case the tool goes to Chat Completions and OpenAI rejects it.
+        request with a built-in tool there automatically, unless use_responses_api is false,
+        in which case the tool goes to Chat Completions and OpenAI rejects it. A value in the
+        model config wins, an explicit null leaves the choice to langchain, and an absent key
+        takes the default the runtime fills in from llm_info (DefaultLlmFactory.get_default_arg_value).
 
         :param label: The agent name, or NETWORK_LABEL for an inherited setup
         :param models: The resolved models from resolve_models()
@@ -269,9 +272,13 @@ class ProviderToolsFitChecker:
         for model_label, _, family, declares, model_config in models:
             if family != self.OPENAI_FAMILY or not declares:
                 continue
-            if model_config.get("use_responses_api") is False:
-                errors.append(f"{label} sets use_responses_api to false for model '{model_label}' but declares"
-                              f" provider_tools; OpenAI built-in tools need the Responses API.")
+            if "use_responses_api" in model_config:
+                value: Any = model_config.get("use_responses_api")
+            else:
+                value = self.factory.get_default_arg_value(model_config, "use_responses_api")
+            if value is False:
+                errors.append(f"{label} binds provider_tools to model '{model_label}' with use_responses_api false;"
+                              f" OpenAI built-in tools need the Responses API.")
         return errors
 
     def check_entry_shape(self, label: str, index: int, entry: Dict[str, Any], family: str) -> List[str]:

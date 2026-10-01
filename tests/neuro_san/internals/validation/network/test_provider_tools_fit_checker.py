@@ -282,8 +282,8 @@ class TestProviderToolsFitChecker(TestCase):
         errors: List[str] = self._check({"model_name": self.OPENAI_MODEL, "use_responses_api": False,
                                          "provider_tools": [self.WEB_SEARCH]})
 
-        self.assertEqual([self.AGENT + " sets use_responses_api to false for model '" + self.OPENAI_MODEL + "' but"
-                          " declares provider_tools; OpenAI built-in tools need the Responses API."], errors)
+        self.assertEqual([self.AGENT + " binds provider_tools to model '" + self.OPENAI_MODEL + "' with"
+                          " use_responses_api false; OpenAI built-in tools need the Responses API."], errors)
 
     def test_use_responses_api_true_with_provider_tools_passes(self) -> None:
         """
@@ -304,8 +304,8 @@ class TestProviderToolsFitChecker(TestCase):
                           {"model_name": self.SECOND_OPENAI_MODEL, "use_responses_api": False}],
         })
 
-        self.assertEqual([self.AGENT + " sets use_responses_api to false for model '" + self.SECOND_OPENAI_MODEL
-                          + "' but declares provider_tools; OpenAI built-in tools need the Responses API."], errors)
+        self.assertEqual([self.AGENT + " binds provider_tools to model '" + self.SECOND_OPENAI_MODEL
+                          + "' with use_responses_api false; OpenAI built-in tools need the Responses API."], errors)
 
     def test_use_responses_api_false_on_azure_is_reported(self) -> None:
         """
@@ -314,8 +314,47 @@ class TestProviderToolsFitChecker(TestCase):
         errors: List[str] = self._check({"model_name": self.AZURE_MODEL, "use_responses_api": False,
                                          "provider_tools": [self.WEB_SEARCH]})
 
-        self.assertEqual([self.AGENT + " sets use_responses_api to false for model '" + self.AZURE_MODEL + "' but"
-                          " declares provider_tools; OpenAI built-in tools need the Responses API."], errors)
+        self.assertEqual([self.AGENT + " binds provider_tools to model '" + self.AZURE_MODEL + "' with"
+                          " use_responses_api false; OpenAI built-in tools need the Responses API."], errors)
+
+    def test_explicit_null_use_responses_api_passes(self) -> None:
+        """
+        An explicit null leaves the endpoint choice to langchain, which routes built-in tools to the
+        Responses API, so nothing is reported.
+        """
+        errors: List[str] = self._check({"model_name": self.OPENAI_MODEL, "use_responses_api": None,
+                                         "provider_tools": [self.WEB_SEARCH]})
+
+        self.assertEqual([], errors)
+
+    def test_class_default_use_responses_api_false_is_reported(self) -> None:
+        """
+        A user llm_info that turns the openai class default off is honoured when the llm_config is silent.
+        """
+        extra_hocon: str = '{ "classes": { "openai": { "args": { "use_responses_api": false } } } }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        errors: List[str] = self._check({"model_name": self.OPENAI_MODEL, "provider_tools": [self.WEB_SEARCH]},
+                                        factory=factory)
+
+        self.assertEqual([self.AGENT + " binds provider_tools to model '" + self.OPENAI_MODEL + "' with"
+                          " use_responses_api false; OpenAI built-in tools need the Responses API."], errors)
+
+    def test_agent_use_responses_api_override_is_labelled_by_name(self) -> None:
+        """
+        An agent that keeps the network's model and list but turns the Responses API off is the one
+        at fault, so the message carries its name rather than "network".
+        """
+        inherited: Dict[str, Any] = {"model_name": self.OPENAI_MODEL, "provider_tools": [self.WEB_SEARCH]}
+        candidates: List[Tuple[str, Dict[str, Any], Dict[str, Any]]] = [
+            self._candidate(self.AGENT, {"model_name": self.OPENAI_MODEL, "provider_tools": [self.WEB_SEARCH],
+                                         "use_responses_api": False}),
+        ]
+
+        errors: List[str] = self._checker().check(candidates, inherited)
+
+        self.assertEqual([self.AGENT + " binds provider_tools to model '" + self.OPENAI_MODEL + "' with"
+                          " use_responses_api false; OpenAI built-in tools need the Responses API."], errors)
 
     # ---- Part 2: one provider per fallback chain -------------------------------------------------------
 

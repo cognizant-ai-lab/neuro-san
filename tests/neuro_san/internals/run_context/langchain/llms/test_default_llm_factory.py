@@ -582,6 +582,37 @@ class TestDefaultLlmFactory(TestCase):
         for class_name in ["anthropic-bedrock", "ollama"]:
             self.assertFalse(self.factory.declares_provider_tools(class_name), class_name)
 
+    def test_get_default_arg_value_from_class_of_model_name(self) -> None:
+        """
+        With only a model_name, the default comes from the resolved class's args.
+        """
+        self.assertIs(True, self.factory.get_default_arg_value({"model_name": "gpt-4.1"}, "use_responses_api"))
+
+    def test_get_default_arg_value_with_class_follows_extends(self) -> None:
+        """
+        With a "class" in the llm_config, only that class's args (merged through extends) supply the default.
+        """
+        config: Dict[str, Any] = {"class": "azure-openai", "model_name": "gpt-5.2", "deployment_name": "d"}
+        self.assertIs(True, self.factory.get_default_arg_value(config, "use_responses_api"))
+
+    def test_get_default_arg_value_honours_user_class_default(self) -> None:
+        """
+        A user llm_info that changes a class default is what the runtime would fill in.
+        """
+        extra_hocon: str = '{ "classes": { "openai": { "args": { "use_responses_api": false } } } }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertIs(False, factory.get_default_arg_value({"model_name": "gpt-4.1"}, "use_responses_api"))
+        self.assertIs(False, factory.get_default_arg_value({"class": "azure-openai"}, "use_responses_api"))
+
+    def test_get_default_arg_value_unknown_is_none(self) -> None:
+        """
+        An unknown model or class, or a key no class sets, yields None without raising.
+        """
+        self.assertIsNone(self.factory.get_default_arg_value({"model_name": "no-such-model"}, "use_responses_api"))
+        self.assertIsNone(self.factory.get_default_arg_value({"class": "my.pkg.MyChat"}, "use_responses_api"))
+        self.assertIsNone(self.factory.get_default_arg_value({"model_name": "gpt-4.1"}, "no_such_key"))
+
     def test_declares_provider_tools_unknown_is_false(self) -> None:
         """
         A class that is not in the table, or no class at all, declares nothing.

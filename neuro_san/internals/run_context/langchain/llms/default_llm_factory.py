@@ -424,6 +424,47 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             return False
         return "provider_tools" in args
 
+    def get_default_arg_value(self, config: Dict[str, Any], key: str) -> Any:
+        """
+        Tells what value the runtime fills in for an llm_config key the user left unset.
+
+        This mirrors create_full_llm_config(): when the llm_config names a "class", only that
+        class's args (merged through "extends") supply defaults; otherwise the class is the
+        one model_name resolves to, and llm_info's default_config is overlaid on its args.
+        Nothing is raised for an unknown class or model; the result is then None.
+
+        :param config: The llm_config from the user, or one fallbacks entry
+        :param key: The llm_config key to look up
+        :return: The default value, or None when nothing supplies one
+        """
+        class_from_llm_config: Any = config.get("class")
+        if isinstance(class_from_llm_config, str) and len(class_from_llm_config) > 0:
+            return self._class_args_or_empty(class_from_llm_config).get(key)
+
+        class_args: Dict[str, Any] = self._class_args_or_empty(self.get_chat_class_name(config))
+        default_config: Any = self.llm_infos.get("default_config")
+        if not isinstance(default_config, dict):
+            default_config = {}
+        defaults: Dict[str, Any] = self.overlayer.overlay(class_args, default_config)
+        return defaults.get(key)
+
+    def _class_args_or_empty(self, chat_class_name: Optional[str]) -> Dict[str, Any]:
+        """
+        Reads a class's args from the llm_info "classes" table, merged through "extends".
+
+        :param chat_class_name: The class name as the runtime would look it up, or None
+        :return: The merged args, or an empty dictionary when the class is not in the table
+        """
+        chat_classes: Any = self.llm_infos.get("classes")
+        if not isinstance(chat_class_name, str) or not isinstance(chat_classes, dict):
+            return {}
+        if chat_class_name not in chat_classes:
+            return {}
+        args: Any = self.get_chat_class_args(chat_class_name)
+        if not isinstance(args, dict):
+            return {}
+        return args
+
     def _find_llm_entry(self, model_name: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Looks up the llm_info entry for a model name, following at most one alias hop.

@@ -79,8 +79,9 @@ errors, so they surface at load time rather than as provider errors at request t
   does not support it, such as `ollama` or `anthropic-bedrock`.
 - A fallback chain whose models resolve to more than one class while `provider_tools` is non-empty, since the same
   list is bound to every fallback and the runtime rejects such a chain.
-- `use_responses_api` set to `false` on an `openai` or `azure-openai` model that declares `provider_tools`, since
-  OpenAI built-in tools exist only on the Responses API.
+- `use_responses_api` false on an `openai` or `azure-openai` model that declares `provider_tools`, whether set in
+  the llm_config or inherited from a class default in a user llm_info file, since OpenAI built-in tools exist only
+  on the Responses API.
 - A dictionary that does not match the provider: a Gemini entry with a `type` key, an OpenAI or Anthropic entry
   without a string `type`, or an Anthropic `type` that is not a server tool. Anthropic client-side tools (`bash_`,
   `text_editor_`, `computer_`, `memory_`) are reported here because neuro-san does not execute them.
