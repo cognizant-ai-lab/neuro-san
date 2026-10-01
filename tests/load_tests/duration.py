@@ -31,7 +31,12 @@ class DurationParser:
 
     @staticmethod
     def parse(value: str) -> int:
-        """Return whole seconds for ``value``; raise on bad input."""
+        """
+        Return whole seconds for ``value``; raise on bad input.
+
+        :param value: Seconds, or a number with an s, m or h suffix
+        :return: Whole seconds
+        """
         text = str(value).strip().lower()
         if not text:
             raise argparse.ArgumentTypeError("empty duration")

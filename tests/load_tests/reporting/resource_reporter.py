@@ -17,19 +17,21 @@
 """Builds and logs server and client resource delta tables."""
 
 import logging
+from typing import Any
+from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.config import ResourceSnapshot
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)
-ServerResourceRow = Tuple[tuple, ResourceSnapshot, ResourceSnapshot]
+ServerResourceRow = Tuple[tuple, Dict[str, Any], Dict[str, Any]]
 
 # (display_row, before_snapshot, peak_snapshot, settled_snapshot)
 ClientResourceRow = Tuple[
-    tuple, ResourceSnapshot, ResourceSnapshot, ResourceSnapshot,
+    tuple, Dict[str, Any], Dict[str, Any], Dict[str, Any],
 ]
 
 logger = logging.getLogger(__name__)
@@ -48,22 +50,33 @@ class ResourceReporter:
 
     @property
     def resource_rows(self) -> List[ServerResourceRow]:
-        """Return the accumulated server resource rows."""
+        """
+        Return the accumulated server resource rows.
+
+        :return: A copy of the server resource rows
+        """
         return list(self._resource_rows)
 
     @property
     def client_rows(self) -> List[ClientResourceRow]:
-        """Return the accumulated client resource rows."""
+        """
+        Return the accumulated client resource rows.
+
+        :return: A copy of the client resource rows
+        """
         return list(self._client_rows)
 
-    def add_resource_row(
-            self, stage_label, before, after,
-    ) -> ServerResourceRow:
+    def add_resource_row(self, stage_label: str, before: Dict[str, Any], after: Dict[str, Any]) -> ServerResourceRow:
         """Build and store a server resource row from before/after snapshots.
 
         Returns (display_row, before_snapshot, after_snapshot) so that
         delta calculations can use raw numeric values instead of
         reverse-parsing formatted strings.
+
+        :param stage_label: Label shown in the first column
+        :param before: Server process snapshot taken before the stage
+        :param after: Server process snapshot taken after the stage
+        :return: (display_row, before, after)
         """
         rss_delta = after.get("rss") - before.get("rss")
         thread_delta = after.get("threads") - before.get("threads")
@@ -83,14 +96,19 @@ class ResourceReporter:
         self._resource_rows.append(row)
         return row
 
-    def add_client_row(
-            self, stage_label, before, peak, settled,
-    ) -> ClientResourceRow:
+    def add_client_row(self, stage_label: str, before: Dict[str, Any], peak: Optional[Dict[str, Any]],
+                       settled: Dict[str, Any]) -> ClientResourceRow:
         """Build and store a client resource row from before/peak/settled.
 
         Returns (display_row, before_snapshot, peak_snapshot,
         settled_snapshot) so that delta calculations and JSON export
         can use raw numeric values.
+
+        :param stage_label: Label shown in the first column
+        :param before: Client process snapshot taken before the stage
+        :param peak: Client process snapshot at peak RSS during the stage, or None
+        :param settled: Client process snapshot taken after the stage settled
+        :return: (display_row, before, peak or {}, settled)
         """
         rss_delta = settled.get("rss") - before.get("rss")
         peak_rss = f"{peak.get('rss'):.1f}M" if peak else "-"
@@ -112,15 +130,16 @@ class ResourceReporter:
     # component produced no data at all.
     _NA_METRICS = ("na",) * 11
 
-    def log_combined_analysis(
-            self, total_client_reqs, total_server_calls,
-    ) -> None:
+    def log_combined_analysis(self, total_client_reqs: int, total_server_calls: int) -> None:
         """Log one combined server-app + client-app resource table.
 
         Server-app and client-app rows share a single table.  Columns
         that don't apply to a component — or a component that produced
         no data (no local server, or the server-only mode's absent
         client) — show ``na``.
+
+        :param total_client_reqs: Client requests sent across all stages
+        :param total_server_calls: Server calls across all stages; 0 leaves it out of the title
         """
         if not self._resource_rows and not self._client_rows:
             return
@@ -148,7 +167,11 @@ class ResourceReporter:
         self._log_client_deltas()
 
     def _combined_server_rows(self) -> List[tuple]:
-        """Server-app rows for the combined table (na when absent)."""
+        """
+        Server-app rows for the combined table (na when absent).
+
+        :return: One row per stage, or one row of na when there is no server data
+        """
         if not self._resource_rows:
             return [("Server app",) + self._NA_METRICS]
         rows = []
@@ -163,7 +186,11 @@ class ResourceReporter:
         return rows
 
     def _combined_client_rows(self) -> List[tuple]:
-        """Client-app rows for the combined table (na when absent)."""
+        """
+        Client-app rows for the combined table (na when absent).
+
+        :return: One row per stage, or one row of na when there is no client data
+        """
         if not self._client_rows:
             return [("Client app",) + self._NA_METRICS]
         rows = []
@@ -211,8 +238,16 @@ class ResourceReporter:
         )
 
     @staticmethod
-    def _log_snapshot_deltas(label, before, after, *, fields):
-        """Log deltas between two ResourceSnapshots."""
+    def _log_snapshot_deltas(label: str, before: Dict[str, Any], after: Dict[str, Any],
+                             fields: List[Tuple[str, str, str]]) -> None:
+        """
+        Log deltas between two ResourceSnapshots.
+
+        :param label: Component name shown in the heading
+        :param before: Snapshot from the first stage
+        :param after: Snapshot from the last stage
+        :param fields: (display name, snapshot key, % format) of each field to log
+        """
         max_name = max(len(name) for name, _, _ in fields)
         logger.info(
             "\n  %s overall deltas (first stage vs last stage):",

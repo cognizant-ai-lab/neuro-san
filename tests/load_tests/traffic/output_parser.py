@@ -27,16 +27,27 @@ class OutputParser:
     """Parses agent response fields and token accounting."""
 
     @staticmethod
-    def parse_stdout_field(stdout, field_name) -> Optional[str]:
-        """Extract a JSON field value from agent response text."""
+    def parse_stdout_field(stdout: str, field_name: str) -> Optional[str]:
+        """
+        Extract a JSON field value from agent response text.
+
+        :param stdout: Agent response text
+        :param field_name: JSON field name to look for
+        :return: The field's string value, or None when it is not found
+        """
         match = re.search(rf'"{field_name}"\s*:\s*"([^"]+)"', stdout)
         if match:
             return match.group(1)
         return None
 
     @staticmethod
-    def parse_token_accounting(stdout) -> Dict[str, Any]:
-        """Extract Token Accounting JSON block from agent response text."""
+    def parse_token_accounting(stdout: str) -> Dict[str, Any]:
+        """
+        Extract Token Accounting JSON block from agent response text.
+
+        :param stdout: Agent response text
+        :return: The parsed Token Accounting block, or {} when it is missing or invalid
+        """
         marker = "Token Accounting:"
         idx = stdout.find(marker)
         if idx < 0:
@@ -60,8 +71,13 @@ class OutputParser:
             return {}
 
     @staticmethod
-    def last_stderr_line(stderr) -> str:
-        """Extract the last line of stderr for error reporting."""
+    def last_stderr_line(stderr: Optional[str]) -> str:
+        """
+        Extract the last line of stderr for error reporting.
+
+        :param stderr: Captured stderr, or None
+        :return: Last line of stderr, or "" when it is empty
+        """
         stripped = stderr.strip() if stderr else ""
         if not stripped:
             return ""

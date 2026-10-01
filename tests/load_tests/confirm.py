@@ -36,6 +36,9 @@ class Confirm:
         Returns True for ``y`` and False for ``n``.  Ctrl+C and EOF
         (closed stdin) are treated as ``n``.  Anything else is
         rejected and the question is asked again.
+
+        :param question: Question shown before [y/n]
+        :return: True for y; False for n, Ctrl+C or EOF
         """
         prompt = f"{question} [y/n]: "
         while True:

@@ -31,6 +31,7 @@ import logging
 import os
 import socket
 import sys
+from argparse import Namespace
 from typing import Optional
 
 import psutil
@@ -88,8 +89,14 @@ class EnvironmentValidator:
         logger.info("No mock LLM environment detected.")
 
     @staticmethod
-    def is_port_open(host, port) -> bool:
-        """Check if a TCP port is accepting connections."""
+    def is_port_open(host: str, port: int) -> bool:
+        """
+        Check if a TCP port is accepting connections.
+
+        :param host: Server host name or address
+        :param port: TCP port to check
+        :return: True if a connection succeeds within SOCKET_CHECK_TIMEOUT, False otherwise
+        """
         try:
             with socket.create_connection(
                 (host, port), timeout=SOCKET_CHECK_TIMEOUT,
@@ -99,11 +106,14 @@ class EnvironmentValidator:
             return False
 
     @staticmethod
-    def find_local_server(args) -> Optional[psutil.Process]:
+    def find_local_server(args: Namespace) -> Optional[psutil.Process]:
         """Locate the neuro-san server process for resource monitoring.
 
         Searches by process keyword first, then falls back to port
         ownership.  Returns the process or None.
+
+        :param args: Parsed arguments; host and port are used
+        :return: The server process, or None when it is not found locally
         """
         if not EnvironmentValidator.is_port_open(args.host, args.port):
             logger.error(
@@ -143,13 +153,16 @@ class EnvironmentValidator:
         return server_proc
 
     @staticmethod
-    def try_auto_detect_server_log(args) -> Optional[str]:
+    def try_auto_detect_server_log(args: Namespace) -> Optional[str]:
         """Best-effort local server-log detection; None if unavailable.
 
         Unlike auto_detect_server_log, this never aborts.  It is used
         for the default (unrequested) auto-detect so that remote or
         no-server runs degrade quietly to no server-log analysis
         instead of failing.
+
+        :param args: Parsed arguments; host and port are used
+        :return: Path to logs/server.log in the server's working directory, or None when it cannot be found
         """
         if not EnvironmentValidator.is_port_open(
                 args.host, args.port,
@@ -177,12 +190,15 @@ class EnvironmentValidator:
         return None
 
     @staticmethod
-    def auto_detect_server_log(server_proc) -> str:
+    def auto_detect_server_log(server_proc: Optional[psutil.Process]) -> str:
         """Auto-detect server log from server process CWD.
 
         Looks for logs/server.log relative to the server's working
         directory.  Aborts with sys.exit(1) when auto-detection
         fails because the user explicitly requested --server-log.
+
+        :param server_proc: Local server process, or None when it was not found
+        :return: Path to logs/server.log in the server's working directory
         """
         if server_proc is None:
             logger.error(

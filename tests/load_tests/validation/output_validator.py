@@ -23,17 +23,17 @@ request validation (sent vs received), and client disconnections.
 
 import logging
 
+from typing import Any
+from typing import Dict
 from typing import List
 
-from tests.load_tests.config import Formatters
-from tests.load_tests.config import RequestResult
 from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import RETRY_LABELS
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.config import StatusCounts
+from tests.load_tests.reporting.formatters import Formatters
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,14 @@ class OutputValidator:
     """Counts results and logs server-side request verification."""
 
     @staticmethod
-    def count_results(results) -> StatusCounts:
-        """Count results by status type."""
-        counts: StatusCounts = {
+    def count_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Count results by status type.
+
+        :param results: Request results of the stage
+        :return: Count per status; unknown statuses count as failed
+        """
+        counts: Dict[str, Any] = {
             STATUS_CREATED: 0,
             STATUS_FAILED: 0,
             STATUS_TIMEOUT: 0,
@@ -57,16 +62,22 @@ class OutputValidator:
             counts[status] = counts.get(status, 0) + 1
         return counts
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def log_stage_results(actual_requests, counts, elapsed, *,
-                          timeout, idle_timeout,
-                          show_counts=True) -> None:
+    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed: float, timeout: float,
+                          idle_timeout: float, show_counts: bool = True) -> None:
         """Log per-stage summary of request results.
 
         When ``show_counts`` is False (single-stage runs, where the
         counts are repeated verbatim in OVERALL RESULTS), only the
         Duration/Avg line is printed to avoid duplication.
+
+        :param actual_requests: Requests sent in the stage
+        :param counts: Count per status from count_results
+        :param elapsed: Stage wall time in seconds
+        :param timeout: --request-timeout in seconds, shown in the timed-out line
+        :param idle_timeout: --idle-timeout in seconds, shown in the killed line
+        :param show_counts: False to log only the Duration/Avg line
         """
         if show_counts:
             logger.info("\n  Requests: %s", actual_requests)
@@ -97,10 +108,14 @@ class OutputValidator:
         )
 
     @staticmethod
-    def log_retry_activity(
-            retries, total_retries, actual_requests,
-    ) -> None:
-        """Log retry activity from server log."""
+    def log_retry_activity(retries: Dict[str, int], total_retries: int, actual_requests: int) -> None:
+        """
+        Log retry activity from server log.
+
+        :param retries: Retry count per error type, from the server log
+        :param total_retries: Retries of every type
+        :param actual_requests: Requests sent in the stage, used for the amplification
+        """
         logger.info(
             "\n  Retry activity (from server log):",
         )
@@ -121,9 +136,7 @@ class OutputValidator:
         )
 
     @staticmethod
-    def log_server_validation(
-            server_counts, actual_requests, agent_name,
-    ) -> None:
+    def log_server_validation(server_counts: Dict[str, Any], actual_requests: int, agent_name: str) -> None:
         """Log server-side request validation from log counts.
 
         Compares the number of requests the server received (from the
@@ -132,6 +145,10 @@ class OutputValidator:
         run, so another client testing the same agent inflates the
         count.  Extra starts are therefore not treated as a mismatch,
         while missing ones always are.
+
+        :param server_counts: Start and finish counts from the server log; logs nothing if primary_started is None
+        :param actual_requests: Requests the client sent
+        :param agent_name: Agent name shown in the lines
         """
         if server_counts.get("primary_started") is None:
             return
@@ -172,8 +189,12 @@ class OutputValidator:
             )
 
     @staticmethod
-    def log_disconnections(disconnections) -> None:
-        """Log client disconnections detected in the current stage."""
+    def log_disconnections(disconnections: List[Dict[str, str]]) -> None:
+        """
+        Log client disconnections detected in the current stage.
+
+        :param disconnections: Disconnection events with agent, request_id and client_request
+        """
         if not disconnections:
             return
         logger.warning(
@@ -194,8 +215,12 @@ class OutputValidator:
             )
 
     @staticmethod
-    def log_server_errors(server_errors) -> None:
-        """Log server-side "Errors detected:" events for the stage."""
+    def log_server_errors(server_errors: List[Dict[str, str]]) -> None:
+        """
+        Log server-side "Errors detected:" events for the stage.
+
+        :param server_errors: Error events with request_id and message
+        """
         if not server_errors:
             return
         logger.warning(
@@ -208,12 +233,14 @@ class OutputValidator:
             logger.warning("    %s: %s", req_id, message)
 
     @staticmethod
-    def log_tool_warnings(tool_warnings) -> None:
+    def log_tool_warnings(tool_warnings: List[Dict[str, str]]) -> None:
         """Log server-side tool-creation warnings for the stage.
 
         These mean a requested tool was unavailable to an agent; they
         don't affect the created network, but a high count under load
         may indicate tool-creation failures worth investigating.
+
+        :param tool_warnings: Tool warning events with request_id and message
         """
         if not tool_warnings:
             return
@@ -227,9 +254,7 @@ class OutputValidator:
             logger.warning("    %s: %s", req_id, message)
 
     @staticmethod
-    def check_permission_failures(
-            results: List[RequestResult], agent_name: str,
-    ) -> bool:
+    def check_permission_failures(results: List[Dict[str, Any]], agent_name: str) -> bool:
         """Check if all requests failed with a permissions error.
 
         When neuro-san-studio organizes agents under subdirectories
@@ -238,6 +263,10 @@ class OutputValidator:
 
         Returns True if the test should abort (all requests failed
         with a permissions-related error).
+
+        :param results: Request results of the stage
+        :param agent_name: --agent value, used in the error message
+        :return: True if every request failed with a permissions error
         """
         if not results:
             return False
@@ -281,14 +310,15 @@ class OutputValidator:
         return True
 
     @staticmethod
-    def check_timeout_abort(
-            counts: "StatusCounts",
-    ) -> bool:
+    def check_timeout_abort(counts: Dict[str, Any]) -> bool:
         """Check if any requests hit a timeout or were killed.
 
         Returns True if the test should abort because at least one
         request exceeded its idle-timeout, request-timeout, or was
         killed by stage-timeout.
+
+        :param counts: Count per status from count_results
+        :return: True if any request timed out or was killed
         """
         timed_out = counts.get(STATUS_TIMEOUT, 0)
         killed = counts.get(STATUS_KILLED, 0)

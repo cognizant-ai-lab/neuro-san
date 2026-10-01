@@ -26,6 +26,7 @@ import json
 import logging
 import os
 
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -40,7 +41,13 @@ logger = logging.getLogger(__name__)
 class TrendHistory:
     """Reads history JSONL records and logs them in run order."""
 
-    def __init__(self, path, *, agent_filter=None) -> None:
+    def __init__(self, path: str, agent_filter: Optional[List[str]] = None) -> None:
+        """
+        Constructor.
+
+        :param path: History JSONL file, or a directory holding it
+        :param agent_filter: Agent names to include; None or empty includes every agent
+        """
         self._path = path
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
@@ -89,6 +96,8 @@ class TrendHistory:
         Accepts either the file itself or a directory holding the
         default-named history file, so the path printed at the end of a
         run and its parent output directory both work.
+
+        :return: Path of the history file, or None when absent
         """
         if os.path.isfile(self._path):
             return self._path
@@ -98,14 +107,17 @@ class TrendHistory:
         return None
 
     @staticmethod
-    def _read_records(history_path) -> List[Dict]:
+    def _read_records(history_path: str) -> List[Dict[str, Any]]:
         """Parse the JSONL file, skipping unreadable lines.
 
         A partially written final line is expected when a run is
         interrupted, so a bad line is reported and skipped rather than
         losing every earlier record.
+
+        :param history_path: Path of the history JSONL file
+        :return: Every record that is a JSON object, in file order; empty when the file cannot be read
         """
-        records: List[Dict] = []
+        records: List[Dict[str, Any]] = []
         skipped = 0
         try:
             with open(history_path, "r", encoding="utf-8") as handle:
@@ -136,7 +148,11 @@ class TrendHistory:
 
     @staticmethod
     def _header() -> List[str]:
-        """Return the table header, including a column per threshold."""
+        """
+        Return the table header, including a column per threshold.
+
+        :return: Column names
+        """
         header = [
             "timestamp", "neuro-san", "agent", "mode", "via",
             "reqs", "done",
@@ -149,7 +165,7 @@ class TrendHistory:
         return header
 
     @staticmethod
-    def _row(record) -> List[str]:
+    def _row(record: Dict[str, Any]) -> List[str]:
         """Format one history record as a table row.
 
         Client and server-only records count requests under different
@@ -158,6 +174,9 @@ class TrendHistory:
 
         The transport is shown so historical transport values remain
         distinguishable in the same file.
+
+        :param record: One history record
+        :return: Cell values in _header order
         """
         mode = record.get("mode", "client")
         requests = record.get(
@@ -195,16 +214,26 @@ class TrendHistory:
         return row
 
     @staticmethod
-    def _fmt_timestamp(timestamp) -> str:
-        """Shorten an ISO timestamp to "YYYY-MM-DD HH:MM"."""
+    def _fmt_timestamp(timestamp: str) -> str:
+        """
+        Shorten an ISO timestamp to "YYYY-MM-DD HH:MM".
+
+        :param timestamp: ISO timestamp, or empty
+        :return: e.g. '2026-09-30 01:54', or '-' when empty
+        """
         if not timestamp:
             return "-"
         text = str(timestamp).replace("T", " ")
         return text[:16]
 
     @staticmethod
-    def _fmt_seconds(value) -> str:
-        """Format a seconds value, rendering absent or zero as "-"."""
+    def _fmt_seconds(value: Optional[float]) -> str:
+        """
+        Format a seconds value, rendering absent or zero as "-".
+
+        :param value: Seconds, or None
+        :return: e.g. '12.3s', or '-' when absent or 0
+        """
         if not isinstance(value, (int, float)) or value <= 0:
             return "-"
         return f"{value:.1f}s"

@@ -45,11 +45,8 @@ class AgentRequestExecutor:
     """
 
     @staticmethod
-    def execute_request(
-            host: str, port: int, agent: str, prompt: str, *,
-            timeout: float, idle_timeout: float, use_https: bool = False,
-            chat_filter_type: str = "MAXIMAL",
-    ) -> AgentRequestResult:
+    def execute_request(host: str, port: int, agent: str, prompt: str, timeout: float, idle_timeout: float,
+                        use_https: bool = False, chat_filter_type: str = "MAXIMAL") -> AgentRequestResult:
         """
         Send one streaming_chat request in-thread.
 
@@ -72,7 +69,7 @@ class AgentRequestExecutor:
                  and None when the request did not complete
         """
         # The argument list tracks the streaming_chat request surface.
-        # pylint: disable=too-many-arguments,too-many-locals
+        # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
         start: float = time.perf_counter()
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout)
 

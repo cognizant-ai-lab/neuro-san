@@ -15,7 +15,9 @@
 #
 # END COPYRIGHT
 from argparse import Namespace
+from typing import Optional
 from unittest import TestCase
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
@@ -34,16 +36,26 @@ class TestOutputBase(TestCase):
     """
 
     @staticmethod
-    def _orchestrator(output_dir=None) -> LoadTestOrchestrator:
-        """Build an orchestrator with only the args _output_base reads."""
+    def _orchestrator(output_dir: Optional[str] = None) -> LoadTestOrchestrator:
+        """
+        Build an orchestrator with only the args _output_base reads.
+
+        :param output_dir: --output-dir value; None for the default
+        :return: Orchestrator with only args set
+        """
         orchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
         orchestrator.args = Namespace(output_dir=output_dir)
         return orchestrator
 
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
-    def test_default_is_per_user(self, get_user, get_temp_dir):
-        """The default path carries the user name, not a fixed one."""
+    def test_default_is_per_user(self, get_user: MagicMock, get_temp_dir: MagicMock) -> None:
+        """
+        The default path carries the user name, not a fixed one.
+
+        :param get_user: Mock of getpass.getuser
+        :param get_temp_dir: Mock of tempfile.gettempdir
+        """
         get_user.return_value = "alice"
         get_temp_dir.return_value = "/tmp"
 
@@ -53,8 +65,12 @@ class TestOutputBase(TestCase):
         )
 
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
-    def test_output_dir_argument_wins(self, get_user):
-        """--output-dir overrides the default without consulting the user."""
+    def test_output_dir_argument_wins(self, get_user: MagicMock) -> None:
+        """
+        --output-dir overrides the default without consulting the user.
+
+        :param get_user: Mock of getpass.getuser; fails the test if called
+        """
         get_user.side_effect = AssertionError("user name not needed")
 
         self.assertEqual(
@@ -66,9 +82,15 @@ class TestOutputBase(TestCase):
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
     def test_falls_back_to_uid_without_passwd_entry(
-        self, get_user, get_temp_dir, get_uid,
-    ):
-        """A uid with no passwd entry (containers) must not crash the run."""
+        self, get_user: MagicMock, get_temp_dir: MagicMock, get_uid: MagicMock,
+    ) -> None:
+        """
+        A uid with no passwd entry (containers) must not crash the run.
+
+        :param get_user: Mock of getpass.getuser; raises KeyError
+        :param get_temp_dir: Mock of tempfile.gettempdir
+        :param get_uid: Mock of os.getuid
+        """
         get_user.side_effect = KeyError("getpwuid(): uid not found")
         get_temp_dir.return_value = "/tmp"
         get_uid.return_value = 1000
@@ -80,10 +102,13 @@ class TestOutputBase(TestCase):
 
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
-    def test_user_name_cannot_inject_path_separators(
-        self, get_user, get_temp_dir,
-    ):
-        """A domain-style name must stay one directory, not nest."""
+    def test_user_name_cannot_inject_path_separators(self, get_user: MagicMock, get_temp_dir: MagicMock) -> None:
+        """
+        A domain-style name must stay one directory, not nest.
+
+        :param get_user: Mock of getpass.getuser
+        :param get_temp_dir: Mock of tempfile.gettempdir
+        """
         get_user.return_value = "CORP\\alice"
         get_temp_dir.return_value = "/tmp"
 

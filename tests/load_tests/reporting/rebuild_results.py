@@ -25,6 +25,11 @@ import json
 import logging
 import os
 import re
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -51,7 +56,13 @@ _CONFIG_NUM_REQ_RE = re.compile(
 class ResultsRebuilder:
     """Reconstructs raw_results.json from per-request files."""
 
-    def __init__(self, output_dir, *, force=False) -> None:
+    def __init__(self, output_dir: str, force: bool = False) -> None:
+        """
+        Constructor.
+
+        :param output_dir: Run output directory, or a parent directory holding many runs
+        :param force: True to reclassify failures in runs that already have raw_results.json
+        """
         self._output_dir = output_dir
         self._force = force
 
@@ -186,8 +197,12 @@ class ResultsRebuilder:
         )
         logger.info("  Saved to: %s", json_path)
 
-    def _parse_timing(self):
-        """Extract request timing from log files."""
+    def _parse_timing(self) -> Dict[int, Dict[str, Any]]:
+        """
+        Extract request timing from log files.
+
+        :return: Request id to its status and elapsed seconds, from load_test.log and progress.log
+        """
         timing = {}
         for filename in ("load_test.log", "progress.log"):
             path = os.path.join(self._output_dir, filename)
@@ -206,8 +221,12 @@ class ResultsRebuilder:
                         }
         return timing
 
-    def _parse_config(self):
-        """Extract agent name and num_requests from log."""
+    def _parse_config(self) -> Tuple[str, int]:
+        """
+        Extract agent name and num_requests from log.
+
+        :return: (agent, num_requests); ("unknown", 0) when load_test.log is missing or has no config lines
+        """
         agent = "unknown"
         num_requests = 0
         log_path = os.path.join(
@@ -225,8 +244,14 @@ class ResultsRebuilder:
                     num_requests = int(match.group(1))
         return agent, num_requests
 
-    def _scan_requests(self, requests_dir, timing):
-        """Parse each request stdout file into a result dict."""
+    def _scan_requests(self, requests_dir: str, timing: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Parse each request stdout file into a result dict.
+
+        :param requests_dir: Directory holding the request_<id>_stdout.txt files
+        :param timing: Request timing from _parse_timing
+        :return: One result dict per stdout file, in file name order
+        """
         results = []
         for filename in sorted(os.listdir(requests_dir)):
             if not filename.endswith("_stdout.txt"):
@@ -250,8 +275,15 @@ class ResultsRebuilder:
         return results
 
     @staticmethod
-    def _build_result(req_id, stdout, timing):
-        """Build a single result dict from stdout and timing."""
+    def _build_result(req_id: int, stdout: str, timing: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build a single result dict from stdout and timing.
+
+        :param req_id: Numeric request id
+        :param stdout: Contents of the request's stdout file
+        :param timing: Request timing from _parse_timing
+        :return: The result dict for the request
+        """
         parsed_fields = {
             "reservation_id": OutputParser.parse_stdout_field(
                 stdout, "reservation_id",
@@ -279,8 +311,13 @@ class ResultsRebuilder:
         return result
 
     @staticmethod
-    def _attach_tokens(result, stdout):
-        """Add token accounting fields to a result dict."""
+    def _attach_tokens(result: Dict[str, Any], stdout: str) -> None:
+        """
+        Add token accounting fields to a result dict.
+
+        :param result: Result dict, updated in place
+        :param stdout: Contents of the request's stdout file
+        """
         token_data = OutputParser.parse_token_accounting(stdout)
         if token_data:
             result.update({
@@ -299,8 +336,13 @@ class ResultsRebuilder:
             })
 
     @staticmethod
-    def _load_stdout_cache(requests_dir):
-        """Load all request stdout files into a dict keyed by id."""
+    def _load_stdout_cache(requests_dir: str) -> Dict[int, str]:
+        """
+        Load all request stdout files into a dict keyed by id.
+
+        :param requests_dir: Directory holding the request_<id>_stdout.txt files
+        :return: Request id to the contents of its stdout file
+        """
         cache = {}
         for filename in os.listdir(requests_dir):
             if not filename.endswith("_stdout.txt"):
@@ -318,8 +360,13 @@ class ResultsRebuilder:
                 cache[req_id] = fh.read()
         return cache
 
-    def _reclassify(self, json_path, requests_dir):
-        """Update failure_reason and config in existing JSON."""
+    def _reclassify(self, json_path: str, requests_dir: str) -> None:
+        """
+        Update failure_reason and config in existing JSON.
+
+        :param json_path: Path to raw_results.json, rewritten in place
+        :param requests_dir: Directory holding the request_<id>_stdout.txt files
+        """
         with open(json_path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
 
@@ -362,8 +409,12 @@ class ResultsRebuilder:
             "  Updated %s failure reason(s)", updated,
         )
 
-    def _fix_config(self, data):
-        """Repair config.num_requests from log if needed."""
+    def _fix_config(self, data: Dict[str, Any]) -> None:
+        """
+        Repair config.num_requests from log if needed.
+
+        :param data: Parsed raw_results.json, updated in place
+        """
         _agent, num_requests = self._parse_config()
         if num_requests <= 0:
             return
@@ -377,7 +428,7 @@ class ResultsRebuilder:
             )
 
     @staticmethod
-    def _resolve_status(timing_info):
+    def _resolve_status(timing_info: Dict[str, Any]) -> str:
         """Determine request status from the log line for the request.
 
         Every status the runner reports is preserved, including TIMEOUT
@@ -386,6 +437,9 @@ class ResultsRebuilder:
         line was never observed to finish -- failures past
         FAILURE_LOG_LIMIT are never printed -- so it counts as failed
         rather than being guessed at from its partial output.
+
+        :param timing_info: The request's entry from _parse_timing; empty when it has no log line
+        :return: The status from the log line, or FAILED when there is none
         """
         log_status = timing_info.get("status", "")
         if log_status in (
@@ -395,8 +449,15 @@ class ResultsRebuilder:
         return STATUS_FAILED
 
     @staticmethod
-    def _diagnose(status, stdout, parsed_fields):
-        """Build a failure reason string for failed requests."""
+    def _diagnose(status: str, stdout: str, parsed_fields: Dict[str, Optional[str]]) -> Optional[str]:
+        """
+        Build a failure reason string for failed requests.
+
+        :param status: The request's status
+        :param stdout: Contents of the request's stdout file
+        :param parsed_fields: reservation_id and agent_network_name parsed from stdout; None when missing
+        :return: Reasons joined by "; ", or None for a CREATED request
+        """
         if status == STATUS_CREATED:
             return None
         reasons = []

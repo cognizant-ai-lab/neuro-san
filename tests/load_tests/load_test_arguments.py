@@ -24,6 +24,7 @@ applies level-based defaults.
 
 import argparse
 import os
+from typing import Dict
 from typing import Set
 
 from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
@@ -39,11 +40,14 @@ class LoadTestArguments:
     """Defines and parses the load test's command-line arguments."""
 
     @staticmethod
-    def parse_args(epilog) -> argparse.Namespace:
+    def parse_args(epilog: str) -> argparse.Namespace:
         """Parse command-line arguments for the load test.
 
         The epilog is supplied by the caller so that ``--help``
         still ends with the entrypoint module's usage notes.
+
+        :param epilog: Text shown at the end of --help
+        :return: Parsed arguments, with explicit_args set to the dest names the user passed
         """
         parser = argparse.ArgumentParser(
             description=(
@@ -441,7 +445,7 @@ class LoadTestArguments:
         return args
 
     @staticmethod
-    def _explicit_args(parser, args) -> Set[str]:
+    def _explicit_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Set[str]:
         """Return the dest names the user actually passed.
 
         Re-parses the command line with every default replaced by a
@@ -449,13 +453,18 @@ class LoadTestArguments:
         supplied.  This recognizes "--port=8080" as well as
         "--port 8080", and still counts a value that happens to equal
         the default.
+
+        :param parser: Parser holding every argument; its defaults are replaced by a sentinel
+        :param args: Arguments from the first parse; their names are the dests checked
+        :return: Dest names given on the command line
         """
-        sentinel = object()
-        parser.set_defaults(
-            **{name: sentinel for name in vars(args)}
-        )
-        return {
-            name
-            for name, value in vars(parser.parse_args()).items()
-            if value is not sentinel
-        }
+        sentinel: object = object()
+        sentinel_defaults: Dict[str, object] = {}
+        for name in vars(args):
+            sentinel_defaults[name] = sentinel
+        parser.set_defaults(**sentinel_defaults)
+        explicit: Set[str] = set()
+        for name, value in vars(parser.parse_args()).items():
+            if value is not sentinel:
+                explicit.add(name)
+        return explicit

@@ -222,16 +222,17 @@ to use LLMs from various providers.
 | Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
 | Anthropic                  | ANTHROPIC_API_KEY                                                  |
 | Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
-| Azure OpenAI               | AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT and OPENAI_API_VERSION |
+| Azure OpenAI               | AZURE_OPENAI_API_KEY or AZURE_OPENAI_AD_TOKEN, and AZURE_OPENAI_ENDPOINT |
 | Google Gemini              | GOOGLE_API_KEY                                                     |
 | NVidia                     | NVIDIA_API_KEY                                                     |
 | Ollama                     | &lt;None required&gt;                                              |
 | OpenAI                     | OPENAI_API_KEY                                                     |
 | OpenRouter                 | OPENROUTER_API_KEY                                                 |
 
-Azure OpenAI also needs to know which deployment to call.  Give it as `deployment_name` in the llm_config
-or set the `AZURE_OPENAI_DEPLOYMENT_NAME` environment variable.  See
-[music_nerd_pro_llm_azure.hocon](../neuro_san/registries/music_nerd_pro_llm_azure.hocon) for a working example.
+Azure OpenAI also needs the deployment to call: give it as `deployment_name` in the llm_config or set the
+`AZURE_OPENAI_DEPLOYMENT_NAME` environment variable. How the deployment, the OpenAI `model_name` and token
+pricing relate is covered under [Azure OpenAI](./llm_info_hocon_reference.md#azure-openai) in the llm info
+reference.
 
 For the Bedrock-based entries you can either set explicit credentials via
 `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`

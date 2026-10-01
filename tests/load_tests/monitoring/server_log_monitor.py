@@ -28,9 +28,11 @@ import sys
 import threading
 import time
 
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import TextIO
 from typing import Tuple
 
 import psutil
@@ -38,22 +40,19 @@ import psutil
 from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
 from tests.load_tests.config import DONE_STREAMING_PATTERN
 from tests.load_tests.config import NETWORK_LOOKAHEAD_LINES
-from tests.load_tests.config import NetworkTokenEntry
 from tests.load_tests.config import PROVIDER_RETRY_PATTERN
 from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import REQUEST_START_PATTERN
 from tests.load_tests.config import RETRY_LOG_PATTERN
 from tests.load_tests.config import SERVER_ERROR_PATTERN
 from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
-from tests.load_tests.config import SharedRef
 from tests.load_tests.config import TASK_CANCELLED_PATTERN
-from tests.load_tests.config import TokenEntry
 from tests.load_tests.config import VALIDATION_ATTEMPT_PATTERN
 from tests.load_tests.config import VALIDATION_ERROR_PATTERN
-from tests.load_tests.config import ValidationEvent
 from tests.load_tests.config import VALIDATION_REINVOKE_PATTERN
 from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.shared_ref import SharedRef
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +243,7 @@ class ServerLogMonitor:
 
     def parse_token_accounting_since(
             self, position,
-    ) -> Dict[str, TokenEntry]:
+    ) -> Dict[str, Dict[str, Any]]:
         """Parse Request reporting entries for token accounting data.
 
         Returns a dict of request_id -> token data, where each entry has:
@@ -256,7 +255,7 @@ class ServerLogMonitor:
         lines = self._read_lines_since(position, "tokens")
         if not lines:
             return {}
-        results: Dict[str, TokenEntry] = {}
+        results: Dict[str, Dict[str, Any]] = {}
         for block in self._collect_reporting_blocks(lines):
             entry = self._extract_token_entry(
                 block.get("text", ""),
@@ -273,7 +272,7 @@ class ServerLogMonitor:
         return results
 
     @staticmethod
-    def _extract_token_entry(block: str) -> Optional[TokenEntry]:
+    def _extract_token_entry(block: str) -> Optional[Dict[str, Any]]:
         """Extract token accounting fields from a Request reporting log block."""
         rid_match = re.search(r'"request_id": "([^"]+)"', block)
         if not rid_match:
@@ -296,7 +295,7 @@ class ServerLogMonitor:
 
     def parse_per_network_tokens_since(
             self, position,
-    ) -> List[NetworkTokenEntry]:
+    ) -> List[Dict[str, Any]]:
         """Parse per-sub-network token data from Request reporting blocks.
 
         For multi-agent networks (e.g. AND), each sub-network produces
@@ -335,9 +334,9 @@ class ServerLogMonitor:
         return blocks
 
     @staticmethod
-    def _resolve_network_names(blocks, lines) -> List[NetworkTokenEntry]:
+    def _resolve_network_names(blocks, lines) -> List[Dict[str, Any]]:
         """Match each block to its network via Done-with log lines."""
-        results: List[NetworkTokenEntry] = []
+        results: List[Dict[str, Any]] = []
         for block in blocks:
             block_text = block.get("text", "")
             entry = ServerLogMonitor._extract_token_entry(
@@ -391,7 +390,7 @@ class ServerLogMonitor:
 
     def parse_validation_events_since(
             self, position,
-    ) -> List[ValidationEvent]:
+    ) -> List[Dict[str, Any]]:
         """Parse validation attempts and fix cycles per request.
 
         Scans for 'Validating toolbox agents' (attempt),
@@ -409,7 +408,7 @@ class ServerLogMonitor:
         return self._collect_validation_events(lines)
 
     @staticmethod
-    def _collect_validation_events(lines) -> List[ValidationEvent]:
+    def _collect_validation_events(lines) -> List[Dict[str, Any]]:
         """Group validation log lines by request_id."""
         by_request: Dict[str, Dict[str, object]] = {}
         for line in lines:
@@ -433,7 +432,7 @@ class ServerLogMonitor:
                 raw = err_match.group(1)
                 for err in re.findall(r'"([^"]+)"', raw):
                     entry["errors"].append(err)
-        results: List[ValidationEvent] = []
+        results: List[Dict[str, Any]] = []
         for rid, data in sorted(by_request.items()):
             if data.get("fix_cycles", 0) > 0:
                 results.append({
@@ -594,20 +593,21 @@ class ServerLogMonitor:
                     f"request-{parent_idx + 1}"
                 )
 
-    # pylint: disable=too-many-arguments
-    def start_log_monitor(self, position,
-                          expected_count, fire_time, *,
-                          client_proc, primary_start_pattern,
-                          output_dir=None,
-                          ) -> Tuple[
-        Optional[threading.Event],
-        Optional[threading.Thread],
-        Optional[SharedRef],
-    ]:
-        """Start a background thread to monitor server log for request arrivals.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time: float,
+                          client_proc: Optional[psutil.Process], primary_start_pattern: str,
+                          output_dir: Optional[str] = None,
+                          ) -> Tuple[Optional[threading.Event], Optional[threading.Thread], Optional[SharedRef]]:
+        """
+        Start a background thread to monitor server log for request arrivals.
 
-        Returns (stop_event, thread, peak_client_ref).
-        Returns (None, None, None) if monitoring is not available.
+        :param position: Server log offset to start reading from, or None
+        :param expected_count: Number of arrivals to wait for
+        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param primary_start_pattern: Regex for the log line of a primary agent request arriving
+        :param output_dir: Directory for server_receipts.log, or None for console only
+        :return: (stop_event, thread, peak_client_ref), or (None, None, None) if monitoring is not available
         """
         if self._server_log is None or position is None:
             return None, None, None
@@ -628,18 +628,27 @@ class ServerLogMonitor:
         monitor.start()
         return stop_event, monitor, peak_client_ref
 
-    # pylint: disable=too-many-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     @staticmethod
-    def _log_monitor_worker(server_log, position,
-                            expected_count, stop_event,
-                            fire_time, *, client_proc,
-                            peak_client_ref,
-                            primary_start_pattern,
-                            output_dir=None) -> None:
-        """Background worker that tails server log and reports arrivals."""
-        pri_start_re = re.compile(primary_start_pattern)
-        agent_label = primary_start_pattern.split("/")[0].split(" ")[-1]
-        receipt_path = (
+    def _log_monitor_worker(server_log: str, position: int, expected_count: int, stop_event: threading.Event,
+                            fire_time: float, client_proc: Optional[psutil.Process], peak_client_ref: SharedRef,
+                            primary_start_pattern: str, output_dir: Optional[str] = None) -> None:
+        """
+        Background worker that tails server log and reports arrivals.
+
+        :param server_log: Path of the server log
+        :param position: Server log offset to start reading from
+        :param expected_count: Number of arrivals to wait for
+        :param stop_event: Set to stop tailing
+        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param peak_client_ref: Receives the client snapshot once all requests arrive
+        :param primary_start_pattern: Regex for the log line of a primary agent request arriving
+        :param output_dir: Directory for server_receipts.log, or None for console only
+        """
+        pri_start_re: re.Pattern = re.compile(primary_start_pattern)
+        agent_label: str = primary_start_pattern.split("/")[0].split(" ")[-1]
+        receipt_path: Optional[str] = (
             os.path.join(output_dir, "server_receipts.log")
             if output_dir else None
         )
@@ -669,31 +678,40 @@ class ServerLogMonitor:
             return open(path, "w", encoding="utf-8")
         return _NullFile()
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def _tail_arrivals(
-            log_fh, stop_event, pri_start_re,
-            expected_count, fire_time, *,
-            agent_label, receipt_fh,
-            client_proc, peak_client_ref,
-    ) -> None:
-        """Tail log for arrivals, printing dots or full lines."""
-        count = 0
-        use_dots = receipt_fh is not None
+    def _tail_arrivals(log_fh: TextIO, stop_event: threading.Event, pri_start_re: re.Pattern, expected_count: int,
+                       fire_time: float, agent_label: str, receipt_fh: Optional[TextIO],
+                       client_proc: Optional[psutil.Process], peak_client_ref: SharedRef) -> None:
+        """
+        Tail log for arrivals, printing dots or full lines.
+
+        :param log_fh: Open server log, positioned where to start reading
+        :param stop_event: Set to stop tailing
+        :param pri_start_re: Matches the log line of a primary agent request arriving
+        :param expected_count: Number of arrivals to wait for
+        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param agent_label: Agent name shown in the receipt lines
+        :param receipt_fh: Open server_receipts.log, or None to log each receipt to the console
+        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param peak_client_ref: Receives the client snapshot once all requests arrive
+        """
+        count: int = 0
+        use_dots: bool = receipt_fh is not None
         while not stop_event.is_set() and count < expected_count:
-            line = log_fh.readline()
+            line: str = log_fh.readline()
             if not line:
                 stop_event.wait(0.5)
                 continue
             if not pri_start_re.search(line):
                 continue
             count += 1
-            now = time.time()
-            ts = time.strftime(
-                "%H:%M:%S", time.localtime(now),
+            now: float = time.perf_counter()
+            ts: str = time.strftime(
+                "%H:%M:%S", time.localtime(),
             )
-            delta = now - fire_time
-            detail = (
+            delta: float = now - fire_time
+            detail: str = (
                 f"  [server] {agent_label} request"
                 f" {count}/{expected_count}"
                 f" received [{ts}] (+{delta:.1f}s)"
