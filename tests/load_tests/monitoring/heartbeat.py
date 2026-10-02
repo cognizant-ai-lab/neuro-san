@@ -230,7 +230,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         peak_threads: int = 0
         peak_server_rss_megabytes: float = 0.0
         peak_system_memory_percent: float = 0.0
-        peak_sys_threads: int = 0
+        peak_system_threads: int = 0
         tick_count: int = 0
         peak_client_rss_megabytes: float = self._sample_client_rss(0.0, peak_client_rss_ref)
         ready_event.set()
@@ -270,10 +270,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 if failed > 0:
                     failed_percent: int = Heartbeat._percent(failed, done)
                     fail_info = f", {failed} failed {failed_percent}%"
-                sys_mem_info: str
+                system_memory_info: str
                 current_memory_percent: float
                 current_available_gigabytes: float
-                sys_mem_info, current_memory_percent, current_available_gigabytes = self._format_system_memory()
+                system_memory_info, current_memory_percent, current_available_gigabytes = self._format_system_memory()
                 if current_memory_percent > peak_system_memory_percent:
                     peak_system_memory_percent = current_memory_percent
                     peak_sys_mem_pct_ref.value = {
@@ -285,15 +285,16 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 server_durations: Optional[List[float]] = self._server_durations()
                 if server_durations is not None:
                     duration_info += "  dur/server: " + Heartbeat.format_dur_stats(server_durations)
-                sys_cpu_info: str = self._format_system_cpu()
+                system_cpu_info: str = self._format_system_cpu()
                 peak_sys_cpu_ref.value = self._peak_system_cpu_percent
-                cur_sys_threads: int = SystemResources.total_threads()
-                if cur_sys_threads > peak_sys_threads:
-                    peak_sys_threads = cur_sys_threads
-                    peak_sys_threads_ref.value = cur_sys_threads
+                current_system_threads: int = SystemResources.total_threads()
+                if current_system_threads > peak_system_threads:
+                    peak_system_threads = current_system_threads
+                    peak_sys_threads_ref.value = current_system_threads
                 line: str = (f"  [progress] {done} of {total} completed ({percent_done}%{fail_info}) --"
                              f" {Heartbeat._fmt_elapsed(elapsed_seconds)} elapsed [{timestamp}]{suffix}"
-                             f"  {duration_info.strip()}{thread_info}{server_rss_info}{sys_mem_info}{sys_cpu_info}")
+                             f"  {duration_info.strip()}{thread_info}{server_rss_info}"
+                             f"{system_memory_info}{system_cpu_info}")
                 self._write_to_file(progress_file, line)
                 self._write_to_console(tick_count, line, force=stopped)
                 if stopped:
