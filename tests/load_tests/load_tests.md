@@ -3,6 +3,10 @@
 Send many requests at once to a neuro-san server and see how it holds up:
 how many requests succeed, how long they take, and how many tokens they cost.
 
+Use it to gather statistics on how requests are handled, so you can measure how your performance
+optimization ideas fare. The requests come from neuro-san test case hocon files, so the test cases
+you already have can be the basis for your load testing (see [Prompts and checks](#prompts-and-checks)).
+
 The load test makes real LLM calls, so every run costs money.
 
 ## Before you start
