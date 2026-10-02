@@ -96,9 +96,9 @@ class ServerLogMonitor:
         if self._server_log is None:
             return None
         try:
-            with open(self._server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(0, 2)
-                return log_fh.tell()
+            with open(self._server_log, "r", encoding="utf-8") as server_log_file:
+                server_log_file.seek(0, 2)
+                return server_log_file.tell()
         except OSError:
             return None
 
@@ -109,9 +109,9 @@ class ServerLogMonitor:
         the log message when an OSError occurs.
         """
         try:
-            with open(self._server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(position)
-                return log_fh.readlines()
+            with open(self._server_log, "r", encoding="utf-8") as server_log_file:
+                server_log_file.seek(position)
+                return server_log_file.readlines()
         except OSError as exc:
             logger.info("Could not read server log for %s: %s", label, exc)
             return []
@@ -548,7 +548,7 @@ class ServerLogMonitor:
         return -1
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time: float,
+    def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time_seconds: float,
                           client_proc: Optional[psutil.Process], primary_start_pattern: str,
                           output_dir: Optional[str] = None,
                           ) -> Tuple[Optional[threading.Event], Optional[threading.Thread], Optional[SharedRef]]:
@@ -557,7 +557,7 @@ class ServerLogMonitor:
 
         :param position: Server log offset to start reading from, or None
         :param expected_count: Number of arrivals to wait for
-        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param fire_time_seconds: time.perf_counter() value taken when the stage fired
         :param client_proc: Client process for the snapshot once all requests arrive, or None
         :param primary_start_pattern: Regex for the log line of a primary agent request arriving
         :param output_dir: Directory for server_receipts.log, or None for console only
@@ -569,7 +569,7 @@ class ServerLogMonitor:
         peak_client_ref: SharedRef = SharedRef()
         monitor: threading.Thread = threading.Thread(
             target=ServerLogMonitor._log_monitor_worker,
-            args=(self._server_log, position, expected_count, stop_event, fire_time),
+            args=(self._server_log, position, expected_count, stop_event, fire_time_seconds),
             kwargs={
                 "client_proc": client_proc,
                 "peak_client_ref": peak_client_ref,
@@ -584,7 +584,7 @@ class ServerLogMonitor:
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     @staticmethod
     def _log_monitor_worker(server_log: str, position: int, expected_count: int, stop_event: threading.Event,
-                            fire_time: float, client_proc: Optional[psutil.Process], peak_client_ref: SharedRef,
+                            fire_time_seconds: float, client_proc: Optional[psutil.Process], peak_client_ref: SharedRef,
                             primary_start_pattern: str, output_dir: Optional[str] = None) -> None:
         """
         Background worker that tails server log and reports arrivals.
@@ -593,7 +593,7 @@ class ServerLogMonitor:
         :param position: Server log offset to start reading from
         :param expected_count: Number of arrivals to wait for
         :param stop_event: Set to stop tailing
-        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param fire_time_seconds: time.perf_counter() value taken when the stage fired
         :param client_proc: Client process for the snapshot once all requests arrive, or None
         :param peak_client_ref: Receives the client snapshot once all requests arrive
         :param primary_start_pattern: Regex for the log line of a primary agent request arriving
@@ -605,12 +605,13 @@ class ServerLogMonitor:
         if output_dir:
             receipt_path = os.path.join(output_dir, "server_receipts.log")
         try:
-            with ServerLogMonitor._open_receipt_log(receipt_path) as receipt_fh:
-                with open(server_log, "r", encoding="utf-8") as log_fh:
-                    log_fh.seek(position)
-                    ServerLogMonitor._tail_arrivals(log_fh, stop_event, primary_start_re, expected_count, fire_time,
-                                                    agent_label=agent_label, receipt_fh=receipt_fh,
-                                                    client_proc=client_proc, peak_client_ref=peak_client_ref)
+            with ServerLogMonitor._open_receipt_log(receipt_path) as receipt_file:
+                with open(server_log, "r", encoding="utf-8") as server_log_file:
+                    server_log_file.seek(position)
+                    ServerLogMonitor._tail_arrivals(server_log_file, stop_event, primary_start_re, expected_count,
+                                                    fire_time_seconds, agent_label=agent_label,
+                                                    receipt_file=receipt_file, client_proc=client_proc,
+                                                    peak_client_ref=peak_client_ref)
         except OSError as exc:
             logger.debug("Log monitor stopped: %s", exc)
 
@@ -628,26 +629,26 @@ class ServerLogMonitor:
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def _tail_arrivals(log_fh: TextIO, stop_event: threading.Event, primary_start_re: re.Pattern, expected_count: int,
-                       fire_time: float, agent_label: str, receipt_fh: Optional[TextIO],
+    def _tail_arrivals(server_log_file: TextIO, stop_event: threading.Event, primary_start_re: re.Pattern,
+                       expected_count: int, fire_time_seconds: float, agent_label: str, receipt_file: Optional[TextIO],
                        client_proc: Optional[psutil.Process], peak_client_ref: SharedRef) -> None:
         """
         Tail log for arrivals, printing dots or full lines.
 
-        :param log_fh: Open server log, positioned where to start reading
+        :param server_log_file: Open server log, positioned where to start reading
         :param stop_event: Set to stop tailing
         :param primary_start_re: Matches the log line of a primary agent request arriving
         :param expected_count: Number of arrivals to wait for
-        :param fire_time: time.perf_counter() value taken when the stage fired
+        :param fire_time_seconds: time.perf_counter() value taken when the stage fired
         :param agent_label: Agent name shown in the receipt lines
-        :param receipt_fh: Open server_receipts.log, or None to log each receipt to the console
+        :param receipt_file: Open server_receipts.log, or None to log each receipt to the console
         :param client_proc: Client process for the snapshot once all requests arrive, or None
         :param peak_client_ref: Receives the client snapshot once all requests arrive
         """
         count: int = 0
-        use_dots: bool = receipt_fh is not None
+        use_dots: bool = receipt_file is not None
         while not stop_event.is_set() and count < expected_count:
-            line: str = log_fh.readline()
+            line: str = server_log_file.readline()
             if not line:
                 stop_event.wait(0.5)
                 continue
@@ -656,12 +657,12 @@ class ServerLogMonitor:
             count += 1
             now: float = time.perf_counter()
             timestamp: str = time.strftime("%H:%M:%S", time.localtime())
-            delta_seconds: float = now - fire_time
+            delta_seconds: float = now - fire_time_seconds
             detail: str = (f"  [server] {agent_label} request {count}/{expected_count} received [{timestamp}]"
                            f" (+{delta_seconds:.1f}s)")
             if use_dots:
-                receipt_fh.write(detail + "\n")
-                receipt_fh.flush()
+                receipt_file.write(detail + "\n")
+                receipt_file.flush()
                 _progress_logger.info(".")
             else:
                 logger.info("%s", detail)
