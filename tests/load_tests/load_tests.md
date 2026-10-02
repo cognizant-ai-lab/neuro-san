@@ -1,8 +1,7 @@
 # Load Test
 
 Send many requests at once to a neuro-san server and see how it holds up:
-how many requests succeed, how long they take, how many tokens they cost,
-and how much memory the server uses.
+how many requests succeed, how long they take, and how many tokens they cost.
 
 The load test makes real LLM calls, so every run costs money.
 
@@ -103,99 +102,6 @@ For example, `tests/fixtures/load_tests/hello_world/greet_in_languages.hocon`:
 Without `--fixtures-hocon-dir`, prompts come from
 `tests/load_tests/prompts/profiles/<agent>.json` (being phased out).
 
-## Watching the server too
-
-Client-only tells you what the client saw. When the server runs on the same machine, drop
-`--client-only` and the load test also watches the server. That answers three more questions:
-did the client and the server count the same tokens, did the server hold on to memory after the run,
-and did the server log any errors.
-
-Terminal 1: stop the Quick start server (Ctrl+C) and start it again with its log in `/tmp`:
-
-```bash
-export OPENAI_API_KEY=<your key>
-python -m neuro_san.service.main_loop.server_main_loop 2>&1 | tee /tmp/neuro_san_server.log
-```
-
-Terminal 2: the same command as Quick start, without `--client-only`, and with `--server-log`
-to say where that log is:
-
-```bash
-python -m tests.load_tests.load_test_cli --agent hello_world --fixtures-hocon-dir \
-    --server-log /tmp/neuro_san_server.log
-```
-
-It runs the same `hello_world` test cases as Quick start. Like Quick start, it first sends one probe
-request and asks before sending the rest.
-
-### What you get on top of client-only
-
-You get everything from [What a run prints](#what-a-run-prints), plus parts like these (10 requests, shortened):
-
-```text
-============================================================
-  LLM & TOKEN USAGE
-============================================================
-  Client (HTTP token_accounting):
-    LLM calls: 10 total  (1 / 1 / 1 min/avg/max)
-    Tokens:    9,900 total  (900 / 990 / 1,080 min/avg/max),  7,000 prompt + 2,900 completion
-  Server log:
-    LLM calls: 10 total  (1 / 1 / 1 min/avg/max)
-    Tokens:    9,900 total  (900 / 990 / 1,080 min/avg/max),  7,000 prompt + 2,900 completion
-  Match: OK
-  LLM models: gpt-4o (10)
-
-============================================================
-  RESOURCE ANALYSIS (10 client requests, 10 server calls)
-============================================================
- Component  Concurrent  Before RSS  Peak RSS  Settled RSS  RSS Delta  CPU%  FDs   Threads  Thread Delta  Conns  Children
-------------------------------------------------------------------------------------------------------------------------
-Server app          10      412.3M        na       431.8M     +19.5M  3.1%   45  38 -> 42            +4      2         0
-Client app          10      180.2M    205.6M       188.4M      +8.2M  0.4%   14         5            na     na        na
-```
-
-What to look at:
-
-- **Do the token counts agree?** "Client" is what the client counted, "Server log" is what the server
-  wrote down. `Match: OK` means they agree. `MISMATCH` means they don't, so look at the server log.
-- **Did the server keep memory?** RSS is the memory a program uses. In the `Server app` row,
-  **RSS Delta** is how much more memory the server uses after the run than before it.
-  If it goes up again on every run, report it.
-- **Did the server keep threads?** **Thread Delta** is how many more threads the server has after
-  the run. If it goes up again on every run, report it.
-- The other columns (CPU%, open files, connections) are there to help when you dig into a problem.
-- A **SYSTEM RESOURCES** part shows the whole machine's memory and CPU before, at the busiest point,
-  and after the run. If the machine is nearly full at the busiest point, slow results may come from
-  the machine, not the server.
-- If the server log shows errors, or clients that gave up before the server finished, they are
-  listed by request.
-
-### Levels
-
-The level sets how long the run is. Both levels watch the server as described above. Pick one with `--level`:
-
-- `norm` (default): a short run. It sends one probe request first and asks before sending the rest.
-- `adv`: a longer run, 50 requests x 3 rounds unless you set them. No probe, and it writes a `summary.txt` report.
-
-### Server on another machine
-
-When the server is on another machine, run the load test twice, once on each machine.
-`--level` does not apply here.
-
-1. On the server machine, start the server with its log in `/tmp` as above. Then, in a second terminal,
-   start the watcher. It sends nothing; it watches the server and reads its log:
-
-   ```bash
-   python -m tests.load_tests.load_test_cli --agent hello_world --fixtures-hocon-dir \
-       --server-only --server-log /tmp/neuro_san_server.log
-   ```
-
-   It asks how many requests the client will send. Type the same number you give the client.
-   Press Ctrl+C at that question to stop.
-
-2. On the client machine, send the requests as in [More load](#more-load), with `--host`
-   set to the server machine.
-
 ## Results
 
 Each run gets its own folder, `/tmp/load_test_<you>/<level>/<time>_<host>_<requests>/`
@@ -204,7 +110,7 @@ Each run gets its own folder, `/tmp/load_test_<you>/<level>/<time>_<host>_<reque
 | File                  | What's in it                                  |
 |-----------------------|-----------------------------------------------|
 | `raw_results.json`    | Everything from the run                       |
-| `summary.txt`         | Readable report (`adv` only)                  |
+| `summary.txt`         | Readable report (`--level adv` only)          |
 | `stdout.log`          | Everything printed on screen                  |
 | `progress.log`        | Progress ticks and each finished request      |
 | `server_receipts.log` | Per-request server details (with server log)  |
@@ -272,8 +178,107 @@ python -m tests.load_tests.load_test_cli --compare /tmp/load_test_<you>/min/
 python -m tests.load_tests.load_test_cli --trend /tmp/load_test_<you>/history.jsonl
 ```
 
-`--client-only` runs are saved under `min/`, the others under `norm/` or `adv/`.
+`--client-only` runs are saved under `min/`. Runs that also watch the server (see
+[Watching the server too](#watching-the-server-too)) are saved under `norm/` or `adv/`.
 Neither command sends any requests.
+
+## Watching the server too
+
+This part is optional. Everything above works without it.
+
+Client-only tells you what the client saw. When the server runs on the same machine, drop
+`--client-only` and the load test also watches the server. That answers three more questions:
+did the client and the server count the same tokens, did the server hold on to memory after the run,
+and did the server log any errors.
+
+Terminal 1: stop the Quick start server (Ctrl+C) and start it again with its log in `/tmp`:
+
+```bash
+export OPENAI_API_KEY=<your key>
+python -m neuro_san.service.main_loop.server_main_loop 2>&1 | tee /tmp/neuro_san_server.log
+```
+
+Terminal 2: the same command as Quick start, without `--client-only`, and with `--server-log`
+to say where that log is:
+
+```bash
+python -m tests.load_tests.load_test_cli --agent hello_world --fixtures-hocon-dir \
+    --server-log /tmp/neuro_san_server.log
+```
+
+It runs the same `hello_world` test cases as Quick start. Like Quick start, it first sends one probe
+request and asks before sending the rest.
+
+### What you get on top of client-only
+
+You get everything from [What a run prints](#what-a-run-prints), plus parts like these (10 requests, shortened):
+
+```text
+============================================================
+  LLM & TOKEN USAGE
+============================================================
+  Client (HTTP token_accounting):
+    LLM calls: 10 total  (1 / 1 / 1 min/avg/max)
+    Tokens:    9,900 total  (900 / 990 / 1,080 min/avg/max),  7,000 prompt + 2,900 completion
+  Server log:
+    LLM calls: 10 total  (1 / 1 / 1 min/avg/max)
+    Tokens:    9,900 total  (900 / 990 / 1,080 min/avg/max),  7,000 prompt + 2,900 completion
+  Match: OK
+  LLM models: gpt-4o (10)
+
+============================================================
+  RESOURCE ANALYSIS (10 client requests, 10 server calls)
+============================================================
+ Component  Concurrent  Before RSS  Peak RSS  Settled RSS  RSS Delta  CPU%  FDs   Threads  Thread Delta  Conns  Children
+------------------------------------------------------------------------------------------------------------------------
+Server app          10      412.3M        na       431.8M     +19.5M  3.1%   45  38 -> 42            +4      2         0
+Client app          10      180.2M    205.6M       188.4M      +8.2M  0.4%   14         5            na     na        na
+```
+
+What to look at:
+
+- **Do the token counts agree?** "Client" is what the client counted, "Server log" is what the server
+  wrote down. `Match: OK` means they agree. `MISMATCH` means they don't, so look at the server log.
+- **Did the server keep memory?** RSS is the memory a program uses. In the `Server app` row,
+  **RSS Delta** is how much more memory the server uses after the run than before it.
+  Run the same command a few times. If RSS Delta goes up again each time, the server keeps memory
+  from requests that are done, and a server left running will slowly run out of memory.
+  Look first at the coded tools your agent uses, since they run inside the server.
+- **Did the server keep threads?** **Thread Delta** is how many more threads the server has after
+  the run. If it goes up again each time you run the same command, something starts threads and never
+  stops them. Again, look first at your agent's coded tools.
+- The other columns (CPU%, open files, connections) are there to help when you dig into a problem.
+- A **SYSTEM RESOURCES** part shows the whole machine's memory and CPU before, at the busiest point,
+  and after the run. If the machine is nearly full at the busiest point, slow results may come from
+  the machine, not the server.
+- If the server log shows errors, or clients that gave up before the server finished, they are
+  listed by request.
+
+### Levels
+
+The level sets how long the run is. Both levels watch the server as described above. Pick one with `--level`:
+
+- `norm` (default): a short run. It sends one probe request first and asks before sending the rest.
+- `adv`: a longer run, 50 requests x 3 rounds unless you set them. No probe, and it writes a `summary.txt` report.
+
+### Server on another machine
+
+When the server is on another machine, run the load test twice, once on each machine.
+`--level` does not apply here.
+
+1. On the server machine, start the server with its log in `/tmp` as above. Then, in a second terminal,
+   start the watcher. It sends nothing; it watches the server and reads its log:
+
+   ```bash
+   python -m tests.load_tests.load_test_cli --agent hello_world --fixtures-hocon-dir \
+       --server-only --server-log /tmp/neuro_san_server.log
+   ```
+
+   It asks how many requests the client will send. Type the same number you give the client.
+   Press Ctrl+C at that question to stop.
+
+2. On the client machine, send the requests as in [More load](#more-load), with `--host`
+   set to the server machine.
 
 ## Troubleshooting
 
