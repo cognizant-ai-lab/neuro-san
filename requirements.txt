@@ -66,7 +66,10 @@ langchain-openai>=1.4.0,<2.0
 # Pinned explicitly (it is otherwise only a transitive dependency of langchain-openai).
 # Floor 2.45.0 matches langchain-openai's own requirement; the <4 ceiling is langchain-openai's too.
 # openai 3.x is built on httpx2 instead of httpx. OpenAILlmPolicy builds its http client from the
-# SDK's own client class, so either major works.
+# SDK's own client class, so either major works. Both majors stay supported because litellm, a
+# common companion of neuro-san, still pins openai<3. Once litellm and langchain-openai have moved
+# to openai 3, raise this floor to 3, drop the httpx line below, and remove the OpenAIHttpx helper
+# (neuro_san/internals/run_context/langchain/util/openai_httpx.py), which only bridges the two majors.
 openai>=2.45.0,<4
 
 # The http library behind openai 2.x; openai 3.x brings httpx2 instead and does not need this.

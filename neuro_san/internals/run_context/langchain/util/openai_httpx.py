@@ -29,6 +29,11 @@ class OpenAIHttpx:
     under its own import name. A transport, limit or request object handed to the SDK has to
     come from the same library as the SDK's own clients, so code that builds one asks here
     instead of importing either library by name.
+
+    This class only exists while both SDK majors are supported. Once litellm, a common companion
+    of neuro-san that still pins openai below 3, and langchain-openai have moved to openai 3, raise
+    the openai floor in requirements.txt to 3, import httpx2 directly where this class is used, and
+    delete it.
     """
 
     # Loads third-party modules the way the LLM policies do, installing the SDK when it is missing.
