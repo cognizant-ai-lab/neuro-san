@@ -655,9 +655,9 @@ class ServerLogMonitor:
             if not primary_start_re.search(line):
                 continue
             count += 1
-            now: float = time.perf_counter()
+            now_seconds: float = time.perf_counter()
             timestamp: str = time.strftime("%H:%M:%S", time.localtime())
-            delta_seconds: float = now - fire_time_seconds
+            delta_seconds: float = now_seconds - fire_time_seconds
             detail: str = (f"  [server] {agent_label} request {count}/{expected_count} received [{timestamp}]"
                            f" (+{delta_seconds:.1f}s)")
             if use_dots:
