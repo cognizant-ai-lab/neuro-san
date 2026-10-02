@@ -81,7 +81,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         self._total_system_ram: int = psutil.virtual_memory().total
         self._out_of_memory_warned: bool = False
         self._swap_warned: bool = False
-        self._peak_sys_cpu: float = 0.0
+        self._peak_system_cpu_percent: float = 0.0
         self._console_started: bool = False
         # Prime the non-blocking system CPU counter so the first real
         # sample reflects usage since the heartbeat started rather
@@ -98,40 +98,40 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             if primary_start_pattern else None
         )
 
-    def _sample_client_rss(self, peak_rss: float, peak_ref: SharedRef) -> float:
+    def _sample_client_rss(self, peak_rss_megabytes: float, peak_ref: SharedRef) -> float:
         """
         Sample client RSS and update the peak if higher.
 
-        :param peak_rss: Peak client RSS in MB so far
+        :param peak_rss_megabytes: Peak client RSS in MB so far
         :param peak_ref: Receives the new peak when this sample is higher
         :return: The peak client RSS in MB after this sample
         """
         if self._client_proc is None:
-            return peak_rss
+            return peak_rss_megabytes
         try:
-            rss: float = (
+            rss_megabytes: float = (
                 self._client_proc.memory_info().rss / (1024 * 1024)
             )
-            if rss > peak_rss:
-                peak_rss = rss
-                peak_ref.value = rss
+            if rss_megabytes > peak_rss_megabytes:
+                peak_rss_megabytes = rss_megabytes
+                peak_ref.value = rss_megabytes
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
-        return peak_rss
+        return peak_rss_megabytes
 
     def _sample_server_memory(self) -> Tuple[Optional[float], Optional[float]]:
         """
         Sample server RSS and swap in MB.
 
-        :return: (rss_mb, swap_mb), or (None, None) if unavailable
+        :return: (rss_megabytes, swap_megabytes), or (None, None) if unavailable
         """
         if self._server_proc is None:
             return None, None
         try:
             info = self._server_proc.memory_full_info()
-            rss_mb: float = info.rss / (1024 * 1024)
-            swap_mb: float = info.swap / (1024 * 1024)
-            return rss_mb, swap_mb
+            rss_megabytes: float = info.rss / (1024 * 1024)
+            swap_megabytes: float = info.swap / (1024 * 1024)
+            return rss_megabytes, swap_megabytes
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return None, None
 
@@ -148,19 +148,19 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return False
 
-    def _check_memory_warnings(self, swap_mb: float, progress_file: Optional[TextIO]) -> None:
+    def _check_memory_warnings(self, swap_megabytes: float, progress_file: Optional[TextIO]) -> None:
         """
         Warn if system memory or swap exceeds thresholds.
 
-        :param swap_mb: Server swap in MB
+        :param swap_megabytes: Server swap in MB
         :param progress_file: Open progress.log, or None
         """
         self._check_system_memory_warning(progress_file)
-        if not self._swap_warned and swap_mb > 0:
+        if not self._swap_warned and swap_megabytes > 0:
             self._swap_warned = True
             warning = (
                 f"  WARNING: Server has"
-                f" {Formatters.format_rss(swap_mb)} swapped to disk"
+                f" {Formatters.format_rss(swap_megabytes)} swapped to disk"
                 " — severe performance impact"
             )
             logger.warning("%s", warning)
@@ -174,15 +174,15 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         if self._out_of_memory_warned:
             return
-        memory = psutil.virtual_memory()
-        used_fraction = memory.percent / 100.0
+        virtual_memory_stats = psutil.virtual_memory()
+        used_fraction = virtual_memory_stats.percent / 100.0
         if used_fraction >= OUT_OF_MEMORY_WARNING_THRESHOLD:
             self._out_of_memory_warned = True
-            total_gigabytes = memory.total / (1024 ** 3)
-            available_gigabytes = memory.available / (1024 ** 3)
+            total_gigabytes = virtual_memory_stats.total / (1024 ** 3)
+            available_gigabytes = virtual_memory_stats.available / (1024 ** 3)
             warning = (
                 f"  WARNING: System memory at"
-                f" {memory.percent:.0f}%"
+                f" {virtual_memory_stats.percent:.0f}%"
                 f" ({available_gigabytes:.1f}G free"
                 f" / {total_gigabytes:.1f}G total)"
                 " — risk of OOM kill"
@@ -204,7 +204,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
     # pylint: disable=too-many-locals,too-many-arguments
     # pylint: disable=too-many-statements
-    def progress_heartbeat(self, futures: List[Future], total: int, start_time: float,
+    def progress_heartbeat(self, futures: List[Future], total: int, start_seconds: float,
                            stop_event: threading.Event,
                            ready_event: threading.Event,
                            fires_done_event: threading.Event,
@@ -227,7 +227,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :param futures: Futures of the requests fired in this stage
         :param total: Number of requests in this stage
-        :param start_time: time.perf_counter() value taken when the stage began
+        :param start_seconds: time.perf_counter() value taken when the stage began
         :param stop_event: Set by the caller to stop the heartbeat
         :param ready_event: Set once the initial RSS sample is taken
         :param fires_done_event: Set by the caller once every request is fired
@@ -241,13 +241,13 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :param server_dead_event: Set when the server process is found dead
         """
         last_done = 0
-        last_change = start_time
+        last_change_seconds = start_seconds
         peak_threads = 0
-        peak_server_rss = 0.0
-        peak_sys_mem_pct = 0.0
+        peak_server_rss_megabytes = 0.0
+        peak_system_memory_percent = 0.0
         peak_sys_threads = 0
         tick_count = 0
-        peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
+        peak_client_rss_megabytes = self._sample_client_rss(0.0, peak_client_rss_ref)
         ready_event.set()
         fires_done_event.wait()
         progress_file: Optional[TextIO] = self._open_progress_file()
@@ -263,55 +263,55 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                     )
                     server_dead_event.set()
                     break
-                peak_rss = self._sample_client_rss(
-                    peak_rss, peak_client_rss_ref,
+                peak_client_rss_megabytes = self._sample_client_rss(
+                    peak_client_rss_megabytes, peak_client_rss_ref,
                 )
                 done: int = Heartbeat._count_done(futures)
-                elapsed: int = int(time.perf_counter() - start_time)
+                elapsed_seconds: int = int(time.perf_counter() - start_seconds)
                 ts = time.strftime("%H:%M:%S", time.localtime())
                 percent_done = done * 100 // total if total > 0 else 0
                 suffix = ""
                 in_flight = total - done
                 if done == last_done and done < total:
-                    stall: int = int(time.perf_counter() - last_change)
+                    stall_seconds: int = int(time.perf_counter() - last_change_seconds)
                     suffix = (
                         f"  !! {in_flight} request(s) stalled for "
-                        f"{Heartbeat._fmt_elapsed(stall)}"
+                        f"{Heartbeat._fmt_elapsed(stall_seconds)}"
                     )
                 if done > last_done:
-                    last_change = time.perf_counter()
+                    last_change_seconds = time.perf_counter()
                     last_done = done
                 thread_info: str
                 server_rss_info: str
                 thread_info, server_rss_info = (
                     self._sample_server_metrics(
                         peak_threads, peak_threads_ref,
-                        peak_server_rss, peak_server_rss_ref,
+                        peak_server_rss_megabytes, peak_server_rss_ref,
                         progress_file,
                     )
                 )
                 peak_threads = peak_threads_ref.value or 0
                 if peak_server_rss_ref.value is not None:
-                    peak_server_rss = peak_server_rss_ref.value
+                    peak_server_rss_megabytes = peak_server_rss_ref.value
                 tick_count += 1
                 failed: int = failed_ref.value or 0
                 fail_info = ""
                 if failed > 0:
-                    fail_pct = failed * 100 // done if done else 0
+                    failed_percent = failed * 100 // done if done else 0
                     fail_info = (
-                        f", {failed} failed {fail_pct}%"
+                        f", {failed} failed {failed_percent}%"
                     )
                 sys_mem_info: str
-                cur_pct: float
-                cur_avail: float
-                sys_mem_info, cur_pct, cur_avail = (
+                current_memory_percent: float
+                current_available_gigabytes: float
+                sys_mem_info, current_memory_percent, current_available_gigabytes = (
                     self._format_system_memory()
                 )
-                if cur_pct > peak_sys_mem_pct:
-                    peak_sys_mem_pct = cur_pct
+                if current_memory_percent > peak_system_memory_percent:
+                    peak_system_memory_percent = current_memory_percent
                     peak_sys_mem_pct_ref.value = {
-                        "pct": cur_pct,
-                        "avail_gb": cur_avail,
+                        "pct": current_memory_percent,
+                        "avail_gb": current_available_gigabytes,
                     }
                 dur_info = (
                     "  dur/client: "
@@ -326,7 +326,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                         + Heartbeat.format_dur_stats(server_durs)
                     )
                 sys_cpu_info = self._format_system_cpu()
-                peak_sys_cpu_ref.value = self._peak_sys_cpu
+                peak_sys_cpu_ref.value = self._peak_system_cpu_percent
                 cur_sys_threads: int = SystemResources.total_threads()
                 if cur_sys_threads > peak_sys_threads:
                     peak_sys_threads = cur_sys_threads
@@ -334,7 +334,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({percent_done}%{fail_info}) --"
-                    f" {Heartbeat._fmt_elapsed(elapsed)}"
+                    f" {Heartbeat._fmt_elapsed(elapsed_seconds)}"
                     f" elapsed [{ts}]{suffix}  {dur_info.strip()}"
                     f"{thread_info}"
                     f"{server_rss_info}{sys_mem_info}{sys_cpu_info}"
@@ -354,15 +354,15 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         Format total system memory usage for the progress line.
 
-        :return: (formatted_string, current_percent, available_gb)
+        :return: (formatted_string, current_percent, available_gigabytes)
         """
-        memory = psutil.virtual_memory()
-        used_megabytes = (memory.total - memory.available) / (1024 ** 2)
-        available_gigabytes = memory.available / (1024 ** 3)
+        virtual_memory_stats = psutil.virtual_memory()
+        used_megabytes = (virtual_memory_stats.total - virtual_memory_stats.available) / (1024 ** 2)
+        available_gigabytes = virtual_memory_stats.available / (1024 ** 3)
         return (
-            f"  sysmem: {memory.percent:.0f}%"
+            f"  sysmem: {virtual_memory_stats.percent:.0f}%"
             f" ({used_megabytes:.0f}M used / {available_gigabytes:.1f}G free)",
-            memory.percent,
+            virtual_memory_stats.percent,
             available_gigabytes,
         )
 
@@ -376,9 +376,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :return: The CPU part of the progress line
         """
-        cur: float = psutil.cpu_percent(interval=None)
-        self._peak_sys_cpu = max(self._peak_sys_cpu, cur)
-        return f"  syscpu: {cur:.0f}% (peak {self._peak_sys_cpu:.0f}%)"
+        current_cpu_percent: float = psutil.cpu_percent(interval=None)
+        self._peak_system_cpu_percent = max(self._peak_system_cpu_percent, current_cpu_percent)
+        return f"  syscpu: {current_cpu_percent:.0f}% (peak {self._peak_system_cpu_percent:.0f}%)"
 
     @staticmethod
     def _fmt_elapsed(seconds: int) -> str:
@@ -402,13 +402,13 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         if not durations:
             return "n/a"
-        lo = int(min(durations))
-        hi = int(max(durations))
-        avg = int(sum(durations) / len(durations))
+        min_seconds = int(min(durations))
+        max_seconds = int(max(durations))
+        average_seconds = int(sum(durations) / len(durations))
         return (
-            f"{Heartbeat._fmt_elapsed(lo)} min /"
-            f" {Heartbeat._fmt_elapsed(avg)} avg /"
-            f" {Heartbeat._fmt_elapsed(hi)} max"
+            f"{Heartbeat._fmt_elapsed(min_seconds)} min /"
+            f" {Heartbeat._fmt_elapsed(average_seconds)} avg /"
+            f" {Heartbeat._fmt_elapsed(max_seconds)} max"
         )
 
     @staticmethod
@@ -447,9 +447,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 result = future.result()
             except (CancelledError, FutureTimeoutError):
                 continue
-            duration = result.get("elapsed", result.get("duration"))
-            if isinstance(duration, (int, float)) and duration > 0:
-                durations.append(float(duration))
+            duration_seconds = result.get("elapsed", result.get("duration"))
+            if isinstance(duration_seconds, (int, float)) and duration_seconds > 0:
+                durations.append(float(duration_seconds))
         return durations
 
     def _server_durations(self) -> Optional[List[float]]:
@@ -477,20 +477,20 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 start_line = f"Start {agent}/streaming_chat"
                 if not self._primary_start_re.search(start_line):
                     continue
-            duration = pair.get("duration")
-            if isinstance(duration, (int, float)) and duration > 0:
-                durations.append(float(duration))
+            duration_seconds = pair.get("duration_seconds")
+            if isinstance(duration_seconds, (int, float)) and duration_seconds > 0:
+                durations.append(float(duration_seconds))
         return durations
 
     # pylint: disable=too-many-positional-arguments
-    def _sample_server_metrics(self, peak_threads: int, peak_threads_ref: SharedRef, peak_server_rss: float,
+    def _sample_server_metrics(self, peak_threads: int, peak_threads_ref: SharedRef, peak_server_rss_megabytes: float,
                                peak_server_rss_ref: SharedRef, progress_file: Optional[TextIO]) -> Tuple[str, str]:
         """
         Sample server thread count and RSS.
 
         :param peak_threads: Peak server thread count so far
         :param peak_threads_ref: Receives the new peak thread count when this sample is higher
-        :param peak_server_rss: Peak server RSS in MB so far
+        :param peak_server_rss_megabytes: Peak server RSS in MB so far
         :param peak_server_rss_ref: Receives the new peak RSS when this sample is higher
         :param progress_file: Open progress.log, or None
         :return: (thread_info, server_rss_info) parts of the progress line
@@ -515,18 +515,18 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 "Heartbeat thread count unavailable: %s",
                 exc,
             )
-        rss_mb, swap_mb = self._sample_server_memory()
-        if rss_mb is not None:
+        rss_megabytes, swap_megabytes = self._sample_server_memory()
+        if rss_megabytes is not None:
             swap_info = ""
-            if swap_mb > 0:
-                swap_info = f" swap: {Formatters.format_rss(swap_mb)}"
+            if swap_megabytes > 0:
+                swap_info = f" swap: {Formatters.format_rss(swap_megabytes)}"
             server_rss_info = (
-                f"  RSS: {Formatters.format_rss(rss_mb)}{swap_info}"
+                f"  RSS: {Formatters.format_rss(rss_megabytes)}{swap_info}"
             )
-            if rss_mb > peak_server_rss:
-                peak_server_rss_ref.value = rss_mb
+            if rss_megabytes > peak_server_rss_megabytes:
+                peak_server_rss_ref.value = rss_megabytes
             self._check_memory_warnings(
-                swap_mb, progress_file,
+                swap_megabytes, progress_file,
             )
         return thread_info, server_rss_info
 

@@ -449,7 +449,7 @@ class ServerLogMonitor:
         """Parse Start/Finish streaming_chat entries for timing.
 
         Returns a list of dicts with agent, start_ts, finish_ts,
-        duration, and request_id for each streaming_chat pair.
+        duration_seconds, and request_id for each streaming_chat pair.
         """
         if self._server_log is None or position is None:
             return []
@@ -504,7 +504,7 @@ class ServerLogMonitor:
                         "agent": agent,
                         "start_ts": start_ts,
                         "finish_ts": ts,
-                        "duration": ts - start_ts,
+                        "duration_seconds": ts - start_ts,
                         "request_id": req_id,
                     })
         return results
