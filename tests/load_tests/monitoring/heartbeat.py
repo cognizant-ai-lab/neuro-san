@@ -94,10 +94,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         # server-side min/avg/max durations.
         self._log_monitor: Optional[ServerLogMonitor] = log_monitor
         self._log_start_pos: Optional[int] = log_start_pos
-        self._primary_start_re: Optional[re.Pattern] = (
-            re.compile(primary_start_pattern)
-            if primary_start_pattern else None
-        )
+        self._primary_start_re: Optional[re.Pattern] = None
+        if primary_start_pattern:
+            self._primary_start_re = re.compile(primary_start_pattern)
 
     def _sample_client_rss(self, peak_rss_megabytes: float, peak_ref: SharedRef) -> float:
         """
@@ -127,9 +126,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         if self._server_proc is None:
             return None, None
         try:
-            info: Any = self._server_proc.memory_full_info()
-            rss_megabytes: float = info.rss / (1024 * 1024)
-            swap_megabytes: float = info.swap / (1024 * 1024)
+            memory_info: Any = self._server_proc.memory_full_info()
+            rss_megabytes: float = memory_info.rss / (1024 * 1024)
+            swap_megabytes: float = memory_info.swap / (1024 * 1024)
             return rss_megabytes, swap_megabytes
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return None, None
@@ -247,8 +246,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 peak_client_rss_megabytes = self._sample_client_rss(peak_client_rss_megabytes, peak_client_rss_ref)
                 done: int = Heartbeat._count_done(futures)
                 elapsed_seconds: int = int(time.perf_counter() - start_seconds)
-                ts: str = time.strftime("%H:%M:%S", time.localtime())
-                percent_done: int = done * 100 // total if total > 0 else 0
+                timestamp: str = time.strftime("%H:%M:%S", time.localtime())
+                percent_done: int = Heartbeat._percent(done, total)
                 suffix: str = ""
                 in_flight: int = total - done
                 if done == last_done and done < total:
@@ -269,7 +268,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 failed: int = failed_ref.value or 0
                 fail_info: str = ""
                 if failed > 0:
-                    failed_percent: int = failed * 100 // done if done else 0
+                    failed_percent: int = Heartbeat._percent(failed, done)
                     fail_info = f", {failed} failed {failed_percent}%"
                 sys_mem_info: str
                 current_memory_percent: float
@@ -281,10 +280,11 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                         "pct": current_memory_percent,
                         "avail_gb": current_available_gigabytes,
                     }
-                dur_info: str = "  dur/client: " + Heartbeat.format_dur_stats(Heartbeat._client_durations(futures))
-                server_durs: Optional[List[float]] = self._server_durations()
-                if server_durs is not None:
-                    dur_info += "  dur/server: " + Heartbeat.format_dur_stats(server_durs)
+                client_durations: List[float] = Heartbeat._client_durations(futures)
+                duration_info: str = "  dur/client: " + Heartbeat.format_dur_stats(client_durations)
+                server_durations: Optional[List[float]] = self._server_durations()
+                if server_durations is not None:
+                    duration_info += "  dur/server: " + Heartbeat.format_dur_stats(server_durations)
                 sys_cpu_info: str = self._format_system_cpu()
                 peak_sys_cpu_ref.value = self._peak_system_cpu_percent
                 cur_sys_threads: int = SystemResources.total_threads()
@@ -292,8 +292,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                     peak_sys_threads = cur_sys_threads
                     peak_sys_threads_ref.value = cur_sys_threads
                 line: str = (f"  [progress] {done} of {total} completed ({percent_done}%{fail_info}) --"
-                             f" {Heartbeat._fmt_elapsed(elapsed_seconds)} elapsed [{ts}]{suffix}  {dur_info.strip()}"
-                             f"{thread_info}{server_rss_info}{sys_mem_info}{sys_cpu_info}")
+                             f" {Heartbeat._fmt_elapsed(elapsed_seconds)} elapsed [{timestamp}]{suffix}"
+                             f"  {duration_info.strip()}{thread_info}{server_rss_info}{sys_mem_info}{sys_cpu_info}")
                 self._write_to_file(progress_file, line)
                 self._write_to_console(tick_count, line, force=stopped)
                 if stopped:
@@ -329,6 +329,19 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         current_cpu_percent: float = psutil.cpu_percent(interval=None)
         self._peak_system_cpu_percent = max(self._peak_system_cpu_percent, current_cpu_percent)
         return f"  syscpu: {current_cpu_percent:.0f}% (peak {self._peak_system_cpu_percent:.0f}%)"
+
+    @staticmethod
+    def _percent(part: int, whole: int) -> int:
+        """
+        Work out part as a whole-number percent of whole.
+
+        :param part: Count to express as a percent
+        :param whole: Count that is 100%
+        :return: part * 100 // whole, or 0 when whole is 0 or less
+        """
+        if whole <= 0:
+            return 0
+        return part * 100 // whole
 
     @staticmethod
     def _fmt_elapsed(seconds: int) -> str:

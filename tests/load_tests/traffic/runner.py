@@ -133,6 +133,9 @@ class TrafficRunner:
         if status == STATUS_CREATED and failure_reason:
             status = STATUS_FAILED
 
+        error: Optional[str] = None
+        if status != STATUS_CREATED:
+            error = failure_reason
         result: Dict[str, Any] = {
             "request_id": f"request-{request_id}",
             "status": status,
@@ -142,7 +145,7 @@ class TrafficRunner:
             "end_time": start_unix_seconds + elapsed_seconds,
             "prompt": prompt,
             "failure_reason": failure_reason,
-            "error": failure_reason if status != STATUS_CREATED else None,
+            "error": error,
         }
         self._record_request(request_id, output_dir, request_result, result)
         return result
@@ -648,8 +651,8 @@ class TrafficRunner:
             f" ({Formatters.fmt_duration(elapsed_seconds, precision=2)})"
             f"  {fields_str}\n"
         )
-        with open(path, "a", encoding="utf-8") as fh:
-            fh.write(line)
+        with open(path, "a", encoding="utf-8") as progress_log:
+            progress_log.write(line)
 
     @staticmethod
     def _save_request_output(output_dir: Optional[str], request_id: int, stdout: str, stderr: str) -> None:
@@ -666,9 +669,9 @@ class TrafficRunner:
         requests_dir: str = os.path.join(output_dir, "requests")
         os.makedirs(requests_dir, exist_ok=True)
         stdout_path: str = os.path.join(requests_dir, f"request_{request_id}_stdout.txt")
-        with open(stdout_path, "w", encoding="utf-8") as fh:
-            fh.write(stdout)
+        with open(stdout_path, "w", encoding="utf-8") as stdout_file:
+            stdout_file.write(stdout)
         if stderr and stderr.strip():
             stderr_path: str = os.path.join(requests_dir, f"request_{request_id}_stderr.txt")
-            with open(stderr_path, "w", encoding="utf-8") as fh:
-                fh.write(stderr)
+            with open(stderr_path, "w", encoding="utf-8") as stderr_file:
+                stderr_file.write(stderr)
