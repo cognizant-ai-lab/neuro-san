@@ -421,9 +421,9 @@ class TrafficRunner:
         pool: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=plan.get_max_workers())
         try:
             futures_ref: List[Future] = []
-            hb: Heartbeat = self._create_heartbeat(server_proc, client_proc, plan.get_output_dir(), log_monitor)
+            heartbeat: Heartbeat = self._create_heartbeat(server_proc, client_proc, plan.get_output_dir(), log_monitor)
             heartbeat_thread = threading.Thread(
-                target=hb.progress_heartbeat,
+                target=heartbeat.progress_heartbeat,
                 args=(futures_ref, plan.get_num_requests(), start),
                 kwargs=heartbeat_kwargs,
                 daemon=True,
@@ -511,10 +511,10 @@ class TrafficRunner:
         :param futures: Receives one future per request; the heartbeat reads it while requests run
         :param failed_ref: Shared counter of failed requests
         """
-        for i in range(plan.get_num_requests()):
+        for index in range(plan.get_num_requests()):
             future: Future = pool.submit(
                 self._run_one_tracked,
-                i + 1, plan.get_global_offset() + i,
+                index + 1, plan.get_global_offset() + index,
                 plan.get_output_dir(), failed_ref,
             )
             futures.append(future)
@@ -534,12 +534,12 @@ class TrafficRunner:
         :param cancel_event: Set by the Ctrl-C handler to stop collecting early
         :return: (num_killed, interrupted)
         """
-        pending: Set[Future] = set(futures)
+        pending_futures: Set[Future] = set(futures)
         interrupted: bool = False
         elapsed: float
         remaining: float
         wait_slice: float
-        while pending:
+        while pending_futures:
             if cancel_event.is_set():
                 interrupted = True
                 break
@@ -552,61 +552,62 @@ class TrafficRunner:
             else:
                 wait_slice = 1.0
             try:
-                for fut in as_completed(pending, timeout=wait_slice):
-                    results_list.append(fut.result())
-                    pending.discard(fut)
+                for future in as_completed(pending_futures, timeout=wait_slice):
+                    results_list.append(future.result())
+                    pending_futures.discard(future)
             except FutureTimeoutError:
                 pass
 
         reason: str = "Killed by --stage-timeout"
         if interrupted:
             reason = "Killed by Ctrl-C interrupt"
-        for fut in pending:
-            fut.cancel()
+        for future in pending_futures:
+            future.cancel()
         if interrupted:
-            TrafficRunner._collect_during_grace(pending, results_list)
+            TrafficRunner._collect_during_grace(pending_futures, results_list)
         killed: int = TrafficRunner._collect_killed(
-            pending, results_list, start=start, reason=reason,
+            pending_futures, results_list, start=start, reason=reason,
         )
         return killed, interrupted
 
     @staticmethod
-    def _collect_during_grace(pending: Set[Future], results_list: List[Dict[str, Any]]) -> None:
+    def _collect_during_grace(pending_futures: Set[Future], results_list: List[Dict[str, Any]]) -> None:
         """
         Give in-flight requests a short grace to wind down after Ctrl-C.
 
-        Anything still stuck after the grace stays in pending, without blocking on it.
+        Anything still stuck after the grace stays in pending_futures, without blocking on it.
 
-        :param pending: Futures not collected yet, updated in place
+        :param pending_futures: Futures not collected yet, updated in place
         :param results_list: Receives the results that finish within the grace
         """
         grace_deadline: float = time.perf_counter() + INTERRUPT_GRACE_SECONDS
         remaining: float
-        for fut in list(pending):
+        for future in list(pending_futures):
             remaining = max(0.0, grace_deadline - time.perf_counter())
             try:
-                results_list.append(fut.result(timeout=remaining))
-                pending.discard(fut)
+                results_list.append(future.result(timeout=remaining))
+                pending_futures.discard(future)
             except FutureTimeoutError:
                 pass
             except CancelledError:
-                pending.discard(fut)
+                pending_futures.discard(future)
 
     @staticmethod
-    def _collect_killed(pending: Set[Future], results_list: List[Dict[str, Any]], start: float, reason: str) -> int:
+    def _collect_killed(pending_futures: Set[Future], results_list: List[Dict[str, Any]], start: float,
+                        reason: str) -> int:
         """
         Record the futures still pending, KILLED unless they finished meanwhile.
 
-        :param pending: Futures not collected yet
+        :param pending_futures: Futures not collected yet
         :param results_list: Receives one result per pending future
         :param start: time.perf_counter() when the stage began
         :param reason: Why the stragglers were killed, saved as their stderr
         :return: Number of pending futures
         """
         killed: int = 0
-        for fut in pending:
+        for future in pending_futures:
             killed += 1
-            if fut.cancelled() or not fut.done():
+            if future.cancelled() or not future.done():
                 results_list.append({
                     "request_id": "unknown",
                     "status": STATUS_KILLED,
@@ -618,7 +619,7 @@ class TrafficRunner:
                     "prompt": "",
                 })
             else:
-                results_list.append(fut.result())
+                results_list.append(future.result())
         return killed
 
     def _log_request_result(self, request_id: int, result: Dict[str, Any],
@@ -669,9 +670,9 @@ class TrafficRunner:
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
         if is_failure:
-            last_err: Optional[str] = OutputParser.last_stderr_line(stderr)
-            if last_err and last_err.strip():
-                logger.info("  stderr: %s", last_err)
+            last_error_line: Optional[str] = OutputParser.last_stderr_line(stderr)
+            if last_error_line and last_error_line.strip():
+                logger.info("  stderr: %s", last_error_line)
 
     @staticmethod
     def _write_result_to_file(output_dir: str, request_id: int, status: str, elapsed: float,

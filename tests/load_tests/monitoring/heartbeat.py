@@ -46,7 +46,7 @@ from tests.load_tests.shared_ref import SharedRef
 logger = logging.getLogger(__name__)
 
 CONSOLE_TICK_INTERVAL = 1
-OOM_WARNING_THRESHOLD = 0.80
+OUT_OF_MEMORY_WARNING_THRESHOLD = 0.80
 
 
 class Heartbeat:  # pylint: disable=too-many-instance-attributes
@@ -79,7 +79,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         self._client_proc: Optional[psutil.Process] = client_proc
         self._output_dir: Optional[str] = output_dir
         self._total_system_ram: int = psutil.virtual_memory().total
-        self._oom_warned: bool = False
+        self._out_of_memory_warned: bool = False
         self._swap_warned: bool = False
         self._peak_sys_cpu: float = 0.0
         self._console_started: bool = False
@@ -172,29 +172,29 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :param progress_file: Open progress.log, or None
         """
-        if self._oom_warned:
+        if self._out_of_memory_warned:
             return
-        mem = psutil.virtual_memory()
-        used_pct = mem.percent / 100.0
-        if used_pct >= OOM_WARNING_THRESHOLD:
-            self._oom_warned = True
-            total_gb = mem.total / (1024 ** 3)
-            avail_gb = mem.available / (1024 ** 3)
+        memory = psutil.virtual_memory()
+        used_fraction = memory.percent / 100.0
+        if used_fraction >= OUT_OF_MEMORY_WARNING_THRESHOLD:
+            self._out_of_memory_warned = True
+            total_gigabytes = memory.total / (1024 ** 3)
+            available_gigabytes = memory.available / (1024 ** 3)
             warning = (
                 f"  WARNING: System memory at"
-                f" {mem.percent:.0f}%"
-                f" ({avail_gb:.1f}G free"
-                f" / {total_gb:.1f}G total)"
+                f" {memory.percent:.0f}%"
+                f" ({available_gigabytes:.1f}G free"
+                f" / {total_gigabytes:.1f}G total)"
                 " — risk of OOM kill"
             )
             logger.warning("%s", warning)
             self._write_to_file(progress_file, warning)
             swap = psutil.swap_memory()
             if swap.total > 0 and swap.used > 0:
-                swap_gb = swap.used / (1024 ** 3)
+                swap_used_gigabytes = swap.used / (1024 ** 3)
                 swap_warning = (
                     f"  WARNING: System swap in use:"
-                    f" {swap_gb:.1f}G"
+                    f" {swap_used_gigabytes:.1f}G"
                     " — severe performance impact"
                 )
                 logger.warning("%s", swap_warning)
@@ -269,7 +269,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 done: int = Heartbeat._count_done(futures)
                 elapsed: int = int(time.perf_counter() - start_time)
                 ts = time.strftime("%H:%M:%S", time.localtime())
-                pct = done * 100 // total if total > 0 else 0
+                percent_done = done * 100 // total if total > 0 else 0
                 suffix = ""
                 in_flight = total - done
                 if done == last_done and done < total:
@@ -333,7 +333,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                     peak_sys_threads_ref.value = cur_sys_threads
                 line = (
                     f"  [progress] {done} of {total} completed"
-                    f" ({pct}%{fail_info}) --"
+                    f" ({percent_done}%{fail_info}) --"
                     f" {Heartbeat._fmt_elapsed(elapsed)}"
                     f" elapsed [{ts}]{suffix}  {dur_info.strip()}"
                     f"{thread_info}"
@@ -356,14 +356,14 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :return: (formatted_string, current_percent, available_gb)
         """
-        mem = psutil.virtual_memory()
-        used_mb = (mem.total - mem.available) / (1024 ** 2)
-        avail_gb = mem.available / (1024 ** 3)
+        memory = psutil.virtual_memory()
+        used_megabytes = (memory.total - memory.available) / (1024 ** 2)
+        available_gigabytes = memory.available / (1024 ** 3)
         return (
-            f"  sysmem: {mem.percent:.0f}%"
-            f" ({used_mb:.0f}M used / {avail_gb:.1f}G free)",
-            mem.percent,
-            avail_gb,
+            f"  sysmem: {memory.percent:.0f}%"
+            f" ({used_megabytes:.0f}M used / {available_gigabytes:.1f}G free)",
+            memory.percent,
+            available_gigabytes,
         )
 
     def _format_system_cpu(self) -> str:
@@ -438,18 +438,18 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Durations in seconds of the finished requests
         """
         durations: List[float] = []
-        for fut in futures:
-            if not fut.done() or fut.cancelled():
+        for future in futures:
+            if not future.done() or future.cancelled():
                 continue
             try:
-                if fut.exception() is not None:
+                if future.exception() is not None:
                     continue
-                result = fut.result()
+                result = future.result()
             except (CancelledError, FutureTimeoutError):
                 continue
-            dur = result.get("elapsed", result.get("duration"))
-            if isinstance(dur, (int, float)) and dur > 0:
-                durations.append(float(dur))
+            duration = result.get("elapsed", result.get("duration"))
+            if isinstance(duration, (int, float)) and duration > 0:
+                durations.append(float(duration))
         return durations
 
     def _server_durations(self) -> Optional[List[float]]:
@@ -477,9 +477,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 start_line = f"Start {agent}/streaming_chat"
                 if not self._primary_start_re.search(start_line):
                     continue
-            dur = pair.get("duration")
-            if isinstance(dur, (int, float)) and dur > 0:
-                durations.append(float(dur))
+            duration = pair.get("duration")
+            if isinstance(duration, (int, float)) and duration > 0:
+                durations.append(float(duration))
         return durations
 
     # pylint: disable=too-many-positional-arguments
