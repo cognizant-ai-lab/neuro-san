@@ -44,7 +44,7 @@ class DurationParser:
         if text[-1] in DurationParser._UNITS:
             unit = DurationParser._UNITS[text[-1]]
             text = text[:-1]
-        seconds: float
+        seconds: float = 0.0
         try:
             seconds = float(text) * unit
         except ValueError as exc:

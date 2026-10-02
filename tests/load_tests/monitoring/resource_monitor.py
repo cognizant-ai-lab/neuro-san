@@ -80,7 +80,7 @@ class ResourceMonitor:
             return None
         try:
             mem = proc.memory_info()
-            fds: int
+            fds: int = 0
             try:
                 fds = proc.num_fds()
             except AttributeError:

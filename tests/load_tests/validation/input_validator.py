@@ -141,7 +141,7 @@ class InputValidator:
         """
         if self._args.ramp:
             if self._args.stages is not None:
-                stages: List[int]
+                stages: List[int] = []
                 try:
                     stages = [
                         int(s.strip())
@@ -223,7 +223,7 @@ class InputValidator:
 
         self._print_summary_header(stages, total_planned, capped)
 
-        warnings: List[str]
+        warnings: List[str] = []
         if self._args.no_dry_run or self._args.level == LEVEL_ADV:
             warnings = self._collect_warnings(
                 capped=capped,
@@ -234,8 +234,8 @@ class InputValidator:
             logger.info("=" * SEPARATOR_WIDTH)
             return None
 
-        probe_result: Dict[str, Any]
-        probe_data: Dict[str, Any]
+        probe_result: Dict[str, Any] = {}
+        probe_data: Dict[str, Any] = {}
         probe_result, probe_data = (
             self._run_cost_probe(runner, output_dir)
         )

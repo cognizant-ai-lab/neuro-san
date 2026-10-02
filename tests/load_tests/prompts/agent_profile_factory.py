@@ -117,7 +117,7 @@ class AgentProfileFactory:
         """
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
-        candidate: str
+        candidate: str = ""
         if profile_path:
             if os.path.isfile(profile_path):
                 logger.error(

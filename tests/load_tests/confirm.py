@@ -42,7 +42,7 @@ class Confirm:
         """
         prompt: str = f"{question} [y/n]: "
         while True:
-            answer: str
+            answer: str = ""
             try:
                 answer = input(prompt).strip().lower()
             except (EOFError, KeyboardInterrupt):
