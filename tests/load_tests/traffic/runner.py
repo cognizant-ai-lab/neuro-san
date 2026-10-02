@@ -670,9 +670,9 @@ class TrafficRunner:
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
         if is_failure:
-            last_err: Optional[str] = OutputParser.last_stderr_line(stderr)
-            if last_err and last_err.strip():
-                logger.info("  stderr: %s", last_err)
+            last_error_line: Optional[str] = OutputParser.last_stderr_line(stderr)
+            if last_error_line and last_error_line.strip():
+                logger.info("  stderr: %s", last_error_line)
 
     @staticmethod
     def _write_result_to_file(output_dir: str, request_id: int, status: str, elapsed: float,
