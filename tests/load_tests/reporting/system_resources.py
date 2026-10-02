@@ -71,7 +71,7 @@ class SystemResources:
         user_limit: str = "n/a"
         if resource is not None:
             try:
-                soft: int
+                soft: int = 0
                 soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
                 user_limit = (
                     "unlimited"
@@ -115,8 +115,8 @@ class SystemResources:
         avail_gb: float = mem.available / (1024 ** 3)
         ncores: int = psutil.cpu_count() or 1
         cpu_pct: float = psutil.cpu_percent(interval=0.1)
-        user_limit: str
-        sys_max: str
+        user_limit: str = ""
+        sys_max: str = ""
         user_limit, sys_max = cls.thread_limits()
         logger.info(
             "  System RAM: %.1fG (%.1fG available, %.0f%% used)",
@@ -153,8 +153,8 @@ class SystemResources:
         logger.info("=" * SEPARATOR_WIDTH)
         total_gb: float = psutil.virtual_memory().total / (1024 ** 3)
         ncores: int = psutil.cpu_count() or 1
-        user_limit: str
-        sys_max: str
+        user_limit: str = ""
+        sys_max: str = ""
         user_limit, sys_max = cls.thread_limits()
         for tag, snap in rows:
             if snap is not None and snap.get("mem_pct") is not None:

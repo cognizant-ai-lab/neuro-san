@@ -209,8 +209,8 @@ class SummaryReporter:
         available".  When both are present (all-in-one) a Match line
         reports whether they agree.
         """
-        client: Optional[Dict[str, int]]
-        server: Optional[Dict[str, int]]
+        client: Optional[Dict[str, int]] = None
+        server: Optional[Dict[str, int]] = None
         if self._has_client_token_copy():
             client = self._token_stats("client_")
             server = self._token_stats("")

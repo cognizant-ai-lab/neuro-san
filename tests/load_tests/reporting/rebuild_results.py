@@ -128,8 +128,8 @@ class ResultsRebuilder:
             return
 
         timing: Dict[int, Dict[str, Any]] = self._parse_timing()
-        agent: str
-        num_requests: int
+        agent: str = ""
+        num_requests: int = 0
         agent, num_requests = self._parse_config()
         results: List[Dict[str, Any]] = self._scan_requests(requests_dir, timing)
 
@@ -265,7 +265,7 @@ class ResultsRebuilder:
             stdout_path: str = os.path.join(
                 requests_dir, filename,
             )
-            stdout: str
+            stdout: str = ""
             with open(
                 stdout_path, "r", encoding="utf-8",
             ) as fh:
@@ -370,7 +370,7 @@ class ResultsRebuilder:
         :param json_path: Path to raw_results.json, rewritten in place
         :param requests_dir: Directory holding the request_<id>_stdout.txt files
         """
-        data: Dict[str, Any]
+        data: Dict[str, Any] = {}
         with open(json_path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
 
@@ -419,8 +419,8 @@ class ResultsRebuilder:
 
         :param data: Parsed raw_results.json, updated in place
         """
-        _agent: str
-        num_requests: int
+        _agent: str = ""
+        num_requests: int = 0
         _agent, num_requests = self._parse_config()
         if num_requests <= 0:
             return

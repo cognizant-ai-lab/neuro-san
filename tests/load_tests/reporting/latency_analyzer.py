@@ -99,7 +99,7 @@ class LatencyAnalyzer:
             total: int = len(latencies)
             stage: Union[int, str] = summary.get("stage", "?")
             rnd: Union[int, str] = summary.get("round", "?")
-            label: str
+            label: str = ""
             if is_ramp:
                 label = f"Stage {stage}"
                 if rnd != "?":

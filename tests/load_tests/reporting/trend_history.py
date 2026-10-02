@@ -125,7 +125,7 @@ class TrendHistory:
                     line = line.strip()
                     if not line:
                         continue
-                    record: Any
+                    record: Any = None
                     try:
                         record = json.loads(line)
                     except json.JSONDecodeError:

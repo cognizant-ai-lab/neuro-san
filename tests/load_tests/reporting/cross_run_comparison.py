@@ -145,7 +145,7 @@ class CrossRunComparison:
         :param folder_name: Name of the run folder, stored as the run's folder
         :return: The run's metrics, or None when the file cannot be read or parsed
         """
-        data: Dict[str, Any]
+        data: Dict[str, Any] = {}
         try:
             with open(json_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
