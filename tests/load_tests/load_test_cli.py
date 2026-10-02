@@ -17,7 +17,7 @@
 # pylint: disable=too-many-lines
 """Generic load-test orchestrator for neuro-san agent networks.
 
-See tests/load_tests/README.md for prerequisites, test levels, and
+See tests/load_tests/load_tests.md for prerequisites, test levels, and
 usage examples.
 """
 
@@ -1211,7 +1211,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         Returns the subset of parsed pairs whose agent matches the
         primary (front-man) agent, each with ``start_ts``,
-        ``finish_ts``, and ``duration``.  Empty on read error or when
+        ``finish_ts``, and ``duration_seconds``.  Empty on read error or when
         no primary request has completed yet.
         """
         if self.log_monitor is None:
@@ -1241,12 +1241,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         until at least one request has completed.
         """
         durations = [
-            float(p["duration"])
-            for p in self._server_only_primary_pairs(
+            float(pair.get("duration_seconds"))
+            for pair in self._server_only_primary_pairs(
                 log_pos, pri_start_re,
             )
-            if isinstance(p.get("duration"), (int, float))
-            and p["duration"] > 0
+            if isinstance(pair.get("duration_seconds"), (int, float))
+            and pair.get("duration_seconds") > 0
         ]
         return Heartbeat.format_dur_stats(durations)
 
@@ -2530,9 +2530,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         the math and labels match the client's percentile line.
         """
         durations = sorted(
-            float(p["duration"]) for p in primary_pairs
-            if isinstance(p.get("duration"), (int, float))
-            and p["duration"] > 0
+            float(pair.get("duration_seconds")) for pair in primary_pairs
+            if isinstance(pair.get("duration_seconds"), (int, float))
+            and pair.get("duration_seconds") > 0
         )
         if not durations:
             return
@@ -2577,9 +2577,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """
         primary_pairs = primary_pairs or []
         durations = [
-            float(p["duration"]) for p in primary_pairs
-            if isinstance(p.get("duration"), (int, float))
-            and p["duration"] > 0
+            float(pair.get("duration_seconds")) for pair in primary_pairs
+            if isinstance(pair.get("duration_seconds"), (int, float))
+            and pair.get("duration_seconds") > 0
         ]
         avg_duration = (
             round(sum(durations) / len(durations), 2)

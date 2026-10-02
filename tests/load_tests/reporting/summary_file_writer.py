@@ -572,7 +572,7 @@ class SummaryFileWriter:
             )
         lines.append(
             f"    Server: {top_agent:<25s}"
-            f" {top.get('duration', 0):6.1f}s",
+            f" {top.get('duration_seconds', 0):6.1f}s",
         )
         SummaryFileWriter._format_sub_agents(
             lines, entries, top_agent,
@@ -603,9 +603,9 @@ class SummaryFileWriter:
                 else "\u251c\u2500"
             )
             name = sub.get("agent", "?")
-            dur = sub.get("duration", 0)
+            duration_seconds = sub.get("duration_seconds", 0)
             lines.append(
-                f"      {prefix} {name:<23s} {dur:6.1f}s",
+                f"      {prefix} {name:<23s} {duration_seconds:6.1f}s",
             )
 
     @staticmethod

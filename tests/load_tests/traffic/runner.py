@@ -100,9 +100,7 @@ class TrafficRunner:
         :param failed_ref: Shared counter of failed requests
         :return: The request result
         """
-        result: Dict[str, Any] = self.run_one_http(
-            request_id, global_request_id, output_dir,
-        )
+        result: Dict[str, Any] = self.run_one_http(request_id, global_request_id, output_dir)
         if result.get("status") != STATUS_CREATED:
             failed_ref.value = (failed_ref.value or 0) + 1
         return result
@@ -117,13 +115,10 @@ class TrafficRunner:
         :param output_dir: Directory for per-request output files, or None
         :return: The request result
         """
-        prompt: str = self._profile.get_prompt(
-            global_request_id,
-            same_prompt=self._args.same_prompt,
-            allow_caching=self._args.allow_caching,
-        )
-        start_time: float = time.time()
-        start: float = time.perf_counter()
+        prompt: str = self._profile.get_prompt(global_request_id, same_prompt=self._args.same_prompt,
+                                               allow_caching=self._args.allow_caching)
+        start_unix_seconds: float = time.time()
+        start_seconds: float = time.perf_counter()
         request_result: AgentRequestResult = AgentRequestExecutor.execute_request(
             self._args.host, self._args.port,
             self._args.agent, prompt,
@@ -132,24 +127,25 @@ class TrafficRunner:
             use_https=self._args.https,
             chat_filter_type=self._args.chat_filter.upper(),
         )
-        elapsed: float = time.perf_counter() - start
+        elapsed_seconds: float = time.perf_counter() - start_seconds
         status: str = request_result.get_status()
-        failure_reason: Optional[str] = self._failure_reason(
-            request_result, global_request_id,
-        )
+        failure_reason: Optional[str] = self._failure_reason(request_result, global_request_id)
         if status == STATUS_CREATED and failure_reason:
             status = STATUS_FAILED
 
+        error: Optional[str] = None
+        if status != STATUS_CREATED:
+            error = failure_reason
         result: Dict[str, Any] = {
             "request_id": f"request-{request_id}",
             "status": status,
-            "elapsed": elapsed,
+            "elapsed": elapsed_seconds,
             "time_to_first_response": request_result.get_time_to_first_response(),
-            "start_time": start_time,
-            "end_time": start_time + elapsed,
+            "start_time": start_unix_seconds,
+            "end_time": start_unix_seconds + elapsed_seconds,
             "prompt": prompt,
             "failure_reason": failure_reason,
-            "error": failure_reason if status != STATUS_CREATED else None,
+            "error": error,
         }
         self._record_request(request_id, output_dir, request_result, result)
         return result
@@ -207,16 +203,10 @@ class TrafficRunner:
 
         status: str = result.get("status")
         if output_dir and not RequestStatusPolicy.is_failure(status):
-            self._write_result_to_file(
-                output_dir, request_id, status, result.get("elapsed"),
-                parsed_fields=parsed_fields,
-            )
+            self._write_result_to_file(output_dir, request_id, status, result.get("elapsed"),
+                                       parsed_fields=parsed_fields)
         else:
-            self._log_request_result(
-                request_id, result,
-                parsed_fields=parsed_fields,
-                stderr=stderr,
-            )
+            self._log_request_result(request_id, result, parsed_fields=parsed_fields, stderr=stderr)
 
         result.update(parsed_fields)
         if token_data:
@@ -256,8 +246,7 @@ class TrafficRunner:
                 all_models.extend(provider_models.keys())
         return all_models
 
-    def check_response(self, processor: BasicMessageProcessor,
-                       response_checks: Dict[str, Any]) -> Optional[str]:
+    def check_response(self, processor: BasicMessageProcessor, response_checks: Dict[str, Any]) -> Optional[str]:
         """
         Apply the data-driven response checks to one completed request.
 
@@ -274,25 +263,21 @@ class TrafficRunner:
         :param response_checks: The hocon ``response`` block for this request's prompt
         :return: A one-line reason when any check failed, else None
         """
-        asserts = AssertCapture(LoadTestAssertForwarder())
-        driver = DataDrivenTestsDriver(asserts)
-        blocks = [response_checks]
+        asserts: AssertCapture = AssertCapture(LoadTestAssertForwarder())
+        driver: DataDrivenTestsDriver = DataDrivenTestsDriver(asserts)
+        blocks: List[Dict[str, Any]] = [response_checks]
         if self._profile.get_failure_patterns():
-            blocks.append(
-                {"text": {"not_keywords": self._profile.get_failure_patterns()}},
-            )
+            blocks.append({"text": {"not_keywords": self._profile.get_failure_patterns()}})
         reasons: List[str] = []
         for block in blocks:
-            extractor = DictionaryExtractor(block)
+            extractor: DictionaryExtractor = DictionaryExtractor(block)
             # One test_response_keys call per top-level test key
             # (text, sly_data.<field>, ...) so each failure can be
             # labelled with the key it belongs to; the evaluators'
             # own messages only show the compared values.
             for key in self._top_level_keys(block):
-                seen = len(asserts.get_asserts())
-                driver.test_response_keys(
-                    processor, extractor, [key], asserts, [],
-                )
+                seen: int = len(asserts.get_asserts())
+                driver.test_response_keys(processor, extractor, [key], asserts, [])
                 for failure in asserts.get_asserts()[seen:]:
                     reasons.append(f"{key}: {self._first_line(str(failure))}")
         if not reasons:
@@ -310,7 +295,7 @@ class TrafficRunner:
         """
         keys: List[str] = []
         for test_key in DataDrivenTestsDriver.TEST_KEYS:
-            checks = block.get(test_key)
+            checks: Any = block.get(test_key)
             if checks is None:
                 continue
             if test_key == "sly_data" and isinstance(checks, dict):
@@ -338,8 +323,7 @@ class TrafficRunner:
             return line
         return line[:FAILURE_REASON_LINE_LIMIT - 3] + "..."
 
-    def _http_saved_stdout(self, response_text: str,
-                           token_data: Optional[Dict[str, Any]]) -> str:
+    def _http_saved_stdout(self, response_text: str, token_data: Optional[Dict[str, Any]]) -> str:
         """
         Join the final answer and the Token Accounting JSON for the saved per-request file.
 
@@ -349,16 +333,11 @@ class TrafficRunner:
         """
         saved: str = response_text or ""
         if self._args.include_tokens and token_data:
-            saved += (
-                "\n\nToken Accounting:\n"
-                + json.dumps(token_data, indent=2)
-                + "\n"
-            )
+            saved += "\n\nToken Accounting:\n" + json.dumps(token_data, indent=2) + "\n"
         return saved
 
     @staticmethod
-    def _attach_http_token_data(result: Dict[str, Any],
-                                token_data: Optional[Dict[str, Any]]) -> None:
+    def _attach_http_token_data(result: Dict[str, Any], token_data: Optional[Dict[str, Any]]) -> None:
         """
         Attach token accounting from the HTTP response to the result.
 
@@ -369,22 +348,20 @@ class TrafficRunner:
             return
         models_dict: Dict[str, Any] = token_data.get("models", {})
         model: str = TrafficRunner._extract_model(models_dict)
-        all_models: List[str] = TrafficRunner._extract_all_models(
-            models_dict,
-        )
-        prompt_tok: int = token_data.get("prompt_tokens", 0)
-        completion_tok: int = token_data.get("completion_tokens", 0)
+        all_models: List[str] = TrafficRunner._extract_all_models(models_dict)
+        prompt_tokens: int = token_data.get("prompt_tokens", 0)
+        completion_tokens: int = token_data.get("completion_tokens", 0)
         result.update({
             "total_tokens": token_data.get("total_tokens", 0),
-            "prompt_tokens": prompt_tok,
-            "completion_tokens": completion_tok,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
             "llm_calls": token_data.get(
                 "successful_requests", 0,
             ),
             "model": model,
             "all_models": all_models,
             "cost_usd": CostEstimator.estimate(
-                prompt_tok, completion_tok, model,
+                prompt_tokens, completion_tokens, model,
             ),
         })
 
@@ -406,13 +383,13 @@ class TrafficRunner:
         :param server_proc: Server process for the heartbeat's resource readings, or None
         :param client_proc: Client process for the heartbeat's resource readings, or None
         :param log_monitor: Server log reader for server-side request timing, or None
-        :return: (elapsed, results, peak_threads_ref, peak_client_rss_ref,
+        :return: (total_time_seconds, results, peak_threads_ref, peak_client_rss_ref,
                  peak_server_rss_ref, peak_sys_mem_pct_ref, peak_sys_cpu_ref,
                  peak_sys_threads_ref, server_died, interrupted)
         """
         results_list: List[Dict[str, Any]] = []
         heartbeat_kwargs: Dict[str, Any] = TrafficRunner._new_heartbeat_kwargs()
-        start: float = time.perf_counter()
+        start_seconds: float = time.perf_counter()
         interrupted: bool = False
         heartbeat_thread: Optional[threading.Thread] = None
         # Not using ``with`` so that on Ctrl-C we can shut the pool
@@ -421,13 +398,10 @@ class TrafficRunner:
         pool: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=plan.get_max_workers())
         try:
             futures_ref: List[Future] = []
-            hb: Heartbeat = self._create_heartbeat(server_proc, client_proc, plan.get_output_dir(), log_monitor)
-            heartbeat_thread = threading.Thread(
-                target=hb.progress_heartbeat,
-                args=(futures_ref, plan.get_num_requests(), start),
-                kwargs=heartbeat_kwargs,
-                daemon=True,
-            )
+            heartbeat: Heartbeat = self._create_heartbeat(server_proc, client_proc, plan.get_output_dir(), log_monitor)
+            heartbeat_thread = threading.Thread(target=heartbeat.progress_heartbeat,
+                                                args=(futures_ref, plan.get_num_requests(), start_seconds),
+                                                kwargs=heartbeat_kwargs, daemon=True)
             heartbeat_thread.start()
             heartbeat_kwargs.get("ready_event").wait()
             self._submit_requests(pool, plan, futures_ref, heartbeat_kwargs.get("failed_ref"))
@@ -435,15 +409,12 @@ class TrafficRunner:
             killed_count: int
             killed_count, interrupted = self._collect_with_timeout(
                 futures_ref, results_list,
-                start=start, stage_timeout=self._args.stage_timeout,
+                start_seconds=start_seconds, stage_timeout_seconds=self._args.stage_timeout,
                 cancel_event=self._cancel_event,
             )
             if killed_count and not interrupted:
-                logger.warning(
-                    "  Stage timeout (%ss) reached — "
-                    "%s request(s) killed.",
-                    self._args.stage_timeout, killed_count,
-                )
+                logger.warning("  Stage timeout (%ss) reached — %s request(s) killed.", self._args.stage_timeout,
+                               killed_count)
             elif interrupted:
                 logger.warning(
                     "  Interrupted (Ctrl-C) — %s request(s) still "
@@ -455,9 +426,9 @@ class TrafficRunner:
             if heartbeat_thread is not None:
                 heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
             pool.shutdown(wait=not interrupted, cancel_futures=True)
-        total_time: float = time.perf_counter() - start
+        total_time_seconds: float = time.perf_counter() - start_seconds
         return (
-            total_time, results_list,
+            total_time_seconds, results_list,
             heartbeat_kwargs.get("peak_threads_ref"), heartbeat_kwargs.get("peak_client_rss_ref"),
             heartbeat_kwargs.get("peak_server_rss_ref"), heartbeat_kwargs.get("peak_sys_mem_pct_ref"),
             heartbeat_kwargs.get("peak_sys_cpu_ref"), heartbeat_kwargs.get("peak_sys_threads_ref"),
@@ -494,12 +465,8 @@ class TrafficRunner:
         log_start_pos: Optional[int] = None
         if log_monitor is not None:
             log_start_pos = log_monitor.read_position()
-        return Heartbeat(
-            server_proc, client_proc, output_dir,
-            log_monitor=log_monitor,
-            log_start_pos=log_start_pos,
-            primary_start_pattern=self._profile.get_primary_start_pattern(),
-        )
+        return Heartbeat(server_proc, client_proc, output_dir, log_monitor=log_monitor, log_start_pos=log_start_pos,
+                         primary_start_pattern=self._profile.get_primary_start_pattern())
 
     def _submit_requests(self, pool: ThreadPoolExecutor, plan: StagePlan, futures: List[Future],
                          failed_ref: SharedRef) -> None:
@@ -511,17 +478,15 @@ class TrafficRunner:
         :param futures: Receives one future per request; the heartbeat reads it while requests run
         :param failed_ref: Shared counter of failed requests
         """
-        for i in range(plan.get_num_requests()):
-            future: Future = pool.submit(
-                self._run_one_tracked,
-                i + 1, plan.get_global_offset() + i,
-                plan.get_output_dir(), failed_ref,
-            )
+        for index in range(plan.get_num_requests()):
+            future: Future = pool.submit(self._run_one_tracked, index + 1, plan.get_global_offset() + index,
+                                         plan.get_output_dir(), failed_ref)
             futures.append(future)
 
     @staticmethod
-    def _collect_with_timeout(futures: List[Future], results_list: List[Dict[str, Any]], start: float,
-                              stage_timeout: Optional[float], cancel_event: threading.Event) -> Tuple[int, bool]:
+    def _collect_with_timeout(futures: List[Future], results_list: List[Dict[str, Any]], start_seconds: float,
+                              stage_timeout_seconds: Optional[float],
+                              cancel_event: threading.Event) -> Tuple[int, bool]:
         """
         Collect future results, cancelling stragglers on timeout/Ctrl-C.
 
@@ -529,96 +494,97 @@ class TrafficRunner:
 
         :param futures: Futures of the requests fired in this stage
         :param results_list: Receives one RequestResult per future, KILLED for stragglers
-        :param start: time.perf_counter() when the stage began
-        :param stage_timeout: Seconds after which unfinished requests are killed, or None
+        :param start_seconds: time.perf_counter() when the stage began
+        :param stage_timeout_seconds: Seconds after which unfinished requests are killed, or None
         :param cancel_event: Set by the Ctrl-C handler to stop collecting early
         :return: (num_killed, interrupted)
         """
-        pending: Set[Future] = set(futures)
+        pending_futures: Set[Future] = set(futures)
         interrupted: bool = False
-        elapsed: float
-        remaining: float
-        wait_slice: float
-        while pending:
+        elapsed_seconds: float
+        remaining_seconds: float
+        wait_slice_seconds: float
+        while pending_futures:
             if cancel_event.is_set():
                 interrupted = True
                 break
-            elapsed = time.perf_counter() - start
-            if stage_timeout is not None:
-                remaining = stage_timeout - elapsed
-                if remaining <= 0:
+            elapsed_seconds = time.perf_counter() - start_seconds
+            if stage_timeout_seconds is not None:
+                remaining_seconds = stage_timeout_seconds - elapsed_seconds
+                if remaining_seconds <= 0:
                     break
-                wait_slice = min(1.0, remaining)
+                wait_slice_seconds = min(1.0, remaining_seconds)
             else:
-                wait_slice = 1.0
+                wait_slice_seconds = 1.0
             try:
-                for fut in as_completed(pending, timeout=wait_slice):
-                    results_list.append(fut.result())
-                    pending.discard(fut)
+                for future in as_completed(pending_futures, timeout=wait_slice_seconds):
+                    results_list.append(future.result())
+                    pending_futures.discard(future)
             except FutureTimeoutError:
                 pass
 
         reason: str = "Killed by --stage-timeout"
         if interrupted:
             reason = "Killed by Ctrl-C interrupt"
-        for fut in pending:
-            fut.cancel()
+        for future in pending_futures:
+            future.cancel()
         if interrupted:
-            TrafficRunner._collect_during_grace(pending, results_list)
+            TrafficRunner._collect_during_grace(pending_futures, results_list)
         killed: int = TrafficRunner._collect_killed(
-            pending, results_list, start=start, reason=reason,
+            pending_futures, results_list, start_seconds=start_seconds, reason=reason,
         )
         return killed, interrupted
 
     @staticmethod
-    def _collect_during_grace(pending: Set[Future], results_list: List[Dict[str, Any]]) -> None:
+    def _collect_during_grace(pending_futures: Set[Future], results_list: List[Dict[str, Any]]) -> None:
         """
         Give in-flight requests a short grace to wind down after Ctrl-C.
 
-        Anything still stuck after the grace stays in pending, without blocking on it.
+        Anything still stuck after the grace stays in pending_futures, without blocking on it.
 
-        :param pending: Futures not collected yet, updated in place
+        :param pending_futures: Futures not collected yet, updated in place
         :param results_list: Receives the results that finish within the grace
         """
-        grace_deadline: float = time.perf_counter() + INTERRUPT_GRACE_SECONDS
-        remaining: float
-        for fut in list(pending):
-            remaining = max(0.0, grace_deadline - time.perf_counter())
+        grace_deadline_seconds: float = time.perf_counter() + INTERRUPT_GRACE_SECONDS
+        remaining_seconds: float
+        for future in list(pending_futures):
+            remaining_seconds = max(0.0, grace_deadline_seconds - time.perf_counter())
             try:
-                results_list.append(fut.result(timeout=remaining))
-                pending.discard(fut)
+                results_list.append(future.result(timeout=remaining_seconds))
+                pending_futures.discard(future)
             except FutureTimeoutError:
                 pass
             except CancelledError:
-                pending.discard(fut)
+                pending_futures.discard(future)
 
     @staticmethod
-    def _collect_killed(pending: Set[Future], results_list: List[Dict[str, Any]], start: float, reason: str) -> int:
+    def _collect_killed(pending_futures: Set[Future], results_list: List[Dict[str, Any]], start_seconds: float,
+                        reason: str) -> int:
         """
         Record the futures still pending, KILLED unless they finished meanwhile.
 
-        :param pending: Futures not collected yet
+        :param pending_futures: Futures not collected yet
         :param results_list: Receives one result per pending future
-        :param start: time.perf_counter() when the stage began
+        :param start_seconds: time.perf_counter() when the stage began
         :param reason: Why the stragglers were killed, saved as their stderr
         :return: Number of pending futures
         """
         killed: int = 0
-        for fut in pending:
+        for future in pending_futures:
             killed += 1
-            if fut.cancelled() or not fut.done():
+            if future.cancelled() or not future.done():
                 results_list.append({
                     "request_id": "unknown",
                     "status": STATUS_KILLED,
                     "stdout": "",
                     "stderr": reason,
                     "returncode": -1,
-                    "elapsed": time.perf_counter() - start,
+                    "elapsed": time.perf_counter() - start_seconds,
                     "time_to_first_response": 0.0,
                     "prompt": "",
                 })
             else:
-                results_list.append(fut.result())
+                results_list.append(future.result())
         return killed
 
     def _log_request_result(self, request_id: int, result: Dict[str, Any],
@@ -634,7 +600,7 @@ class TrafficRunner:
         :param stderr: Error text captured for the request
         """
         status: str = result.get("status")
-        elapsed: float = result.get("elapsed")
+        elapsed_seconds: float = result.get("elapsed")
         failure_reason: Optional[str] = result.get("failure_reason")
         is_failure: bool = RequestStatusPolicy.is_failure(status)
         if is_failure:
@@ -647,34 +613,24 @@ class TrafficRunner:
             if rank == FAILURE_LOG_LIMIT:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
-                logger.info(
-                    "Request %s: %s (%s)",
-                    request_id, status,
-                    Formatters.fmt_duration(elapsed, precision=2),
-                )
-                logger.info(
-                    "  ... further per-request failures suppressed"
-                    " (see totals below and raw_results.json)",
-                )
+                logger.info("Request %s: %s (%s)", request_id, status,
+                            Formatters.fmt_duration(elapsed_seconds, precision=2))
+                logger.info("  ... further per-request failures suppressed (see totals below and raw_results.json)")
                 return
         sys.stdout.write("\n")
         sys.stdout.flush()
-        logger.info(
-            "Request %s: %s (%s)",
-            request_id, status,
-            Formatters.fmt_duration(elapsed, precision=2),
-        )
+        logger.info("Request %s: %s (%s)", request_id, status, Formatters.fmt_duration(elapsed_seconds, precision=2))
         for field, value in parsed_fields.items():
             logger.info("  %s: %s", field, value or "")
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
         if is_failure:
-            last_err: Optional[str] = OutputParser.last_stderr_line(stderr)
-            if last_err and last_err.strip():
-                logger.info("  stderr: %s", last_err)
+            last_error_line: Optional[str] = OutputParser.last_stderr_line(stderr)
+            if last_error_line and last_error_line.strip():
+                logger.info("  stderr: %s", last_error_line)
 
     @staticmethod
-    def _write_result_to_file(output_dir: str, request_id: int, status: str, elapsed: float,
+    def _write_result_to_file(output_dir: str, request_id: int, status: str, elapsed_seconds: float,
                               parsed_fields: Dict[str, str]) -> None:
         """
         Append a successful request result to progress.log.
@@ -682,7 +638,7 @@ class TrafficRunner:
         :param output_dir: Directory holding progress.log
         :param request_id: Request number within the current stage
         :param status: One of the STATUS_* values
-        :param elapsed: Request duration in seconds
+        :param elapsed_seconds: Request duration in seconds
         :param parsed_fields: Flattened sly_data string fields of the response
         """
         path: str = os.path.join(output_dir, "progress.log")
@@ -692,16 +648,14 @@ class TrafficRunner:
         fields_str: str = "  ".join(field_parts)
         line: str = (
             f"Request {request_id}: {status}"
-            f" ({Formatters.fmt_duration(elapsed, precision=2)})"
+            f" ({Formatters.fmt_duration(elapsed_seconds, precision=2)})"
             f"  {fields_str}\n"
         )
-        with open(path, "a", encoding="utf-8") as fh:
-            fh.write(line)
+        with open(path, "a", encoding="utf-8") as progress_log:
+            progress_log.write(line)
 
     @staticmethod
-    def _save_request_output(
-            output_dir: Optional[str], request_id: int, stdout: str, stderr: str,
-    ) -> None:
+    def _save_request_output(output_dir: Optional[str], request_id: int, stdout: str, stderr: str) -> None:
         """
         Save the request's response text and error text under output_dir/requests.
 
@@ -714,16 +668,10 @@ class TrafficRunner:
             return
         requests_dir: str = os.path.join(output_dir, "requests")
         os.makedirs(requests_dir, exist_ok=True)
-        stdout_path: str = os.path.join(
-            requests_dir,
-            f"request_{request_id}_stdout.txt",
-        )
-        with open(stdout_path, "w", encoding="utf-8") as fh:
-            fh.write(stdout)
+        stdout_path: str = os.path.join(requests_dir, f"request_{request_id}_stdout.txt")
+        with open(stdout_path, "w", encoding="utf-8") as stdout_file:
+            stdout_file.write(stdout)
         if stderr and stderr.strip():
-            stderr_path: str = os.path.join(
-                requests_dir,
-                f"request_{request_id}_stderr.txt",
-            )
-            with open(stderr_path, "w", encoding="utf-8") as fh:
-                fh.write(stderr)
+            stderr_path: str = os.path.join(requests_dir, f"request_{request_id}_stderr.txt")
+            with open(stderr_path, "w", encoding="utf-8") as stderr_file:
+                stderr_file.write(stderr)
