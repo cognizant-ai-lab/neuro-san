@@ -35,7 +35,7 @@ class OutputParser:
         :param field_name: JSON field name to look for
         :return: The field's string value, or None when it is not found
         """
-        match = re.search(rf'"{field_name}"\s*:\s*"([^"]+)"', stdout)
+        match: Optional[re.Match] = re.search(rf'"{field_name}"\s*:\s*"([^"]+)"', stdout)
         if match:
             return match.group(1)
         return None
@@ -48,15 +48,15 @@ class OutputParser:
         :param stdout: Agent response text
         :return: The parsed Token Accounting block, or {} when it is missing or invalid
         """
-        marker = "Token Accounting:"
-        idx = stdout.find(marker)
+        marker: str = "Token Accounting:"
+        idx: int = stdout.find(marker)
         if idx < 0:
             return {}
-        json_start = stdout.find("{", idx)
+        json_start: int = stdout.find("{", idx)
         if json_start < 0:
             return {}
-        depth = 0
-        json_end = json_start
+        depth: int = 0
+        json_end: int = json_start
         for i in range(json_start, len(stdout)):
             if stdout[i] == "{":
                 depth += 1
@@ -78,7 +78,7 @@ class OutputParser:
         :param stderr: Captured stderr, or None
         :return: Last line of stderr, or "" when it is empty
         """
-        stripped = stderr.strip() if stderr else ""
+        stripped: str = stderr.strip() if stderr else ""
         if not stripped:
             return ""
         return stripped.rsplit("\n", maxsplit=1)[-1]

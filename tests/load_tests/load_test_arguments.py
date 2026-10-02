@@ -49,7 +49,7 @@ class LoadTestArguments:
         :param epilog: Text shown at the end of --help
         :return: Parsed arguments, with explicit_args set to the dest names the user passed
         """
-        parser = argparse.ArgumentParser(
+        parser: argparse.ArgumentParser = argparse.ArgumentParser(
             description=(
                 "Load-test neuro-san agent networks "
                 "with real LLM calls."
@@ -433,10 +433,10 @@ class LoadTestArguments:
                  "directory, rebuild ALL runs including "
                  "those that already have raw_results.json.",
         )
-        args = parser.parse_args()
+        args: argparse.Namespace = parser.parse_args()
         # Track which args the user explicitly provided so
         # level-based defaults do not override them.
-        explicit = LoadTestArguments._explicit_args(parser, args)
+        explicit: Set[str] = LoadTestArguments._explicit_args(parser, args)
         args.explicit_args = explicit
         # When targeting https and no explicit port was given,
         # default to the standard TLS port.
