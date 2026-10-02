@@ -34,6 +34,7 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 from typing import Tuple
+from typing import Union
 
 import psutil
 
@@ -112,9 +113,7 @@ class ServerLogMonitor:
                 log_fh.seek(position)
                 return log_fh.readlines()
         except OSError as exc:
-            logger.info(
-                "Could not read server log for %s: %s", label, exc,
-            )
+            logger.info("Could not read server log for %s: %s", label, exc)
             return []
 
     def count_retries_since(self, position) -> Dict[str, int]:
@@ -137,13 +136,9 @@ class ServerLogMonitor:
             match = RETRY_LOG_PATTERN.search(line)
             if match:
                 error_type = match.group(2)
-                retry_counts[error_type] = (
-                    retry_counts.get(error_type, 0) + 1
-                )
+                retry_counts[error_type] = retry_counts.get(error_type, 0) + 1
             elif PROVIDER_RETRY_PATTERN.search(line):
-                retry_counts["ProviderRetry"] = (
-                    retry_counts.get("ProviderRetry", 0) + 1
-                )
+                retry_counts["ProviderRetry"] = retry_counts.get("ProviderRetry", 0) + 1
         return retry_counts
 
     def scan_server_errors_since(self, position) -> List[Dict[str, str]]:
@@ -164,10 +159,7 @@ class ServerLogMonitor:
         errors: List[Dict[str, str]] = []
         for match in SERVER_ERROR_PATTERN.finditer(text):
             message = " ".join(match.group(1).split())
-            errors.append({
-                "request_id": match.group(2),
-                "message": message,
-            })
+            errors.append({"request_id": match.group(2), "message": message})
         return errors
 
     def scan_tool_warnings_since(self, position) -> List[Dict[str, str]]:
@@ -196,24 +188,15 @@ class ServerLogMonitor:
             message = entry.get("message", "")
             if not message.startswith("Failed to create Agent/tool"):
                 continue
-            warnings.append({
-                "request_id": entry.get("request_id", "unknown"),
-                "message": " ".join(message.split()),
-            })
+            warnings.append({"request_id": entry.get("request_id", "unknown"), "message": " ".join(message.split())})
         return warnings
 
-    def count_requests_since(self, position,
-                             primary_start_pattern,
-                             primary_finish_pattern
-                             ) -> Dict[str, Optional[int]]:
+    def count_requests_since(self, position, primary_start_pattern, primary_finish_pattern) -> Dict[str, Optional[int]]:
         """Count request Start/Finish entries since the given position.
 
         Uses agent-specific patterns for primary requests.
         """
-        none_result = {
-            "primary_started": None, "primary_finished": None,
-            "total_started": None, "total_finished": None,
-        }
+        none_result = {"primary_started": None, "primary_finished": None, "total_started": None, "total_finished": None}
         if self._server_log is None or position is None:
             return none_result
         lines = self._read_lines_since(position, "counts")
@@ -241,9 +224,7 @@ class ServerLogMonitor:
             "total_finished": total_finished,
         }
 
-    def parse_token_accounting_since(
-            self, position,
-    ) -> Dict[str, Dict[str, Any]]:
+    def parse_token_accounting_since(self, position) -> Dict[str, Dict[str, Any]]:
         """Parse Request reporting entries for token accounting data.
 
         Returns a dict of request_id -> token data, where each entry has:
@@ -257,15 +238,11 @@ class ServerLogMonitor:
             return {}
         results: Dict[str, Dict[str, Any]] = {}
         for block in self._collect_reporting_blocks(lines):
-            entry = self._extract_token_entry(
-                block.get("text", ""),
-            )
+            entry = self._extract_token_entry(block.get("text", ""))
             if entry:
                 rid = entry.get("request_id")
                 if rid is not None:
-                    agent = self._find_network_after(
-                        lines, block.get("end_idx", 0),
-                    )
+                    agent = self._find_network_after(lines, block.get("end_idx", 0))
                     if agent:
                         entry["reporting_agent"] = agent
                     results[rid] = entry
@@ -281,9 +258,7 @@ class ServerLogMonitor:
         prompt = re.search(r'"prompt_tokens": (\d+)', block)
         completion = re.search(r'"completion_tokens": (\d+)', block)
         llm_calls = re.search(r'"successful_requests": (\d+)', block)
-        model_names = re.findall(
-            r'"(gpt[^"]+|claude[^"]+|gemini[^"]+|o\d[^"]*)"', block,
-        )
+        model_names = re.findall(r'"(gpt[^"]+|claude[^"]+|gemini[^"]+|o\d[^"]*)"', block)
         return {
             "request_id": rid_match.group(1),
             "total_tokens": int(total.group(1)) if total else 0,
@@ -293,9 +268,7 @@ class ServerLogMonitor:
             "model": model_names[0] if model_names else "unknown",
         }
 
-    def parse_per_network_tokens_since(
-            self, position,
-    ) -> List[Dict[str, Any]]:
+    def parse_per_network_tokens_since(self, position) -> List[Dict[str, Any]]:
         """Parse per-sub-network token data from Request reporting blocks.
 
         For multi-agent networks (e.g. AND), each sub-network produces
@@ -325,10 +298,7 @@ class ServerLogMonitor:
             elif in_block:
                 block_lines.append(line)
                 if '"request_id"' in line:
-                    blocks.append({
-                        "text": "".join(block_lines),
-                        "end_idx": idx,
-                    })
+                    blocks.append({"text": "".join(block_lines), "end_idx": idx})
                     in_block = False
                     block_lines = []
         return blocks
@@ -339,24 +309,14 @@ class ServerLogMonitor:
         results: List[Dict[str, Any]] = []
         for block in blocks:
             block_text = block.get("text", "")
-            entry = ServerLogMonitor._extract_token_entry(
-                block_text,
-            )
+            entry = ServerLogMonitor._extract_token_entry(block_text)
             if not entry:
                 continue
-            network = ServerLogMonitor._find_network_after(
-                lines, block.get("end_idx", 0),
-            )
+            network = ServerLogMonitor._find_network_after(lines, block.get("end_idx", 0))
             if not network:
                 continue
-            duration = re.search(
-                r'"time_taken_in_seconds": ([\d.]+)',
-                block_text,
-            )
-            total_cost = re.search(
-                r'"total_cost": ([\d.]+)',
-                block_text,
-            )
+            duration = re.search(r'"time_taken_in_seconds": ([\d.]+)', block_text)
+            total_cost = re.search(r'"total_cost": ([\d.]+)', block_text)
             results.append({
                 "request_id": entry.get("request_id", ""),
                 "network": network,
@@ -377,9 +337,7 @@ class ServerLogMonitor:
         return results
 
     @staticmethod
-    def _find_network_after(lines, end_idx,
-                            lookahead=NETWORK_LOOKAHEAD_LINES
-                            ) -> Optional[str]:
+    def _find_network_after(lines, end_idx, lookahead=NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
         """Find the network name from Done-with lines after a block."""
         limit = min(end_idx + lookahead, len(lines))
         for idx in range(end_idx + 1, limit):
@@ -388,9 +346,7 @@ class ServerLogMonitor:
                 return match.group(1)
         return None
 
-    def parse_validation_events_since(
-            self, position,
-    ) -> List[Dict[str, Any]]:
+    def parse_validation_events_since(self, position) -> List[Dict[str, Any]]:
         """Parse validation attempts and fix cycles per request.
 
         Scans for 'Validating toolbox agents' (attempt),
@@ -400,9 +356,7 @@ class ServerLogMonitor:
         """
         if self._server_log is None or position is None:
             return []
-        lines = self._read_lines_since(
-            position, "validation events",
-        )
+        lines = self._read_lines_since(position, "validation events")
         if not lines:
             return []
         return self._collect_validation_events(lines)
@@ -417,11 +371,7 @@ class ServerLogMonitor:
                 continue
             rid = rid_match.group(1)
             if rid not in by_request:
-                by_request[rid] = {
-                    "attempts": 0,
-                    "fix_cycles": 0,
-                    "errors": [],
-                }
+                by_request[rid] = {"attempts": 0, "fix_cycles": 0, "errors": []}
             entry = by_request[rid]
             if VALIDATION_ATTEMPT_PATTERN.search(line):
                 entry["attempts"] += 1
@@ -443,9 +393,7 @@ class ServerLogMonitor:
                 })
         return results
 
-    def parse_streaming_chat_timing_since(
-            self, position,
-    ) -> List[Dict[str, object]]:
+    def parse_streaming_chat_timing_since(self, position) -> List[Dict[str, object]]:
         """Parse Start/Finish streaming_chat entries for timing.
 
         Returns a list of dicts with agent, start_ts, finish_ts,
@@ -453,17 +401,13 @@ class ServerLogMonitor:
         """
         if self._server_log is None or position is None:
             return []
-        lines = self._read_lines_since(
-            position, "streaming_chat timing",
-        )
+        lines = self._read_lines_since(position, "streaming_chat timing")
         if not lines:
             return []
         return self._match_streaming_chat_pairs(lines)
 
     @staticmethod
-    def _match_streaming_chat_pairs(
-            lines,
-    ) -> List[Dict[str, object]]:
+    def _match_streaming_chat_pairs(lines) -> List[Dict[str, object]]:
         """Match Start/Finish pairs from server log lines."""
         from datetime import datetime  # pylint: disable=import-outside-toplevel
 
@@ -482,23 +426,15 @@ class ServerLogMonitor:
             if not msg or not ts_str:
                 continue
             try:
-                ts = datetime.fromisoformat(
-                    ts_str,
-                ).timestamp()
+                ts = datetime.fromisoformat(ts_str).timestamp()
             except (ValueError, TypeError):
                 continue
             if msg.startswith("Start ") and "/streaming_chat" in msg:
-                agent = msg.replace(
-                    "Start ", "",
-                ).replace("/streaming_chat", "")
+                agent = msg.replace("Start ", "").replace("/streaming_chat", "")
                 starts[(agent, req_id)] = ts
             elif msg.startswith("Finish ") and "/streaming_chat" in msg:
-                agent = msg.replace(
-                    "Finish ", "",
-                ).replace("/streaming_chat", "")
-                start_ts = starts.pop(
-                    (agent, req_id), None,
-                )
+                agent = msg.replace("Finish ", "").replace("/streaming_chat", "")
+                start_ts = starts.pop((agent, req_id), None)
                 if start_ts is not None:
                     results.append({
                         "agent": agent,
@@ -509,9 +445,7 @@ class ServerLogMonitor:
                     })
         return results
 
-    def scan_disconnections_since(
-            self, position, primary_start_pattern=None,
-    ) -> List[Dict[str, str]]:
+    def scan_disconnections_since(self, position, primary_start_pattern=None) -> List[Dict[str, str]]:
         """Scan server log for client disconnections since the given position.
 
         Returns a list of dicts with request_id, agent, and
@@ -523,10 +457,7 @@ class ServerLogMonitor:
         if not lines:
             return []
 
-        pri_re = (
-            re.compile(primary_start_pattern)
-            if primary_start_pattern else None
-        )
+        pri_re = re.compile(primary_start_pattern) if primary_start_pattern else None
         primary_request_ids = []
         disconnections = {}
         context_request_id = None
@@ -537,16 +468,11 @@ class ServerLogMonitor:
                 context_request_id = req_match.group(1)
             if pri_re and pri_re.search(line) and context_request_id:
                 if context_request_id not in primary_request_ids:
-                    primary_request_ids.append(
-                        context_request_id,
-                    )
+                    primary_request_ids.append(context_request_id)
             if CLIENT_DISCONNECT_PATTERN.search(line):
                 req_id = context_request_id or "unknown"
                 if req_id not in disconnections:
-                    disconnections[req_id] = {
-                        "request_id": req_id,
-                        "agent": "unknown",
-                    }
+                    disconnections[req_id] = {"request_id": req_id, "agent": "unknown"}
             cancel_match = TASK_CANCELLED_PATTERN.search(line)
             if cancel_match and context_request_id:
                 agent = cancel_match.group(1)
@@ -554,9 +480,7 @@ class ServerLogMonitor:
                 if disc is not None:
                     disc.update({"agent": agent})
 
-        self._map_to_client_requests(
-            disconnections, primary_request_ids,
-        )
+        self._map_to_client_requests(disconnections, primary_request_ids)
         return list(disconnections.values())
 
     @staticmethod
@@ -575,9 +499,7 @@ class ServerLogMonitor:
             match = re.search(r"(\d+)$", rid)
             return int(match.group(1)) if match else -1
 
-        primary_nums = [
-            _extract_num(rid) for rid in primary_request_ids
-        ]
+        primary_nums = [_extract_num(rid) for rid in primary_request_ids]
 
         for disc in disconnections.values():
             rid = disc.get("request_id", "")
@@ -589,9 +511,7 @@ class ServerLogMonitor:
                 else:
                     break
             if parent_idx is not None:
-                disc["client_request"] = (
-                    f"request-{parent_idx + 1}"
-                )
+                disc["client_request"] = f"request-{parent_idx + 1}"
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time: float,
@@ -648,32 +568,27 @@ class ServerLogMonitor:
         """
         pri_start_re: re.Pattern = re.compile(primary_start_pattern)
         agent_label: str = primary_start_pattern.split("/")[0].split(" ")[-1]
-        receipt_path: Optional[str] = (
-            os.path.join(output_dir, "server_receipts.log")
-            if output_dir else None
-        )
+        receipt_path: Optional[str] = None
+        if output_dir:
+            receipt_path = os.path.join(output_dir, "server_receipts.log")
         try:
-            with ServerLogMonitor._open_receipt_log(
-                    receipt_path,
-            ) as receipt_fh:
-                with open(
-                        server_log, "r", encoding="utf-8",
-                ) as log_fh:
+            with ServerLogMonitor._open_receipt_log(receipt_path) as receipt_fh:
+                with open(server_log, "r", encoding="utf-8") as log_fh:
                     log_fh.seek(position)
-                    ServerLogMonitor._tail_arrivals(
-                        log_fh, stop_event, pri_start_re,
-                        expected_count, fire_time,
-                        agent_label=agent_label,
-                        receipt_fh=receipt_fh,
-                        client_proc=client_proc,
-                        peak_client_ref=peak_client_ref,
-                    )
+                    ServerLogMonitor._tail_arrivals(log_fh, stop_event, pri_start_re, expected_count, fire_time,
+                                                    agent_label=agent_label, receipt_fh=receipt_fh,
+                                                    client_proc=client_proc, peak_client_ref=peak_client_ref)
         except OSError as exc:
             logger.debug("Log monitor stopped: %s", exc)
 
     @staticmethod
-    def _open_receipt_log(path):
-        """Open the receipt log file or return a no-op context."""
+    def _open_receipt_log(path: Optional[str]) -> Union[TextIO, _NullFile]:
+        """
+        Open the receipt log file or return a no-op context.
+
+        :param path: Path of server_receipts.log, or None for no file
+        :return: The open receipt log, or a no-op context manager when path is None
+        """
         if path:
             return open(path, "w", encoding="utf-8")
         return _NullFile()
@@ -707,15 +622,9 @@ class ServerLogMonitor:
                 continue
             count += 1
             now: float = time.perf_counter()
-            ts: str = time.strftime(
-                "%H:%M:%S", time.localtime(),
-            )
+            ts: str = time.strftime("%H:%M:%S", time.localtime())
             delta: float = now - fire_time
-            detail: str = (
-                f"  [server] {agent_label} request"
-                f" {count}/{expected_count}"
-                f" received [{ts}] (+{delta:.1f}s)"
-            )
+            detail: str = f"  [server] {agent_label} request {count}/{expected_count} received [{ts}] (+{delta:.1f}s)"
             if use_dots:
                 receipt_fh.write(detail + "\n")
                 receipt_fh.flush()
@@ -723,39 +632,22 @@ class ServerLogMonitor:
             else:
                 logger.info("%s", detail)
             if count >= expected_count:
-                ServerLogMonitor._log_all_received(
-                    use_dots, count, expected_count,
-                    now - fire_time,
-                    client_proc=client_proc,
-                    peak_client_ref=peak_client_ref,
-                )
+                ServerLogMonitor._log_all_received(use_dots, count, expected_count, now - fire_time,
+                                                   client_proc=client_proc, peak_client_ref=peak_client_ref)
 
     @staticmethod
-    def _log_all_received(
-            use_dots, count, expected_count,
-            elapsed, *, client_proc, peak_client_ref,
-    ) -> None:
+    def _log_all_received(use_dots, count, expected_count, elapsed, *, client_proc, peak_client_ref) -> None:
         """Log the final receipt summary and client snapshot."""
         if use_dots:
             _progress_logger.info("\n")
-            logger.info(
-                "  All %s/%s requests received by "
-                "server (%.1fs)",
-                count, expected_count, elapsed,
-            )
+            logger.info("  All %s/%s requests received by server (%.1fs)", count, expected_count, elapsed)
         snap = ResourceMonitor.snapshot(client_proc)
         if snap:
-            logger.info(
-                "  Client AFTER: RSS %.1fM, CPU %.1f%%",
-                snap.get("rss"), snap.get("cpu"),
-            )
+            logger.info("  Client AFTER: RSS %.1fM, CPU %.1f%%", snap.get("rss"), snap.get("cpu"))
             peak_client_ref.value = snap
         mem = psutil.virtual_memory()
         used_mb = (mem.total - mem.available) / (1024 ** 2)
         avail_gb = mem.available / (1024 ** 3)
         total_gb = mem.total / (1024 ** 3)
-        logger.info(
-            "  System RECEIVED: %.0f%% used"
-            " (%.0fM used / %.1fG free / %.1fG total)",
-            mem.percent, used_mb, avail_gb, total_gb,
-        )
+        logger.info("  System RECEIVED: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)", mem.percent, used_mb,
+                    avail_gb, total_gb)
