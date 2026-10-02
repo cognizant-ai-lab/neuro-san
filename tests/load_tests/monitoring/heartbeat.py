@@ -81,7 +81,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         self._total_system_ram: int = psutil.virtual_memory().total
         self._out_of_memory_warned: bool = False
         self._swap_warned: bool = False
-        self._peak_sys_cpu: float = 0.0
+        self._peak_system_cpu_percent: float = 0.0
         self._console_started: bool = False
         # Prime the non-blocking system CPU counter so the first real
         # sample reflects usage since the heartbeat started rather
@@ -326,7 +326,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                         + Heartbeat.format_dur_stats(server_durs)
                     )
                 sys_cpu_info = self._format_system_cpu()
-                peak_sys_cpu_ref.value = self._peak_sys_cpu
+                peak_sys_cpu_ref.value = self._peak_system_cpu_percent
                 cur_sys_threads: int = SystemResources.total_threads()
                 if cur_sys_threads > peak_sys_threads:
                     peak_sys_threads = cur_sys_threads
@@ -377,8 +377,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: The CPU part of the progress line
         """
         current_cpu_percent: float = psutil.cpu_percent(interval=None)
-        self._peak_sys_cpu = max(self._peak_sys_cpu, current_cpu_percent)
-        return f"  syscpu: {current_cpu_percent:.0f}% (peak {self._peak_sys_cpu:.0f}%)"
+        self._peak_system_cpu_percent = max(self._peak_system_cpu_percent, current_cpu_percent)
+        return f"  syscpu: {current_cpu_percent:.0f}% (peak {self._peak_system_cpu_percent:.0f}%)"
 
     @staticmethod
     def _fmt_elapsed(seconds: int) -> str:

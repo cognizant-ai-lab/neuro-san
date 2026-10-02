@@ -406,7 +406,7 @@ class TrafficRunner:
         :param server_proc: Server process for the heartbeat's resource readings, or None
         :param client_proc: Client process for the heartbeat's resource readings, or None
         :param log_monitor: Server log reader for server-side request timing, or None
-        :return: (elapsed, results, peak_threads_ref, peak_client_rss_ref,
+        :return: (total_time_seconds, results, peak_threads_ref, peak_client_rss_ref,
                  peak_server_rss_ref, peak_sys_mem_pct_ref, peak_sys_cpu_ref,
                  peak_sys_threads_ref, server_died, interrupted)
         """

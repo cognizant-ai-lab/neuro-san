@@ -1241,12 +1241,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         until at least one request has completed.
         """
         durations = [
-            float(p["duration_seconds"])
-            for p in self._server_only_primary_pairs(
+            float(pair.get("duration_seconds"))
+            for pair in self._server_only_primary_pairs(
                 log_pos, pri_start_re,
             )
-            if isinstance(p.get("duration_seconds"), (int, float))
-            and p["duration_seconds"] > 0
+            if isinstance(pair.get("duration_seconds"), (int, float))
+            and pair.get("duration_seconds") > 0
         ]
         return Heartbeat.format_dur_stats(durations)
 
@@ -2530,9 +2530,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         the math and labels match the client's percentile line.
         """
         durations = sorted(
-            float(p["duration_seconds"]) for p in primary_pairs
-            if isinstance(p.get("duration_seconds"), (int, float))
-            and p["duration_seconds"] > 0
+            float(pair.get("duration_seconds")) for pair in primary_pairs
+            if isinstance(pair.get("duration_seconds"), (int, float))
+            and pair.get("duration_seconds") > 0
         )
         if not durations:
             return
@@ -2577,9 +2577,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """
         primary_pairs = primary_pairs or []
         durations = [
-            float(p["duration_seconds"]) for p in primary_pairs
-            if isinstance(p.get("duration_seconds"), (int, float))
-            and p["duration_seconds"] > 0
+            float(pair.get("duration_seconds")) for pair in primary_pairs
+            if isinstance(pair.get("duration_seconds"), (int, float))
+            and pair.get("duration_seconds") > 0
         ]
         avg_duration = (
             round(sum(durations) / len(durations), 2)
