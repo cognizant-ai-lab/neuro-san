@@ -42,10 +42,10 @@ class DisconnectionReporter:
 
     def log_disconnection_summary(self) -> None:
         """Log aggregate client disconnection report."""
-        all_disconnections = []
+        all_disconnections: List[Dict[str, Any]] = []
         for idx, stage in enumerate(self._summaries):
             for disc in stage.get("disconnections") or []:
-                disc_copy = dict(disc)
+                disc_copy: Dict[str, Any] = dict(disc)
                 disc_copy.update({"batch": idx + 1})
                 all_disconnections.append(disc_copy)
         if not all_disconnections:

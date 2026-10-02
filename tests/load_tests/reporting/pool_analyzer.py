@@ -20,6 +20,7 @@ import logging
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
@@ -44,7 +45,7 @@ class PoolAnalyzer:
     # pylint: disable=too-many-locals
     def log_pool_reuse_analysis(self) -> None:
         """Log executor pool reuse analysis across stages."""
-        stages_with_data = [
+        stages_with_data: List[Dict[str, Any]] = [
             s for s in self._summaries
             if s.get("before_threads") is not None
             and s.get("after_threads") is not None
@@ -54,46 +55,46 @@ class PoolAnalyzer:
         if not stages_with_data:
             return
 
-        base_threads = stages_with_data[0].get("before_threads")
+        base_threads: int = stages_with_data[0].get("before_threads")
 
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  EXECUTOR POOL REUSE ANALYSIS")
         logger.info("=" * SEPARATOR_WIDTH)
 
-        header = [
+        header: List[str] = [
             "Batch", "Server Calls", "New Threads",
             "Peak Threads", "Reused", "Reuse%",
             "Pool Avail", "Exec/Req",
         ]
         rows: List[tuple] = []
-        total_new_threads = 0
+        total_new_threads: int = 0
         reuse_pcts: List[float] = []
 
         for idx, stage in enumerate(stages_with_data):
-            batch_num = idx + 1
-            server_calls = stage.get("total_started")
-            before_threads = stage.get("before_threads")
-            after_threads = stage.get("after_threads")
-            new_threads = max(after_threads - before_threads, 0)
+            batch_num: int = idx + 1
+            server_calls: int = stage.get("total_started")
+            before_threads: int = stage.get("before_threads")
+            after_threads: int = stage.get("after_threads")
+            new_threads: int = max(after_threads - before_threads, 0)
             total_new_threads += new_threads
-            reused = max(server_calls - new_threads, 0)
-            reuse_pct = (
+            reused: int = max(server_calls - new_threads, 0)
+            reuse_pct: float = (
                 (reused / server_calls * 100.0)
                 if server_calls > 0 else 0.0
             )
             reuse_pcts.append(reuse_pct)
-            pool_avail = max(before_threads - base_threads, 0)
+            pool_avail: int = max(before_threads - base_threads, 0)
 
-            primary = (
+            primary: int = (
                 stage.get("primary_started")
                 or stage.get("concurrent")
             )
-            exec_per_req = (
+            exec_per_req: float = (
                 server_calls / primary if primary > 0 else 0.0
             )
 
-            peak_t = stage.get("peak_threads")
-            peak_str = str(peak_t) if peak_t is not None else "-"
+            peak_t: Optional[int] = stage.get("peak_threads")
+            peak_str: str = str(peak_t) if peak_t is not None else "-"
 
             rows.append((
                 str(batch_num),
@@ -108,7 +109,7 @@ class PoolAnalyzer:
 
         TableFormatter.log_table(header, rows)
 
-        first_demand = max(
+        first_demand: int = max(
             stages_with_data[0].get("after_threads")
             - stages_with_data[0].get("before_threads"), 0,
         )
@@ -133,7 +134,7 @@ class PoolAnalyzer:
             reuse_pcts[0], reuse_pcts[-1], len(reuse_pcts),
         )
         if total_new_threads > first_demand > 0:
-            excess = total_new_threads - first_demand
+            excess: int = total_new_threads - first_demand
             logger.info(
                 "  WARNING: %d new threads created across all "
                 "batches, but batch 1 demand was only %d.",

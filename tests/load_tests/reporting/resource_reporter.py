@@ -78,9 +78,9 @@ class ResourceReporter:
         :param after: Server process snapshot taken after the stage
         :return: (display_row, before, after)
         """
-        rss_delta = after.get("rss") - before.get("rss")
-        thread_delta = after.get("threads") - before.get("threads")
-        display = (
+        rss_delta: float = after.get("rss") - before.get("rss")
+        thread_delta: int = after.get("threads") - before.get("threads")
+        display: Tuple[str, ...] = (
             str(stage_label),
             f"{before.get('rss'):.1f}M",
             f"{after.get('rss'):.1f}M",
@@ -92,7 +92,7 @@ class ResourceReporter:
             f"{after.get('cpu'):.1f}%",
             str(after.get("children")),
         )
-        row = (display, before, after)
+        row: ServerResourceRow = (display, before, after)
         self._resource_rows.append(row)
         return row
 
@@ -110,9 +110,9 @@ class ResourceReporter:
         :param settled: Client process snapshot taken after the stage settled
         :return: (display_row, before, peak or {}, settled)
         """
-        rss_delta = settled.get("rss") - before.get("rss")
-        peak_rss = f"{peak.get('rss'):.1f}M" if peak else "-"
-        display = (
+        rss_delta: float = settled.get("rss") - before.get("rss")
+        peak_rss: str = f"{peak.get('rss'):.1f}M" if peak else "-"
+        display: Tuple[str, ...] = (
             str(stage_label),
             f"{before.get('rss'):.1f}M",
             peak_rss,
@@ -122,7 +122,7 @@ class ResourceReporter:
             str(settled.get("fds")),
             str(settled.get("threads")),
         )
-        row = (display, before, peak or {}, settled)
+        row: ClientResourceRow = (display, before, peak or {}, settled)
         self._client_rows.append(row)
         return row
 
@@ -143,12 +143,12 @@ class ResourceReporter:
         """
         if not self._resource_rows and not self._client_rows:
             return
-        header = [
+        header: List[str] = [
             "Component", "Concurrent", "Before RSS", "Peak RSS",
             "Settled RSS", "RSS Delta", "CPU%", "FDs",
             "Threads", "Thread Delta", "Conns", "Children",
         ]
-        rows = self._combined_server_rows() + self._combined_client_rows()
+        rows: List[tuple] = self._combined_server_rows() + self._combined_client_rows()
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         if total_server_calls > 0:
             logger.info(
@@ -174,7 +174,7 @@ class ResourceReporter:
         """
         if not self._resource_rows:
             return [("Server app",) + self._NA_METRICS]
-        rows = []
+        rows: List[tuple] = []
         for display, _before, _after in self._resource_rows:
             # display: (concurrent, before_rss, settled_rss, rss_delta,
             #   fds, threads, thread_delta, conns, cpu, children)
@@ -193,9 +193,9 @@ class ResourceReporter:
         """
         if not self._client_rows:
             return [("Client app",) + self._NA_METRICS]
-        rows = []
+        rows: List[tuple] = []
         for row in self._client_rows:
-            display = row[0]
+            display: Tuple[str, ...] = row[0]
             # display: (concurrent, before_rss, peak_rss, settled_rss,
             #   rss_delta, cpu, fds, threads)
             rows.append((
@@ -209,8 +209,8 @@ class ResourceReporter:
         """Log overall resource deltas if enough data points."""
         if len(self._resource_rows) < 2:
             return
-        first_before = self._resource_rows[0][1]
-        last_after = self._resource_rows[-1][2]
+        first_before: Dict[str, Any] = self._resource_rows[0][1]
+        last_after: Dict[str, Any] = self._resource_rows[-1][2]
         self._log_snapshot_deltas(
             "Server", first_before, last_after,
             fields=[
@@ -226,8 +226,8 @@ class ResourceReporter:
         """Log overall client resource deltas if enough data points."""
         if len(self._client_rows) < 2:
             return
-        first_before = self._client_rows[0][1]
-        last_settled = self._client_rows[-1][3]
+        first_before: Dict[str, Any] = self._client_rows[0][1]
+        last_settled: Dict[str, Any] = self._client_rows[-1][3]
         self._log_snapshot_deltas(
             "Client", first_before, last_settled,
             fields=[
@@ -248,16 +248,16 @@ class ResourceReporter:
         :param after: Snapshot from the last stage
         :param fields: (display name, snapshot key, % format) of each field to log
         """
-        max_name = max(len(name) for name, _, _ in fields)
+        max_name: int = max(len(name) for name, _, _ in fields)
         logger.info(
             "\n  %s overall deltas (first stage vs last stage):",
             label,
         )
         for name, key, fmt in fields:
-            delta = after.get(key) - before.get(key)
-            padded = f"{name}:".ljust(max_name + 1)
-            formatted = fmt % abs(delta)
-            sign = "+" if delta >= 0 else "-"
+            delta: float = after.get(key) - before.get(key)
+            padded: str = f"{name}:".ljust(max_name + 1)
+            formatted: str = fmt % abs(delta)
+            sign: str = "+" if delta >= 0 else "-"
             logger.info(
                 "    %s %s%s", padded, sign, formatted,
             )
