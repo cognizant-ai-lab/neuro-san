@@ -24,6 +24,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
+from typing import Tuple
 
 from collections import Counter
 
@@ -62,13 +64,13 @@ class SummaryFileWriter:
         :param output_dir: Directory to write summary.txt into
         :return: Path of summary.txt
         """
-        lines = []
+        lines: List[str] = []
         self._write_header(lines)
         self._write_request_results(lines)
         self._write_completion_timeline(lines)
         self._write_server_timing(lines)
 
-        path = os.path.join(output_dir, "summary.txt")
+        path: str = os.path.join(output_dir, "summary.txt")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
         logger.info("  Summary:     %s", path)
@@ -80,18 +82,18 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        total_requests = sum(
+        total_requests: int = sum(
             len(s.get("results", []))
             for s in self._summaries
         )
-        total_elapsed = sum(
+        total_elapsed: float = sum(
             s.get("elapsed", 0) for s in self._summaries
         )
-        agent = self._args.agent
-        date_str = time.strftime("%Y-%m-%d %H:%M")
-        num_req = self._args.num_requests
-        num_rnd = self._args.num_rounds
-        workers = self._args.max_workers
+        agent: str = self._args.agent
+        date_str: str = time.strftime("%Y-%m-%d %H:%M")
+        num_req: int = self._args.num_requests
+        num_rnd: int = self._args.num_rounds
+        workers: int = self._args.max_workers
         lines.append("=" * 60)
         lines.append("  LOAD TEST SUMMARY")
         lines.append("=" * 60)
@@ -115,27 +117,27 @@ class SummaryFileWriter:
                 f" / {Formatters.fmt_duration(avg_first_response)} avg"
                 f" / {Formatters.fmt_duration(max(first_response_values))} max"
             )
-        durations = [
+        durations: List[float] = [
             r.get("elapsed", 0)
             for s in self._summaries
             for r in s.get("results", [])
         ]
         if durations:
-            avg_dur = sum(durations) / len(durations)
+            avg_dur: float = sum(durations) / len(durations)
             lines.append(
                 f"  Request duration:"
                 f" {Formatters.fmt_duration(min(durations))} min"
                 f" / {Formatters.fmt_duration(avg_dur)} avg"
                 f" / {Formatters.fmt_duration(max(durations))} max"
             )
-        llm_calls = [
+        llm_calls: List[int] = [
             r.get("llm_calls", 0)
             for s in self._summaries
             for r in s.get("results", [])
             if r.get("llm_calls", 0) > 0
         ]
         if llm_calls:
-            avg_calls = round(sum(llm_calls) / len(llm_calls))
+            avg_calls: int = round(sum(llm_calls) / len(llm_calls))
             lines.append(
                 f"  LLM calls:"
                 f" {min(llm_calls)} min"
@@ -170,13 +172,13 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        start_rss = None
-        end_rss = None
-        peak_rss = None
+        start_rss: Optional[float] = None
+        end_rss: Optional[float] = None
+        peak_rss: Optional[float] = None
         for summary in self._summaries:
-            before = summary.get("before_server_rss")
-            after = summary.get("after_server_rss")
-            peak = summary.get("peak_server_rss")
+            before: Optional[float] = summary.get("before_server_rss")
+            after: Optional[float] = summary.get("after_server_rss")
+            peak: Optional[float] = summary.get("peak_server_rss")
             if before is not None and start_rss is None:
                 start_rss = before
             if after is not None:
@@ -199,13 +201,13 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        start_rss = None
-        end_rss = None
-        peak_rss = None
+        start_rss: Optional[float] = None
+        end_rss: Optional[float] = None
+        peak_rss: Optional[float] = None
         for summary in self._summaries:
-            before = summary.get("before_client_rss")
-            after = summary.get("after_client_rss")
-            peak = summary.get("peak_client_rss")
+            before: Optional[float] = summary.get("before_client_rss")
+            after: Optional[float] = summary.get("after_client_rss")
+            peak: Optional[float] = summary.get("peak_client_rss")
             if before is not None and start_rss is None:
                 start_rss = before
             if after is not None:
@@ -228,15 +230,15 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        start_pct = None
-        end_pct = None
-        peak_pct = None
-        peak_avail_gb = None
+        start_pct: Optional[float] = None
+        end_pct: Optional[float] = None
+        peak_pct: Optional[float] = None
+        peak_avail_gb: Optional[float] = None
         for summary in self._summaries:
-            before = summary.get("before_sys_mem_pct")
-            after = summary.get("after_sys_mem_pct")
-            peak = summary.get("peak_sys_mem_pct")
-            avail = summary.get("peak_sys_mem_avail_gb")
+            before: Optional[float] = summary.get("before_sys_mem_pct")
+            after: Optional[float] = summary.get("after_sys_mem_pct")
+            peak: Optional[float] = summary.get("peak_sys_mem_pct")
+            avail: Optional[float] = summary.get("peak_sys_mem_avail_gb")
             if before is not None and start_pct is None:
                 start_pct = before
             if after is not None:
@@ -247,10 +249,10 @@ class SummaryFileWriter:
                     peak_avail_gb = avail
         if peak_pct is None:
             return
-        total_gb = (
+        total_gb: float = (
             psutil.virtual_memory().total / (1024 ** 3)
         )
-        peak_detail = (
+        peak_detail: str = (
             f"{peak_pct:.0f}% peak"
             f" ({peak_avail_gb or 0:.1f}G free"
             f" / {total_gb:.1f}G)"
@@ -268,20 +270,20 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        all_events = []
+        all_events: List[Dict[str, Any]] = []
         for summary in self._summaries:
             all_events.extend(
                 summary.get("validation_events", []),
             )
         if not all_events:
             return
-        total_cycles = sum(
+        total_cycles: int = sum(
             e.get("fix_cycles", 0) for e in all_events
         )
-        total_requests = sum(
+        total_requests: int = sum(
             s.get("concurrent", 0) for s in self._summaries
         )
-        affected = len(all_events)
+        affected: int = len(all_events)
         lines.append(
             f"  Validation: {affected} of {total_requests}"
             f" requests needed fixes"
@@ -290,13 +292,13 @@ class SummaryFileWriter:
         self._write_validation_time_impact(
             lines, all_events,
         )
-        all_errors = []
+        all_errors: List[str] = []
         for event in all_events:
             all_errors.extend(event.get("errors", []))
         if all_errors:
-            counts = Counter(all_errors)
-            top = counts.most_common(3)
-            parts = [
+            counts: Counter = Counter(all_errors)
+            top: List[Tuple[str, int]] = counts.most_common(3)
+            parts: List[str] = [
                 f"{err} ({cnt}x)" for err, cnt in top
             ]
             lines.append(
@@ -311,20 +313,20 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param events: Validation events from every stage
         """
-        fix_rids = {e.get("request_id") for e in events}
-        with_fixes = []
-        without_fixes = []
+        fix_rids: Set[str] = {e.get("request_id") for e in events}
+        with_fixes: List[float] = []
+        without_fixes: List[float] = []
         for summary in self._summaries:
             for result in summary.get("results", []):
-                rid = result.get("request_id", "")
-                elapsed = result.get("elapsed", 0)
+                rid: str = result.get("request_id", "")
+                elapsed: float = result.get("elapsed", 0)
                 if rid in fix_rids:
                     with_fixes.append(elapsed)
                 else:
                     without_fixes.append(elapsed)
         if with_fixes and without_fixes:
-            avg_with = sum(with_fixes) / len(with_fixes)
-            avg_without = (
+            avg_with: float = sum(with_fixes) / len(with_fixes)
+            avg_without: float = (
                 sum(without_fixes) / len(without_fixes)
             )
             lines.append(
@@ -340,7 +342,7 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        all_results = []
+        all_results: List[Dict[str, Any]] = []
         for summary in self._summaries:
             all_results.extend(summary.get("results", []))
         if not all_results:
@@ -362,10 +364,10 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param result: One request result
         """
-        rid = result.get("request_id", "?")
-        elapsed = result.get("elapsed", 0)
-        status = result.get("status", "?")
-        detail = self._extract_detail(result)
+        rid: str = result.get("request_id", "?")
+        elapsed: float = result.get("elapsed", 0)
+        status: str = result.get("status", "?")
+        detail: str = self._extract_detail(result)
         if detail:
             lines.append(
                 f"  {rid:<12s} {elapsed:7.1f}s"
@@ -385,13 +387,13 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param all_results: Every request result
         """
-        passed = sum(
+        passed: int = sum(
             1 for r in all_results
             if r.get("status") == STATUS_CREATED
         )
-        total = len(all_results)
-        failed = total - passed
-        latencies = [
+        total: int = len(all_results)
+        failed: int = total - passed
+        latencies: List[float] = [
             r.get("elapsed", 0) for r in all_results
         ]
         lines.append("")
@@ -400,7 +402,7 @@ class SummaryFileWriter:
             f" {failed} failed",
         )
         if latencies:
-            avg = sum(latencies) / len(latencies)
+            avg: float = sum(latencies) / len(latencies)
             lines.append(
                 f"  Avg: {avg:.1f}s"
                 f" | Min: {min(latencies):.1f}s"
@@ -414,7 +416,7 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        all_latencies = []
+        all_latencies: List[float] = []
         for summary in self._summaries:
             for result in summary.get("results", []):
                 all_latencies.append(result.get("elapsed", 0))
@@ -422,20 +424,20 @@ class SummaryFileWriter:
             return
 
         all_latencies.sort()
-        total = len(all_latencies)
-        milestones = [50, 60, 70, 80, 90, 95, 100]
+        total: int = len(all_latencies)
+        milestones: List[int] = [50, 60, 70, 80, 90, 95, 100]
         lines.append("=" * 60)
         lines.append("  COMPLETION TIMELINE")
         lines.append("=" * 60)
 
-        prev_count = -1
+        prev_count: int = -1
         for pct in milestones:
-            idx = min(
+            idx: int = min(
                 int(total * pct / 100 + 0.999999) - 1,
                 total - 1,
             )
-            count = idx + 1
-            val = all_latencies[idx]
+            count: int = idx + 1
+            val: float = all_latencies[idx]
             if count == prev_count:
                 continue
             prev_count = count
@@ -455,17 +457,17 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param sorted_latencies: Request latencies in seconds, sorted in ascending order
         """
-        total = len(sorted_latencies)
-        step = 50
+        total: int = len(sorted_latencies)
+        step: int = 50
         if total <= step:
             return
-        milestones = list(range(step, total, step))
+        milestones: List[int] = list(range(step, total, step))
         if not milestones or milestones[-1] != total:
             milestones.append(total)
         lines.append("")
         lines.append("  Completion by count:")
         for count in milestones:
-            duration = sorted_latencies[count - 1]
+            duration: float = sorted_latencies[count - 1]
             lines.append(
                 f"  {count:5d} requests completed by"
                 f" {Formatters.fmt_duration(duration, precision=1)}",
@@ -480,7 +482,7 @@ class SummaryFileWriter:
         if not self._server_timing:
             return
 
-        client_results = self._collect_client_times()
+        client_results: List[Dict[str, Any]] = self._collect_client_times()
         by_server_id: Dict[str, list] = {}
         for entry in self._server_timing:
             sid = entry.get("request_id", "")
@@ -491,17 +493,17 @@ class SummaryFileWriter:
         lines.append("=" * 60)
 
         for sid in sorted(by_server_id.keys()):
-            entries = by_server_id[sid]
+            entries: List[Dict[str, Any]] = by_server_id[sid]
             entries.sort(
                 key=lambda e: e.get("start_ts", 0),
             )
             if not entries:
                 continue
-            top_start = entries[0].get("start_ts", 0)
-            client = self._match_client(
+            top_start: float = entries[0].get("start_ts", 0)
+            client: Dict[str, Any] = self._match_client(
                 top_start, client_results,
             )
-            label = client.get("id", sid)
+            label: str = client.get("id", sid)
             self._format_request_timing(
                 lines, label, entries, client,
             )
@@ -516,9 +518,9 @@ class SummaryFileWriter:
         results: List[Dict[str, Any]] = []
         for summary in self._summaries:
             for result in summary.get("results", []):
-                rid = result.get("request_id", "")
-                start = result.get("start_time", 0)
-                end = result.get("end_time", 0)
+                rid: str = result.get("request_id", "")
+                start: float = result.get("start_time", 0)
+                end: float = result.get("end_time", 0)
                 if rid and start and end:
                     results.append({
                         "id": rid,
@@ -554,15 +556,15 @@ class SummaryFileWriter:
         :param entries: Server timing entries of the request, sorted by start time; the first is the top-level agent
         :param client: Matching client entry, or {} when none matched
         """
-        top = entries[0]
-        top_agent = top.get("agent", "?")
-        c_start = client.get("start", 0)
-        c_end = client.get("end", 0)
-        total = (
+        top: Dict[str, Any] = entries[0]
+        top_agent: str = top.get("agent", "?")
+        c_start: float = client.get("start", 0)
+        c_end: float = client.get("end", 0)
+        total: float = (
             c_end - c_start if c_start and c_end else 0
         )
-        s_start = top.get("start_ts", 0)
-        s_finish = top.get("finish_ts", 0)
+        s_start: float = top.get("start_ts", 0)
+        s_finish: float = top.get("finish_ts", 0)
         lines.append("")
         lines.append(f"  {rid} ({total:.1f}s total):")
         if c_start and s_start and s_start > c_start:
@@ -592,18 +594,18 @@ class SummaryFileWriter:
         :param entries: Server timing entries of the request
         :param top_agent: Name of the top-level agent, left out of the list
         """
-        sub_agents = [
+        sub_agents: List[Dict[str, Any]] = [
             e for e in entries
             if e.get("agent") != top_agent
         ]
         for i, sub in enumerate(sub_agents):
-            prefix = (
+            prefix: str = (
                 "\u2514\u2500"
                 if i == len(sub_agents) - 1
                 else "\u251c\u2500"
             )
-            name = sub.get("agent", "?")
-            duration_seconds = sub.get("duration_seconds", 0)
+            name: str = sub.get("agent", "?")
+            duration_seconds: float = sub.get("duration_seconds", 0)
             lines.append(
                 f"      {prefix} {name:<23s} {duration_seconds:6.1f}s",
             )
@@ -616,13 +618,13 @@ class SummaryFileWriter:
         :param result: One request result
         :return: Network name or reservation id, then failure reason; empty when neither is set
         """
-        parts = []
+        parts: List[str] = []
         for key in ("agent_network_name", "reservation_id"):
-            val = result.get(key, "")
+            val: Optional[str] = result.get(key, "")
             if val:
                 parts.append(str(val))
                 break
-        reason = result.get("failure_reason")
+        reason: Optional[str] = result.get("failure_reason")
         if reason:
             parts.append(f"reason: {reason}")
         return "  ".join(parts)

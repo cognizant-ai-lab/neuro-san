@@ -55,7 +55,7 @@ class TrendHistory:
 
     def run(self) -> None:
         """Read the history file and log one row per recorded run."""
-        history_path = self._resolve_path()
+        history_path: Optional[str] = self._resolve_path()
         if history_path is None:
             logger.info(
                 "No history file found at %s. Runs append one record "
@@ -63,7 +63,7 @@ class TrendHistory:
                 self._path,
             )
             return
-        records = self._read_records(history_path)
+        records: List[Dict[str, Any]] = self._read_records(history_path)
         if not records:
             logger.info("No usable records in %s", history_path)
             return
@@ -101,7 +101,7 @@ class TrendHistory:
         """
         if os.path.isfile(self._path):
             return self._path
-        candidate = os.path.join(self._path, HISTORY_FILE_NAME)
+        candidate: str = os.path.join(self._path, HISTORY_FILE_NAME)
         if os.path.isfile(candidate):
             return candidate
         return None
@@ -118,13 +118,14 @@ class TrendHistory:
         :return: Every record that is a JSON object, in file order; empty when the file cannot be read
         """
         records: List[Dict[str, Any]] = []
-        skipped = 0
+        skipped: int = 0
         try:
             with open(history_path, "r", encoding="utf-8") as handle:
                 for line in handle:
                     line = line.strip()
                     if not line:
                         continue
+                    record: Any = None
                     try:
                         record = json.loads(line)
                     except json.JSONDecodeError:
@@ -153,7 +154,7 @@ class TrendHistory:
 
         :return: Column names
         """
-        header = [
+        header: List[str] = [
             "timestamp", "neuro-san", "agent", "mode", "via",
             "reqs", "done",
         ]
@@ -178,14 +179,14 @@ class TrendHistory:
         :param record: One history record
         :return: Cell values in _header order
         """
-        mode = record.get("mode", "client")
-        requests = record.get(
+        mode: str = record.get("mode", "client")
+        requests: int = record.get(
             "total_requests", record.get("expected_requests", 0),
         )
-        completed = record.get(
+        completed: int = record.get(
             "completed", record.get("received_requests", 0),
         )
-        row = [
+        row: List[str] = [
             TrendHistory._fmt_timestamp(record.get("timestamp", "")),
             record.get("neuro_san_version", "unknown"),
             record.get("agent", "unknown"),
@@ -223,7 +224,7 @@ class TrendHistory:
         """
         if not timestamp:
             return "-"
-        text = str(timestamp).replace("T", " ")
+        text: str = str(timestamp).replace("T", " ")
         return text[:16]
 
     @staticmethod
