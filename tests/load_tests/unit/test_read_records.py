@@ -17,6 +17,9 @@
 import json
 import os
 import tempfile
+from typing import Any
+from typing import Dict
+from typing import List
 from unittest import TestCase
 
 from tests.load_tests.reporting.trend_history import TrendHistory
@@ -36,6 +39,7 @@ class TestReadRecords(TestCase):
 
     def setUp(self) -> None:
         """Create a scratch history file removed again after each test."""
+        handle: int = 0
         handle, self._path = tempfile.mkstemp(suffix=".jsonl")
         os.close(handle)
         self.addCleanup(os.unlink, self._path)
@@ -56,7 +60,7 @@ class TestReadRecords(TestCase):
             + json.dumps({"agent": "two"}) + "\n"
         )
 
-        records = TrendHistory._read_records(self._path)
+        records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
         self.assertEqual(
             [record["agent"] for record in records], ["one", "two"],
@@ -69,7 +73,7 @@ class TestReadRecords(TestCase):
             + '{"agent": "two", "requ'
         )
 
-        records = TrendHistory._read_records(self._path)
+        records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
         self.assertEqual([record["agent"] for record in records], ["one"])
 
@@ -83,7 +87,7 @@ class TestReadRecords(TestCase):
         """Valid JSON that is not an object cannot be a record."""
         self._write("[1, 2, 3]\n" + json.dumps({"agent": "one"}) + "\n")
 
-        records = TrendHistory._read_records(self._path)
+        records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
         self.assertEqual([record["agent"] for record in records], ["one"])
 
