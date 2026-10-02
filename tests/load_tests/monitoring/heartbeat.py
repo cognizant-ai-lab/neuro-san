@@ -46,7 +46,7 @@ from tests.load_tests.shared_ref import SharedRef
 logger = logging.getLogger(__name__)
 
 CONSOLE_TICK_INTERVAL = 1
-OOM_WARNING_THRESHOLD = 0.80
+OUT_OF_MEMORY_WARNING_THRESHOLD = 0.80
 
 
 class Heartbeat:  # pylint: disable=too-many-instance-attributes
@@ -176,7 +176,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             return
         memory = psutil.virtual_memory()
         used_fraction = memory.percent / 100.0
-        if used_fraction >= OOM_WARNING_THRESHOLD:
+        if used_fraction >= OUT_OF_MEMORY_WARNING_THRESHOLD:
             self._out_of_memory_warned = True
             total_gigabytes = memory.total / (1024 ** 3)
             available_gigabytes = memory.available / (1024 ** 3)
