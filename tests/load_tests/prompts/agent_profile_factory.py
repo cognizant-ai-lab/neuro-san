@@ -117,6 +117,7 @@ class AgentProfileFactory:
         """
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
+        candidate: str
         if profile_path:
             if os.path.isfile(profile_path):
                 logger.error(
@@ -139,10 +140,10 @@ class AgentProfileFactory:
                 raise SystemExit(1)
             return candidate
 
-        searched = []
+        searched: List[str] = []
 
         # Search in the built-in profiles directory next to this module
-        profiles_dir = os.path.join(
+        profiles_dir: str = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "profiles",
         )
         for name in (agent_name, agent_base):

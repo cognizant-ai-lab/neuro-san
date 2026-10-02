@@ -65,7 +65,7 @@ class InputValidator:
         The server resolves agents by registry-relative name
         (e.g. 'basic/hello_world'), not by absolute path.
         """
-        agent = self._args.agent
+        agent: str = self._args.agent
         if os.path.isabs(agent):
             logger.error(
                 "ERROR: --agent appears to be a filesystem path:\n"
@@ -141,6 +141,7 @@ class InputValidator:
         """
         if self._args.ramp:
             if self._args.stages is not None:
+                stages: List[int]
                 try:
                     stages = [
                         int(s.strip())
@@ -217,11 +218,12 @@ class InputValidator:
         :param stale_log_age: Minutes since the server log was last modified when it looks stale, or None
         :return: The probe result, or None when no probe was run
         """
-        total_planned = sum(stages) * self._args.num_rounds
-        capped = min(total_planned, total_cap)
+        total_planned: int = sum(stages) * self._args.num_rounds
+        capped: int = min(total_planned, total_cap)
 
         self._print_summary_header(stages, total_planned, capped)
 
+        warnings: List[str]
         if self._args.no_dry_run or self._args.level == LEVEL_ADV:
             warnings = self._collect_warnings(
                 capped=capped,
@@ -232,12 +234,14 @@ class InputValidator:
             logger.info("=" * SEPARATOR_WIDTH)
             return None
 
+        probe_result: Dict[str, Any]
+        probe_data: Dict[str, Any]
         probe_result, probe_data = (
             self._run_cost_probe(runner, output_dir)
         )
 
-        remaining = max(capped - 1, 0)
-        est_stage_duration = self._estimate_stage_duration(
+        remaining: int = max(capped - 1, 0)
+        est_stage_duration: float = self._estimate_stage_duration(
             probe_data.get("elapsed", 0), remaining,
         )
         logger.info(
@@ -282,7 +286,7 @@ class InputValidator:
         :param total_planned: Planned requests: sum(stages) * --num-rounds
         :param capped: Requests after the --max-requests cap
         """
-        args = self._args
+        args: Namespace = self._args
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  PRE-RUN SUMMARY")
         logger.info("=" * SEPARATOR_WIDTH)
@@ -357,8 +361,8 @@ class InputValidator:
         warnings: List[str] = []
 
         if probe_cost is not None and probe_tokens:
-            est_total_cost = probe_cost * capped
-            est_total_tokens = probe_tokens * capped
+            est_total_cost: float = probe_cost * capped
+            est_total_tokens: int = probe_tokens * capped
             if est_total_cost > 1.0:
                 warnings.append(
                     f"Estimated cost exceeds $1:\n"
@@ -370,8 +374,8 @@ class InputValidator:
                     f"     Model: {probe_model}"
                 )
 
-        max_w = self._args.max_workers
-        num_r = self._args.num_requests
+        max_w: int = self._args.max_workers
+        num_r: int = self._args.num_requests
         if not self._args.ramp and max_w < num_r:
             warnings.append(
                 f"--max-workers ({max_w}) < "
@@ -382,7 +386,7 @@ class InputValidator:
         if (est_stage_duration is not None
                 and est_stage_duration
                 > self._args.stage_timeout):
-            stage_to = self._args.stage_timeout
+            stage_to: int = self._args.stage_timeout
             warnings.append(
                 f"Estimated stage duration "
                 f"~{int(est_stage_duration)}s "
@@ -405,7 +409,7 @@ class InputValidator:
 
         warnings.extend(self._token_reporting_warnings())
 
-        mem_warning = self._check_memory_headroom(capped)
+        mem_warning: Optional[str] = self._check_memory_headroom(capped)
         if mem_warning:
             warnings.append(mem_warning)
 
@@ -421,7 +425,7 @@ class InputValidator:
 
         :return: One warning when --minimal is used with token accounting, else empty
         """
-        args = self._args
+        args: Namespace = self._args
         if getattr(args, "chat_filter", "maximal") != "minimal":
             return []
         if not getattr(args, "include_tokens", False):
@@ -454,9 +458,9 @@ class InputValidator:
         :return: Warning text, or None when available memory looks sufficient
         """
         mem = psutil.virtual_memory()
-        avail_gb = mem.available / (1024 ** 3)
-        per_request_mb = 2
-        needed_gb = (num_requests * per_request_mb) / 1024
+        avail_gb: float = mem.available / (1024 ** 3)
+        per_request_mb: int = 2
+        needed_gb: float = (num_requests * per_request_mb) / 1024
         if needed_gb > avail_gb * 0.8:
             return (
                 f"Memory may be insufficient for"
@@ -487,7 +491,7 @@ class InputValidator:
             "\n  WARNINGS (%s found):", len(warnings),
         )
         for idx, warning in enumerate(warnings, 1):
-            lines = warning.split("\n")
+            lines: List[str] = warning.split("\n")
             logger.warning("  %s. %s", idx, lines[0])
             for line in lines[1:]:
                 logger.warning("  %s", line)
@@ -510,16 +514,16 @@ class InputValidator:
             "cost...",
         )
 
-        probe_result = runner.run_one_http(
+        probe_result: Dict[str, Any] = runner.run_one_http(
             request_id=0, global_request_id=0,
             output_dir=output_dir,
         )
 
-        probe_tokens = probe_result.get("total_tokens", 0)
-        probe_cost = probe_result.get("cost_usd", 0.0)
-        probe_model = probe_result.get("model", "unknown")
-        probe_status = probe_result.get("status", "FAILED")
-        probe_elapsed = probe_result.get("elapsed", 0)
+        probe_tokens: int = probe_result.get("total_tokens", 0)
+        probe_cost: float = probe_result.get("cost_usd", 0.0)
+        probe_model: str = probe_result.get("model", "unknown")
+        probe_status: str = probe_result.get("status", "FAILED")
+        probe_elapsed: float = probe_result.get("elapsed", 0)
 
         logger.info(
             "\n  Probe request completed in %.1fs (%s)",
@@ -537,7 +541,7 @@ class InputValidator:
                 "track tokens).",
             )
 
-        probe_data = {
+        probe_data: Dict[str, Any] = {
             "tokens": probe_tokens,
             "cost": probe_cost,
             "model": probe_model,

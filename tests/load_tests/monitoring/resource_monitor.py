@@ -44,7 +44,7 @@ class ResourceMonitor:
         """
         for proc in psutil.process_iter(["pid", "cmdline"]):
             try:
-                cmdline = " ".join(proc.info.get("cmdline") or [])
+                cmdline: str = " ".join(proc.info.get("cmdline") or [])
                 if keyword in cmdline:
                     return psutil.Process(proc.info.get("pid"))
             except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -80,6 +80,7 @@ class ResourceMonitor:
             return None
         try:
             mem = proc.memory_info()
+            fds: int
             try:
                 fds = proc.num_fds()
             except AttributeError:

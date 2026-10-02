@@ -37,13 +37,14 @@ class DurationParser:
         :param value: Seconds, or a number with an s, m or h suffix
         :return: Whole seconds
         """
-        text = str(value).strip().lower()
+        text: str = str(value).strip().lower()
         if not text:
             raise argparse.ArgumentTypeError("empty duration")
-        unit = 1
+        unit: int = 1
         if text[-1] in DurationParser._UNITS:
             unit = DurationParser._UNITS[text[-1]]
             text = text[:-1]
+        seconds: float
         try:
             seconds = float(text) * unit
         except ValueError as exc:
