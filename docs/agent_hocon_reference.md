@@ -359,7 +359,8 @@ match the provider selected by `model_name` or `class`.
 ```
 
 See [Provider Tools](./provider_tools.md) for the shapes each provider accepts, how an agent-level list combines
-with the network-level one, the fallback rule, and the classes that do not support it.
+with the network-level one, the fallback rule, the classes that do not support it, and the mistakes reported at load
+time.
 
 #### class
 

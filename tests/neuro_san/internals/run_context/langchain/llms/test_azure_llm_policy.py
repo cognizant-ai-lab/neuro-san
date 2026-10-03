@@ -557,6 +557,24 @@ class TestAzureLlmPolicy(TestCase):
         self.assertIs(body.get("store"), False)
         self.assertNotIn("n", body)
 
+    def test_bound_provider_tool_dict_reaches_v1_responses(self) -> None:
+        """
+        A provider tool dictionary bound to the chat model, as LangChainRunContext does for
+        llm_config.provider_tools, is sent verbatim in "tools" to /openai/v1/responses.
+        """
+        _, llm = self._build_policy({"use_responses_api": True}, capture=True)
+        web_search: Dict[str, Any] = {"type": "web_search"}
+        bound: Any = llm.bind_tools([web_search])
+
+        result: AIMessage = asyncio.run(bound.ainvoke([HumanMessage("hi")]))
+
+        self.assertIsInstance(result, AIMessage)
+        self.assertEqual(len(self.requests), 1)
+        request: Request = self.requests[0]
+        self.assertEqual(request.url.path, "/openai/v1/responses")
+        body: Dict[str, Any] = self._sent_body(request)
+        self.assertEqual([web_search], body.get("tools"))
+
     def test_entra_token_is_sent_as_the_bearer_token(self) -> None:
         """
         A configured azure_ad_token replaces the API key in the Authorization header.
