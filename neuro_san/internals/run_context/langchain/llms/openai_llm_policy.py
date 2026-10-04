@@ -18,14 +18,13 @@ from typing import Any
 from typing import Dict
 
 from contextlib import suppress
-from httpx import AsyncClient
-from httpx import Limits
 
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.run_context.langchain.util.openai_httpx import OpenAIHttpx
 
 
 class OpenAILlmPolicy(LlmPolicy):
@@ -38,16 +37,14 @@ class OpenAILlmPolicy(LlmPolicy):
     the llm reference, because of our create_client() implementation, we do not.
     """
 
-    # None means no limit
-    LIMITS: Limits = Limits(max_connections=None, max_keepalive_connections=None)
-
     def __init__(self, llm: BaseLanguageModel = None):
         """
         Constructor.
         """
         super().__init__()
 
-        self.http_client: AsyncClient = None
+        # An AsyncClient of whichever httpx library the installed OpenAI SDK uses; see create_http_client().
+        self.http_client: Any = None
 
         # Not doing lazy type resolution here just for type hints.
         # Save that for create_client(), where it's meatier.
@@ -92,16 +89,26 @@ class OpenAILlmPolicy(LlmPolicy):
         # to pass to the BaseLanguageModel constructor.
         return self.async_openai_client.chat.completions
 
-    def create_http_client(self, config: Dict[str, Any]):
+    def create_http_client(self, config: Dict[str, Any]) -> None:
         """
         Creates the http client from the given config.
 
+        The client is the SDK's own default client class, so it is built from the httpx library
+        the installed SDK uses (httpx for openai 2.x, httpx2 for openai 3.x) and carries the
+        SDK's defaults for whatever the config does not set.
+
         :param config: The fully specified llm config
         """
-        # Our run-time model resource here is httpx client which we need to control directly:
+        # pylint: disable=invalid-name
+        DefaultAsyncHttpxClient = self.resolver.resolve_class_in_module("DefaultAsyncHttpxClient",
+                                                                        module_name="openai",
+                                                                        install_if_missing="langchain-openai")
+
         openai_proxy: str = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
         request_timeout: int = config.get("request_timeout")
-        self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout, limits=self.LIMITS)
+        # None means no limit on the connection pool.
+        limits: Any = OpenAIHttpx.limits(max_connections=None, max_keepalive_connections=None)
+        self.http_client = DefaultAsyncHttpxClient(proxy=openai_proxy, timeout=request_timeout, limits=limits)
 
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
