@@ -13,6 +13,12 @@ checking for issues such as:
 - Invalid URL references
 - Malformed function.parameters blocks (nested keys, bad required refs, unrecognized types)
 
+It also runs a set of best-effort lint checks and prints anything they find as warnings
+(see [Lint Warnings](#lint-warnings) below): they don't fail validation unless you pass `--strict`.
+
+For editor autocomplete/linting rather than a CLI run, see the
+[agent network JSON Schema](./agent_hocon_schema.md).
+
 Usage:
 
 ```sh
@@ -126,4 +132,39 @@ Gmail API setup, and Selenium configuration.",
     "Build and visualize an agent network for university administration"
   ]
 }
+```
+
+## Lint Warnings
+
+Beyond the hard validation rules above, the validator runs three best-effort lint checks. Unlike the rest of
+validation, these can have legitimate explanations the hocon file alone can't rule out (a sly_data key set only
+by a CodedTool at runtime, for instance), so they are printed as warnings and do not affect the exit code unless
+you pass `--strict`:
+
+- **Unused commondefs** - a `commondefs.replacement_strings` or `commondefs.replacement_values` entry that is
+  never referenced (as `{key}` or as a bare value, respectively) anywhere else in the file. Usually a stale
+  definition left over from a refactor.
+- **Unresolved `{replacement}` strings** - a `{word}`-shaped placeholder that survives commondefs substitution,
+  almost always because of a typo in the token or a missing `commondefs.replacement_strings` entry.
+- **`allow.*.sly_data` keys that are never set** - a key referenced under `allow.to_downstream.sly_data`,
+  `allow.from_downstream.sly_data`, `allow.to_upstream.sly_data`, or `allow.to_tracing.sly_data` that isn't
+  declared in any `sly_data_schema`/`sly_data_output_schema` in the file. This one is necessarily approximate:
+  a CodedTool can set a sly_data key at runtime with no schema anywhere, and a key can be declared by an
+  externally-referenced agent network (one reached via `/some_agent`) that this per-file check can't see.
+  Treat a hit as "double check this", not proof of a bug.
+
+Example output for a file with an unused commondef:
+
+```text
+Validation passed: No errors found.
+
+1 lint warning(s) (use --strict to treat these as errors):
+
+  1. commondefs.replacement_strings.operation is defined but '{operation}' never appears anywhere else in the network.
+```
+
+Pass `--strict` to make any of these warnings fail validation (exit code 1) instead:
+
+```sh
+python -m neuro_san.client.hocon_validator_cli registries/my_agent.hocon --strict
 ```

@@ -1,0 +1,319 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/main/docs/schema/agent_network.schema.json",
+    "title": "Neuro SAN Agent Network",
+    "description": "Schema for a single agent network .hocon file, as described in docs/agent_hocon_reference.md. This describes the shape neuro-san actually reads: it is intentionally permissive about unknown/extra keys (additionalProperties defaults to true throughout) since agent networks routinely carry CodedTool- or middleware-specific keys this schema has no way to know about in advance. Validate the *parsed* HOCON (e.g. via pyhocon) against this schema rather than the raw text, since HOCON syntax (unquoted keys, '#' comments, triple-quoted strings, bare True/False) is not valid JSON.",
+    "type": "object",
+    "required": ["tools"],
+    "properties": {
+        "llm_config": { "$ref": "#/$defs/llmConfig" },
+        "tools": {
+            "type": "array",
+            "description": "The list of agent/tool definitions that make up the network. The first entry is the front man.",
+            "items": { "$ref": "#/$defs/agentSpec" }
+        },
+        "commondefs": { "$ref": "#/$defs/commondefs" },
+        "error_formatter": { "$ref": "#/$defs/errorFormatter" },
+        "error_fragments": { "$ref": "#/$defs/stringList" },
+        "llm_info_file": {
+            "type": "string",
+            "description": "Path to a HOCON file extending the default list of available LLMs."
+        },
+        "max_steps": { "$ref": "#/$defs/positiveInteger" },
+        "max_iterations": {
+            "$ref": "#/$defs/positiveInteger",
+            "description": "Deprecated. Use max_steps instead."
+        },
+        "max_execution_seconds": { "$ref": "#/$defs/nonNegativeInteger" },
+        "max_attempts": { "$ref": "#/$defs/positiveInteger" },
+        "request_timeout_seconds": { "$ref": "#/$defs/nonNegativeInteger" },
+        "toolbox_info_file": {
+            "type": "string",
+            "description": "Path to a HOCON file extending the default toolbox of predefined tools."
+        },
+        "verbose": {
+            "type": "boolean",
+            "description": "Turns on server-side logging of agent chatter."
+        },
+        "sly_data_schema": { "$ref": "#/$defs/jsonSchemaLike" },
+        "metadata": { "$ref": "#/$defs/metadata" }
+    },
+    "additionalProperties": true,
+    "$defs": {
+        "stringList": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "positiveInteger": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "nonNegativeInteger": {
+            "type": "integer",
+            "minimum": 0
+        },
+        "errorFormatter": {
+            "type": "string",
+            "enum": ["string", "json"]
+        },
+        "commondefs": {
+            "type": "object",
+            "description": "Common definitions used for commondefs substitution throughout the network.",
+            "properties": {
+                "replacement_strings": {
+                    "type": "object",
+                    "description": "Keys found within braces (e.g. '{operation}') and replaced by their string value.",
+                    "additionalProperties": { "type": "string" }
+                },
+                "replacement_values": {
+                    "type": "object",
+                    "description": "Keys found as full/bare string values and replaced by their (any-typed) value."
+                }
+            },
+            "additionalProperties": true
+        },
+        "metadata": {
+            "type": "object",
+            "description": "Optional, purely informational metadata about the agent network.",
+            "properties": {
+                "description": { "type": "string" },
+                "tags": { "$ref": "#/$defs/stringList" },
+                "sample_queries": { "$ref": "#/$defs/stringList" }
+            },
+            "additionalProperties": true
+        },
+        "llmConfig": {
+            "type": "object",
+            "description": "Default or per-agent LLM configuration. Extra scalar keys are allowed: they are passed through as constructor/API parameters for the chosen class.",
+            "properties": {
+                "model_name": { "type": "string" },
+                "class": { "type": "string" },
+                "temperature": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "fallbacks": {
+                    "type": "array",
+                    "description": "Priority-ordered list of llm_config dictionaries to fall back to. Cannot itself contain fallbacks.",
+                    "items": { "$ref": "#/$defs/llmConfig" }
+                }
+            },
+            "additionalProperties": true
+        },
+        "propertyDef": {
+            "type": "object",
+            "description": "A single entry under a parameters/sly_data_schema 'properties' dictionary.",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "int", "integer",
+                        "float", "number",
+                        "string",
+                        "bool", "boolean",
+                        "array",
+                        "object"
+                    ]
+                },
+                "description": { "type": "string" },
+                "default": {},
+                "enum": { "type": "array" },
+                "items": {
+                    "description": "Required when type is 'array': describes the type of its elements.",
+                    "$ref": "#/$defs/propertyDef"
+                },
+                "properties": {
+                    "type": "object",
+                    "description": "Used when type is 'object' to describe nested properties.",
+                    "additionalProperties": { "$ref": "#/$defs/propertyDef" }
+                },
+                "required": { "$ref": "#/$defs/stringList" }
+            },
+            "additionalProperties": true
+        },
+        "jsonSchemaLike": {
+            "type": "object",
+            "description": "The 'type: object + properties' JSON Schema subset honored by neuro-san for function.parameters, sly_data_schema, and sly_data_output_schema. Other JSON Schema constructs (additionalProperties, anyOf, $ref, ...) are not honored by neuro-san itself, so they are allowed here but not given any special meaning.",
+            "properties": {
+                "type": { "const": "object" },
+                "properties": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/propertyDef" }
+                },
+                "required": { "$ref": "#/$defs/stringList" }
+            },
+            "additionalProperties": true
+        },
+        "functionSpec": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "What this agent can do, for both upstream agents and clients."
+                },
+                "parameters": { "$ref": "#/$defs/jsonSchemaLike" },
+                "sly_data_schema": { "$ref": "#/$defs/jsonSchemaLike" },
+                "sly_data_output_schema": { "$ref": "#/$defs/jsonSchemaLike" }
+            },
+            "additionalProperties": true
+        },
+        "slyDataAllow": {
+            "description": "Either a plain list of allowed sly_data keys, or a dict mapping each key to true/false, or to a string to rename it in transit.",
+            "oneOf": [
+                { "$ref": "#/$defs/stringList" },
+                {
+                    "type": "object",
+                    "additionalProperties": { "type": ["boolean", "string"] }
+                }
+            ]
+        },
+        "allowMessages": {
+            "description": "Whether/which downstream external agent messages get forwarded to the client.",
+            "oneOf": [
+                { "type": "boolean" },
+                { "type": "string" },
+                { "$ref": "#/$defs/stringList" },
+                {
+                    "type": "object",
+                    "additionalProperties": { "type": "boolean" }
+                }
+            ]
+        },
+        "allow": {
+            "type": "object",
+            "description": "Security policy pertaining to agent information flow.",
+            "properties": {
+                "connectivity": {
+                    "type": "boolean",
+                    "description": "Whether to report downstream tools during a Connectivity() API call."
+                },
+                "to_downstream": {
+                    "type": "object",
+                    "properties": { "sly_data": { "$ref": "#/$defs/slyDataAllow" } },
+                    "additionalProperties": true
+                },
+                "from_downstream": {
+                    "type": "object",
+                    "properties": {
+                        "sly_data": { "$ref": "#/$defs/slyDataAllow" },
+                        "messages": { "$ref": "#/$defs/allowMessages" }
+                    },
+                    "additionalProperties": true
+                },
+                "to_upstream": {
+                    "type": "object",
+                    "description": "Front man only.",
+                    "properties": { "sly_data": { "$ref": "#/$defs/slyDataAllow" } },
+                    "additionalProperties": true
+                },
+                "to_tracing": {
+                    "type": "object",
+                    "description": "Front man only.",
+                    "properties": { "sly_data": { "$ref": "#/$defs/slyDataAllow" } },
+                    "additionalProperties": true
+                }
+            },
+            "additionalProperties": true
+        },
+        "mcpServerRef": {
+            "type": "object",
+            "description": "Dictionary-form reference to an MCP server, optionally filtering which of its tools are exposed.",
+            "properties": {
+                "url": { "type": "string" },
+                "tools": { "$ref": "#/$defs/stringList" }
+            },
+            "required": ["url"],
+            "additionalProperties": true
+        },
+        "toolRef": {
+            "description": "A tool-list entry: another agent's name, an external agent/server reference ('/name' or a URL), or a dictionary-form MCP server reference.",
+            "oneOf": [
+                { "type": "string" },
+                { "$ref": "#/$defs/mcpServerRef" }
+            ]
+        },
+        "middlewareEntry": {
+            "type": "object",
+            "properties": {
+                "class": {
+                    "type": "string",
+                    "description": "Fully-qualified class name of the langchain AgentMiddleware to instantiate."
+                },
+                "args": {
+                    "type": "object",
+                    "description": "Keyword arguments for the middleware class constructor."
+                }
+            },
+            "required": ["class"],
+            "additionalProperties": true
+        },
+        "agentSpec": {
+            "type": "object",
+            "description": "A single agent/tool definition.",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Alphanumeric characters with '-' or '_' as word separators. No spaces or other punctuation.",
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "function": { "$ref": "#/$defs/functionSpec" },
+                "instructions": {
+                    "type": "string",
+                    "description": "The main system prompt for an LLM-enabled agent."
+                },
+                "tools": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/toolRef" }
+                },
+                "class": {
+                    "type": "string",
+                    "description": "Python class name implementing the CodedTool interface."
+                },
+                "llm_config": { "$ref": "#/$defs/llmConfig" },
+                "command": { "type": "string" },
+                "toolbox": {
+                    "type": "string",
+                    "description": "Refers to a predefined tool in a toolbox configuration file. Mutually exclusive with 'tools'."
+                },
+                "args": {
+                    "type": "object",
+                    "description": "Extra key/value pairs passed to a CodedTool/toolbox tool when invoked."
+                },
+                "allow": { "$ref": "#/$defs/allow" },
+                "display_as": {
+                    "type": "string",
+                    "enum": ["external_agent", "coded_tool", "langchain_tool", "llm_agent"]
+                },
+                "max_message_history": {
+                    "$ref": "#/$defs/nonNegativeInteger",
+                    "description": "Front man only."
+                },
+                "verbose": { "type": "boolean" },
+                "max_steps": { "$ref": "#/$defs/positiveInteger" },
+                "max_iterations": {
+                    "$ref": "#/$defs/positiveInteger",
+                    "description": "Deprecated. Use max_steps instead."
+                },
+                "max_execution_seconds": { "$ref": "#/$defs/nonNegativeInteger" },
+                "max_attempts": { "$ref": "#/$defs/positiveInteger" },
+                "error_formatter": { "$ref": "#/$defs/errorFormatter" },
+                "error_fragments": { "$ref": "#/$defs/stringList" },
+                "structure_formats": {
+                    "description": "Front man only. A single format string, or a list of them.",
+                    "oneOf": [
+                        { "type": "string", "enum": ["json"] },
+                        { "type": "array", "items": { "type": "string", "enum": ["json"] } }
+                    ]
+                },
+                "middleware": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/middlewareEntry" }
+                },
+                "metadata": { "$ref": "#/$defs/metadata" }
+            },
+            "required": ["name"],
+            "additionalProperties": true
+        }
+    }
+}

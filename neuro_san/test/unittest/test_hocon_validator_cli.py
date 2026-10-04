@@ -22,6 +22,7 @@ import unittest
 from unittest.mock import patch
 
 from neuro_san.client.hocon_validator_cli import HoconValidatorCli
+from neuro_san.internals.graph.persistence.raw_agent_network_restorer import RawAgentNetworkRestorer
 
 
 class TestHoconValidatorCli(unittest.TestCase):
@@ -136,6 +137,138 @@ class TestHoconValidatorCli(unittest.TestCase):
             cli = HoconValidatorCli()
             exit_code = cli.main()
         self.assertEqual(exit_code, 0)
+
+    def test_lint_warning_does_not_fail_by_default(self):
+        """An unused commondef is reported but does not fail validation without --strict."""
+        hocon_content = '''
+        {
+            commondefs: {
+                replacement_strings: {
+                    unused_key: "never referenced"
+                }
+            }
+            tools: [
+                {
+                    name: "test_agent"
+                    instructions: "Test instructions"
+                    tools: []
+                }
+            ]
+        }
+        '''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
+            f.write(hocon_content)
+            temp_file = f.name
+        try:
+            with patch("sys.argv", ["hocon_validator_cli", temp_file, "--registry-dir", self.neuro_san_dir]):
+                cli = HoconValidatorCli()
+                exit_code = cli.main()
+            self.assertEqual(exit_code, 0)
+        finally:
+            os.unlink(temp_file)
+
+    def test_lint_warning_fails_with_strict_flag(self):
+        """The same unused commondef fails validation once --strict is passed."""
+        hocon_content = '''
+        {
+            commondefs: {
+                replacement_strings: {
+                    unused_key: "never referenced"
+                }
+            }
+            tools: [
+                {
+                    name: "test_agent"
+                    instructions: "Test instructions"
+                    tools: []
+                }
+            ]
+        }
+        '''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
+            f.write(hocon_content)
+            temp_file = f.name
+        try:
+            with patch("sys.argv", ["hocon_validator_cli", temp_file,
+                                    "--registry-dir", self.neuro_san_dir, "--strict"]):
+                cli = HoconValidatorCli()
+                exit_code = cli.main()
+            self.assertEqual(exit_code, 1)
+        finally:
+            os.unlink(temp_file)
+
+    def test_unresolved_replacement_string_is_flagged(self):
+        """A {word} placeholder with no matching commondef is reported as a lint warning."""
+        hocon_content = '''
+        {
+            tools: [
+                {
+                    name: "test_agent"
+                    instructions: "Perform the {operation} operation."
+                    tools: []
+                }
+            ]
+        }
+        '''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
+            f.write(hocon_content)
+            temp_file = f.name
+        try:
+            with patch("sys.argv", ["hocon_validator_cli", temp_file, "--registry-dir", self.neuro_san_dir]):
+                cli = HoconValidatorCli()
+                exit_code = cli.main()
+            self.assertEqual(exit_code, 0)
+            with patch("sys.argv", ["hocon_validator_cli", temp_file,
+                                    "--registry-dir", self.neuro_san_dir, "--strict"]):
+                cli = HoconValidatorCli()
+                exit_code = cli.main()
+            self.assertEqual(exit_code, 1)
+        finally:
+            os.unlink(temp_file)
+
+    def test_clean_hocon_has_no_lint_warnings(self):
+        """A self-contained network with commondefs fully used, no leftover placeholders,
+        and all allow.sly_data keys declared produces zero lint warnings across all three checks."""
+        hocon_content = '''
+        {
+            commondefs: {
+                replacement_strings: {
+                    role: "assistant"
+                }
+            }
+            tools: [
+                {
+                    name: "front_man"
+                    instructions: "You are a {role}."
+                    tools: ["worker"]
+                },
+                {
+                    name: "worker"
+                    instructions: "Supporting {role} for front_man."
+                    function: {
+                        sly_data_schema: {
+                            type: object
+                            properties: { session_id: { type: string } }
+                        }
+                    }
+                    allow: { to_upstream: { sly_data: ["session_id"] } }
+                }
+            ]
+        }
+        '''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
+            f.write(hocon_content)
+            temp_file = f.name
+        try:
+            with patch("sys.argv", ["hocon_validator_cli", temp_file, "--registry-dir", self.neuro_san_dir]):
+                cli = HoconValidatorCli()
+                cli.parse_args()
+                config = cli.load_hocon_file(temp_file)
+                raw_config = cli.load_hocon_file(temp_file, restorer_class=RawAgentNetworkRestorer)
+                lint_warnings = cli.find_lint_warnings(config, raw_config)
+            self.assertEqual(lint_warnings, [])
+        finally:
+            os.unlink(temp_file)
 
 
 if __name__ == "__main__":
