@@ -25,7 +25,7 @@ import uuid
 
 from janus import Queue
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.task_executor import TaskExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.utils.atomic_counter import AtomicCounter
@@ -291,7 +291,7 @@ class AsyncAgentService:
 
         # Set up logging inside async thread
         # Prefer any request_id from the client over what we generated on the server.
-        executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
+        executor: TaskExecutor = invocation_context.get_asyncio_executor()
         _ = executor.submit(None, self.server_logging.setup_logging, metadata, metadata.get("request_id"))
 
         # Delegate to Direct*Session

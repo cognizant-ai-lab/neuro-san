@@ -34,7 +34,7 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.task_executor import TaskExecutor
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
@@ -204,7 +204,7 @@ class LangChainTokenCounter:
         Riffed from:
         https://stackoverflow.com/questions/78659844/async-version-of-context-run-for-context-vars-in-python-asyncio
         """
-        executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
+        executor: TaskExecutor = self.invocation_context.get_asyncio_executor()
         origin_str: str = ORIGIN_INFO.get()
         task: Task = executor.create_task(awaitable, origin_str)
 

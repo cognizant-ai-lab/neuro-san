@@ -22,7 +22,7 @@ from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+from leaf_common.asyncio.asyncio_executor_factory import AsyncioExecutorFactory
 
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -43,7 +43,7 @@ class TestSessionInvocationContext(TestCase):
         :return: A started SessionInvocationContext over a non-reusing executor
                  pool, with mock factories that are never called.
         """
-        pool: AsyncioExecutorPool = AsyncioExecutorPool(reuse_mode=False)
+        pool = AsyncioExecutorFactory.create_pool(reuse_mode=False)
         context = SessionInvocationContext(agent_name="test_agent",
                                            async_session_factory=MagicMock(),
                                            async_executors_pool=pool,

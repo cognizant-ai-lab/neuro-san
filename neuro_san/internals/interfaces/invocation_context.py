@@ -20,7 +20,7 @@ from typing import Dict
 
 from threading import Event
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.task_executor import TaskExecutor
 
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
@@ -62,9 +62,9 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
-    def get_asyncio_executor(self) -> AsyncioExecutor:
+    def get_asyncio_executor(self) -> TaskExecutor:
         """
-        :return: The AsyncioExecutor associated with the invocation
+        :return: The TaskExecutor associated with the invocation
         """
         raise NotImplementedError
 
