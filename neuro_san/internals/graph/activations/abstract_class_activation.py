@@ -32,7 +32,7 @@ import traceback
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.task_executor import TaskExecutor
 from leaf_common.config.config_util import ConfigUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver import Resolver
@@ -439,7 +439,7 @@ This can lead to performance problems when running within a server. Consider por
 
                 # Try to run in the executor.
                 invocation_context = self.run_context.get_invocation_context()
-                executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
+                executor: TaskExecutor = invocation_context.get_asyncio_executor()
                 loop: AbstractEventLoop = executor.get_event_loop()
                 retval = await loop.run_in_executor(None, coded_tool.invoke, args, sly_data)
         # pylint: disable=broad-exception-caught
