@@ -32,6 +32,7 @@ import os
 import socket
 import sys
 from argparse import Namespace
+from typing import List
 from typing import Optional
 
 import psutil
@@ -65,11 +66,11 @@ class EnvironmentValidator:
     @staticmethod
     def _check_no_mock_environment() -> None:
         """Exit if a mock LLM environment is detected."""
-        issues = []
-        api_base = os.environ.get("OPENAI_API_BASE")
+        issues: List[str] = []
+        api_base: Optional[str] = os.environ.get("OPENAI_API_BASE")
         if api_base:
             issues.append(f"  OPENAI_API_BASE={api_base}")
-        mock_proc = ResourceMonitor.find_process("mock_llm_server")
+        mock_proc: Optional[psutil.Process] = ResourceMonitor.find_process("mock_llm_server")
         if mock_proc is not None:
             issues.append(
                 f"  mock_llm_server process running "
@@ -123,7 +124,7 @@ class EnvironmentValidator:
             )
             sys.exit(1)
 
-        server_proc = None
+        server_proc: Optional[psutil.Process] = None
         for keyword in ["neuro_san_studio", "server_main_loop"]:
             server_proc = ResourceMonitor.find_process(keyword)
             if server_proc is not None:
@@ -168,7 +169,7 @@ class EnvironmentValidator:
                 args.host, args.port,
         ):
             return None
-        server_proc = None
+        server_proc: Optional[psutil.Process] = None
         for keyword in ["neuro_san_studio", "server_main_loop"]:
             server_proc = ResourceMonitor.find_process(keyword)
             if server_proc is not None:
@@ -180,7 +181,7 @@ class EnvironmentValidator:
         if server_proc is None:
             return None
         try:
-            candidate = os.path.join(
+            candidate: str = os.path.join(
                 server_proc.cwd(), "logs", "server.log",
             )
             if os.path.isfile(candidate):
@@ -207,8 +208,8 @@ class EnvironmentValidator:
             )
             sys.exit(1)
         try:
-            cwd = server_proc.cwd()
-            candidate = os.path.join(cwd, "logs", "server.log")
+            cwd: str = server_proc.cwd()
+            candidate: str = os.path.join(cwd, "logs", "server.log")
             if os.path.isfile(candidate):
                 logger.info(
                     "  Auto-detected server log: %s", candidate,

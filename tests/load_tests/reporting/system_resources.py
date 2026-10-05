@@ -53,7 +53,7 @@ class SystemResources:
 
         :return: Total thread count, leaving out processes that exit or deny access
         """
-        total = 0
+        total: int = 0
         for proc in psutil.process_iter(["num_threads"]):
             try:
                 total += proc.info["num_threads"] or 0
@@ -68,9 +68,10 @@ class SystemResources:
 
         :return: (per-user limit, system max); "n/a" when a value cannot be read
         """
-        user_limit = "n/a"
+        user_limit: str = "n/a"
         if resource is not None:
             try:
+                soft: int = 0
                 soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
                 user_limit = (
                     "unlimited"
@@ -79,7 +80,7 @@ class SystemResources:
                 )
             except (ValueError, OSError, AttributeError):
                 user_limit = "n/a"
-        sys_max = "n/a"
+        sys_max: str = "n/a"
         try:
             with open(
                 "/proc/sys/kernel/threads-max",
@@ -110,10 +111,12 @@ class SystemResources:
     def log_prerun(cls) -> None:
         """Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads)."""
         mem = psutil.virtual_memory()
-        total_gb = mem.total / (1024 ** 3)
-        avail_gb = mem.available / (1024 ** 3)
-        ncores = psutil.cpu_count() or 1
-        cpu_pct = psutil.cpu_percent(interval=0.1)
+        total_gb: float = mem.total / (1024 ** 3)
+        avail_gb: float = mem.available / (1024 ** 3)
+        ncores: int = psutil.cpu_count() or 1
+        cpu_pct: float = psutil.cpu_percent(interval=0.1)
+        user_limit: str = ""
+        sys_max: str = ""
         user_limit, sys_max = cls.thread_limits()
         logger.info(
             "  System RAM: %.1fG (%.1fG available, %.0f%% used)",
@@ -142,14 +145,16 @@ class SystemResources:
         :param peak: Peak values during the run, or None
         :param after: Snapshot taken after the run, or None
         """
-        rows = (("before", before), ("peak", peak), ("after", after))
+        rows: Tuple[Tuple[str, Optional[SysSnapshot]], ...] = (("before", before), ("peak", peak), ("after", after))
         if all(snap is None for _, snap in rows):
             return
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  SYSTEM RESOURCES")
         logger.info("=" * SEPARATOR_WIDTH)
-        total_gb = psutil.virtual_memory().total / (1024 ** 3)
-        ncores = psutil.cpu_count() or 1
+        total_gb: float = psutil.virtual_memory().total / (1024 ** 3)
+        ncores: int = psutil.cpu_count() or 1
+        user_limit: str = ""
+        sys_max: str = ""
         user_limit, sys_max = cls.thread_limits()
         for tag, snap in rows:
             if snap is not None and snap.get("mem_pct") is not None:
@@ -188,9 +193,9 @@ class SystemResources:
         :param total_gb: Total system memory in GB
         :return: e.g. '8192M used / 7.5G free (50% used)'
         """
-        pct = snap["mem_pct"]
-        avail_gb = snap.get("mem_avail_gb", 0.0)
-        used_mb = pct / 100.0 * total_gb * 1024.0
+        pct: float = snap["mem_pct"]
+        avail_gb: float = snap.get("mem_avail_gb", 0.0)
+        used_mb: float = pct / 100.0 * total_gb * 1024.0
         return (
             f"{used_mb:.0f}M used / {avail_gb:.1f}G free"
             f" ({pct:.0f}% used)"
@@ -205,7 +210,7 @@ class SystemResources:
         :param ncores: Number of CPU cores
         :return: e.g. '50% (2.00 of 4 cores)'
         """
-        pct = snap["cpu_pct"]
+        pct: float = snap["cpu_pct"]
         return f"{pct:.0f}% ({pct / 100.0 * ncores:.2f} of {ncores} cores)"
 
     @staticmethod
@@ -219,7 +224,7 @@ class SystemResources:
         :param sys_max: System thread max from thread_limits
         :return: e.g. '1,234 in use', with the limits added on the before row
         """
-        threads = int(snap["threads"])
+        threads: int = int(snap["threads"])
         if tag == "before":
             return (
                 f"{threads:,} in use / limit {user_limit}"

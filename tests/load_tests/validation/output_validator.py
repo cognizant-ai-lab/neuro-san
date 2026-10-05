@@ -26,6 +26,7 @@ import logging
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import RETRY_LABELS
@@ -56,7 +57,7 @@ class OutputValidator:
             STATUS_KILLED: 0,
         }
         for result in results:
-            status = result.get("status", STATUS_FAILED)
+            status: str = result.get("status", STATUS_FAILED)
             if status not in counts:
                 status = STATUS_FAILED
             counts[status] = counts.get(status, 0) + 1
@@ -97,7 +98,7 @@ class OutputValidator:
                 "    Killed:  %s  (no output for %ss, presumed hanging)",
                 counts.get(STATUS_KILLED, 0), idle_timeout,
             )
-        avg_per = (
+        avg_per: float = (
             elapsed / actual_requests
             if actual_requests else 0
         )
@@ -120,11 +121,11 @@ class OutputValidator:
             "\n  Retry activity (from server log):",
         )
         for error_type in RETRY_ERROR_TYPES:
-            count = retries.get(error_type, 0)
-            label = RETRY_LABELS.get(error_type, f"{error_type} retries")
+            count: int = retries.get(error_type, 0)
+            label: str = RETRY_LABELS.get(error_type, f"{error_type} retries")
             logger.info("    %s: %s", label, count)
         logger.info("    Total retries:  %s", total_retries)
-        amplification = Formatters.compute_amplification(
+        amplification: float = Formatters.compute_amplification(
             actual_requests, total_retries,
         )
         logger.info(
@@ -152,12 +153,12 @@ class OutputValidator:
         """
         if server_counts.get("primary_started") is None:
             return
-        pri_started = server_counts.get("primary_started")
-        pri_finished = server_counts.get("primary_finished")
-        total_started = server_counts.get("total_started")
-        total_finished = server_counts.get("total_finished")
-        internal_calls = total_started - pri_started
-        match_label = (
+        pri_started: int = server_counts.get("primary_started")
+        pri_finished: int = server_counts.get("primary_finished")
+        total_started: int = server_counts.get("total_started")
+        total_finished: int = server_counts.get("total_finished")
+        internal_calls: int = total_started - pri_started
+        match_label: str = (
             "OK" if pri_started >= actual_requests else "MISMATCH"
         )
         logger.info(
@@ -202,10 +203,10 @@ class OutputValidator:
             len(disconnections),
         )
         for disc in disconnections:
-            agent = disc.get("agent", "unknown")
-            req_id = disc.get("request_id", "unknown")
-            client_req = disc.get("client_request")
-            label = (
+            agent: str = disc.get("agent", "unknown")
+            req_id: str = disc.get("request_id", "unknown")
+            client_req: Optional[str] = disc.get("client_request")
+            label: str = (
                 f"{client_req}/{req_id}" if client_req
                 else req_id
             )
@@ -228,8 +229,8 @@ class OutputValidator:
             len(server_errors),
         )
         for err in server_errors:
-            req_id = err.get("request_id", "unknown")
-            message = err.get("message", "")
+            req_id: str = err.get("request_id", "unknown")
+            message: str = err.get("message", "")
             logger.warning("    %s: %s", req_id, message)
 
     @staticmethod
@@ -249,8 +250,8 @@ class OutputValidator:
             len(tool_warnings),
         )
         for warn in tool_warnings:
-            req_id = warn.get("request_id", "unknown")
-            message = warn.get("message", "")
+            req_id: str = warn.get("request_id", "unknown")
+            message: str = warn.get("message", "")
             logger.warning("    %s: %s", req_id, message)
 
     @staticmethod
@@ -270,13 +271,13 @@ class OutputValidator:
         """
         if not results:
             return False
-        all_failed = all(
+        all_failed: bool = all(
             r.get("status") == STATUS_FAILED for r in results
         )
         if not all_failed:
             return False
-        permission_keywords = ["permissions", "permission", "not found"]
-        has_perm_error = any(
+        permission_keywords: List[str] = ["permissions", "permission", "not found"]
+        has_perm_error: bool = any(
             any(
                 kw in (r.get("error") or "").lower()
                 for kw in permission_keywords
@@ -320,12 +321,12 @@ class OutputValidator:
         :param counts: Count per status from count_results
         :return: True if any request timed out or was killed
         """
-        timed_out = counts.get(STATUS_TIMEOUT, 0)
-        killed = counts.get(STATUS_KILLED, 0)
-        total_bad = timed_out + killed
+        timed_out: int = counts.get(STATUS_TIMEOUT, 0)
+        killed: int = counts.get(STATUS_KILLED, 0)
+        total_bad: int = timed_out + killed
         if total_bad == 0:
             return False
-        parts = []
+        parts: List[str] = []
         if timed_out:
             parts.append(
                 f"{timed_out} timed out"
