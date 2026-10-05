@@ -24,6 +24,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
@@ -68,16 +69,16 @@ class CrossRunComparison:
 
     def run(self) -> None:
         """Scan for runs and log comparison tables by agent."""
-        all_runs = self._collect_runs()
+        all_runs: List[Dict[str, Any]] = self._collect_runs()
         if not all_runs:
             logger.info(
                 "No raw_results.json files found in %s",
                 self._base_dir,
             )
             return
-        groups = self._group_by_agent(all_runs)
+        groups: Dict[str, List[Dict[str, Any]]] = self._group_by_agent(all_runs)
         for agent_name in sorted(groups):
-            runs = (
+            runs: List[Dict[str, Any]] = (
                 groups[agent_name]
                 if self._run_filter
                 else self._deduplicate(groups[agent_name])
@@ -102,17 +103,17 @@ class CrossRunComparison:
 
         :return: Metrics for each run folder that has a readable raw_results.json
         """
-        runs = []
+        runs: List[Dict[str, Any]] = []
         for entry in os.listdir(self._base_dir):
             if (self._run_filter
                     and entry not in self._run_filter):
                 continue
-            json_path = os.path.join(
+            json_path: str = os.path.join(
                 self._base_dir, entry, "raw_results.json",
             )
             if not os.path.isfile(json_path):
                 continue
-            metrics = self._extract_metrics(json_path, entry)
+            metrics: Optional[Dict[str, Any]] = self._extract_metrics(json_path, entry)
             if metrics is not None:
                 runs.append(metrics)
         return runs
@@ -125,10 +126,10 @@ class CrossRunComparison:
         :param runs: Metrics for one agent's runs
         :return: One run per num_requests, the one whose folder name sorts last
         """
-        by_count = {}
+        by_count: Dict[int, Dict[str, Any]] = {}
         for run in runs:
-            count = run.get("num_requests", 0)
-            existing = by_count.get(count)
+            count: int = run.get("num_requests", 0)
+            existing: Optional[Dict[str, Any]] = by_count.get(count)
             if (existing is None
                     or run.get("folder", "")
                     > existing.get("folder", "")):
@@ -144,15 +145,16 @@ class CrossRunComparison:
         :param folder_name: Name of the run folder, stored as the run's folder
         :return: The run's metrics, or None when the file cannot be read or parsed
         """
+        data: Dict[str, Any] = {}
         try:
             with open(json_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
         except (json.JSONDecodeError, OSError):
             return None
 
-        aggregates = data.get("aggregates", {})
-        stages = data.get("stage_summaries", [])
-        all_results = []
+        aggregates: Dict[str, Any] = data.get("aggregates", {})
+        stages: List[Dict[str, Any]] = data.get("stage_summaries", [])
+        all_results: List[Dict[str, Any]] = []
         for stage in stages:
             all_results.extend(stage.get("results", []))
         created_results: List[Dict[str, Any]] = []
@@ -161,7 +163,7 @@ class CrossRunComparison:
             if result.get("status") == STATUS_CREATED:
                 created_results.append(result)
 
-        agent = data.get("config", {}).get(
+        agent: str = data.get("config", {}).get(
             "agent", "unknown",
         )
 
@@ -199,7 +201,7 @@ class CrossRunComparison:
         :param all_results: Every request result in the run
         :return: Failure category to count; "other" is added only when a reason matches no category
         """
-        counts = {
+        counts: Dict[str, int] = {
             "empty_llm": 0,
             "validation": 0,
             "incomplete": 0,
@@ -208,7 +210,7 @@ class CrossRunComparison:
         for result in all_results:
             if result.get("status") == STATUS_CREATED:
                 continue
-            reason = result.get("failure_reason", "") or ""
+            reason: str = result.get("failure_reason", "") or ""
             if "empty LLM response" in reason:
                 counts["empty_llm"] += 1
             elif "validation fix cycle" in reason:
@@ -231,7 +233,7 @@ class CrossRunComparison:
         :param key: Result field to average
         :return: Average of the values above 0, or 0 when there are none
         """
-        values = [
+        values: List[float] = [
             r.get(key, 0) for r in results
             if r.get(key, 0) > 0
         ]
@@ -246,9 +248,9 @@ class CrossRunComparison:
         :param runs: Metrics for every run
         :return: Agent name to its runs, limited to agent_filter when set
         """
-        groups = {}
+        groups: Dict[str, List[Dict[str, Any]]] = {}
         for run in runs:
-            agent = run.get("agent", "unknown")
+            agent: str = run.get("agent", "unknown")
             if (self._agent_filter
                     and agent not in self._agent_filter):
                 continue
@@ -267,24 +269,24 @@ class CrossRunComparison:
         logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
         logger.info("=" * SEPARATOR_WIDTH)
 
-        header = [
+        header: List[str] = [
             "Folder", "Requests", "Succeeded",
             "Wall Time",
             "Avg success (duration)",
             "First resp avg", "Peak RSS",
             "Failed requests",
         ]
-        rows = []
-        metric_keys = [
+        rows: List[Tuple[str, ...]] = []
+        metric_keys: List[str] = [
             "num_requests", "wall_time",
             "avg_success",
             "time_to_first_response_avg", "peak_rss",
             "failed",
         ]
-        baseline = runs[0] if runs else None
+        baseline: Optional[Dict[str, Any]] = runs[0] if runs else None
         for run in runs:
-            ref = baseline if run is not baseline else None
-            deltas = CrossRunComparison._compute_deltas(
+            ref: Optional[Dict[str, Any]] = baseline if run is not baseline else None
+            deltas: Dict[str, float] = CrossRunComparison._compute_deltas(
                 ref, run, metric_keys,
             )
             rows.append((
@@ -325,11 +327,11 @@ class CrossRunComparison:
         :param runs: Runs whose server_tokens.log is checked
         """
         for run in runs:
-            folder = run.get("folder", "")
-            log_path = os.path.join(
+            folder: str = run.get("folder", "")
+            log_path: str = os.path.join(
                 self._base_dir, folder, "server_tokens.log",
             )
-            loops = self._parse_validation_loops(log_path)
+            loops: List[Dict[str, Any]] = self._parse_validation_loops(log_path)
             if not loops:
                 continue
             self._print_loop_summary(folder, loops)
@@ -344,24 +346,24 @@ class CrossRunComparison:
         """
         if not os.path.isfile(log_path):
             return []
-        loops = []
+        loops: List[Dict[str, Any]] = []
         with open(log_path, "r", encoding="utf-8") as fh:
             for line in fh:
-                match = _SERVER_TOKEN_RE.search(line)
+                match: Optional[re.Match] = _SERVER_TOKEN_RE.search(line)
                 if not match:
                     continue
-                llm_calls = int(match.group(5))
+                llm_calls: int = int(match.group(5))
                 if llm_calls < _LOOP_THRESHOLD:
                     continue
-                prompt = int(
+                prompt: int = int(
                     match.group(3).replace(",", ""),
                 )
-                completion = int(
+                completion: int = int(
                     match.group(4).replace(",", ""),
                 )
-                model = match.group(6)
-                retries = llm_calls - _NORMAL_LLM_CALLS
-                cost = CostEstimator.estimate(
+                model: str = match.group(6)
+                retries: int = llm_calls - _NORMAL_LLM_CALLS
+                cost: float = CostEstimator.estimate(
                     prompt, completion, model,
                 )
                 loops.append({
@@ -384,13 +386,13 @@ class CrossRunComparison:
         :param folder: Run folder name shown in the summary
         :param loops: Validation loop entries from _parse_validation_loops
         """
-        total_retries = sum(
+        total_retries: int = sum(
             lp.get("retries", 0) for lp in loops
         )
-        total_tokens = sum(
+        total_tokens: int = sum(
             lp.get("total_tokens", 0) for lp in loops
         )
-        total_cost = sum(
+        total_cost: float = sum(
             lp.get("cost_usd", 0.0) for lp in loops
         )
         logger.info("")
@@ -431,10 +433,10 @@ class CrossRunComparison:
         """
         if prev is None:
             return {}
-        deltas = {}
+        deltas: Dict[str, float] = {}
         for key in keys:
-            prev_val = prev.get(key, 0)
-            curr_val = current.get(key, 0)
+            prev_val: float = prev.get(key, 0)
+            curr_val: float = current.get(key, 0)
             if prev_val > 0:
                 deltas[key] = (
                     (curr_val - prev_val) / prev_val * 100
@@ -452,7 +454,7 @@ class CrossRunComparison:
         """
         if delta_pct is None:
             return formatted_val
-        sign = "+" if delta_pct >= 0 else ""
+        sign: str = "+" if delta_pct >= 0 else ""
         return f"{formatted_val} ({sign}{delta_pct:.0f}%)"
 
     @staticmethod
@@ -512,20 +514,20 @@ class CrossRunComparison:
         """
         if count == 0:
             return "0"
-        pct = (count * 100 // total) if total else 0
-        base = f"{count} ({pct}%)"
+        pct: int = (count * 100 // total) if total else 0
+        base: str = f"{count} ({pct}%)"
         if not breakdown:
             return base
-        labels = (
+        labels: Tuple[Tuple[str, str], ...] = (
             ("empty_llm", "empty LLM"),
             ("validation", "validation"),
             ("incomplete", "incomplete"),
             ("no_token_data", "no token data"),
             ("other", "other"),
         )
-        parts = []
+        parts: List[str] = []
         for key, label in labels:
-            val = breakdown.get(key, 0)
+            val: int = breakdown.get(key, 0)
             if val:
                 parts.append(f"{val} {label}")
         if not parts:

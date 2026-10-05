@@ -40,8 +40,9 @@ class Confirm:
         :param question: Question shown before [y/n]
         :return: True for y; False for n, Ctrl+C or EOF
         """
-        prompt = f"{question} [y/n]: "
+        prompt: str = f"{question} [y/n]: "
         while True:
+            answer: str = ""
             try:
                 answer = input(prompt).strip().lower()
             except (EOFError, KeyboardInterrupt):

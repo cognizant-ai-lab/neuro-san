@@ -24,6 +24,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Tuple
+from typing import Union
 
 
 from tests.load_tests.config import SEPARATOR_WIDTH
@@ -60,10 +61,10 @@ class LatencyAnalyzer:
         """
         if not sorted_values:
             return 0.0
-        idx = (pct / 100.0) * (len(sorted_values) - 1)
-        lower = int(math.floor(idx))
-        upper = min(lower + 1, len(sorted_values) - 1)
-        frac = idx - lower
+        idx: float = (pct / 100.0) * (len(sorted_values) - 1)
+        lower: int = int(math.floor(idx))
+        upper: int = min(lower + 1, len(sorted_values) - 1)
+        frac: float = idx - lower
         return sorted_values[lower] + frac * (
             sorted_values[upper] - sorted_values[lower]
         )
@@ -91,27 +92,28 @@ class LatencyAnalyzer:
         :param is_ramp: True to label each stage, False to label each round
         """
         for summary in self._summaries:
-            latencies = self._extract_latencies(summary)
+            latencies: List[float] = self._extract_latencies(summary)
             if not latencies:
                 continue
             latencies.sort()
-            total = len(latencies)
-            stage = summary.get("stage", "?")
-            rnd = summary.get("round", "?")
+            total: int = len(latencies)
+            stage: Union[int, str] = summary.get("stage", "?")
+            rnd: Union[int, str] = summary.get("round", "?")
+            label: str = ""
             if is_ramp:
                 label = f"Stage {stage}"
                 if rnd != "?":
                     label += f", round {rnd}"
             else:
                 label = f"Round {rnd}"
-            parts_list = []
+            parts_list: List[str] = []
             for pct in COMPLETION_MILESTONES:
-                dur = Formatters.fmt_duration(
+                dur: str = Formatters.fmt_duration(
                     self._percentile(latencies, pct),
                     precision=1,
                 )
                 parts_list.append(f"p{pct} {dur}")
-            parts = " / ".join(parts_list)
+            parts: str = " / ".join(parts_list)
             logger.info(
                 "\n  Completion percentiles "
                 "(%s, %s requests): %s",
@@ -126,10 +128,10 @@ class LatencyAnalyzer:
 
         :param sorted_latencies: Request latencies in seconds, sorted in ascending order
         """
-        total = len(sorted_latencies)
+        total: int = len(sorted_latencies)
         if total <= COUNT_MILESTONE_STEP:
             return
-        milestones = list(
+        milestones: List[int] = list(
             range(
                 COUNT_MILESTONE_STEP, total,
                 COUNT_MILESTONE_STEP,
@@ -139,7 +141,7 @@ class LatencyAnalyzer:
             milestones.append(total)
         logger.info("\n  Completion by count:")
         for count in milestones:
-            duration = sorted_latencies[count - 1]
+            duration: float = sorted_latencies[count - 1]
             logger.info(
                 "    %4d requests completed by %s",
                 count,
@@ -159,14 +161,14 @@ class LatencyAnalyzer:
         if len(self._summaries) < 2:
             return
 
-        groups = self._group_by_concurrency()
-        has_degradation = False
+        groups: Dict[int, List[Dict[str, Any]]] = self._group_by_concurrency()
+        has_degradation: bool = False
         for concurrency, summaries in sorted(groups.items()):
             if len(summaries) < 2:
                 continue
-            avgs = []
+            avgs: List[float] = []
             for s in summaries:
-                latencies = self._extract_latencies(s)
+                latencies: List[float] = self._extract_latencies(s)
                 if latencies:
                     avgs.append(
                         sum(latencies) / len(latencies),
@@ -179,14 +181,14 @@ class LatencyAnalyzer:
                     "(round-over-round):",
                 )
                 has_degradation = True
-            parts = " -> ".join(
+            parts: str = " -> ".join(
                 f"{a:.1f}s" for a in avgs
             )
-            change = (
+            change: float = (
                 (avgs[-1] - avgs[0]) / avgs[0] * 100
                 if avgs[0] > 0 else 0
             )
-            sign = "+" if change >= 0 else ""
+            sign: str = "+" if change >= 0 else ""
             logger.info(
                 "    %s concurrent: %s (%s%.0f%%)",
                 concurrency, parts, sign, change,
@@ -199,14 +201,14 @@ class LatencyAnalyzer:
     def log_concurrency_timeline(self) -> None:
         """Log actual in-flight request counts over time per stage."""
         for summary in self._summaries:
-            results = summary.get("results", [])
-            timeline = self._build_timeline(results)
+            results: List[Dict[str, Any]] = summary.get("results", [])
+            timeline: List[Tuple[float, int]] = self._build_timeline(results)
             if not timeline:
                 continue
-            stage = summary.get("stage", "?")
-            rnd = summary.get("round", "?")
-            concurrent = summary.get("concurrent", "?")
-            peak = max(c for _, c in timeline)
+            stage: Union[int, str] = summary.get("stage", "?")
+            rnd: Union[int, str] = summary.get("round", "?")
+            concurrent: Union[int, str] = summary.get("concurrent", "?")
+            peak: int = max(c for _, c in timeline)
             logger.info(
                 "\n  Concurrency timeline "
                 "(stage %s, round %s, %s planned):",
@@ -229,7 +231,7 @@ class LatencyAnalyzer:
         :param summary: One stage summary
         :return: Elapsed seconds of each result, leaving out results with no elapsed time
         """
-        results = summary.get("results", [])
+        results: List[Dict[str, Any]] = summary.get("results", [])
         return [
             r.get("elapsed", 0)
             for r in results
@@ -244,7 +246,7 @@ class LatencyAnalyzer:
         """
         groups: Dict[int, List[Dict[str, Any]]] = {}
         for s in self._summaries:
-            conc = s.get("concurrent", 0)
+            conc: int = s.get("concurrent", 0)
             groups.setdefault(conc, []).append(s)
         return groups
 
@@ -259,17 +261,17 @@ class LatencyAnalyzer:
         """
         events: List[Tuple[float, int]] = []
         for r in results:
-            start_t = r.get("start_time", 0)
-            end_t = r.get("end_time", 0)
+            start_t: float = r.get("start_time", 0)
+            end_t: float = r.get("end_time", 0)
             if start_t and end_t:
                 events.append((start_t, 1))
                 events.append((end_t, -1))
         if not events:
             return []
         events.sort()
-        base = events[0][0]
+        base: float = events[0][0]
         timeline: List[Tuple[float, int]] = []
-        in_flight = 0
+        in_flight: int = 0
         for ts, delta in events:
             in_flight += delta
             timeline.append((ts - base, in_flight))
@@ -284,19 +286,19 @@ class LatencyAnalyzer:
         """
         if not timeline:
             return
-        max_conc = max(c for _, c in timeline)
-        total_duration = timeline[-1][0]
+        max_conc: int = max(c for _, c in timeline)
+        total_duration: float = timeline[-1][0]
         if total_duration <= 0 or max_conc <= 0:
             return
-        num_buckets = min(20, int(total_duration) + 1)
-        bucket_size = total_duration / num_buckets
-        bucket_peaks = [0] * num_buckets
+        num_buckets: int = min(20, int(total_duration) + 1)
+        bucket_size: float = total_duration / num_buckets
+        bucket_peaks: List[int] = [0] * num_buckets
         # Carry forward the in-flight count so buckets
         # without events reflect the actual state.
-        current = 0
-        event_idx = 0
+        current: int = 0
+        event_idx: int = 0
         for i in range(num_buckets):
-            bucket_end = (i + 1) * bucket_size
+            bucket_end: float = (i + 1) * bucket_size
             bucket_peaks[i] = current
             while (event_idx < len(timeline)
                    and timeline[event_idx][0] < bucket_end):
@@ -306,9 +308,9 @@ class LatencyAnalyzer:
                 )
                 event_idx += 1
         for i, peak in enumerate(bucket_peaks):
-            t_start = i * bucket_size
-            chart = "#" * (peak * 40 // max_conc) if max_conc else ""
-            label = Formatters.fmt_duration(t_start)
+            t_start: float = i * bucket_size
+            chart: str = "#" * (peak * 40 // max_conc) if max_conc else ""
+            label: str = Formatters.fmt_duration(t_start)
             logger.info(
                 "    %8s |%-40s| %d",
                 label, chart, peak,

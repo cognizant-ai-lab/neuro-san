@@ -22,6 +22,8 @@ matched by substring so dated model names (e.g. gpt-5.2-2025-12-11)
 resolve to their base model entry.
 """
 
+from typing import Dict
+
 from tests.load_tests.config import DEFAULT_PRICING
 from tests.load_tests.config import MODEL_PRICING
 from tests.load_tests.config import TOKENS_PER_MILLION
@@ -43,16 +45,16 @@ class CostEstimator:
         :param model: Model name matched against MODEL_PRICING; DEFAULT_PRICING when none match
         :return: Estimated cost in USD
         """
-        pricing = DEFAULT_PRICING
+        pricing: Dict[str, float] = DEFAULT_PRICING
         for key in sorted(MODEL_PRICING, key=len, reverse=True):
             if key in model:
                 pricing = MODEL_PRICING[key]
                 break
-        prompt_cost = (
+        prompt_cost: float = (
             (prompt_tokens / TOKENS_PER_MILLION)
             * pricing.get("prompt", 0)
         )
-        completion_cost = (
+        completion_cost: float = (
             (completion_tokens / TOKENS_PER_MILLION)
             * pricing.get("completion", 0)
         )
