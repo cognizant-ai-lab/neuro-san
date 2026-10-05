@@ -20,6 +20,7 @@ import shutil
 import tempfile
 from typing import Any
 from typing import Dict
+from typing import List
 from unittest import TestCase
 
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
@@ -47,9 +48,9 @@ class TestRebuiltAggregates(TestCase):
         :param elapsed_by_id: Elapsed seconds per request id
         :return: Aggregates read back from raw_results.json
         """
-        lines = []
+        lines: List[str] = []
         for req_id, elapsed in elapsed_by_id.items():
-            path = os.path.join(
+            path: str = os.path.join(
                 self._dir, "requests", f"request_{req_id}_stdout.txt",
             )
             with open(path, "w", encoding="utf-8") as handle:
@@ -58,13 +59,13 @@ class TestRebuiltAggregates(TestCase):
                     ' "agent_network_name": "music_nerd"}\n' % req_id
                 )
             lines.append(f"Request {req_id}: CREATED ({elapsed:.2f}s)\n")
-        log_path = os.path.join(self._dir, "load_test.log")
+        log_path: str = os.path.join(self._dir, "load_test.log")
         with open(log_path, "w", encoding="utf-8") as handle:
             handle.writelines(lines)
 
         ResultsRebuilder(self._dir).run()
 
-        json_path = os.path.join(self._dir, "raw_results.json")
+        json_path: str = os.path.join(self._dir, "raw_results.json")
         with open(json_path, "r", encoding="utf-8") as handle:
             return json.load(handle)["aggregates"]
 
@@ -75,18 +76,18 @@ class TestRebuiltAggregates(TestCase):
         request count would shrink the average by the concurrency
         factor and make a slow run look fast.
         """
-        aggregates = self._build_run({1: 30.0, 2: 30.0, 3: 30.0})
+        aggregates: Dict[str, Any] = self._build_run({1: 30.0, 2: 30.0, 3: 30.0})
 
         self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
-        aggregates = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
+        aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
         self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
 
     def test_total_elapsed_is_the_slowest_request(self) -> None:
         """Total elapsed still stands in for the run's wall clock."""
-        aggregates = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
+        aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
         self.assertEqual(aggregates["total_elapsed_seconds"], 6.0)

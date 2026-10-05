@@ -49,20 +49,20 @@ class TestResolvePath(TestCase):
 
         :return: Path of the created file
         """
-        path = os.path.join(self._dir, HISTORY_FILE_NAME)
+        path: str = os.path.join(self._dir, HISTORY_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(json.dumps({"agent": "one"}) + "\n")
         return path
 
     def test_a_file_path_is_used_directly(self) -> None:
         """Passing the history file itself resolves to that file."""
-        path = self._create_history()
+        path: str = self._create_history()
 
         self.assertEqual(TrendHistory(path)._resolve_path(), path)
 
     def test_a_directory_resolves_to_its_history_file(self) -> None:
         """Passing the output directory finds history.jsonl inside it."""
-        path = self._create_history()
+        path: str = self._create_history()
 
         self.assertEqual(TrendHistory(self._dir)._resolve_path(), path)
 

@@ -62,6 +62,6 @@ class TestAgentProfilePrompt(TestCase):
 
     def test_empty_prompt_pool_aborts(self) -> None:
         """A profile with no prompts is a hard error."""
-        empty = AgentProfile("music_nerd", {"prompts": []})
+        empty: AgentProfile = AgentProfile("music_nerd", {"prompts": []})
         with self.assertRaises(SystemExit):
             empty.get_prompt(0)

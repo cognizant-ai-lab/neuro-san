@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Dict
 from unittest import TestCase
 
 from tests.load_tests.config import DEFAULT_PRICING
@@ -32,8 +33,8 @@ class TestCostEstimator(TestCase):
 
     def test_rate_is_per_million_tokens(self) -> None:
         """Prompt and completion tokens are billed at their own rates."""
-        pricing = MODEL_PRICING["gpt-4o"]
-        expected = pricing["prompt"] + pricing["completion"]
+        pricing: Dict[str, float] = MODEL_PRICING["gpt-4o"]
+        expected: float = pricing["prompt"] + pricing["completion"]
 
         self.assertAlmostEqual(
             CostEstimator.estimate(1_000_000, 1_000_000, "gpt-4o"),
@@ -47,26 +48,26 @@ class TestCostEstimator(TestCase):
         dictionary order would bill mini traffic at ~17x its real
         prompt rate.  Keys are tried longest-first to prevent that.
         """
-        mini = CostEstimator.estimate(1_000_000, 0, "gpt-4o-mini")
+        mini: float = CostEstimator.estimate(1_000_000, 0, "gpt-4o-mini")
 
         self.assertAlmostEqual(mini, MODEL_PRICING["gpt-4o-mini"]["prompt"])
         self.assertLess(mini, CostEstimator.estimate(1_000_000, 0, "gpt-4o"))
 
     def test_nano_is_not_priced_as_mini(self) -> None:
         """The same specificity rule holds across a three-way prefix."""
-        nano = CostEstimator.estimate(1_000_000, 0, "gpt-4.1-nano")
+        nano: float = CostEstimator.estimate(1_000_000, 0, "gpt-4.1-nano")
 
         self.assertAlmostEqual(nano, MODEL_PRICING["gpt-4.1-nano"]["prompt"])
 
     def test_dated_model_names_resolve_to_their_base_model(self) -> None:
         """Server-reported names carry a date suffix and still match."""
-        dated = CostEstimator.estimate(1_000_000, 0, "gpt-5.2-2025-12-11")
+        dated: float = CostEstimator.estimate(1_000_000, 0, "gpt-5.2-2025-12-11")
 
         self.assertAlmostEqual(dated, MODEL_PRICING["gpt-5.2"]["prompt"])
 
     def test_unknown_model_falls_back_to_default_pricing(self) -> None:
         """An unrecognized model is costed, not silently free."""
-        unknown = CostEstimator.estimate(1_000_000, 0, "llama-9")
+        unknown: float = CostEstimator.estimate(1_000_000, 0, "llama-9")
 
         self.assertAlmostEqual(unknown, DEFAULT_PRICING["prompt"])
 
