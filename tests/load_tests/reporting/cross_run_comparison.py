@@ -32,16 +32,16 @@ from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-_NORMAL_LLM_CALLS = 4
-_LOOP_THRESHOLD = 10
-_SERVER_TOKEN_RE = re.compile(
+_NORMAL_LLM_CALLS: int = 4
+_LOOP_THRESHOLD: int = 10
+_SERVER_TOKEN_RE: re.Pattern = re.compile(
     r"(request-\d+):\s*([\d,]+)\s*tokens"
     r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
     r"\s*(\d+)\s*LLM call\(s\),"
     r"\s*model=([^\s]+)",
 )
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class CrossRunComparison:
@@ -58,11 +58,11 @@ class CrossRunComparison:
         :param baseline_requests: Leave out runs with fewer requests than this; 0 keeps every run
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
-        self._base_dir = base_dir
+        self._base_dir: str = base_dir
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
         )
-        self._baseline_requests = baseline_requests
+        self._baseline_requests: int = baseline_requests
         self._run_filter: set = (
             set(run_filter) if run_filter else set()
         )

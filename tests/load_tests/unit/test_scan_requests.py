@@ -41,7 +41,7 @@ class TestScanRequests(TestCase):
 
     def setUp(self) -> None:
         """Create a run directory removed again after each test."""
-        self._dir = tempfile.mkdtemp()
+        self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
 

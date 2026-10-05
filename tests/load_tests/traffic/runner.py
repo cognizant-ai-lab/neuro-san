@@ -63,11 +63,11 @@ from tests.load_tests.traffic.output_parser import OutputParser
 from tests.load_tests.traffic.request_status_policy import RequestStatusPolicy
 from tests.load_tests.traffic.stage_plan import StagePlan
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 # Grace period after Ctrl-C for in-flight requests to wind down before
 # they are recorded as KILLED.
-INTERRUPT_GRACE_SECONDS = 2.0
+INTERRUPT_GRACE_SECONDS: float = 2.0
 
 
 class TrafficRunner:

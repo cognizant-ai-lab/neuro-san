@@ -34,7 +34,7 @@ ClientResourceRow = Tuple[
     tuple, Dict[str, Any], Dict[str, Any], Dict[str, Any],
 ]
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResourceReporter:
@@ -128,7 +128,7 @@ class ResourceReporter:
 
     # Placeholder row (Component + 11 metric columns) shown when a
     # component produced no data at all.
-    _NA_METRICS = ("na",) * 11
+    _NA_METRICS: Tuple[str, ...] = ("na",) * 11
 
     def log_combined_analysis(self, total_client_reqs: int, total_server_calls: int) -> None:
         """Log one combined server-app + client-app resource table.

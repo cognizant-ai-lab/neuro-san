@@ -30,13 +30,13 @@ from typing import Union
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.formatters import Formatters
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 # Completion latency percentiles (percent)
-COMPLETION_MILESTONES = [0, 50, 90, 95, 100]
+COMPLETION_MILESTONES: List[int] = [0, 50, 90, 95, 100]
 
 # Step size for count-based milestones (e.g. 50, 100, 150...)
-COUNT_MILESTONE_STEP = 50
+COUNT_MILESTONE_STEP: int = 50
 
 
 class LatencyAnalyzer:
@@ -48,7 +48,7 @@ class LatencyAnalyzer:
 
         :param stage_summaries: Per-stage summaries collected during the run
         """
-        self._summaries = stage_summaries
+        self._summaries: List[Dict[str, Any]] = stage_summaries
 
     @staticmethod
     def _percentile(sorted_values: List[float], pct: float) -> float:

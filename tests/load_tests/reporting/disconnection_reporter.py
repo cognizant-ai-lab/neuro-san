@@ -23,7 +23,7 @@ from typing import List
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class DisconnectionReporter:
@@ -38,7 +38,7 @@ class DisconnectionReporter:
 
         :param stage_summaries: Per-stage summaries collected during the run
         """
-        self._summaries = stage_summaries
+        self._summaries: List[Dict[str, Any]] = stage_summaries
 
     def log_disconnection_summary(self) -> None:
         """Log aggregate client disconnection report."""

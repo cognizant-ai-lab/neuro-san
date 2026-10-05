@@ -41,7 +41,7 @@ from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class InputValidator:
@@ -57,7 +57,7 @@ class InputValidator:
 
         :param args: Parsed command-line arguments
         """
-        self._args = args
+        self._args: Namespace = args
 
     def validate_agent_name(self) -> None:
         """Reject --agent values that look like filesystem paths.

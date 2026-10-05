@@ -37,7 +37,7 @@ import psutil
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 # A whole-system snapshot: mem_pct, mem_avail_gb, cpu_pct, threads.
 SysSnapshot = Dict[str, float]

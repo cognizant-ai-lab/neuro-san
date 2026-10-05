@@ -38,17 +38,17 @@ from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.traffic.output_parser import OutputParser
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
-_TIMING_RE = re.compile(
+_TIMING_RE: re.Pattern = re.compile(
     r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s",
 )
 
-_CONFIG_AGENT_RE = re.compile(
+_CONFIG_AGENT_RE: re.Pattern = re.compile(
     r"Config:.*agent=([^,]+)",
 )
 
-_CONFIG_NUM_REQ_RE = re.compile(
+_CONFIG_NUM_REQ_RE: re.Pattern = re.compile(
     r"Requests:\s*(\d+)",
 )
 
@@ -63,8 +63,8 @@ class ResultsRebuilder:
         :param output_dir: Run output directory, or a parent directory holding many runs
         :param force: True to reclassify failures in runs that already have raw_results.json
         """
-        self._output_dir = output_dir
-        self._force = force
+        self._output_dir: str = output_dir
+        self._force: bool = force
 
     def run(self) -> None:
         """Rebuild raw_results.json for one or many run directories.

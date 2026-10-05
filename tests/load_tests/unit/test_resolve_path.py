@@ -34,7 +34,7 @@ class TestResolvePath(TestCase):
 
     def setUp(self) -> None:
         """Create a scratch directory removed again after each test."""
-        self._dir = tempfile.mkdtemp()
+        self._dir: str = tempfile.mkdtemp()
         self.addCleanup(self._remove_dir)
 
     def _remove_dir(self) -> None:

@@ -35,7 +35,7 @@ from tests.load_tests.config import HISTORY_FILE_NAME
 from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TrendHistory:
@@ -48,7 +48,7 @@ class TrendHistory:
         :param path: History JSONL file, or a directory holding it
         :param agent_filter: Agent names to include; None or empty includes every agent
         """
-        self._path = path
+        self._path: str = path
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
         )
