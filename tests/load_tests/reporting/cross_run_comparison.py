@@ -24,6 +24,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
 from tests.load_tests.config import SEPARATOR_WIDTH
@@ -59,11 +60,11 @@ class CrossRunComparison:
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
         self._base_dir: str = base_dir
-        self._agent_filter: set = (
+        self._agent_filter: Set[str] = (
             set(agent_filter) if agent_filter else set()
         )
         self._baseline_requests: int = baseline_requests
-        self._run_filter: set = (
+        self._run_filter: Set[str] = (
             set(run_filter) if run_filter else set()
         )
 

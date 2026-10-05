@@ -30,6 +30,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 from tests.load_tests.config import HISTORY_FILE_NAME
 from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
@@ -49,7 +50,7 @@ class TrendHistory:
         :param agent_filter: Agent names to include; None or empty includes every agent
         """
         self._path: str = path
-        self._agent_filter: set = (
+        self._agent_filter: Set[str] = (
             set(agent_filter) if agent_filter else set()
         )
 
