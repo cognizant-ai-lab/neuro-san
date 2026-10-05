@@ -27,25 +27,36 @@ class OutputParser:
     """Parses agent response fields and token accounting."""
 
     @staticmethod
-    def parse_stdout_field(stdout, field_name) -> Optional[str]:
-        """Extract a JSON field value from agent response text."""
-        match = re.search(rf'"{field_name}"\s*:\s*"([^"]+)"', stdout)
+    def parse_stdout_field(stdout: str, field_name: str) -> Optional[str]:
+        """
+        Extract a JSON field value from agent response text.
+
+        :param stdout: Agent response text
+        :param field_name: JSON field name to look for
+        :return: The field's string value, or None when it is not found
+        """
+        match: Optional[re.Match] = re.search(rf'"{field_name}"\s*:\s*"([^"]+)"', stdout)
         if match:
             return match.group(1)
         return None
 
     @staticmethod
-    def parse_token_accounting(stdout) -> Dict[str, Any]:
-        """Extract Token Accounting JSON block from agent response text."""
-        marker = "Token Accounting:"
-        idx = stdout.find(marker)
+    def parse_token_accounting(stdout: str) -> Dict[str, Any]:
+        """
+        Extract Token Accounting JSON block from agent response text.
+
+        :param stdout: Agent response text
+        :return: The parsed Token Accounting block, or {} when it is missing or invalid
+        """
+        marker: str = "Token Accounting:"
+        idx: int = stdout.find(marker)
         if idx < 0:
             return {}
-        json_start = stdout.find("{", idx)
+        json_start: int = stdout.find("{", idx)
         if json_start < 0:
             return {}
-        depth = 0
-        json_end = json_start
+        depth: int = 0
+        json_end: int = json_start
         for i in range(json_start, len(stdout)):
             if stdout[i] == "{":
                 depth += 1
@@ -60,9 +71,14 @@ class OutputParser:
             return {}
 
     @staticmethod
-    def last_stderr_line(stderr) -> str:
-        """Extract the last line of stderr for error reporting."""
-        stripped = stderr.strip() if stderr else ""
+    def last_stderr_line(stderr: Optional[str]) -> str:
+        """
+        Extract the last line of stderr for error reporting.
+
+        :param stderr: Captured stderr, or None
+        :return: Last line of stderr, or "" when it is empty
+        """
+        stripped: str = stderr.strip() if stderr else ""
         if not stripped:
             return ""
         return stripped.rsplit("\n", maxsplit=1)[-1]

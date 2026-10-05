@@ -175,9 +175,14 @@ class TestContentUtils(TestCase):
     def test_is_trivial(self):
         """
         Exactly one text block with no annotations/extras is trivial;
-        anything else is not.
+        anything else is not. Empty annotations/extras do not count, but any
+        other key with a value (an OpenAI Responses "phase") does.
         """
         self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi"}]))
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": [], "extras": {}}]))
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": None, "extras": ""}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "final_answer"}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "commentary"}]))
         self.assertFalse(ContentUtils.is_trivial([]))
         self.assertFalse(ContentUtils.is_trivial([{"type": "reasoning", "reasoning": "r"}]))
         self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]))
@@ -265,16 +270,64 @@ class TestContentUtils(TestCase):
 
     def test_blocks_from_chat_message_prefers_content_blocks(self):
         """
-        content_blocks wins over mime_data when both are present.
+        A content_blocks wrapper in the langchain_v1 format wins over mime_data
+        when both are present, and its blocks list is returned as-is.
         """
         chat_message = {
             "type": "HUMAN",
             "text": "caption",
-            "content_blocks": [{"type": "text", "text": "from blocks"}],
+            "content_blocks": {
+                "format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1,
+                "blocks": [{"type": "text", "text": "from blocks"}],
+            },
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
         }
         blocks = ContentUtils.blocks_from_chat_message(chat_message)
         self.assertEqual(blocks, [{"type": "text", "text": "from blocks"}])
+
+    def test_blocks_from_chat_message_empty_wrapper_falls_through(self) -> None:
+        """
+        A wrapper without blocks carries nothing, so mime_data is still mapped.
+        Absent, null and [] are the same wrapper on the wire (proto3 JSON omits
+        an empty repeated field), and with nothing to interpret the format is
+        not checked.
+        """
+        expected = [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}]
+        empty_wrappers = [
+            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": []},
+            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1},
+            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": None},
+            {"format": "somebody_elses_v2", "blocks": []},
+            {},
+        ]
+        for wrapper in empty_wrappers:
+            with self.subTest(content_blocks=wrapper):
+                chat_message = {
+                    "type": "HUMAN",
+                    "content_blocks": wrapper,
+                    "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
+                }
+                self.assertEqual(ContentUtils.blocks_from_chat_message(chat_message), expected)
+
+    def test_blocks_from_chat_message_unknown_format_or_bare_list_fails_safe(self) -> None:
+        """
+        A wrapper whose format this code does not know, and a bare list of
+        blocks (the shape from before the format tag), both yield None and do
+        NOT fall through to mime_data.
+        """
+        mime_data = [{"mime_type": "image/png", "mime_bytes": "AAAA"}]
+        unknown_format = {
+            "type": "HUMAN",
+            "content_blocks": {"format": "somebody_elses_v2", "blocks": [{"type": "text", "text": "hi"}]},
+            "mime_data": mime_data,
+        }
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(unknown_format))
+        bare_list = {
+            "type": "HUMAN",
+            "content_blocks": [{"type": "text", "text": "hi"}],
+            "mime_data": mime_data,
+        }
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(bare_list))
 
     def test_blocks_from_chat_message_maps_mime_data(self):
         """
@@ -347,6 +400,46 @@ class TestContentUtils(TestCase):
         """
         self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "id": "msg_1", "index": 0}]))
 
+    def test_wrap_content_blocks(self) -> None:
+        """
+        The wire wrapper is the format tag plus the blocks list, as-is.
+        """
+        blocks = [{"type": "text", "text": "hi"}]
+        self.assertEqual(ContentUtils.wrap_content_blocks(blocks), {"format": "langchain_v1", "blocks": blocks})
+
+    def test_unwrap_content_blocks(self) -> None:
+        """
+        unwrap returns the blocks of a langchain_v1 wrapper as-is, an empty
+        list for an empty wrapper whatever its format, and None for anything
+        that is not a wrapper this code knows.
+        """
+        blocks = [{"type": "text", "text": "hi"}]
+        self.assertIs(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": blocks}), blocks)
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": []}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "langchain_v1"}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "somebody_elses_v2", "blocks": []}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({}), [])
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"format": "somebody_elses_v2", "blocks": blocks}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"blocks": blocks}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": 42}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks(blocks))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks(42))
+
+    def test_is_empty_value(self) -> None:
+        """
+        None, "", [] and {} are empty; anything with content, and other
+        types, are not.
+        """
+        self.assertTrue(ContentUtils.is_empty_value(None))
+        self.assertTrue(ContentUtils.is_empty_value(""))
+        self.assertTrue(ContentUtils.is_empty_value([]))
+        self.assertTrue(ContentUtils.is_empty_value({}))
+        self.assertFalse(ContentUtils.is_empty_value("final_answer"))
+        self.assertFalse(ContentUtils.is_empty_value([{"type": "citation"}]))
+        self.assertFalse(ContentUtils.is_empty_value({"signature": "s"}))
+        self.assertFalse(ContentUtils.is_empty_value(0))
+        self.assertFalse(ContentUtils.is_empty_value(False))
+
     def test_history_safe_text_references_data_blocks(self):
         """
         The assistant-history projection keeps text and replaces data blocks
@@ -387,7 +480,10 @@ class TestContentUtils(TestCase):
         chat_message = {
             "type": "HUMAN",
             "text": "caption",
-            "content_blocks": [{"type": "bogus-type", "x": 1}],
+            "content_blocks": {
+                "format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1,
+                "blocks": [{"type": "bogus-type", "x": 1}],
+            },
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
         }
         self.assertIsNone(ContentUtils.blocks_from_chat_message(chat_message))

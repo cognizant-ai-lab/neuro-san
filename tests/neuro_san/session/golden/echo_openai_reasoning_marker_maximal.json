@@ -25,6 +25,29 @@
   },
   {
     "response": {
+      "content_blocks": {
+        "blocks": [
+          {
+            "content": [],
+            "encrypted_content": "mock-encrypted-reasoning",
+            "id": "rs_mock",
+            "reasoning": "Mock reasoning, part one.",
+            "type": "reasoning"
+          },
+          {
+            "id": "rs_mock",
+            "reasoning": "Mock reasoning, part two.",
+            "type": "reasoning"
+          },
+          {
+            "annotations": [],
+            "id": "msg_mock",
+            "text": "the answer",
+            "type": "text"
+          }
+        ],
+        "format": "langchain_v1"
+      },
       "origin": [
         {
           "instantiation_index": 1,

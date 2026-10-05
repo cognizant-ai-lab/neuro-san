@@ -45,18 +45,24 @@ class TestParseTokenAccountingSince(TestCase):
     zero tokens.
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Create a scratch log file removed again after each test."""
         handle, self._log_path = tempfile.mkstemp(suffix=".log")
         os.close(handle)
         self.addCleanup(os.unlink, self._log_path)
 
     @staticmethod
-    def _reporting_record(request_id, *, total=1500, model="gpt-4o") -> str:
-        """Render one 'Request reporting' record as the server writes it.
+    def _reporting_record(request_id: str, total: int = 1500, model: str = "gpt-4o") -> str:
+        """
+        Render one 'Request reporting' record as the server writes it.
 
         Prompt and completion tokens are split 4:1 out of ``total`` so
         the three counts stay consistent with one another.
+
+        :param request_id: Request id in the log record
+        :param total: Total tokens
+        :param model: caller_model value
+        :return: One formatted log record
         """
         prompt = total * 4 // 5
         payload = {
@@ -73,12 +79,16 @@ class TestParseTokenAccountingSince(TestCase):
             message=message, request_id=request_id,
         )
 
-    def _write(self, text) -> None:
-        """Write the given log text to the scratch log file."""
+    def _write(self, text: str) -> None:
+        """
+        Write the given log text to the scratch log file.
+
+        :param text: Log text to write
+        """
         with open(self._log_path, "w", encoding="utf-8") as handle:
             handle.write(text)
 
-    def test_fields_are_extracted_from_a_multiline_record(self):
+    def test_fields_are_extracted_from_a_multiline_record(self) -> None:
         """One record yields its token counts, call count, and model."""
         self._write(self._reporting_record("req-1"))
         monitor = ServerLogMonitor(self._log_path)
@@ -92,7 +102,7 @@ class TestParseTokenAccountingSince(TestCase):
         self.assertEqual(entries["req-1"]["llm_calls"], 2)
         self.assertEqual(entries["req-1"]["model"], "gpt-4o")
 
-    def test_each_request_is_keyed_separately(self):
+    def test_each_request_is_keyed_separately(self) -> None:
         """Concurrent requests must not overwrite one another."""
         self._write(
             self._reporting_record("req-1", total=1500)
@@ -105,7 +115,7 @@ class TestParseTokenAccountingSince(TestCase):
         self.assertEqual(entries["req-1"]["total_tokens"], 1500)
         self.assertEqual(entries["req-2"]["total_tokens"], 2500)
 
-    def test_reporting_agent_comes_from_the_following_done_line(self):
+    def test_reporting_agent_comes_from_the_following_done_line(self) -> None:
         """The network name is taken from the Done-with line after it."""
         self._write(
             self._reporting_record("req-1")
@@ -122,7 +132,7 @@ class TestParseTokenAccountingSince(TestCase):
             entries["req-1"]["reporting_agent"], "music_nerd_pro",
         )
 
-    def test_only_records_after_the_position_are_parsed(self):
+    def test_only_records_after_the_position_are_parsed(self) -> None:
         """Reading from a saved offset ignores earlier runs' records."""
         first = self._reporting_record("req-old")
         self._write(first + self._reporting_record("req-new"))
@@ -132,7 +142,7 @@ class TestParseTokenAccountingSince(TestCase):
 
         self.assertEqual(list(entries), ["req-new"])
 
-    def test_unrelated_log_traffic_is_ignored(self):
+    def test_unrelated_log_traffic_is_ignored(self) -> None:
         """Ordinary log lines produce no entries."""
         self._write(
             LOG_RECORD_FORMAT.format(
@@ -143,13 +153,13 @@ class TestParseTokenAccountingSince(TestCase):
 
         self.assertEqual(monitor.parse_token_accounting_since(0), {})
 
-    def test_no_server_log_yields_nothing(self):
+    def test_no_server_log_yields_nothing(self) -> None:
         """Runs without --server-log get an empty result, not an error."""
         monitor = ServerLogMonitor(None)
 
         self.assertEqual(monitor.parse_token_accounting_since(0), {})
 
-    def test_no_position_yields_nothing(self):
+    def test_no_position_yields_nothing(self) -> None:
         """A missing start offset yields an empty result, not an error."""
         self._write(self._reporting_record("req-1"))
         monitor = ServerLogMonitor(self._log_path)

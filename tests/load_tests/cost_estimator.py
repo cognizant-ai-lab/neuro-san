@@ -22,6 +22,8 @@ matched by substring so dated model names (e.g. gpt-5.2-2025-12-11)
 resolve to their base model entry.
 """
 
+from typing import Dict
+
 from tests.load_tests.config import DEFAULT_PRICING
 from tests.load_tests.config import MODEL_PRICING
 from tests.load_tests.config import TOKENS_PER_MILLION
@@ -31,23 +33,28 @@ class CostEstimator:
     """Estimate USD cost from token counts and model pricing."""
 
     @staticmethod
-    def estimate(prompt_tokens, completion_tokens, model="unknown") -> float:
+    def estimate(prompt_tokens: int, completion_tokens: int, model: str = "unknown") -> float:
         """Estimate USD cost from token counts and model name.
 
         Looks up per-model pricing by substring match, then computes
         cost as (tokens / 1M) * rate for prompt and completion
         separately.
+
+        :param prompt_tokens: Prompt tokens used
+        :param completion_tokens: Completion tokens used
+        :param model: Model name matched against MODEL_PRICING; DEFAULT_PRICING when none match
+        :return: Estimated cost in USD
         """
-        pricing = DEFAULT_PRICING
+        pricing: Dict[str, float] = DEFAULT_PRICING
         for key in sorted(MODEL_PRICING, key=len, reverse=True):
             if key in model:
                 pricing = MODEL_PRICING[key]
                 break
-        prompt_cost = (
+        prompt_cost: float = (
             (prompt_tokens / TOKENS_PER_MILLION)
             * pricing.get("prompt", 0)
         )
-        completion_cost = (
+        completion_cost: float = (
             (completion_tokens / TOKENS_PER_MILLION)
             * pricing.get("completion", 0)
         )

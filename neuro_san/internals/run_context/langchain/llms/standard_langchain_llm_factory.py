@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -119,10 +120,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if chat_class is not None:
             chat_class = chat_class.lower()
 
-        # Check for key "model_name", "model", and "model_id" to use as model name
-        # If the config is from default_llm_info, this is always "model_name"
-        # but with user-specified config, it is possible to have the other keys will be specifed instead.
-        model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
+        # Only for the error messages below; the policy reads the name for itself.
+        model_name: Optional[str] = LlmPolicy.get_model_name(config)
 
         # Get from table of policy classes
         llm_policy: LlmPolicy = None

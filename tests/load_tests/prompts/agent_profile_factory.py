@@ -16,13 +16,13 @@
 
 """Factory that builds an AgentProfile from a JSON profile or test-case hocons."""
 
-import json
 import logging
 import os
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
@@ -50,15 +50,53 @@ class AgentProfileFactory:
         _profile_from_hocons() for the hocon keys used.
         Otherwise the profile comes from a JSON file; see
         _find_json_profile() for the search order.
+
+        :param agent_name: --agent value, e.g. basic/hello_world
+        :param profile_path: --profile-path directory, or None
+        :param project_root: --project-root value, or None to use PYTHONPATH
+        :param hocon_files: Test-case hocon files; when given, no JSON profile is read
+        :return: The agent's profile
         """
         if hocon_files:
             return AgentProfile(agent_name, self._profile_from_hocons(agent_name, hocon_files))
         path: str = self._find_json_profile(agent_name, profile_path, project_root)
         logger.info("Loaded agent profile: %s", path)
-        return AgentProfile(agent_name, self._read_json(path))
+        data: Optional[Dict[str, Any]] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
+        if data is None:
+            # EasyJsonPersistence returns None when the JSON is a list or a single value.
+            logger.error(
+                "Agent profile must be a JSON object ({...}), not a list or a single value.\n"
+                "  File: %s\nAborting.",
+                path,
+            )
+            raise SystemExit(1)
+        data["responses"] = [self._response_from_success_fields(data.get("success_fields", []))]
+        return AgentProfile(agent_name, data)
 
-    def _find_json_profile(self, agent_name: str, profile_path: Optional[str],
-                           project_root: Optional[str]) -> str:
+    def _response_from_success_fields(self, success_fields: List[str]) -> Dict[str, Any]:
+        """
+        Express a JSON profile's success_fields as a hocon-style response block.
+
+        Each field becomes sly_data.<field>: { not_value: "" }, i.e. the
+        ValueAgentEvaluator requires it to be present and non-empty. The
+        field is a DictionaryExtractor path from the top of sly_data.
+        DictionaryExtractor does not index into lists, so a value nested
+        in a list (agent_reservations[0].reservation_id) can only be named
+        by its top-level key (agent_reservations): the check then passes
+        for any non-empty list, even one whose reservation_id is empty.
+
+        :param success_fields: sly_data keys the JSON profile requires
+        :return: A response block with one not_value check per field,
+                 or {} when there are no fields
+        """
+        sly_checks: Dict[str, Any] = {}
+        for field in success_fields:
+            sly_checks[field] = {"not_value": ""}
+        if not sly_checks:
+            return {}
+        return {"sly_data": sly_checks}
+
+    def _find_json_profile(self, agent_name: str, profile_path: Optional[str], project_root: Optional[str]) -> str:
         """Return the path of the JSON profile.
 
         Search order:
@@ -71,9 +109,15 @@ class AgentProfileFactory:
         When agent_name includes a prefix (e.g. basic/hello_world),
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
+
+        :param agent_name: --agent value, e.g. basic/hello_world
+        :param profile_path: --profile-path directory, or None
+        :param project_root: --project-root value, or None to use PYTHONPATH
+        :return: Path of the JSON profile file
         """
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
+        candidate: str = ""
         if profile_path:
             if os.path.isfile(profile_path):
                 logger.error(
@@ -96,10 +140,10 @@ class AgentProfileFactory:
                 raise SystemExit(1)
             return candidate
 
-        searched = []
+        searched: List[str] = []
 
         # Search in the built-in profiles directory next to this module
-        profiles_dir = os.path.join(
+        profiles_dir: str = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "profiles",
         )
         for name in (agent_name, agent_base):
@@ -134,33 +178,34 @@ class AgentProfileFactory:
         """Build the profile dict from test-case hocon files.
 
         Per file (one prompt each, see _read_load_test_hocon):
-          interactions[0].text              -> prompts
-          interactions[0].response.sly_data -> success_fields (its keys;
-              each must come back non-empty, same as the JSON list)
+          interactions[0].text     -> prompts
+          interactions[0].response -> responses (kept as-is; TrafficRunner
+              hands each block to the data-driven AgentEvaluators, see
+              docs/test_case_hocon_reference.md)
         Agent-wide, may appear in any file and are merged across files:
-          failure_patterns                  -> union, in first-seen order
-          estimated_tokens_per_request      -> max
-
-        Only the keys of response.sly_data are used here; the check body
-        under each key (keywords, value, ...) is not applied yet. That is
-        the job of the data-driven AgentEvaluators
-        (neuro_san/test/evaluators), which TrafficRunner does not call yet.
+          failure_patterns             -> union, sorted
+          estimated_tokens_per_request -> max
 
         Aborts when no text is found in any file.
+
+        :param agent_name: --agent value, checked against each hocon's agent
+        :param hocon_files: Test-case hocon files, one prompt each
+        :return: Profile data with prompts, responses, failure_patterns and, when set, estimated_tokens_per_request
         """
         prompts: List[str] = []
-        success_fields: List[str] = []
-        failure_patterns: List[str] = []
+        responses: List[Dict[str, Any]] = []
+        failure_patterns: Set[str] = set()
         estimated_tokens: Optional[int] = None
         for path in hocon_files:
             test_case: Dict[str, Any] = self._read_load_test_hocon(agent_name, path)
             interaction: Dict[str, Any] = next(iter(test_case.get("interactions", [])), {})
             text: Optional[str] = interaction.get("text")
+            response: Dict[str, Any] = interaction.get("response", {})
             if text:
                 prompts.append(text)
-            response: Dict[str, Any] = interaction.get("response", {})
-            self._extend_unique(success_fields, list(response.get("sly_data", {}).keys()))
-            self._extend_unique(failure_patterns, test_case.get("failure_patterns", []))
+                responses.append(response)
+            self._warn_empty_checks(path, response)
+            failure_patterns.update(test_case.get("failure_patterns", []))
             tokens: Optional[int] = test_case.get("estimated_tokens_per_request")
             if tokens is not None:
                 estimated_tokens = max(tokens, estimated_tokens or 0)
@@ -172,16 +217,20 @@ class AgentProfileFactory:
                 len(hocon_files), agent_name,
             )
             raise SystemExit(1)
+        checked: int = 0
+        for response in responses:
+            if response:
+                checked += 1
         logger.info(
             "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' "
-            "(success_fields=%s, failure_patterns=%d)",
+            "(response checks in %d, failure_patterns=%d)",
             len(prompts), len(hocon_files), agent_name,
-            success_fields, len(failure_patterns),
+            checked, len(failure_patterns),
         )
         data: Dict[str, Any] = {
             "prompts": prompts,
-            "success_fields": success_fields,
-            "failure_patterns": failure_patterns,
+            "responses": responses,
+            "failure_patterns": sorted(failure_patterns),
         }
         if estimated_tokens is not None:
             data["estimated_tokens_per_request"] = estimated_tokens
@@ -197,6 +246,10 @@ class AgentProfileFactory:
         response and response.sly_data, if present, must be maps as in
         docs/test_case_hocon_reference.md (a bare list is a common mistake).
         Aborts on any of these.
+
+        :param agent_name: --agent value; the hocon's agent must match it or its base name
+        :param path: Path to the hocon file
+        :return: The parsed test case
         """
         test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
         hocon_agent: str = test_case.get("agent", "")
@@ -232,18 +285,21 @@ class AgentProfileFactory:
             raise SystemExit(1)
         return test_case
 
-    @staticmethod
-    def _extend_unique(target: List[str], items: List[str]) -> None:
-        """Append items not already in target, preserving order."""
-        for item in items:
-            if item not in target:
-                target.append(item)
+    def _warn_empty_checks(self, path: str, response: Dict[str, Any]) -> None:
+        """
+        Warn about response.sly_data keys with an empty check body.
 
-    def _read_json(self, path: str) -> Dict[str, Any]:
-        """Read profile data from a JSON file via leaf-common persistence."""
-        try:
-            data: Dict[str, Any] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
-            return data
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.error("Failed to load profile %s: %s\nAborting.", path, exc)
-            raise SystemExit(1) from exc
+        The data-driven framework treats `"key": {}` as "no test", so
+        such a key is never evaluated; presence is spelled
+        `"key": { "not_value": "" }`.
+
+        :param path: The hocon file the response block came from, for the message
+        :param response: The interaction's response block
+        """
+        for key, check in response.get("sly_data", {}).items():
+            if check == {}:
+                logger.warning(
+                    "%s: response.sly_data.%s is {} and will not be checked; "
+                    "use { \"not_value\": \"\" } to require a non-empty value",
+                    path, key,
+                )

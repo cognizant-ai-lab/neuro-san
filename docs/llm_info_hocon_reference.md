@@ -42,6 +42,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
         - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
         - [Anthropic Thinking Parameters](#anthropic-thinking-parameters)
         - [Gemini Thinking Parameters](#gemini-thinking-parameters)
+        - [Provider Tools](#provider-tools)
     - [Extending LLM Info Specifications](#extending-llm-info-specifications)
         - [AGENT_LLM_INFO_FILE environment variable](#agent_llm_info_file-environment-variable)
         - [llm_info_file key in specific agent hocon files](#llm_info_file-keys-in-agent-network-hocon)
@@ -460,14 +461,6 @@ differences between the two endpoints.
 llm_config in the list. With fallbacks configured, a misconfigured primary model silently fails over instead of
 reporting the problem, so verify a new llm_config without fallbacks first.
 
-**Azure OpenAI.** The `azure-openai` class extends `openai` and therefore inherits the `use_responses_api`,
-`store` and `include` defaults, but `AzureLlmPolicy` does not forward any of them to `AzureChatOpenAI`, so those
-keys have no effect on Azure. Azure requests instead follow langchain's own inference: Chat Completions for most
-models, but a model name langchain knows to be Responses-only (such as the `gpt-5.4-pro` snapshot behind
-`azure-gpt-5.4-pro`) auto-routes to the Responses API, which `AzureLlmPolicy` does not support yet. Responses API
-support for Azure, including pinning the endpoint, is tracked in
-[#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307).
-
 **OpenAI-compatible gateways such as LiteLLM.** A neuro-san llm_config reaches a gateway through the `openai`
 class with `openai_api_base` pointing at it, so the gateway receives whatever the `openai` class sends: with the
 defaults above that is a request to `/v1/responses` carrying `store: false`. What happens next depends on the
@@ -516,6 +509,47 @@ things for llm_configs that never set `use_responses_api`:
   that `store: false` relies on.
 - `tests/mock_llm_server/llm_info_chat_completions.hocon` is a ready-made server-wide override that pins the
   bundled test servers, and any other Chat-Completions-only gateway, back to `/chat/completions`.
+
+### Azure OpenAI
+
+The `azure-openai` class extends `openai` and shares its defaults, including `use_responses_api: true`,
+`store: false` and `include: null`. It sends requests to the resource's v1 API
+(`https://<resource>.openai.azure.com/openai/v1/`), which serves both Chat Completions and the Responses API in
+the OpenAI format without an api-version, through the same client as the `openai` class, with the deployment as
+the model. The endpoint comes from `azure_endpoint` in the llm_config, else from `openai_api_base` in the
+llm_config (the full base URL of a gateway, used as is), else from the `AZURE_OPENAI_ENDPOINT` environment
+variable. The credential environment variables are listed under
+[model_name](./agent_hocon_reference.md#model_name) in the agent network reference. Three things differ from
+OpenAI itself:
+
+- Azure routes by deployment, so the `model` field of every request carries `deployment_name` (or the
+  `AZURE_OPENAI_DEPLOYMENT_NAME` environment variable, or failing both the model id `model_name` resolves to,
+  such as `gpt-4o-2024-08-06` for `gpt-4o`, which rarely matches a real deployment). The recommended
+  llm_config names the class and both names: `"class": "azure-openai"`, the OpenAI `model_name` behind the
+  deployment (any OpenAI entry in this file, e.g. `gpt-5.2`) and your `deployment_name`. The `model_name` is
+  not sent to Azure; it is used only for token accounting, which books the usage under `azure-openai` and
+  prices it by that model. Give a `model_name` even when the deployment alone would do: Azure's Responses API
+  echoes the deployment name as the response model, and token costs are priced by the OpenAI model, so a
+  deployment-only llm_config reports its usage under the deployment name with no price there (Chat Completions
+  names the OpenAI snapshot instead, which is priced). The `azure-*` entries are a shorthand for the same thing
+  (each resolves to an OpenAI snapshot such as `gpt-4o-2024-08-06`) and exist only for some models; they still
+  need a `deployment_name`.
+- Azure offers the Responses API in most but not all regions and not for every model. An llm_config that hits
+  either sets `"use_responses_api": false` to stay on Chat Completions, with the same Chat-Completions-only
+  parameter rules as in the OpenAI section above.
+- langchain's model-name rules see the deployment name, not the OpenAI model. It drops a `temperature` other
+  than 1 only when that name starts with `gpt-5` (and `reasoning_effort` is not `none`); a gpt-5 deployment
+  named any other way sends the value as given and Azure rejects it. Leave `temperature` unset for gpt-5
+  deployments.
+
+[music_nerd_pro_llm_azure.hocon](../neuro_san/registries/music_nerd_pro_llm_azure.hocon) is a complete example
+of such an llm_config with a comment on each key; it is turned off in manifest.hocon because it names a specific
+deployment.
+
+The `openai_api_version`, `openai_api_type` and `model_version` keys of the former dated-api-version setup are
+still accepted but ignored, with a one-time warning, and the `OPENAI_API_VERSION` environment variable is no
+longer read. A prompt that Azure's content filter blocks fails with an HTTP 400 from Azure; a completion it
+blocks comes back as an empty answer, as the other providers' guardrails do.
 
 ### Anthropic Thinking Parameters
 
@@ -576,23 +610,9 @@ is `0.7`, so set `"temperature": 1.0` explicitly in the llm_config of any Gemini
 
 ### Provider Tools
 
-`provider_tools` configures tools that run on the model provider's servers. It is available for the `openai`,
-`anthropic`, and `gemini` classes. The run context consumes the list when creating the agent; it is not passed to
-the chat-model constructor.
-
-- OpenAI accepts Responses API built-ins such as `{"type": "web_search"}` and
-  `{"type": "code_interpreter", "container": {"type": "auto"}}`. Provider tools require the Responses API; do
-  not set `use_responses_api` to `false`.
-- Anthropic accepts server tools such as
-  `{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}`. Supported server-side families include
-  `web_search_`, `web_fetch_`, `code_execution_`, `tool_search_`, and `mcp_toolset`. Client-side tools such as
-  `bash_`, `text_editor_`, `computer_`, and `memory_` are not executed by neuro-san.
-- Gemini accepts one built-in entry, such as `{"google_search": {}}` or `{"code_execution": {}}`. Do not combine
-  a Gemini built-in with other provider tools or regular function tools.
-
-These dictionaries are provider-specific and are passed through unchanged. A non-empty list therefore requires
-every model in a fallback chain, including peer groups, to use the same provider. The `anthropic-bedrock`,
-`azure-openai`, `bedrock`, `nvidia`, `ollama`, and `openrouter` classes do not support `provider_tools`.
+`provider_tools` is not a class argument: neuro-san consumes the list when creating the agent and does not pass
+it to the chat-model constructor. See [Provider Tools](./provider_tools.md) for the shapes each provider accepts
+and the classes that support it.
 
 ## Extending LLM Info Specifications
 

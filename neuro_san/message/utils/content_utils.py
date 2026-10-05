@@ -66,6 +66,15 @@ class ContentUtils:
     # (which would wrap already-standard blocks as "non_standard").
     OUTPUT_VERSION_V1: str = "v1"
 
+    # The ContentBlocks.format value (see chat.proto) that says the blocks
+    # are langchain v1 standard content blocks. Any other format is unknown
+    # to this code and is treated as no usable block content.
+    CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1: str = "langchain_v1"
+
+    # Keys of a text block that carry no information beyond its text:
+    # its type, the text itself, and provider bookkeeping (id, index).
+    TRIVIAL_TEXT_BLOCK_KEYS: List[str] = ["type", "text", "id", "index"]
+
     # Standard block types whose payload is data, not conversation text.
     # Providers reject these in assistant-role history, so history
     # projections replace them with a short text reference instead.
@@ -209,13 +218,17 @@ class ContentUtils:
     def is_trivial(blocks: List[Dict[str, Any]]) -> bool:
         """
         Determine whether a standardized block list carries no more information
-        than its flattened text - a single text block with no annotations and
-        no extras. Trivial block lists collapse back to plain-string content
-        so that existing text-only traffic keeps its exact current shape.
+        than its flattened text: a single text block whose only keys are those
+        in TRIVIAL_TEXT_BLOCK_KEYS, or whose other keys are empty. Trivial block
+        lists collapse back to plain-string content so that existing text-only
+        traffic keeps its exact current shape.
 
         Policy: provider bookkeeping keys ("id", "index") do NOT make a text
         block non-trivial - such messages are plain strings on today's wire,
-        and the collapse deliberately drops those keys to keep that shape.
+        and the collapse deliberately drops those keys to keep that shape. Any
+        other key with a value (annotations, extras, an OpenAI Responses
+        "phase", ...) does, so the collapse never drops information a client
+        could use.
 
         :param blocks: A list of standard content-block dictionaries
         :return: True if the list is equivalent to a plain string
@@ -225,9 +238,82 @@ class ContentUtils:
         block: Dict[str, Any] = blocks[0]
         if block.get("type") != "text":
             return False
-        if block.get("annotations") or block.get("extras"):
+        key: str = None
+        value: Any = None
+        for key, value in block.items():
+            if key in ContentUtils.TRIVIAL_TEXT_BLOCK_KEYS:
+                continue
+            if ContentUtils.is_empty_value(value):
+                continue
             return False
         return True
+
+    @staticmethod
+    def is_empty_value(value: Any) -> bool:
+        """
+        Determine whether a block field value carries nothing: None, an empty
+        string, an empty list or an empty dictionary.
+
+        :param value: The value of one key of a content block
+        :return: True if the value is empty in that sense
+        """
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return len(value) == 0
+        if isinstance(value, list):
+            return len(value) == 0
+        if isinstance(value, dict):
+            return len(value) == 0
+        return False
+
+    @staticmethod
+    def wrap_content_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build the ChatMessage.content_blocks wrapper (see ContentBlocks in
+        chat.proto) around a list of langchain v1 standard blocks.
+
+        This and unwrap_content_blocks are the only two places that know the
+        wrapper's layout and format value, so a second format only touches them.
+
+        :param blocks: A JSON-safe list of standard content-block dictionaries
+        :return: The wrapper dictionary: {"format": "langchain_v1", "blocks": blocks}
+        """
+        return {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": blocks}
+
+    @staticmethod
+    def unwrap_content_blocks(wrapper: Any) -> Optional[List[Dict[str, Any]]]:
+        """
+        Take the blocks back out of a ChatMessage.content_blocks wrapper.
+
+        The blocks themselves are returned as-is, not validated (see
+        looks_like_blocks for that). An empty wrapper is one whose "blocks"
+        member is absent, None or an empty list: proto3 JSON omits an empty
+        repeated field, so these are one and the same on the wire, and such a
+        wrapper carries nothing whatever its format says.
+
+        :param wrapper: The value of a "content_blocks" key
+        :return: The blocks list; an empty list for an empty wrapper; None when
+                 the value is not a wrapper (a bare list, the shape from before
+                 the format tag), its blocks are not a list, or its format is
+                 one this code does not know - callers fall back to text
+        """
+        if not isinstance(wrapper, dict):
+            return None
+        wrapper_dict: Dict[str, Any] = wrapper
+
+        blocks: Any = wrapper_dict.get("blocks")
+        if blocks is None:
+            return []
+        if not isinstance(blocks, list):
+            return None
+        blocks_list: List[Dict[str, Any]] = blocks
+        if len(blocks_list) == 0:
+            return []
+
+        if wrapper_dict.get("format") != ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1:
+            return None
+        return blocks_list
 
     @staticmethod
     def normalize_content(message: BaseMessage) -> Union[str, List[Dict[str, Any]]]:
@@ -359,11 +445,16 @@ class ContentUtils:
         dictionary, if it carries any block-form content.
 
         Precedence:
-        1. A "content_blocks" list of standard blocks is used verbatim.
-           A content_blocks value that is present but NOT valid standard
-           blocks yields None (fail safe) - it does not fall through to
-           mime_data. Note the verbatim path aliases the caller's list;
-           callers must not mutate the result.
+        1. A "content_blocks" wrapper ({"format": "langchain_v1",
+           "blocks": [...]} per chat.proto) supplies its blocks list as-is.
+           A wrapper with a format this code does not know, a bare list, or
+           blocks that are NOT valid standard blocks yields None (fail safe)
+           - it does not fall through to mime_data. A wrapper with no blocks
+           (member absent, null or an empty list - proto3 JSON omits an empty
+           repeated field, so these are one and the same on the wire) carries
+           nothing and does fall through, whatever its format says: a format
+           can only be judged against blocks. Note the returned list aliases
+           the caller's list; callers must not mutate the result.
         2. Otherwise a non-empty "mime_data" list ({"mime_type": ...,
            "mime_bytes": <base64 string>} entries per chat.proto) is mapped to
            data blocks, preceded by a text block for any "text" field.
@@ -380,11 +471,16 @@ class ContentUtils:
             return None
 
         content_blocks: Any = chat_message.get("content_blocks")
-        content_blocks_list: List[Any] = content_blocks
-        if content_blocks is not None and not (isinstance(content_blocks, list) and len(content_blocks_list) == 0):
-            if ContentUtils.looks_like_blocks(content_blocks):
-                return content_blocks
-            return None
+        if content_blocks is not None:
+            unwrapped: Optional[List[Dict[str, Any]]] = ContentUtils.unwrap_content_blocks(content_blocks)
+            if unwrapped is None:
+                # Not a wrapper this code knows: fail safe to text.
+                return None
+            if len(unwrapped) > 0:
+                if ContentUtils.looks_like_blocks(unwrapped):
+                    return unwrapped
+                return None
+            # An empty wrapper carries nothing; fall through to mime_data.
 
         mime_data: Any = chat_message.get("mime_data")
         if not isinstance(mime_data, list):

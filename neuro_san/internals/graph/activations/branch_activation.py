@@ -152,7 +152,8 @@ class BranchActivation(CallingActivation, CallableActivation):
         use_messages = await self.integrate_callable_response(use_run, messages)
 
         # Return the last message
-        return use_messages[-1]
+        last_message: BaseMessage = use_messages[-1]
+        return last_message
 
     def get_origin(self) -> List[Dict[str, Any]]:
         """

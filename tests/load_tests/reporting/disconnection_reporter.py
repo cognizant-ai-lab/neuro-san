@@ -17,6 +17,9 @@
 """Aggregates and logs client disconnection analysis."""
 
 import logging
+from typing import Any
+from typing import Dict
+from typing import List
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 
@@ -29,15 +32,20 @@ class DisconnectionReporter:
     Holds the collected stage summaries for analysis.
     """
 
-    def __init__(self, stage_summaries) -> None:
+    def __init__(self, stage_summaries: List[Dict[str, Any]]) -> None:
+        """
+        Constructor.
+
+        :param stage_summaries: Per-stage summaries collected during the run
+        """
         self._summaries = stage_summaries
 
     def log_disconnection_summary(self) -> None:
         """Log aggregate client disconnection report."""
-        all_disconnections = []
+        all_disconnections: List[Dict[str, Any]] = []
         for idx, stage in enumerate(self._summaries):
             for disc in stage.get("disconnections") or []:
-                disc_copy = dict(disc)
+                disc_copy: Dict[str, Any] = dict(disc)
                 disc_copy.update({"batch": idx + 1})
                 all_disconnections.append(disc_copy)
         if not all_disconnections:

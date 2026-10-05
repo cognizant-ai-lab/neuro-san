@@ -20,10 +20,14 @@ import shutil
 import tempfile
 from argparse import Namespace
 from types import SimpleNamespace
+from typing import Any
+from typing import Dict
+from typing import List
 from unittest import TestCase
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
+from tests.load_tests.prompts.agent_profile import AgentProfile
 
 
 # These tests call a deliberately-internal helper directly; suppress
@@ -38,20 +42,24 @@ class TestExportRawJsonAggregates(TestCase):
     the two compares unlike numbers.
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Create an output directory removed again after each test."""
         self._dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
 
     def _orchestrator(self) -> LoadTestOrchestrator:
-        """Build an orchestrator with only what the export reads."""
+        """
+        Build an orchestrator with only what the export reads.
+
+        :return: Orchestrator that writes to the scratch directory
+        """
         orchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
         orchestrator._output_dir = self._dir
         orchestrator._server_ns_version = "0.6.92"
         orchestrator.server_log = None
         orchestrator.hocon_files = []
-        orchestrator.profile = SimpleNamespace(
-            estimated_tokens_per_request=1000,
+        orchestrator.profile = AgentProfile(
+            "hello_world", {"estimated_tokens_per_request": 1000},
         )
         orchestrator.resource_reporter = SimpleNamespace(
             resource_rows=[], client_rows=[],
@@ -67,16 +75,20 @@ class TestExportRawJsonAggregates(TestCase):
         )
         return orchestrator
 
-    def _export(self, elapsed_values) -> dict:
-        """Export one stage of successful requests and read it back."""
-        results = [
-            {
+    def _export(self, elapsed_values: List[float]) -> Dict[str, Any]:
+        """
+        Export one stage of successful requests and read it back.
+
+        :param elapsed_values: Elapsed seconds, one per request
+        :return: Aggregates read back from raw_results.json
+        """
+        results: List[Dict[str, Any]] = []
+        for index, elapsed in enumerate(elapsed_values, start=1):
+            results.append({
                 "request_id": f"request-{index}",
                 "status": STATUS_CREATED,
                 "elapsed": elapsed,
-            }
-            for index, elapsed in enumerate(elapsed_values, start=1)
-        ]
+            })
         # One stage whose wall-clock time is the slowest request,
         # because the requests ran concurrently.
         stage_summaries = [{
@@ -93,7 +105,7 @@ class TestExportRawJsonAggregates(TestCase):
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)["aggregates"]
 
-    def test_average_latency_is_the_mean_request_time(self):
+    def test_average_latency_is_the_mean_request_time(self) -> None:
         """Concurrency must not divide the reported latency.
 
         Ten overlapping 30-second requests average 30 seconds, not the
@@ -104,13 +116,13 @@ class TestExportRawJsonAggregates(TestCase):
 
         self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
 
-    def test_average_latency_reflects_uneven_requests(self):
+    def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
         aggregates = self._export([1.0, 2.0, 6.0])
 
         self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
 
-    def test_wall_clock_total_is_reported_separately(self):
+    def test_wall_clock_total_is_reported_separately(self) -> None:
         """Throughput is still derivable from the elapsed total."""
         aggregates = self._export([1.0, 2.0, 6.0])
 
