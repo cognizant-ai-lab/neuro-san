@@ -87,15 +87,15 @@ class TestRunnerResponseChecks(TestCase):
         """
         An empty response block and no failure_patterns never fail.
         """
-        reason = self._runner().check_response(self._processor("hi"), {})
+        reason: Optional[str] = self._runner().check_response(self._processor("hi"), {})
         self.assertIsNone(reason)
 
     def test_not_value_requires_present_non_empty_sly_data(self) -> None:
         """
         sly_data.<key>: { not_value: "" } fails on a missing or empty key.
         """
-        checks = {"sly_data": {"agent_reservations": {"not_value": ""}}}
-        runner = self._runner()
+        checks: Dict[str, Any] = {"sly_data": {"agent_reservations": {"not_value": ""}}}
+        runner: TrafficRunner = self._runner()
         self.assertIsNone(runner.check_response(
             self._processor("ok", {"agent_reservations": [{"reservation_id": "r-1"}]}), checks,
         ))
@@ -110,8 +110,8 @@ class TestRunnerResponseChecks(TestCase):
         """
         text: { keywords: [...] } is applied to the answer.
         """
-        checks = {"text": {"keywords": ["Bonjour"]}}
-        runner = self._runner()
+        checks: Dict[str, Any] = {"text": {"keywords": ["Bonjour"]}}
+        runner: TrafficRunner = self._runner()
         self.assertIsNone(runner.check_response(self._processor("Bonjour!"), checks))
         self.assertIsNotNone(runner.check_response(self._processor("Hello!"), checks))
 
@@ -119,17 +119,17 @@ class TestRunnerResponseChecks(TestCase):
         """
         failure_patterns are checked as text.not_keywords.
         """
-        runner = self._runner(["No fully-specified LLM found"])
+        runner: TrafficRunner = self._runner(["No fully-specified LLM found"])
         self.assertIsNone(runner.check_response(self._processor("fine"), {}))
-        reason = runner.check_response(self._processor("Error: No fully-specified LLM found"), {})
+        reason: Optional[str] = runner.check_response(self._processor("Error: No fully-specified LLM found"), {})
         self.assertIn("No fully-specified LLM found", reason)
 
     def test_all_failures_are_reported(self) -> None:
         """
         Every failed check appears in the reason, not just the first.
         """
-        checks = {"sly_data": {"a": {"not_value": ""}, "b": {"not_value": ""}}}
-        reason = self._runner().check_response(self._processor("ok", {}), checks)
+        checks: Dict[str, Any] = {"sly_data": {"a": {"not_value": ""}, "b": {"not_value": ""}}}
+        reason: Optional[str] = self._runner().check_response(self._processor("ok", {}), checks)
         self.assertIn("sly_data.a", reason)
         self.assertIn("sly_data.b", reason)
 

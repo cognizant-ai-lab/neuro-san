@@ -17,6 +17,8 @@
 import json
 import os
 import tempfile
+from typing import Any
+from typing import Dict
 from unittest import TestCase
 
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -27,7 +29,7 @@ from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 # several physical lines, and the record's own request_id arrives on the
 # closing line -- which is why blocks are collected across lines rather
 # than parsed one line at a time.
-LOG_RECORD_FORMAT = (
+LOG_RECORD_FORMAT: str = (
     '{{"message": "{message}", "user_id": "None", '
     '"Timestamp": "2026-07-26T19:00:00", "source": "server", '
     '"message_type": "metrics", "request_id": "{request_id}"}}\n'
@@ -47,6 +49,8 @@ class TestParseTokenAccountingSince(TestCase):
 
     def setUp(self) -> None:
         """Create a scratch log file removed again after each test."""
+        handle: int = 0
+        self._log_path: str = ""
         handle, self._log_path = tempfile.mkstemp(suffix=".log")
         os.close(handle)
         self.addCleanup(os.unlink, self._log_path)
@@ -64,8 +68,8 @@ class TestParseTokenAccountingSince(TestCase):
         :param model: caller_model value
         :return: One formatted log record
         """
-        prompt = total * 4 // 5
-        payload = {
+        prompt: int = total * 4 // 5
+        payload: Dict[str, Any] = {
             "total_cost": 0.0075,
             "total_tokens": total,
             "prompt_tokens": prompt,
@@ -74,7 +78,7 @@ class TestParseTokenAccountingSince(TestCase):
             "time_taken_in_seconds": 12.5,
             "caller_model": model,
         }
-        message = "Request reporting: " + json.dumps(payload, indent=4)
+        message: str = "Request reporting: " + json.dumps(payload, indent=4)
         return LOG_RECORD_FORMAT.format(
             message=message, request_id=request_id,
         )
@@ -91,9 +95,9 @@ class TestParseTokenAccountingSince(TestCase):
     def test_fields_are_extracted_from_a_multiline_record(self) -> None:
         """One record yields its token counts, call count, and model."""
         self._write(self._reporting_record("req-1"))
-        monitor = ServerLogMonitor(self._log_path)
+        monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
-        entries = monitor.parse_token_accounting_since(0)
+        entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
         self.assertEqual(list(entries), ["req-1"])
         self.assertEqual(entries["req-1"]["total_tokens"], 1500)
@@ -108,9 +112,9 @@ class TestParseTokenAccountingSince(TestCase):
             self._reporting_record("req-1", total=1500)
             + self._reporting_record("req-2", total=2500)
         )
-        monitor = ServerLogMonitor(self._log_path)
+        monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
-        entries = monitor.parse_token_accounting_since(0)
+        entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
         self.assertEqual(entries["req-1"]["total_tokens"], 1500)
         self.assertEqual(entries["req-2"]["total_tokens"], 2500)
@@ -124,9 +128,9 @@ class TestParseTokenAccountingSince(TestCase):
                 request_id="req-1",
             )
         )
-        monitor = ServerLogMonitor(self._log_path)
+        monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
-        entries = monitor.parse_token_accounting_since(0)
+        entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
         self.assertEqual(
             entries["req-1"]["reporting_agent"], "music_nerd_pro",
@@ -134,11 +138,11 @@ class TestParseTokenAccountingSince(TestCase):
 
     def test_only_records_after_the_position_are_parsed(self) -> None:
         """Reading from a saved offset ignores earlier runs' records."""
-        first = self._reporting_record("req-old")
+        first: str = self._reporting_record("req-old")
         self._write(first + self._reporting_record("req-new"))
-        monitor = ServerLogMonitor(self._log_path)
+        monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
-        entries = monitor.parse_token_accounting_since(len(first))
+        entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(len(first))
 
         self.assertEqual(list(entries), ["req-new"])
 
@@ -149,19 +153,19 @@ class TestParseTokenAccountingSince(TestCase):
                 message="Starting agent server", request_id="None",
             )
         )
-        monitor = ServerLogMonitor(self._log_path)
+        monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
         self.assertEqual(monitor.parse_token_accounting_since(0), {})
 
     def test_no_server_log_yields_nothing(self) -> None:
         """Runs without --server-log get an empty result, not an error."""
-        monitor = ServerLogMonitor(None)
+        monitor: ServerLogMonitor = ServerLogMonitor(None)
 
         self.assertEqual(monitor.parse_token_accounting_since(0), {})
 
     def test_no_position_yields_nothing(self) -> None:
         """A missing start offset yields an empty result, not an error."""
         self._write(self._reporting_record("req-1"))
-        monitor = ServerLogMonitor(self._log_path)
+        monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
         self.assertEqual(monitor.parse_token_accounting_since(None), {})

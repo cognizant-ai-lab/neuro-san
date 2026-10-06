@@ -21,6 +21,7 @@ import tempfile
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from unittest import TestCase
 
 from neuro_san import TOP_LEVEL_DIR
@@ -131,13 +132,14 @@ class TestAgentProfileHoconPrompts(TestCase):
         """
         get_response() picks the same pool entry as get_prompt().
         """
+        profile: Optional[AgentProfile] = None
         with tempfile.TemporaryDirectory() as tmp:
             first: str = self._write_hocon(
                 tmp, "a.hocon", "x", [],
                 interactions=[{"text": "one", "response": {"text": {"keywords": ["1"]}}}],
             )
             second: str = self._write_hocon(tmp, "b.hocon", "x", ["two"])
-            profile: AgentProfile = self._load("x", [first, second])
+            profile = self._load("x", [first, second])
         self.assertEqual(profile.get_prompt(1, allow_caching=True), "two")
         self.assertEqual(profile.get_response(1), {})
         self.assertEqual(profile.get_response(2), {"text": {"keywords": ["1"]}})
@@ -166,12 +168,13 @@ class TestAgentProfileHoconPrompts(TestCase):
 
     def test_json_profile_not_needed_with_hocons(self) -> None:
         """An agent with no JSON profile loads fine from hocons alone."""
+        profile: Optional[AgentProfile] = None
         with tempfile.TemporaryDirectory() as tmp:
             path: str = self._write_hocon(
                 tmp, "only.hocon", "no_such_agent", ["hi"],
                 failure_patterns=["oops"], estimated_tokens_per_request=42,
             )
-            profile: AgentProfile = self._load("no_such_agent", [path])
+            profile = self._load("no_such_agent", [path])
         self.assertEqual(profile.get_prompts(), ["hi"])
         self.assertEqual(profile.get_failure_patterns(), ["oops"])
         self.assertEqual(profile.get_success_fields(), [])

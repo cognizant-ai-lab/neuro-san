@@ -44,7 +44,7 @@ class TestExportRawJsonAggregates(TestCase):
 
     def setUp(self) -> None:
         """Create an output directory removed again after each test."""
-        self._dir = tempfile.mkdtemp()
+        self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
 
     def _orchestrator(self) -> LoadTestOrchestrator:
@@ -53,7 +53,7 @@ class TestExportRawJsonAggregates(TestCase):
 
         :return: Orchestrator that writes to the scratch directory
         """
-        orchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
+        orchestrator: LoadTestOrchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
         orchestrator._output_dir = self._dir
         orchestrator._server_ns_version = "0.6.92"
         orchestrator.server_log = None
@@ -91,7 +91,7 @@ class TestExportRawJsonAggregates(TestCase):
             })
         # One stage whose wall-clock time is the slowest request,
         # because the requests ran concurrently.
-        stage_summaries = [{
+        stage_summaries: List[Dict[str, Any]] = [{
             "concurrent": len(results),
             "results": results,
             "elapsed": max(elapsed_values),
@@ -101,7 +101,7 @@ class TestExportRawJsonAggregates(TestCase):
             stage_summaries, exit_code=0,
         )
 
-        path = os.path.join(self._dir, "raw_results.json")
+        path: str = os.path.join(self._dir, "raw_results.json")
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)["aggregates"]
 
@@ -112,19 +112,19 @@ class TestExportRawJsonAggregates(TestCase):
         3 seconds that dividing wall-clock time by the request count
         would suggest.
         """
-        aggregates = self._export([30.0] * 10)
+        aggregates: Dict[str, Any] = self._export([30.0] * 10)
 
         self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
-        aggregates = self._export([1.0, 2.0, 6.0])
+        aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
         self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
 
     def test_wall_clock_total_is_reported_separately(self) -> None:
         """Throughput is still derivable from the elapsed total."""
-        aggregates = self._export([1.0, 2.0, 6.0])
+        aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
         self.assertEqual(aggregates["total_elapsed_seconds"], 6.0)
         self.assertEqual(aggregates["total_requests"], 3)

@@ -18,6 +18,7 @@ import time
 from typing import Any
 from typing import Dict
 from typing import Iterator
+from typing import Optional
 from typing import Tuple
 from unittest import TestCase
 from unittest.mock import patch
@@ -124,6 +125,7 @@ class TestAgentRequestExecutor(TestCase):
             message_count=message_count,
             message_interval=message_interval,
         )
+        result: Optional[AgentRequestResult] = None
         with patch(
             "tests.load_tests.traffic.agent_request_executor."
             "HttpServiceAgentSession",
@@ -133,7 +135,7 @@ class TestAgentRequestExecutor(TestCase):
             "StreamingInputProcessor",
             FakeProcessor,
         ):
-            result: AgentRequestResult = AgentRequestExecutor.execute_request(
+            result = AgentRequestExecutor.execute_request(
                 "localhost", 30011, "music_nerd", "prompt",
                 timeout=timeout, idle_timeout=60,
             )
@@ -141,6 +143,8 @@ class TestAgentRequestExecutor(TestCase):
 
     def test_streaming_past_the_cap_is_a_timeout(self) -> None:
         """A stream that outruns the cap reports TIMEOUT."""
+        result: Optional[AgentRequestResult] = None
+        _session: Optional[FakeSession] = None
         result, _session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
         )
@@ -155,6 +159,8 @@ class TestAgentRequestExecutor(TestCase):
         which is the behaviour being fixed.
         """
         start: float = time.perf_counter()
+        _result: Optional[AgentRequestResult] = None
+        session: Optional[FakeSession] = None
         _result, session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
         )
@@ -165,6 +171,8 @@ class TestAgentRequestExecutor(TestCase):
 
     def test_request_within_the_cap_succeeds(self) -> None:
         """A request that finishes in time is unaffected."""
+        result: Optional[AgentRequestResult] = None
+        session: Optional[FakeSession] = None
         result, session = self._execute(
             timeout=30, message_count=3, message_interval=0.01,
         )

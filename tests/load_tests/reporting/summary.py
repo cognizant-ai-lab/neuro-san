@@ -37,7 +37,7 @@ from tests.load_tests.reporting.system_resources import SysSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class SummaryReporter:
@@ -56,9 +56,9 @@ class SummaryReporter:
         :param neuro_san_version: Installed neuro-san version, or None when unknown
         :param client_token_source: Where the client token counts came from, shown in the token usage block
         """
-        self._summaries = stage_summaries
-        self._neuro_san_version = neuro_san_version
-        self._client_token_source = client_token_source
+        self._summaries: List[Dict[str, Any]] = stage_summaries
+        self._neuro_san_version: Optional[str] = neuro_san_version
+        self._client_token_source: str = client_token_source
 
     def log_ramp_summary(self, is_ramp: bool = True) -> None:
         """

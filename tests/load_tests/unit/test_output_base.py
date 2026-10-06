@@ -43,7 +43,7 @@ class TestOutputBase(TestCase):
         :param output_dir: --output-dir value; None for the default
         :return: Orchestrator with only args set
         """
-        orchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
+        orchestrator: LoadTestOrchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
         orchestrator.args = Namespace(output_dir=output_dir)
         return orchestrator
 

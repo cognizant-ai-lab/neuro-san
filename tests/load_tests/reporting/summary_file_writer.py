@@ -34,7 +34,7 @@ import psutil
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.reporting.formatters import Formatters
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class SummaryFileWriter:
@@ -53,9 +53,9 @@ class SummaryFileWriter:
         :param args: Parsed load-test command line
         :param server_chat_timing: Per-agent timing entries from the server log, or None
         """
-        self._summaries = stage_summaries
-        self._args = args
-        self._server_timing = server_chat_timing or []
+        self._summaries: List[Dict[str, Any]] = stage_summaries
+        self._args: Namespace = args
+        self._server_timing: List[Dict[str, Any]] = server_chat_timing or []
 
     def write(self, output_dir: str) -> str:
         """

@@ -26,7 +26,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class AgentProfile:

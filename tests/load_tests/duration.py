@@ -17,6 +17,7 @@
 """Parse human-friendly timeout durations into whole seconds."""
 
 import argparse
+from typing import Dict
 
 
 class DurationParser:
@@ -27,7 +28,7 @@ class DurationParser:
     ``2h``, ``0.5h``.  Designed to be used as an argparse ``type``.
     """
 
-    _UNITS = {"s": 1, "m": 60, "h": 3600}
+    _UNITS: Dict[str, int] = {"s": 1, "m": 60, "h": 3600}
 
     @staticmethod
     def parse(value: str) -> int:

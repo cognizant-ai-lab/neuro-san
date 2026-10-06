@@ -19,6 +19,7 @@ import shutil
 import tempfile
 from typing import Any
 from typing import Dict
+from typing import List
 from unittest import TestCase
 
 from tests.load_tests.config import STATUS_CREATED
@@ -40,7 +41,7 @@ class TestScanRequests(TestCase):
 
     def setUp(self) -> None:
         """Create a run directory removed again after each test."""
-        self._dir = tempfile.mkdtemp()
+        self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
 
@@ -50,7 +51,7 @@ class TestScanRequests(TestCase):
 
         :param req_id: Request id used in the file name and reservation id
         """
-        path = os.path.join(
+        path: str = os.path.join(
             self._dir, "requests", f"request_{req_id}_stdout.txt",
         )
         with open(path, "w", encoding="utf-8") as handle:
@@ -65,7 +66,7 @@ class TestScanRequests(TestCase):
 
         :param text: Log text to write
         """
-        path = os.path.join(self._dir, "load_test.log")
+        path: str = os.path.join(self._dir, "load_test.log")
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
 
@@ -75,8 +76,8 @@ class TestScanRequests(TestCase):
 
         :return: Results keyed by request id
         """
-        rebuilder = ResultsRebuilder(self._dir)
-        results = rebuilder._scan_requests(
+        rebuilder: ResultsRebuilder = ResultsRebuilder(self._dir)
+        results: List[Dict[str, Any]] = rebuilder._scan_requests(
             os.path.join(self._dir, "requests"), rebuilder._parse_timing(),
         )
         keyed: Dict[str, Dict[str, Any]] = {}
@@ -116,7 +117,7 @@ class TestScanRequests(TestCase):
         self._write_request(1)
         self._write_log("Request 1: CREATED (3.00s)\n")
 
-        result = self._rebuild()["request-1"]
+        result: Dict[str, Any] = self._rebuild()["request-1"]
 
         self.assertEqual(result["status"], STATUS_CREATED)
         self.assertEqual(result["elapsed"], 3.0)

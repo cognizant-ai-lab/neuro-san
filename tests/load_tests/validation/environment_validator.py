@@ -40,7 +40,7 @@ import psutil
 from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class EnvironmentValidator:

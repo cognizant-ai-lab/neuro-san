@@ -48,25 +48,25 @@ class TestResolveStages(TestCase):
 
     def test_flat_mode_is_a_single_stage(self) -> None:
         """Without --ramp the run is one stage of --num-requests."""
-        validator = self._validator(num_requests=7)
+        validator: InputValidator = self._validator(num_requests=7)
 
         self.assertEqual(validator.resolve_stages(), [7])
 
     def test_ramp_without_stages_uses_defaults(self) -> None:
         """--ramp alone falls back to the built-in stage list."""
-        validator = self._validator(ramp=True)
+        validator: InputValidator = self._validator(ramp=True)
 
         self.assertEqual(validator.resolve_stages(), list(DEFAULT_STAGES))
 
     def test_stages_are_parsed_and_trailing_commas_ignored(self) -> None:
         """Whitespace and a trailing comma are tolerated."""
-        validator = self._validator(ramp=True, stages=" 2, 4 ,8, ")
+        validator: InputValidator = self._validator(ramp=True, stages=" 2, 4 ,8, ")
 
         self.assertEqual(validator.resolve_stages(), [2, 4, 8])
 
     def test_non_integer_stages_exit(self) -> None:
         """Garbage in --stages exits instead of raising ValueError."""
-        validator = self._validator(ramp=True, stages="2,abc")
+        validator: InputValidator = self._validator(ramp=True, stages="2,abc")
 
         with self.assertRaises(SystemExit) as caught:
             validator.resolve_stages()
@@ -75,7 +75,7 @@ class TestResolveStages(TestCase):
 
     def test_non_positive_stages_exit(self) -> None:
         """A zero stage would run an empty stage, so it is rejected."""
-        validator = self._validator(ramp=True, stages="2,0,8")
+        validator: InputValidator = self._validator(ramp=True, stages="2,0,8")
 
         with self.assertRaises(SystemExit) as caught:
             validator.resolve_stages()
@@ -84,7 +84,7 @@ class TestResolveStages(TestCase):
 
     def test_zero_num_requests_exits(self) -> None:
         """--num-requests 0 is rejected in flat mode."""
-        validator = self._validator(num_requests=0)
+        validator: InputValidator = self._validator(num_requests=0)
 
         with self.assertRaises(SystemExit) as caught:
             validator.resolve_stages()
