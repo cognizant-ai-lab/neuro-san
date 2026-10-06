@@ -67,7 +67,7 @@ class TestRebuiltAggregates(TestCase):
 
         json_path: str = os.path.join(self._dir, "raw_results.json")
         with open(json_path, "r", encoding="utf-8") as handle:
-            return json.load(handle)["aggregates"]
+            return json.load(handle).get("aggregates", {})
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
         """Latency averages the requests, not the run.
@@ -78,16 +78,16 @@ class TestRebuiltAggregates(TestCase):
         """
         aggregates: Dict[str, Any] = self._build_run({1: 30.0, 2: 30.0, 3: 30.0})
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
         aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
 
     def test_total_elapsed_is_the_slowest_request(self) -> None:
         """Total elapsed still stands in for the run's wall clock."""
         aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
-        self.assertEqual(aggregates["total_elapsed_seconds"], 6.0)
+        self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)

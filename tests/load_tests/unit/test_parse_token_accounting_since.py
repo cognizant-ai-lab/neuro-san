@@ -100,11 +100,12 @@ class TestParseTokenAccountingSince(TestCase):
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
         self.assertEqual(list(entries), ["req-1"])
-        self.assertEqual(entries["req-1"]["total_tokens"], 1500)
-        self.assertEqual(entries["req-1"]["prompt_tokens"], 1200)
-        self.assertEqual(entries["req-1"]["completion_tokens"], 300)
-        self.assertEqual(entries["req-1"]["llm_calls"], 2)
-        self.assertEqual(entries["req-1"]["model"], "gpt-4o")
+        entry: Dict[str, Any] = entries.get("req-1", {})
+        self.assertEqual(entry.get("total_tokens", 0), 1500)
+        self.assertEqual(entry.get("prompt_tokens", 0), 1200)
+        self.assertEqual(entry.get("completion_tokens", 0), 300)
+        self.assertEqual(entry.get("llm_calls", 0), 2)
+        self.assertEqual(entry.get("model", ""), "gpt-4o")
 
     def test_each_request_is_keyed_separately(self) -> None:
         """Concurrent requests must not overwrite one another."""
@@ -116,8 +117,10 @@ class TestParseTokenAccountingSince(TestCase):
 
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
-        self.assertEqual(entries["req-1"]["total_tokens"], 1500)
-        self.assertEqual(entries["req-2"]["total_tokens"], 2500)
+        first_entry: Dict[str, Any] = entries.get("req-1", {})
+        second_entry: Dict[str, Any] = entries.get("req-2", {})
+        self.assertEqual(first_entry.get("total_tokens", 0), 1500)
+        self.assertEqual(second_entry.get("total_tokens", 0), 2500)
 
     def test_reporting_agent_comes_from_the_following_done_line(self) -> None:
         """The network name is taken from the Done-with line after it."""
@@ -132,9 +135,8 @@ class TestParseTokenAccountingSince(TestCase):
 
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
-        self.assertEqual(
-            entries["req-1"]["reporting_agent"], "music_nerd_pro",
-        )
+        entry: Dict[str, Any] = entries.get("req-1", {})
+        self.assertEqual(entry.get("reporting_agent", ""), "music_nerd_pro")
 
     def test_only_records_after_the_position_are_parsed(self) -> None:
         """Reading from a saved offset ignores earlier runs' records."""
