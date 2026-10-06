@@ -30,7 +30,7 @@ from neuro_san.test.util.tests_util import TestsUtil
 from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.prompts.agent_profile import AgentProfile
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class AgentProfileFactory:

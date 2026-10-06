@@ -29,7 +29,7 @@ class TestAgentProfilePrompt(TestCase):
 
     def setUp(self) -> None:
         """Build a profile with a two-prompt pool."""
-        self.profile = AgentProfile(
+        self.profile: AgentProfile = AgentProfile(
             "music_nerd", {"prompts": ["first", "second"]},
         )
 

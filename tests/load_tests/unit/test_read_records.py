@@ -40,6 +40,7 @@ class TestReadRecords(TestCase):
     def setUp(self) -> None:
         """Create a scratch history file removed again after each test."""
         handle: int = 0
+        self._path: str = ""
         handle, self._path = tempfile.mkstemp(suffix=".jsonl")
         os.close(handle)
         self.addCleanup(os.unlink, self._path)

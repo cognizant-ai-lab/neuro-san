@@ -29,7 +29,7 @@ from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 # several physical lines, and the record's own request_id arrives on the
 # closing line -- which is why blocks are collected across lines rather
 # than parsed one line at a time.
-LOG_RECORD_FORMAT = (
+LOG_RECORD_FORMAT: str = (
     '{{"message": "{message}", "user_id": "None", '
     '"Timestamp": "2026-07-26T19:00:00", "source": "server", '
     '"message_type": "metrics", "request_id": "{request_id}"}}\n'
@@ -50,6 +50,7 @@ class TestParseTokenAccountingSince(TestCase):
     def setUp(self) -> None:
         """Create a scratch log file removed again after each test."""
         handle: int = 0
+        self._log_path: str = ""
         handle, self._log_path = tempfile.mkstemp(suffix=".log")
         os.close(handle)
         self.addCleanup(os.unlink, self._log_path)

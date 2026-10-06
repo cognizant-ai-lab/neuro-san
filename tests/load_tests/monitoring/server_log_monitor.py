@@ -55,13 +55,13 @@ from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.shared_ref import SharedRef
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 # Console progress ticks for arrivals: single-line dots written via
 # logging (not print()).  An empty terminator keeps the dots on one
 # line, and propagate=False stops the root logger from prefixing each
 # dot with a timestamp or duplicating it.
-_progress_logger = logging.getLogger(__name__ + ".progress")
+_progress_logger: logging.Logger = logging.getLogger(__name__ + ".progress")
 _progress_logger.propagate = False
 if not _progress_logger.handlers:
     _progress_handler = logging.StreamHandler(sys.stdout)
@@ -89,7 +89,7 @@ class ServerLogMonitor:
     """
 
     def __init__(self, server_log: Optional[str]) -> None:
-        self._server_log = server_log
+        self._server_log: Optional[str] = server_log
 
     def read_position(self) -> Optional[int]:
         """Return the current end position of the server log file."""

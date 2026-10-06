@@ -44,10 +44,10 @@ from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.shared_ref import SharedRef
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
-CONSOLE_TICK_INTERVAL = 1
-OUT_OF_MEMORY_WARNING_THRESHOLD = 0.80
+CONSOLE_TICK_INTERVAL: int = 1
+OUT_OF_MEMORY_WARNING_THRESHOLD: float = 0.80
 
 
 class Heartbeat:  # pylint: disable=too-many-instance-attributes

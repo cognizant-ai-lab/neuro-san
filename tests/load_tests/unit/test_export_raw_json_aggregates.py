@@ -44,7 +44,7 @@ class TestExportRawJsonAggregates(TestCase):
 
     def setUp(self) -> None:
         """Create an output directory removed again after each test."""
-        self._dir = tempfile.mkdtemp()
+        self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
 
     def _orchestrator(self) -> LoadTestOrchestrator:

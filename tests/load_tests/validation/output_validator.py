@@ -36,7 +36,7 @@ from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.reporting.formatters import Formatters
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class OutputValidator:

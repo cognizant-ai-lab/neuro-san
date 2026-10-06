@@ -28,7 +28,7 @@ from typing import Optional
 import psutil
 
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResourceMonitor:

@@ -25,7 +25,7 @@ from typing import Optional
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class PoolAnalyzer:
@@ -40,7 +40,7 @@ class PoolAnalyzer:
 
         :param stage_summaries: Per-stage summaries collected during the run
         """
-        self._summaries = stage_summaries
+        self._summaries: List[Dict[str, Any]] = stage_summaries
 
     # pylint: disable=too-many-locals
     def log_pool_reuse_analysis(self) -> None:
