@@ -338,11 +338,11 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :param part: Count to express as a percent
         :param whole: Count that is 100%
-        :return: part * 100 // whole, or 0 when whole is 0 or less
+        :return: The whole-number percent, or 0 when whole is 0 or less
         """
         if whole <= 0:
             return 0
-        return part * 100 // whole
+        return int(part * 100 / whole)
 
     @staticmethod
     def _fmt_elapsed(seconds: int) -> str:
@@ -402,10 +402,11 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         for future in futures:
             if not future.done() or future.cancelled():
                 continue
+            result: Dict[str, Any] = {}
             try:
                 if future.exception() is not None:
                     continue
-                result: Dict[str, Any] = future.result()
+                result = future.result()
             except (CancelledError, FutureTimeoutError):
                 continue
             duration_seconds: Optional[float] = result.get("elapsed", result.get("duration"))
@@ -425,8 +426,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         if self._log_monitor is None or self._log_start_pos is None:
             return None
+        pairs: List[Dict[str, object]] = []
         try:
-            pairs: List[Dict[str, object]] = self._log_monitor.parse_streaming_chat_timing_since(self._log_start_pos)
+            pairs = self._log_monitor.parse_streaming_chat_timing_since(self._log_start_pos)
         except (OSError, ValueError):
             return []
         durations: List[float] = []
