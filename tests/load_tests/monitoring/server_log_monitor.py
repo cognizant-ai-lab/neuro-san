@@ -189,7 +189,12 @@ class ServerLogMonitor:
             message: str = entry.get("message", "")
             if not message.startswith("Failed to create Agent/tool"):
                 continue
-            warnings.append({"request_id": entry.get("request_id", "unknown"), "message": " ".join(message.split())})
+            warning_message: str = " ".join(message.split())
+            warning: Dict[str, str] = {
+                "request_id": entry.get("request_id", "unknown"),
+                "message": warning_message,
+            }
+            warnings.append(warning)
         return warnings
 
     def count_requests_since(self, position, primary_start_pattern, primary_finish_pattern) -> Dict[str, Optional[int]]:
@@ -260,6 +265,7 @@ class ServerLogMonitor:
         prompt_match: Optional[re.Match] = re.search(r'"prompt_tokens": (\d+)', block)
         completion_match: Optional[re.Match] = re.search(r'"completion_tokens": (\d+)', block)
         llm_calls_match: Optional[re.Match] = re.search(r'"successful_requests": (\d+)', block)
+        # Pulls model names that start with gpt, claude, gemini or o<digit>
         model_names: List[str] = re.findall(r'"(gpt[^"]+|claude[^"]+|gemini[^"]+|o\d[^"]*)"', block)
         total_tokens: int = 0
         if total_match:
