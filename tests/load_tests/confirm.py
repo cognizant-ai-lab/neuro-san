@@ -46,6 +46,9 @@ class Confirm:
             try:
                 answer = input(prompt).strip().lower()
             except (EOFError, KeyboardInterrupt):
+                # A bare newline, not a log record: after Ctrl+C the
+                # cursor is still on the prompt line, so the next
+                # output would land mid-line without this.
                 print()
                 return False
             if answer == "y":

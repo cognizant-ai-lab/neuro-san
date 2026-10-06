@@ -64,7 +64,7 @@ class TestReadRecords(TestCase):
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
         self.assertEqual(
-            [record["agent"] for record in records], ["one", "two"],
+            [record.get("agent", "") for record in records], ["one", "two"],
         )
 
     def test_truncated_final_line_does_not_lose_earlier_records(self) -> None:
@@ -76,7 +76,7 @@ class TestReadRecords(TestCase):
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
-        self.assertEqual([record["agent"] for record in records], ["one"])
+        self.assertEqual([record.get("agent", "") for record in records], ["one"])
 
     def test_blank_lines_are_skipped(self) -> None:
         """Blank lines are not counted as records."""
@@ -90,7 +90,7 @@ class TestReadRecords(TestCase):
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
-        self.assertEqual([record["agent"] for record in records], ["one"])
+        self.assertEqual([record.get("agent", "") for record in records], ["one"])
 
     def test_unreadable_file_yields_nothing(self) -> None:
         """A missing file warns and returns empty rather than raising."""
