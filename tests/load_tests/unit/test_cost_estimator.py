@@ -33,8 +33,8 @@ class TestCostEstimator(TestCase):
 
     def test_rate_is_per_million_tokens(self) -> None:
         """Prompt and completion tokens are billed at their own rates."""
-        pricing: Dict[str, float] = MODEL_PRICING["gpt-4o"]
-        expected: float = pricing["prompt"] + pricing["completion"]
+        pricing: Dict[str, float] = MODEL_PRICING.get("gpt-4o", {})
+        expected: float = pricing.get("prompt", 0.0) + pricing.get("completion", 0.0)
 
         self.assertAlmostEqual(
             CostEstimator.estimate(1_000_000, 1_000_000, "gpt-4o"),
@@ -49,27 +49,30 @@ class TestCostEstimator(TestCase):
         prompt rate.  Keys are tried longest-first to prevent that.
         """
         mini: float = CostEstimator.estimate(1_000_000, 0, "gpt-4o-mini")
+        mini_pricing: Dict[str, float] = MODEL_PRICING.get("gpt-4o-mini", {})
 
-        self.assertAlmostEqual(mini, MODEL_PRICING["gpt-4o-mini"]["prompt"])
+        self.assertAlmostEqual(mini, mini_pricing.get("prompt", 0.0))
         self.assertLess(mini, CostEstimator.estimate(1_000_000, 0, "gpt-4o"))
 
     def test_nano_is_not_priced_as_mini(self) -> None:
         """The same specificity rule holds across a three-way prefix."""
         nano: float = CostEstimator.estimate(1_000_000, 0, "gpt-4.1-nano")
+        nano_pricing: Dict[str, float] = MODEL_PRICING.get("gpt-4.1-nano", {})
 
-        self.assertAlmostEqual(nano, MODEL_PRICING["gpt-4.1-nano"]["prompt"])
+        self.assertAlmostEqual(nano, nano_pricing.get("prompt", 0.0))
 
     def test_dated_model_names_resolve_to_their_base_model(self) -> None:
         """Server-reported names carry a date suffix and still match."""
         dated: float = CostEstimator.estimate(1_000_000, 0, "gpt-5.2-2025-12-11")
+        dated_pricing: Dict[str, float] = MODEL_PRICING.get("gpt-5.2", {})
 
-        self.assertAlmostEqual(dated, MODEL_PRICING["gpt-5.2"]["prompt"])
+        self.assertAlmostEqual(dated, dated_pricing.get("prompt", 0.0))
 
     def test_unknown_model_falls_back_to_default_pricing(self) -> None:
         """An unrecognized model is costed, not silently free."""
         unknown: float = CostEstimator.estimate(1_000_000, 0, "llama-9")
 
-        self.assertAlmostEqual(unknown, DEFAULT_PRICING["prompt"])
+        self.assertAlmostEqual(unknown, DEFAULT_PRICING.get("prompt", 0.0))
 
     def test_zero_tokens_cost_nothing(self) -> None:
         """A request with no token data contributes no cost."""

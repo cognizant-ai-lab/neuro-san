@@ -90,34 +90,31 @@ class TestScanRequests(TestCase):
         self._write_request(1)
         self._write_log("Request 1: TIMEOUT (61.00s (1m))\n")
 
-        self.assertEqual(
-            self._rebuild()["request-1"]["status"], STATUS_TIMEOUT,
-        )
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_TIMEOUT)
 
     def test_partial_output_does_not_promote_a_kill(self) -> None:
         """A KILLED request with a reservation_id stays KILLED."""
         self._write_request(1)
         self._write_log("Request 1: KILLED (5.00s)\n")
 
-        self.assertEqual(
-            self._rebuild()["request-1"]["status"], STATUS_KILLED,
-        )
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_KILLED)
 
     def test_partial_output_alone_is_not_success(self) -> None:
         """With no log line, partial output is not counted as passing."""
         self._write_request(1)
         self._write_log("")
 
-        self.assertEqual(
-            self._rebuild()["request-1"]["status"], STATUS_FAILED,
-        )
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_FAILED)
 
     def test_successful_request_is_still_rebuilt_as_created(self) -> None:
         """The normal case is unaffected."""
         self._write_request(1)
         self._write_log("Request 1: CREATED (3.00s)\n")
 
-        result: Dict[str, Any] = self._rebuild()["request-1"]
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
 
-        self.assertEqual(result["status"], STATUS_CREATED)
-        self.assertEqual(result["elapsed"], 3.0)
+        self.assertEqual(result.get("status", ""), STATUS_CREATED)
+        self.assertEqual(result.get("elapsed", 0.0), 3.0)

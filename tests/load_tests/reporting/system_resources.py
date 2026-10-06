@@ -56,7 +56,7 @@ class SystemResources:
         total: int = 0
         for proc in psutil.process_iter(["num_threads"]):
             try:
-                total += proc.info["num_threads"] or 0
+                total += proc.info.get("num_threads") or 0
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return total
@@ -193,7 +193,7 @@ class SystemResources:
         :param total_gb: Total system memory in GB
         :return: e.g. '8192M used / 7.5G free (50% used)'
         """
-        pct: float = snap["mem_pct"]
+        pct: float = snap.get("mem_pct", 0.0)
         avail_gb: float = snap.get("mem_avail_gb", 0.0)
         used_mb: float = pct / 100.0 * total_gb * 1024.0
         return (
@@ -210,7 +210,7 @@ class SystemResources:
         :param ncores: Number of CPU cores
         :return: e.g. '50% (2.00 of 4 cores)'
         """
-        pct: float = snap["cpu_pct"]
+        pct: float = snap.get("cpu_pct", 0.0)
         return f"{pct:.0f}% ({pct / 100.0 * ncores:.2f} of {ncores} cores)"
 
     @staticmethod
@@ -224,7 +224,7 @@ class SystemResources:
         :param sys_max: System thread max from thread_limits
         :return: e.g. '1,234 in use', with the limits added on the before row
         """
-        threads: int = int(snap["threads"])
+        threads: int = int(snap.get("threads", 0))
         if tag == "before":
             return (
                 f"{threads:,} in use / limit {user_limit}"

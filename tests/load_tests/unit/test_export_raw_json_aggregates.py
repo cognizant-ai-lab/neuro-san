@@ -19,7 +19,6 @@ import os
 import shutil
 import tempfile
 from argparse import Namespace
-from types import SimpleNamespace
 from typing import Any
 from typing import Dict
 from typing import List
@@ -28,6 +27,7 @@ from unittest import TestCase
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.reporting.resource_reporter import ResourceReporter
 
 
 # These tests call a deliberately-internal helper directly; suppress
@@ -61,9 +61,7 @@ class TestExportRawJsonAggregates(TestCase):
         orchestrator.profile = AgentProfile(
             "hello_world", {"estimated_tokens_per_request": 1000},
         )
-        orchestrator.resource_reporter = SimpleNamespace(
-            resource_rows=[], client_rows=[],
-        )
+        orchestrator.resource_reporter = ResourceReporter()
         orchestrator.args = Namespace(
             agent="music_nerd", profile_path=None, level="norm",
             ramp=False, host="localhost", port=30011,
@@ -103,7 +101,7 @@ class TestExportRawJsonAggregates(TestCase):
 
         path: str = os.path.join(self._dir, "raw_results.json")
         with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle)["aggregates"]
+            return json.load(handle).get("aggregates", {})
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
         """Concurrency must not divide the reported latency.
@@ -114,17 +112,17 @@ class TestExportRawJsonAggregates(TestCase):
         """
         aggregates: Dict[str, Any] = self._export([30.0] * 10)
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
 
     def test_wall_clock_total_is_reported_separately(self) -> None:
         """Throughput is still derivable from the elapsed total."""
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
-        self.assertEqual(aggregates["total_elapsed_seconds"], 6.0)
-        self.assertEqual(aggregates["total_requests"], 3)
+        self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)
+        self.assertEqual(aggregates.get("total_requests", 0), 3)
