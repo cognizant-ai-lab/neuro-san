@@ -35,14 +35,14 @@ class TableFormatter:
         :param header: Column names
         :param rows: Rows of cell values, one per column
         """
-        col_widths: List[int] = [len(h) for h in header]
+        column_widths: List[int] = [len(column_header) for column_header in header]
         for row in rows:
-            for i, val in enumerate(row):
-                col_widths[i] = max(col_widths[i], len(str(val)))
-        fmt: str = "  ".join(f"{{:>{w}}}" for w in col_widths)
-        logger.info("%s", fmt.format(*header))
+            for index, value in enumerate(row):
+                column_widths[index] = max(column_widths[index], len(str(value)))
+        format_pattern: str = "  ".join(f"{{:>{column_width}}}" for column_width in column_widths)
+        logger.info("%s", format_pattern.format(*header))
         logger.info(
-            "%s", "-" * (sum(col_widths) + 2 * (len(header) - 1)),
+            "%s", "-" * (sum(column_widths) + 2 * (len(header) - 1)),
         )
         for row in rows:
-            logger.info("%s", fmt.format(*row))
+            logger.info("%s", format_pattern.format(*row))

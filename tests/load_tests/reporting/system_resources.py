@@ -54,9 +54,9 @@ class SystemResources:
         :return: Total thread count, leaving out processes that exit or deny access
         """
         total: int = 0
-        for proc in psutil.process_iter(["num_threads"]):
+        for process in psutil.process_iter(["num_threads"]):
             try:
-                total += proc.info["num_threads"] or 0
+                total += process.info["num_threads"] or 0
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return total
@@ -71,106 +71,108 @@ class SystemResources:
         user_limit: str = "n/a"
         if resource is not None:
             try:
-                soft: int = 0
-                soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
+                soft_limit: int = 0
+                soft_limit, _ = resource.getrlimit(resource.RLIMIT_NPROC)
                 user_limit = (
                     "unlimited"
-                    if soft == resource.RLIM_INFINITY
-                    else f"{soft:,}"
+                    if soft_limit == resource.RLIM_INFINITY
+                    else f"{soft_limit:,}"
                 )
             except (ValueError, OSError, AttributeError):
                 user_limit = "n/a"
-        sys_max: str = "n/a"
+        system_maximum: str = "n/a"
         try:
             with open(
                 "/proc/sys/kernel/threads-max",
                 encoding="utf-8",
-            ) as handle:
-                sys_max = f"{int(handle.read().strip()):,}"
+            ) as file_handle:
+                system_maximum = f"{int(file_handle.read().strip()):,}"
         except (OSError, ValueError):
             pass
-        return user_limit, sys_max
+        return user_limit, system_maximum
 
     @classmethod
-    def snapshot(cls, cpu_interval: float = 0.1) -> SysSnapshot:
+    def snapshot(cls, cpu_interval_seconds: float = 0.1) -> SysSnapshot:
         """
         Capture a point-in-time whole-system snapshot.
 
-        :param cpu_interval: Seconds to sample CPU usage over
+        :param cpu_interval_seconds: Seconds to sample CPU usage over
         :return: mem_pct, mem_avail_gb, cpu_pct and threads
         """
-        mem = psutil.virtual_memory()
+        memory_stats = psutil.virtual_memory()
         return {
-            "mem_pct": mem.percent,
-            "mem_avail_gb": mem.available / (1024 ** 3),
-            "cpu_pct": psutil.cpu_percent(interval=cpu_interval),
+            "mem_pct": memory_stats.percent,
+            "mem_avail_gb": memory_stats.available / (1024 ** 3),
+            "cpu_pct": psutil.cpu_percent(interval=cpu_interval_seconds),
             "threads": cls.total_threads(),
         }
 
     @classmethod
     def log_prerun(cls) -> None:
         """Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads)."""
-        mem = psutil.virtual_memory()
-        total_gb: float = mem.total / (1024 ** 3)
-        avail_gb: float = mem.available / (1024 ** 3)
-        ncores: int = psutil.cpu_count() or 1
-        cpu_pct: float = psutil.cpu_percent(interval=0.1)
+        memory_stats = psutil.virtual_memory()
+        total_gigabytes: float = memory_stats.total / (1024 ** 3)
+        available_gigabytes: float = memory_stats.available / (1024 ** 3)
+        core_count: int = psutil.cpu_count() or 1
+        cpu_percentage: float = psutil.cpu_percent(interval=0.1)
         user_limit: str = ""
-        sys_max: str = ""
-        user_limit, sys_max = cls.thread_limits()
+        system_maximum: str = ""
+        user_limit, system_maximum = cls.thread_limits()
         logger.info(
             "  System RAM: %.1fG (%.1fG available, %.0f%% used)",
-            total_gb, avail_gb, mem.percent,
+            total_gigabytes, available_gigabytes, memory_stats.percent,
         )
         logger.info(
             "  System CPU: %d cores (%.0f%% in use)",
-            ncores, cpu_pct,
+            core_count, cpu_percentage,
         )
         logger.info(
             "  System threads: %s in use / limit %s per-user (%s max)",
-            f"{cls.total_threads():,}", user_limit, sys_max,
+            f"{cls.total_threads():,}", user_limit, system_maximum,
         )
 
     @classmethod
     def log_section(
             cls,
-            before: Optional[SysSnapshot],
-            peak: Optional[SysSnapshot],
-            after: Optional[SysSnapshot],
+            before_snapshot: Optional[SysSnapshot],
+            peak_snapshot: Optional[SysSnapshot],
+            after_snapshot: Optional[SysSnapshot],
     ) -> None:
         """
         Log the aligned SYSTEM RESOURCES before/peak/after section.
 
-        :param before: Snapshot taken before the run, or None
-        :param peak: Peak values during the run, or None
-        :param after: Snapshot taken after the run, or None
+        :param before_snapshot: Snapshot taken before the run, or None
+        :param peak_snapshot: Peak values during the run, or None
+        :param after_snapshot: Snapshot taken after the run, or None
         """
-        rows: Tuple[Tuple[str, Optional[SysSnapshot]], ...] = (("before", before), ("peak", peak), ("after", after))
-        if all(snap is None for _, snap in rows):
+        rows: Tuple[Tuple[str, Optional[SysSnapshot]], ...] = (
+            ("before", before_snapshot), ("peak", peak_snapshot), ("after", after_snapshot),
+        )
+        if all(snapshot is None for _, snapshot in rows):
             return
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  SYSTEM RESOURCES")
         logger.info("=" * SEPARATOR_WIDTH)
-        total_gb: float = psutil.virtual_memory().total / (1024 ** 3)
-        ncores: int = psutil.cpu_count() or 1
+        total_gigabytes: float = psutil.virtual_memory().total / (1024 ** 3)
+        core_count: int = psutil.cpu_count() or 1
         user_limit: str = ""
-        sys_max: str = ""
-        user_limit, sys_max = cls.thread_limits()
-        for tag, snap in rows:
-            if snap is not None and snap.get("mem_pct") is not None:
+        system_maximum: str = ""
+        user_limit, system_maximum = cls.thread_limits()
+        for tag, snapshot in rows:
+            if snapshot is not None and snapshot.get("mem_pct") is not None:
                 cls._log_row(
-                    "System memory", tag, cls._fmt_mem(snap, total_gb),
+                    "System memory", tag, cls._fmt_mem(snapshot, total_gigabytes),
                 )
-        for tag, snap in rows:
-            if snap is not None and snap.get("cpu_pct") is not None:
+        for tag, snapshot in rows:
+            if snapshot is not None and snapshot.get("cpu_pct") is not None:
                 cls._log_row(
-                    "System CPU", tag, cls._fmt_cpu(snap, ncores),
+                    "System CPU", tag, cls._fmt_cpu(snapshot, core_count),
                 )
-        for tag, snap in rows:
-            if snap is not None and snap.get("threads") is not None:
+        for tag, snapshot in rows:
+            if snapshot is not None and snapshot.get("threads") is not None:
                 cls._log_row(
                     "System threads", tag,
-                    cls._fmt_threads(snap, tag, user_limit, sys_max),
+                    cls._fmt_threads(snapshot, tag, user_limit, system_maximum),
                 )
 
     @staticmethod
@@ -185,49 +187,49 @@ class SystemResources:
         logger.info("  %-14s %-9s %s", metric, f"({tag}):", value)
 
     @staticmethod
-    def _fmt_mem(snap: SysSnapshot, total_gb: float) -> str:
+    def _fmt_mem(snapshot: SysSnapshot, total_gigabytes: float) -> str:
         """
         Format a memory row: used / free / percent.
 
-        :param snap: System snapshot
-        :param total_gb: Total system memory in GB
+        :param snapshot: System snapshot
+        :param total_gigabytes: Total system memory in GB
         :return: e.g. '8192M used / 7.5G free (50% used)'
         """
-        pct: float = snap["mem_pct"]
-        avail_gb: float = snap.get("mem_avail_gb", 0.0)
-        used_mb: float = pct / 100.0 * total_gb * 1024.0
+        memory_percentage: float = snapshot["mem_pct"]
+        available_gigabytes: float = snapshot.get("mem_avail_gb", 0.0)
+        used_megabytes: float = memory_percentage / 100.0 * total_gigabytes * 1024.0
         return (
-            f"{used_mb:.0f}M used / {avail_gb:.1f}G free"
-            f" ({pct:.0f}% used)"
+            f"{used_megabytes:.0f}M used / {available_gigabytes:.1f}G free"
+            f" ({memory_percentage:.0f}% used)"
         )
 
     @staticmethod
-    def _fmt_cpu(snap: SysSnapshot, ncores: int) -> str:
+    def _fmt_cpu(snapshot: SysSnapshot, core_count: int) -> str:
         """
         Format a CPU row: percent and core-equivalents.
 
-        :param snap: System snapshot
-        :param ncores: Number of CPU cores
+        :param snapshot: System snapshot
+        :param core_count: Number of CPU cores
         :return: e.g. '50% (2.00 of 4 cores)'
         """
-        pct: float = snap["cpu_pct"]
-        return f"{pct:.0f}% ({pct / 100.0 * ncores:.2f} of {ncores} cores)"
+        cpu_percentage: float = snapshot["cpu_pct"]
+        return f"{cpu_percentage:.0f}% ({cpu_percentage / 100.0 * core_count:.2f} of {core_count} cores)"
 
     @staticmethod
-    def _fmt_threads(snap: SysSnapshot, tag: str, user_limit: str, sys_max: str) -> str:
+    def _fmt_threads(snapshot: SysSnapshot, tag: str, user_limit: str, system_maximum: str) -> str:
         """
         Format a threads row; limits only on the before row.
 
-        :param snap: System snapshot
+        :param snapshot: System snapshot
         :param tag: "before", "peak" or "after"
         :param user_limit: Per-user thread limit from thread_limits
-        :param sys_max: System thread max from thread_limits
+        :param system_maximum: System thread max from thread_limits
         :return: e.g. '1,234 in use', with the limits added on the before row
         """
-        threads: int = int(snap["threads"])
+        threads: int = int(snapshot["threads"])
         if tag == "before":
             return (
                 f"{threads:,} in use / limit {user_limit}"
-                f" per-user ({sys_max} max)"
+                f" per-user ({system_maximum} max)"
             )
         return f"{threads:,} in use"

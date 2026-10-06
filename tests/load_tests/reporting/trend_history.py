@@ -121,8 +121,8 @@ class TrendHistory:
         records: List[Dict[str, Any]] = []
         skipped: int = 0
         try:
-            with open(history_path, "r", encoding="utf-8") as handle:
-                for line in handle:
+            with open(history_path, "r", encoding="utf-8") as file_handle:
+                for line in file_handle:
                     line = line.strip()
                     if not line:
                         continue
@@ -229,13 +229,13 @@ class TrendHistory:
         return text[:16]
 
     @staticmethod
-    def _fmt_seconds(value: Optional[float]) -> str:
+    def _fmt_seconds(duration_seconds: Optional[float]) -> str:
         """
         Format a seconds value, rendering absent or zero as "-".
 
-        :param value: Seconds, or None
+        :param duration_seconds: Seconds, or None
         :return: e.g. '12.3s', or '-' when absent or 0
         """
-        if not isinstance(value, (int, float)) or value <= 0:
+        if not isinstance(duration_seconds, (int, float)) or duration_seconds <= 0:
             return "-"
-        return f"{value:.1f}s"
+        return f"{duration_seconds:.1f}s"

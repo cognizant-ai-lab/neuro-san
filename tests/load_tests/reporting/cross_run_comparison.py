@@ -86,12 +86,12 @@ class CrossRunComparison:
             )
             if self._baseline_requests > 0:
                 runs = [
-                    r for r in runs
-                    if r.get("num_requests", 0)
+                    run_metrics for run_metrics in runs
+                    if run_metrics.get("num_requests", 0)
                     >= self._baseline_requests
                 ]
             runs.sort(
-                key=lambda r: r.get("num_requests", 0),
+                key=lambda run_metrics: run_metrics.get("num_requests", 0),
             )
             if not runs:
                 continue
@@ -146,15 +146,15 @@ class CrossRunComparison:
         :param folder_name: Name of the run folder, stored as the run's folder
         :return: The run's metrics, or None when the file cannot be read or parsed
         """
-        data: Dict[str, Any] = {}
+        raw_results: Dict[str, Any] = {}
         try:
-            with open(json_path, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            with open(json_path, "r", encoding="utf-8") as file_handle:
+                raw_results = json.load(file_handle)
         except (json.JSONDecodeError, OSError):
             return None
 
-        aggregates: Dict[str, Any] = data.get("aggregates", {})
-        stages: List[Dict[str, Any]] = data.get("stage_summaries", [])
+        aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
+        stages: List[Dict[str, Any]] = raw_results.get("stage_summaries", [])
         all_results: List[Dict[str, Any]] = []
         for stage in stages:
             all_results.extend(stage.get("results", []))
@@ -164,14 +164,14 @@ class CrossRunComparison:
             if result.get("status") == STATUS_CREATED:
                 created_results.append(result)
 
-        agent: str = data.get("config", {}).get(
+        agent: str = raw_results.get("config", {}).get(
             "agent", "unknown",
         )
 
         return {
             "agent": agent,
             "folder": folder_name,
-            "num_requests": data.get("config", {}).get(
+            "num_requests": raw_results.get("config", {}).get(
                 "num_requests",
                 aggregates.get("total_requests", 0),
             ),
@@ -183,8 +183,8 @@ class CrossRunComparison:
                 created_results, "time_to_first_response",
             ),
             "peak_rss": max(
-                (s.get("peak_server_rss", 0) or 0
-                 for s in stages),
+                (stage_summary.get("peak_server_rss", 0) or 0
+                 for stage_summary in stages),
                 default=0,
             ),
             "succeeded": aggregates.get("passed", 0),
@@ -235,8 +235,8 @@ class CrossRunComparison:
         :return: Average of the values above 0, or 0 when there are none
         """
         values: List[float] = [
-            r.get(key, 0) for r in results
-            if r.get(key, 0) > 0
+            result.get(key, 0) for result in results
+            if result.get(key, 0) > 0
         ]
         if not values:
             return 0
@@ -286,9 +286,9 @@ class CrossRunComparison:
         ]
         baseline: Optional[Dict[str, Any]] = runs[0] if runs else None
         for run in runs:
-            ref: Optional[Dict[str, Any]] = baseline if run is not baseline else None
+            baseline_metrics: Optional[Dict[str, Any]] = baseline if run is not baseline else None
             deltas: Dict[str, float] = CrossRunComparison._compute_deltas(
-                ref, run, metric_keys,
+                baseline_metrics, run, metric_keys,
             )
             rows.append((
                 run.get("folder", ""),
@@ -348,34 +348,34 @@ class CrossRunComparison:
         if not os.path.isfile(log_path):
             return []
         loops: List[Dict[str, Any]] = []
-        with open(log_path, "r", encoding="utf-8") as fh:
-            for line in fh:
+        with open(log_path, "r", encoding="utf-8") as file_handle:
+            for line in file_handle:
                 match: Optional[re.Match] = _SERVER_TOKEN_RE.search(line)
                 if not match:
                     continue
                 llm_calls: int = int(match.group(5))
                 if llm_calls < _LOOP_THRESHOLD:
                     continue
-                prompt: int = int(
+                prompt_tokens: int = int(
                     match.group(3).replace(",", ""),
                 )
-                completion: int = int(
+                completion_tokens: int = int(
                     match.group(4).replace(",", ""),
                 )
                 model: str = match.group(6)
                 retries: int = llm_calls - _NORMAL_LLM_CALLS
-                cost: float = CostEstimator.estimate(
-                    prompt, completion, model,
+                cost_dollars: float = CostEstimator.estimate(
+                    prompt_tokens, completion_tokens, model,
                 )
                 loops.append({
                     "request_id": match.group(1),
                     "llm_calls": llm_calls,
                     "retries": retries,
-                    "prompt_tokens": prompt,
-                    "completion_tokens": completion,
-                    "total_tokens": prompt + completion,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
                     "model": model,
-                    "cost_usd": cost,
+                    "cost_usd": cost_dollars,
                 })
         return loops
 
@@ -388,13 +388,13 @@ class CrossRunComparison:
         :param loops: Validation loop entries from _parse_validation_loops
         """
         total_retries: int = sum(
-            lp.get("retries", 0) for lp in loops
+            loop_entry.get("retries", 0) for loop_entry in loops
         )
         total_tokens: int = sum(
-            lp.get("total_tokens", 0) for lp in loops
+            loop_entry.get("total_tokens", 0) for loop_entry in loops
         )
-        total_cost: float = sum(
-            lp.get("cost_usd", 0.0) for lp in loops
+        total_cost_dollars: float = sum(
+            loop_entry.get("cost_usd", 0.0) for loop_entry in loops
         )
         logger.info("")
         logger.info(
@@ -407,100 +407,101 @@ class CrossRunComparison:
             "$%.2f",
             total_retries,
             f"{total_tokens:,}",
-            total_cost,
+            total_cost_dollars,
         )
-        for lp in sorted(
+        for loop_entry in sorted(
             loops, key=lambda x: x.get("retries", 0),
             reverse=True,
         ):
             logger.info(
                 "    %s: %s retries, %s tokens "
                 "($%.2f)",
-                lp.get("request_id", ""),
-                lp.get("retries", 0),
-                f"{lp.get('total_tokens', 0):,}",
-                lp.get("cost_usd", 0.0),
+                loop_entry.get("request_id", ""),
+                loop_entry.get("retries", 0),
+                f"{loop_entry.get('total_tokens', 0):,}",
+                loop_entry.get("cost_usd", 0.0),
             )
 
     @staticmethod
-    def _compute_deltas(prev: Optional[Dict[str, Any]], current: Dict[str, Any], keys: List[str]) -> Dict[str, float]:
+    def _compute_deltas(previous_metrics: Optional[Dict[str, Any]], current_metrics: Dict[str, Any],
+                        keys: List[str]) -> Dict[str, float]:
         """
-        Compute percentage change from prev to current for each key.
+        Compute percentage change from the previous to the current metrics for each key.
 
-        :param prev: Baseline run metrics, or None for the baseline itself
-        :param current: Metrics of the run being compared
+        :param previous_metrics: Baseline run metrics, or None for the baseline itself
+        :param current_metrics: Metrics of the run being compared
         :param keys: Metric names to compare
         :return: Metric name to percent change; keys with a baseline of 0 are left out
         """
-        if prev is None:
+        if previous_metrics is None:
             return {}
         deltas: Dict[str, float] = {}
         for key in keys:
-            prev_val: float = prev.get(key, 0)
-            curr_val: float = current.get(key, 0)
-            if prev_val > 0:
+            previous_value: float = previous_metrics.get(key, 0)
+            current_value: float = current_metrics.get(key, 0)
+            if previous_value > 0:
                 deltas[key] = (
-                    (curr_val - prev_val) / prev_val * 100
+                    (current_value - previous_value) / previous_value * 100
                 )
         return deltas
 
     @staticmethod
-    def _val_with_delta(formatted_val: str, delta_pct: Optional[float]) -> str:
+    def _val_with_delta(formatted_value: str, delta_percentage: Optional[float]) -> str:
         """
         Append percentage change suffix if available.
 
-        :param formatted_val: Value already formatted for display
-        :param delta_pct: Percent change against the baseline run, or None
-        :return: e.g. '120 (+20%)', or formatted_val unchanged when delta_pct is None
+        :param formatted_value: Value already formatted for display
+        :param delta_percentage: Percent change against the baseline run, or None
+        :return: e.g. '120 (+20%)', or formatted_value unchanged when delta_percentage is None
         """
-        if delta_pct is None:
-            return formatted_val
-        sign: str = "+" if delta_pct >= 0 else ""
-        return f"{formatted_val} ({sign}{delta_pct:.0f}%)"
+        if delta_percentage is None:
+            return formatted_value
+        sign: str = "+" if delta_percentage >= 0 else ""
+        return f"{formatted_value} ({sign}{delta_percentage:.0f}%)"
 
     @staticmethod
-    def _fmt_optional(value: float, delta_pct: Optional[float]) -> str:
+    def _fmt_optional(duration_seconds: float, delta_percentage: Optional[float]) -> str:
         """
         Format a duration, showing a dash when data is missing.
 
-        :param value: Duration in seconds; 0 when unknown
-        :param delta_pct: Percent change against the baseline run, or None
+        :param duration_seconds: Duration in seconds; 0 when unknown
+        :param delta_percentage: Percent change against the baseline run, or None
         :return: The formatted duration, or a dash when value is 0
         """
-        if value <= 0:
+        if duration_seconds <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(
-            Formatters.fmt_duration(value), delta_pct,
+            Formatters.fmt_duration(duration_seconds), delta_percentage,
         )
 
     @staticmethod
-    def _fmt_time_to_first_response(value: float, delta_pct: Optional[float]) -> str:
+    def _fmt_time_to_first_response(duration_seconds: float, delta_percentage: Optional[float]) -> str:
         """
         Format time to first response, showing a dash when data is missing.
 
-        :param value: Average time to first response in seconds; 0 when unknown
-        :param delta_pct: Percent change against the baseline run, or None
+        :param duration_seconds: Average time to first response in seconds; 0 when unknown
+        :param delta_percentage: Percent change against the baseline run, or None
         :return: The formatted value, or a dash when value is 0
         """
-        if value <= 0:
+        if duration_seconds <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(
-            Formatters.fmt_duration(value), delta_pct,
+            Formatters.fmt_duration(duration_seconds), delta_percentage,
         )
 
     @staticmethod
-    def _fmt_rss(value: float, delta_pct: Optional[float]) -> str:
+    def _fmt_rss(rss_megabytes: float, delta_percentage: Optional[float]) -> str:
         """
         Format peak RSS, showing a dash when data is missing.
 
-        :param value: Peak RSS in megabytes; 0 when unknown
-        :param delta_pct: Percent change against the baseline run, or None
+        :param rss_megabytes: Peak RSS in megabytes; 0 when unknown
+        :param delta_percentage: Percent change against the baseline run, or None
         :return: The formatted RSS, or a dash when value is 0
         """
-        if value <= 0:
+        if rss_megabytes <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(
-            Formatters.format_rss(value), delta_pct,
+            Formatters.format_rss(rss_megabytes), delta_percentage,
         )
 
     @staticmethod
@@ -515,8 +516,8 @@ class CrossRunComparison:
         """
         if count == 0:
             return "0"
-        pct: int = (count * 100 // total) if total else 0
-        base: str = f"{count} ({pct}%)"
+        percentage: int = (count * 100 // total) if total else 0
+        base: str = f"{count} ({percentage}%)"
         if not breakdown:
             return base
         labels: Tuple[Tuple[str, str], ...] = (
@@ -528,9 +529,9 @@ class CrossRunComparison:
         )
         parts: List[str] = []
         for key, label in labels:
-            val: int = breakdown.get(key, 0)
-            if val:
-                parts.append(f"{val} {label}")
+            value: int = breakdown.get(key, 0)
+            if value:
+                parts.append(f"{value} {label}")
         if not parts:
             return base
         return f"{base}: {', '.join(parts)}"
