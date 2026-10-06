@@ -265,15 +265,15 @@ class SummaryReporter:
         logger.info("  %s:", label)
         logger.info(
             "    LLM calls: %s total  (%s / %s / %s min/avg/max)",
-            stats["calls_total"], stats["calls_min"],
-            stats["calls_avg"], stats["calls_max"],
+            stats.get("calls_total", 0), stats.get("calls_min", 0),
+            stats.get("calls_avg", 0), stats.get("calls_max", 0),
         )
         logger.info(
             "    Tokens:    %s total  (%s / %s / %s min/avg/max),"
             "  %s prompt + %s completion",
-            f"{stats['tok_total']:,}", f"{stats['tok_min']:,}",
-            f"{stats['tok_avg']:,}", f"{stats['tok_max']:,}",
-            f"{stats['prompt_total']:,}", f"{stats['comp_total']:,}",
+            f"{stats.get('tok_total', 0):,}", f"{stats.get('tok_min', 0):,}",
+            f"{stats.get('tok_avg', 0):,}", f"{stats.get('tok_max', 0):,}",
+            f"{stats.get('prompt_total', 0):,}", f"{stats.get('comp_total', 0):,}",
         )
 
     @staticmethod
@@ -284,16 +284,16 @@ class SummaryReporter:
         :param client: Client token stats
         :param server: Server log token stats
         """
-        calls_match: bool = client["calls_total"] == server["calls_total"]
-        tokens_match: bool = client["tok_total"] == server["tok_total"]
+        calls_match: bool = client.get("calls_total", 0) == server.get("calls_total", 0)
+        tokens_match: bool = client.get("tok_total", 0) == server.get("tok_total", 0)
         if calls_match and tokens_match:
             logger.info("  Match: OK")
             return
         logger.info(
             "  Match: MISMATCH — LLM calls %s vs %s, "
             "tokens %s vs %s",
-            client["calls_total"], server["calls_total"],
-            f"{client['tok_total']:,}", f"{server['tok_total']:,}",
+            client.get("calls_total", 0), server.get("calls_total", 0),
+            f"{client.get('tok_total', 0):,}", f"{server.get('tok_total', 0):,}",
         )
 
     @staticmethod

@@ -56,7 +56,7 @@ class SystemResources:
         total: int = 0
         for process in psutil.process_iter(["num_threads"]):
             try:
-                total += process.info["num_threads"] or 0
+                total += process.info.get("num_threads") or 0
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return total
@@ -195,7 +195,7 @@ class SystemResources:
         :param total_gigabytes: Total system memory in GB
         :return: e.g. '8192M used / 7.5G free (50% used)'
         """
-        memory_percentage: float = snapshot["mem_pct"]
+        memory_percentage: float = snapshot.get("mem_pct", 0.0)
         available_gigabytes: float = snapshot.get("mem_avail_gb", 0.0)
         used_megabytes: float = memory_percentage / 100.0 * total_gigabytes * 1024.0
         return (
@@ -212,7 +212,7 @@ class SystemResources:
         :param core_count: Number of CPU cores
         :return: e.g. '50% (2.00 of 4 cores)'
         """
-        cpu_percentage: float = snapshot["cpu_pct"]
+        cpu_percentage: float = snapshot.get("cpu_pct", 0.0)
         return f"{cpu_percentage:.0f}% ({cpu_percentage / 100.0 * core_count:.2f} of {core_count} cores)"
 
     @staticmethod
@@ -226,7 +226,7 @@ class SystemResources:
         :param system_maximum: System thread max from thread_limits
         :return: e.g. '1,234 in use', with the limits added on the before row
         """
-        threads: int = int(snapshot["threads"])
+        threads: int = int(snapshot.get("threads", 0))
         if tag == "before":
             return (
                 f"{threads:,} in use / limit {user_limit}"

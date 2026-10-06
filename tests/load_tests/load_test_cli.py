@@ -2737,7 +2737,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "stage_summaries": stage_summaries,
             "resource_rows": [
                 {"before": row[1], "after": row[2]}
-                for row in self.resource_reporter.resource_rows
+                for row in self.resource_reporter.get_resource_rows()
             ],
             "client_resource_rows": [
                 {
@@ -2745,7 +2745,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "peak": row[2],
                     "settled": row[3],
                 }
-                for row in self.resource_reporter.client_rows
+                for row in self.resource_reporter.get_client_rows()
             ],
         }
         raw_data.update(JsonMetadata.build())

@@ -48,8 +48,7 @@ class ResourceReporter:
         self._resource_rows: List[ServerResourceRow] = []
         self._client_rows: List[ClientResourceRow] = []
 
-    @property
-    def resource_rows(self) -> List[ServerResourceRow]:
+    def get_resource_rows(self) -> List[ServerResourceRow]:
         """
         Return the accumulated server resource rows.
 
@@ -57,8 +56,7 @@ class ResourceReporter:
         """
         return list(self._resource_rows)
 
-    @property
-    def client_rows(self) -> List[ClientResourceRow]:
+    def get_client_rows(self) -> List[ClientResourceRow]:
         """
         Return the accumulated client resource rows.
 

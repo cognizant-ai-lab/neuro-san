@@ -426,12 +426,11 @@ class InputValidator:
         :return: One warning when --minimal is used with token accounting, else empty
         """
         args: Namespace = self._args
-        if getattr(args, "chat_filter", "maximal") != "minimal":
+        if args.chat_filter != "minimal":
             return []
-        if not getattr(args, "include_tokens", False):
+        if not args.include_tokens:
             return []
-        if (getattr(args, "client_only", False)
-                or getattr(args, "no_server_log", False)):
+        if args.client_only or args.no_server_log:
             return [
                 "--minimal drops the token-accounting"
                 " message, and this run has no server log to fall"
