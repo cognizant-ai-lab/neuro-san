@@ -40,11 +40,7 @@ class TestResolveStages(TestCase):
         :param num_requests: --num-requests value
         :return: Validator over those args
         """
-        return InputValidator(Namespace(
-            ramp=ramp,
-            stages=stages,
-            num_requests=num_requests,
-        ))
+        return InputValidator(Namespace(ramp=ramp, stages=stages, num_requests=num_requests))
 
     def test_flat_mode_is_a_single_stage(self) -> None:
         """Without --ramp the run is one stage of --num-requests."""

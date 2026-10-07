@@ -51,14 +51,9 @@ class TestScanRequests(TestCase):
 
         :param req_id: Request id used in the file name and reservation id
         """
-        path: str = os.path.join(
-            self._dir, "requests", f"request_{req_id}_stdout.txt",
-        )
+        path: str = os.path.join(self._dir, "requests", f"request_{req_id}_stdout.txt")
         with open(path, "w", encoding="utf-8") as handle:
-            handle.write(
-                '{"reservation_id": "abc-%s",'
-                ' "agent_network_name": "music_nerd"}\n' % req_id
-            )
+            handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % req_id)
 
     def _write_log(self, text: str) -> None:
         """

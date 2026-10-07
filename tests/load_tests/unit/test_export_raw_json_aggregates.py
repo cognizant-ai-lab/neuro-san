@@ -58,9 +58,7 @@ class TestExportRawJsonAggregates(TestCase):
         orchestrator._server_ns_version = "0.6.92"
         orchestrator.server_log = None
         orchestrator.hocon_files = []
-        orchestrator.profile = AgentProfile(
-            "hello_world", {"estimated_tokens_per_request": 1000},
-        )
+        orchestrator.profile = AgentProfile("hello_world", {"estimated_tokens_per_request": 1000})
         orchestrator.resource_reporter = ResourceReporter()
         orchestrator.args = Namespace(
             agent="music_nerd", profile_path=None, level="norm",
@@ -82,11 +80,7 @@ class TestExportRawJsonAggregates(TestCase):
         """
         results: List[Dict[str, Any]] = []
         for index, elapsed in enumerate(elapsed_values, start=1):
-            results.append({
-                "request_id": f"request-{index}",
-                "status": STATUS_CREATED,
-                "elapsed": elapsed,
-            })
+            results.append({"request_id": f"request-{index}", "status": STATUS_CREATED, "elapsed": elapsed})
         # One stage whose wall-clock time is the slowest request,
         # because the requests ran concurrently.
         stage_summaries: List[Dict[str, Any]] = [{
@@ -95,9 +89,7 @@ class TestExportRawJsonAggregates(TestCase):
             "elapsed": max(elapsed_values),
         }]
 
-        self._orchestrator()._export_raw_json(
-            stage_summaries, exit_code=0,
-        )
+        self._orchestrator()._export_raw_json(stage_summaries, exit_code=0)
 
         path: str = os.path.join(self._dir, "raw_results.json")
         with open(path, "r", encoding="utf-8") as handle:

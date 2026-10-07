@@ -121,8 +121,7 @@ class AgentProfileFactory:
         if profile_path:
             if os.path.isfile(profile_path):
                 logger.error(
-                    "--profile-path should be a directory, not a "
-                    "file.\n"
+                    "--profile-path should be a directory, not a file.\n"
                     "  Got: %s\n"
                     "  Try: --profile-path %s",
                     profile_path, os.path.dirname(profile_path),
@@ -143,9 +142,7 @@ class AgentProfileFactory:
         searched: List[str] = []
 
         # Search in the built-in profiles directory next to this module
-        profiles_dir: str = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "profiles",
-        )
+        profiles_dir: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
         for name in (agent_name, agent_base):
             candidate = os.path.join(profiles_dir, f"{name}.json")
             searched.append(candidate)
@@ -212,8 +209,7 @@ class AgentProfileFactory:
 
         if not prompts:
             logger.error(
-                "No interactions[0].text found in %d hocon file(s) for "
-                "agent '%s'.\nAborting.",
+                "No interactions[0].text found in %d hocon file(s) for agent '%s'.\nAborting.",
                 len(hocon_files), agent_name,
             )
             raise SystemExit(1)
@@ -222,8 +218,7 @@ class AgentProfileFactory:
             if response:
                 checked += 1
         logger.info(
-            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' "
-            "(response checks in %d, failure_patterns=%d)",
+            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' (response checks in %d, failure_patterns=%d)",
             len(prompts), len(hocon_files), agent_name,
             checked, len(failure_patterns),
         )
