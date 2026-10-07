@@ -46,8 +46,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class CrossRunComparison:
-    """Scans a base directory for raw_results.json files and logs
-    a comparison table across runs."""
+    """
+    Scans a base directory for raw_results.json files and logs a comparison table across runs.
+    """
 
     def __init__(self, base_dir: str, agent_filter: Optional[List[str]] = None, baseline_requests: int = 0,
                  run_filter: Optional[List[str]] = None) -> None:
@@ -60,22 +61,17 @@ class CrossRunComparison:
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
         self._base_dir: str = base_dir
-        self._agent_filter: Set[str] = (
-            set(agent_filter) if agent_filter else set()
-        )
+        self._agent_filter: Set[str] = set(agent_filter) if agent_filter else set()
         self._baseline_requests: int = baseline_requests
-        self._run_filter: Set[str] = (
-            set(run_filter) if run_filter else set()
-        )
+        self._run_filter: Set[str] = set(run_filter) if run_filter else set()
 
     def run(self) -> None:
-        """Scan for runs and log comparison tables by agent."""
+        """
+        Scan for runs and log comparison tables by agent.
+        """
         all_runs: List[Dict[str, Any]] = self._collect_runs()
         if not all_runs:
-            logger.info(
-                "No raw_results.json files found in %s",
-                self._base_dir,
-            )
+            logger.info("No raw_results.json files found in %s", self._base_dir)
             return
         groups: Dict[str, List[Dict[str, Any]]] = self._group_by_agent(all_runs)
         for agent_name in sorted(groups):
@@ -90,9 +86,7 @@ class CrossRunComparison:
                     if run_metrics.get("num_requests", 0)
                     >= self._baseline_requests
                 ]
-            runs.sort(
-                key=lambda run_metrics: run_metrics.get("num_requests", 0),
-            )
+            runs.sort(key=lambda run_metrics: run_metrics.get("num_requests", 0))
             if not runs:
                 continue
             self._log_table(runs, agent_name)
@@ -109,9 +103,7 @@ class CrossRunComparison:
             if (self._run_filter
                     and entry not in self._run_filter):
                 continue
-            json_path: str = os.path.join(
-                self._base_dir, entry, "raw_results.json",
-            )
+            json_path: str = os.path.join(self._base_dir, entry, "raw_results.json")
             if not os.path.isfile(json_path):
                 continue
             metrics: Optional[Dict[str, Any]] = self._extract_metrics(json_path, entry)
@@ -164,24 +156,15 @@ class CrossRunComparison:
             if result.get("status") == STATUS_CREATED:
                 created_results.append(result)
 
-        agent: str = raw_results.get("config", {}).get(
-            "agent", "unknown",
-        )
+        agent: str = raw_results.get("config", {}).get("agent", "unknown")
 
-        return {
+        run_metrics: Dict[str, Any] = {
             "agent": agent,
             "folder": folder_name,
-            "num_requests": raw_results.get("config", {}).get(
-                "num_requests",
-                aggregates.get("total_requests", 0),
-            ),
-            "wall_time": aggregates.get(
-                "total_elapsed_seconds", 0,
-            ),
+            "num_requests": raw_results.get("config", {}).get("num_requests", aggregates.get("total_requests", 0)),
+            "wall_time": aggregates.get("total_elapsed_seconds", 0),
             "avg_success": CrossRunComparison._avg(created_results, "elapsed"),
-            "time_to_first_response_avg": CrossRunComparison._avg(
-                created_results, "time_to_first_response",
-            ),
+            "time_to_first_response_avg": CrossRunComparison._avg(created_results, "time_to_first_response"),
             "peak_rss": max(
                 (stage_summary.get("peak_server_rss", 0)
                  for stage_summary in stages),
@@ -189,10 +172,9 @@ class CrossRunComparison:
             ),
             "succeeded": aggregates.get("passed", 0),
             "failed": aggregates.get("failed", 0),
-            "fail_breakdown": CrossRunComparison._classify_failures(
-                all_results,
-            ),
+            "fail_breakdown": CrossRunComparison._classify_failures(all_results),
         }
+        return run_metrics
 
     @staticmethod
     def _classify_failures(all_results: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -202,12 +184,7 @@ class CrossRunComparison:
         :param all_results: Every request result in the run
         :return: Failure category to count; "other" is added only when a reason matches no category
         """
-        counts: Dict[str, int] = {
-            "empty_llm": 0,
-            "validation": 0,
-            "incomplete": 0,
-            "no_token_data": 0,
-        }
+        counts: Dict[str, int] = {"empty_llm": 0, "validation": 0, "incomplete": 0, "no_token_data": 0}
         for result in all_results:
             if result.get("status") == STATUS_CREATED:
                 continue
@@ -240,7 +217,8 @@ class CrossRunComparison:
         ]
         if not values:
             return 0
-        return sum(values) / len(values)
+        average_value: float = sum(values) / len(values)
+        return average_value
 
     def _group_by_agent(self, runs: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -287,9 +265,7 @@ class CrossRunComparison:
         baseline: Optional[Dict[str, Any]] = runs[0] if runs else None
         for run in runs:
             baseline_metrics: Optional[Dict[str, Any]] = baseline if run is not baseline else None
-            deltas: Dict[str, float] = CrossRunComparison._compute_deltas(
-                baseline_metrics, run, metric_keys,
-            )
+            deltas: Dict[str, float] = CrossRunComparison._compute_deltas(baseline_metrics, run, metric_keys)
             rows.append((
                 run.get("folder", ""),
                 CrossRunComparison._val_with_delta(
@@ -329,9 +305,7 @@ class CrossRunComparison:
         """
         for run in runs:
             folder: str = run.get("folder", "")
-            log_path: str = os.path.join(
-                self._base_dir, folder, "server_tokens.log",
-            )
+            log_path: str = os.path.join(self._base_dir, folder, "server_tokens.log")
             loops: List[Dict[str, Any]] = self._parse_validation_loops(log_path)
             if not loops:
                 continue
@@ -356,18 +330,12 @@ class CrossRunComparison:
                 llm_calls: int = int(match.group(5))
                 if llm_calls < _LOOP_THRESHOLD:
                     continue
-                prompt_tokens: int = int(
-                    match.group(3).replace(",", ""),
-                )
-                completion_tokens: int = int(
-                    match.group(4).replace(",", ""),
-                )
+                prompt_tokens: int = int(match.group(3).replace(",", ""))
+                completion_tokens: int = int(match.group(4).replace(",", ""))
                 model: str = match.group(6)
                 retries: int = llm_calls - _NORMAL_LLM_CALLS
-                cost_dollars: float = CostEstimator.estimate(
-                    prompt_tokens, completion_tokens, model,
-                )
-                loops.append({
+                cost_dollars: float = CostEstimator.estimate(prompt_tokens, completion_tokens, model)
+                loop_entry: Dict[str, Any] = {
                     "request_id": match.group(1),
                     "llm_calls": llm_calls,
                     "retries": retries,
@@ -376,7 +344,8 @@ class CrossRunComparison:
                     "total_tokens": prompt_tokens + completion_tokens,
                     "model": model,
                     "cost_usd": cost_dollars,
-                })
+                }
+                loops.append(loop_entry)
         return loops
 
     @staticmethod
@@ -397,22 +366,9 @@ class CrossRunComparison:
             loop_entry.get("cost_usd", 0.0) for loop_entry in loops
         )
         logger.info("")
-        logger.info(
-            "  Validation loops in %s "
-            "(%s request(s)):",
-            folder, len(loops),
-        )
-        logger.info(
-            "    Total: %s retries, %s tokens, "
-            "$%.2f",
-            total_retries,
-            f"{total_tokens:,}",
-            total_cost_dollars,
-        )
-        for loop_entry in sorted(
-            loops, key=lambda x: x.get("retries", 0),
-            reverse=True,
-        ):
+        logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
+        logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
+        for loop_entry in sorted(loops, key=lambda x: x.get("retries", 0), reverse=True):
             logger.info(
                 "    %s: %s retries, %s tokens "
                 "($%.2f)",
@@ -440,9 +396,7 @@ class CrossRunComparison:
             previous_value: float = previous_metrics.get(key, 0)
             current_value: float = current_metrics.get(key, 0)
             if previous_value > 0:
-                deltas[key] = (
-                    (current_value - previous_value) / previous_value * 100
-                )
+                deltas[key] = (current_value - previous_value) / previous_value * 100
         return deltas
 
     @staticmethod
@@ -470,9 +424,7 @@ class CrossRunComparison:
         """
         if duration_seconds <= 0:
             return "\u2014"
-        return CrossRunComparison._val_with_delta(
-            Formatters.fmt_duration(duration_seconds), delta_percentage,
-        )
+        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
 
     @staticmethod
     def _fmt_time_to_first_response(duration_seconds: float, delta_percentage: Optional[float]) -> str:
@@ -485,9 +437,7 @@ class CrossRunComparison:
         """
         if duration_seconds <= 0:
             return "\u2014"
-        return CrossRunComparison._val_with_delta(
-            Formatters.fmt_duration(duration_seconds), delta_percentage,
-        )
+        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
 
     @staticmethod
     def _fmt_rss(rss_megabytes: float, delta_percentage: Optional[float]) -> str:
@@ -500,9 +450,7 @@ class CrossRunComparison:
         """
         if rss_megabytes <= 0:
             return "\u2014"
-        return CrossRunComparison._val_with_delta(
-            Formatters.format_rss(rss_megabytes), delta_percentage,
-        )
+        return CrossRunComparison._val_with_delta(Formatters.format_rss(rss_megabytes), delta_percentage)
 
     @staticmethod
     def _fmt_failed(count: int, total: int, breakdown: Dict[str, int]) -> str:
