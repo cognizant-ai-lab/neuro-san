@@ -370,8 +370,7 @@ class CrossRunComparison:
         logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
         for loop_entry in sorted(loops, key=lambda x: x.get("retries", 0), reverse=True):
             logger.info(
-                "    %s: %s retries, %s tokens "
-                "($%.2f)",
+                "    %s: %s retries, %s tokens ($%.2f)",
                 loop_entry.get("request_id", ""),
                 loop_entry.get("retries", 0),
                 f"{loop_entry.get('total_tokens', 0):,}",

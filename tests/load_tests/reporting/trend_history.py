@@ -59,8 +59,7 @@ class TrendHistory:
         history_path: Optional[str] = self._resolve_path()
         if history_path is None:
             logger.info(
-                "No history file found at %s. Runs append one record "
-                "each, so this file appears after the first run.",
+                "No history file found at %s. Runs append one record each, so this file appears after the first run.",
                 self._path,
             )
             return
