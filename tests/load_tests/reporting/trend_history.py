@@ -81,6 +81,7 @@ class TrendHistory:
         records.sort(key=lambda record: record.get("timestamp", ""))
         logger.info("")
         logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
+        # One table row per record, in file order.
         rows: List[List[str]] = []
         for record in records:
             rows.append(self._row(record))
@@ -184,7 +185,9 @@ class TrendHistory:
         ]
         # One cell per threshold: requests completed within it, or "-".
         for threshold in HISTORY_THRESHOLDS_SECONDS:
-            row.append(str(record.get(f"completed_within_{int(threshold)}s", "-")))
+            threshold_key: str = f"completed_within_{int(threshold)}s"
+            completed_count: Any = record.get(threshold_key, "-")
+            row.append(str(completed_count))
         row.append(TrendHistory._fmt_seconds(record.get("avg_first_response_s")))
         row.append(TrendHistory._fmt_seconds(record.get("avg_duration_s")))
         row.append(TrendHistory._fmt_seconds(record.get("wall_time_s")))

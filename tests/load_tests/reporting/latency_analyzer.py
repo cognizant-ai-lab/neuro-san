@@ -301,10 +301,10 @@ class LatencyAnalyzer:
                 event_index += 1
         for index, peak_in_flight_count in enumerate(bucket_peaks):
             bucket_start_seconds: float = index * bucket_size_seconds
-            bar_length: int = 0
+            bar_length_characters: int = 0
             if maximum_in_flight_count:
                 # Bar length scaled so the busiest bucket fills 40 characters, rounded down.
-                bar_length = peak_in_flight_count * 40 // maximum_in_flight_count
-            chart: str = "#" * bar_length
+                bar_length_characters = peak_in_flight_count * 40 // maximum_in_flight_count
+            chart: str = "#" * bar_length_characters
             label: str = Formatters.fmt_duration(bucket_start_seconds)
             logger.info("    %8s |%-40s| %d", label, chart, peak_in_flight_count)

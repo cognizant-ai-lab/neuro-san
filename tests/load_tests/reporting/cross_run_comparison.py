@@ -148,9 +148,12 @@ class CrossRunComparison:
 
         aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
         stages: List[Dict[str, Any]] = raw_results.get("stage_summaries", [])
+        # Gather every stage's results, and each stage's peak server RSS.
         all_results: List[Dict[str, Any]] = []
+        peak_rss_values_megabytes: List[float] = []
         for stage in stages:
             all_results.extend(stage.get("results", []))
+            peak_rss_values_megabytes.append(stage.get("peak_server_rss", 0))
         created_results: List[Dict[str, Any]] = []
         result: Dict[str, Any]
         for result in all_results:
@@ -159,10 +162,7 @@ class CrossRunComparison:
 
         agent: str = raw_results.get("config", {}).get("agent", "unknown")
 
-        # Collect each stage's peak server RSS; the run's peak is the largest, or 0 with no stages.
-        peak_rss_values_megabytes: List[float] = []
-        for stage_summary in stages:
-            peak_rss_values_megabytes.append(stage_summary.get("peak_server_rss", 0))
+        # The run's peak RSS is the largest stage peak, or 0 with no stages.
         peak_rss_megabytes: float = max(peak_rss_values_megabytes, default=0)
         run_metrics: Dict[str, Any] = {
             "agent": agent,
@@ -216,9 +216,9 @@ class CrossRunComparison:
         # Keep only the values above 0.
         values: List[float] = []
         for result in results:
-            value: float = result.get(key, 0)
-            if value > 0:
-                values.append(value)
+            field_value: float = result.get(key, 0)
+            if field_value > 0:
+                values.append(field_value)
         if not values:
             return 0
         average_value: float = sum(values) / len(values)
