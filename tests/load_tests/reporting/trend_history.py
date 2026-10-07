@@ -68,10 +68,12 @@ class TrendHistory:
             logger.info("No usable records in %s", history_path)
             return
         if self._agent_filter:
-            records = [
-                record for record in records
-                if record.get("agent") in self._agent_filter
-            ]
+            # Keep only the records for the agents in the filter.
+            matching_records: List[Dict[str, Any]] = []
+            for record in records:
+                if record.get("agent") in self._agent_filter:
+                    matching_records.append(record)
+            records = matching_records
             if not records:
                 agent_names: str = ", ".join(sorted(self._agent_filter))
                 logger.info("No records for agent(s) %s in %s", agent_names, history_path)
@@ -79,9 +81,10 @@ class TrendHistory:
         records.sort(key=lambda record: record.get("timestamp", ""))
         logger.info("")
         logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
-        TableFormatter.log_table(
-            self._header(), [self._row(record) for record in records],
-        )
+        rows: List[List[str]] = []
+        for record in records:
+            rows.append(self._row(record))
+        TableFormatter.log_table(self._header(), rows)
         logger.info("")
 
     def _resolve_path(self) -> Optional[str]:
@@ -146,10 +149,9 @@ class TrendHistory:
         :return: Column names
         """
         header: List[str] = ["timestamp", "neuro-san", "agent", "mode", "via", "reqs", "done"]
-        header.extend(
-            f"<{int(threshold)}s"
-            for threshold in HISTORY_THRESHOLDS_SECONDS
-        )
+        # One column per threshold, e.g. "<30s".
+        for threshold in HISTORY_THRESHOLDS_SECONDS:
+            header.append(f"<{int(threshold)}s")
         header.extend(["first_resp", "avg", "wall", "err", "warn"])
         return header
 
@@ -180,10 +182,9 @@ class TrendHistory:
             str(requests),
             str(completed),
         ]
-        row.extend(
-            str(record.get(f"completed_within_{int(threshold)}s", "-"))
-            for threshold in HISTORY_THRESHOLDS_SECONDS
-        )
+        # One cell per threshold: requests completed within it, or "-".
+        for threshold in HISTORY_THRESHOLDS_SECONDS:
+            row.append(str(record.get(f"completed_within_{int(threshold)}s", "-")))
         row.append(TrendHistory._fmt_seconds(record.get("avg_first_response_s")))
         row.append(TrendHistory._fmt_seconds(record.get("avg_duration_s")))
         row.append(TrendHistory._fmt_seconds(record.get("wall_time_s")))
