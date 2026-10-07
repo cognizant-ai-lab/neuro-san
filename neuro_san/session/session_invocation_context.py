@@ -420,7 +420,7 @@ class SessionInvocationContext(InvocationContext):
         before it has happened.
 
         :param timeout: Seconds to allow each clean-up step, or None for the
-                    default. A step that outlasts it is reported and abandoned.
+                    default. A cleanup step that times out is reported and abandoned.
         """
         # Only ever do this once
         if self.request_finished:
