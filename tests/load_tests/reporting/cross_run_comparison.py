@@ -183,7 +183,7 @@ class CrossRunComparison:
                 created_results, "time_to_first_response",
             ),
             "peak_rss": max(
-                (stage_summary.get("peak_server_rss", 0) or 0
+                (stage_summary.get("peak_server_rss", 0)
                  for stage_summary in stages),
                 default=0,
             ),
