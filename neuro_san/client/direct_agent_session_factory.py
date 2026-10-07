@@ -19,6 +19,7 @@ from typing import Dict
 
 from leaf_common.time.timeout import Timeout
 from leaf_common.asyncio.asyncio_executor_factory import AsyncioExecutorFactory
+from leaf_common.asyncio.asyncio_executor_types import AsyncioExecutorTypes
 
 from neuro_san.client.direct_agent_storage_util import DirectAgentStorageUtil
 from neuro_san.interfaces.agent_session import AgentSession
@@ -34,6 +35,7 @@ from neuro_san.internals.network_providers.expiring_agent_network_storage import
 from neuro_san.internals.reservations.direct_agent_reservationist import DirectAgentReservationist
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
+from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.missing_agent_check import MissingAgentCheck
@@ -50,10 +52,21 @@ class DirectAgentSessionFactory:
         * Initializing an LlmFactory
     """
 
-    def __init__(self):
+    def __init__(self, executor_type: str = AsyncioExecutorTypes.THREADED):
         """
         Constructor
+
+        :param executor_type: One of AsyncioExecutorTypes, naming the kind of
+                        executor sessions from this factory will run on.
+                        Defaults to THREADED, which is what a process with
+                        threads to spare wants. Pass SHARED_LOOP when hosting
+                        neuro-san inside a runtime that has a single event loop
+                        and no threads, such as Pyodide in a browser; sessions
+                        must then be created with create_async_session().
+                        Chosen here, once, rather than looked up from ambient
+                        state wherever an executor happens to be needed.
         """
+        self.executor_type: str = executor_type
         # Read the manifest once and pass that into the Util call below.
         manifest_restorer = RegistryManifestRestorer()
         manifest_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
@@ -108,6 +121,65 @@ class DirectAgentSessionFactory:
                                                          metadata=metadata,
                                                          umbrella_timeout=umbrella_timeout)
         return session
+
+    async def create_async_session(self, agent_name: str, use_direct: bool = False,
+                                   metadata: Dict[str, str] = None) -> AsyncDirectAgentSession:
+        """
+        Create an AsyncDirectAgentSession, for use as a library on a loop the
+        caller already has running.
+
+        The asynchronous counterpart to create_session(), and the only one that
+        works when executor_type is SHARED_LOOP: such an executor binds to the
+        loop that starts it, so it has to be started from async code. Await
+        aclose() on the returned session, or exhaust its streaming_chat()
+        generator, to release what it holds.
+
+        :param agent_name: The name of the agent to use for the session.
+                This name can be something in the manifest file (with no file suffix)
+                or a specific full-reference to an agent network's hocon file.
+        :param use_direct: When True, will use a Direct session for
+                    external agents that would reside on the same server.
+        :param metadata: A grpc metadata of key/value pairs to be inserted into
+                         the header. Default is None. Preferred format is a
+                         dictionary of string keys to string values.
+        :return: An AsyncDirectAgentSession ready to take a request
+        """
+        agent_network: AgentNetwork = self.get_agent_network(agent_name)
+        config: Dict[str, Any] = agent_network.get_config()
+        llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
+        toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
+        # Load once now that we know what tool registry to use.
+        llm_factory.load()
+        toolbox_factory.load()
+
+        factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage_dict=self.network_storage_dict)
+        executors_pool = AsyncioExecutorFactory.create_pool(self.executor_type)
+
+        reservationist = DirectAgentReservationist(set([self.network_storage_dict.get(StorageClass.TEMP)]))
+        invocation_context = SessionInvocationContext(agent_name,
+                                                      factory,
+                                                      executors_pool,
+                                                      llm_factory,
+                                                      toolbox_factory,
+                                                      metadata,
+                                                      reservationist,
+                                                      can_offload_sync_work=self.can_offload_sync_work())
+        # Starting here, inside async code, is what binds a shared-loop
+        # executor to the caller's loop.
+        invocation_context.start()
+        return AsyncDirectAgentSession(agent_network=agent_network,
+                                       invocation_context=invocation_context,
+                                       metadata=metadata,
+                                       toolbox_factory=toolbox_factory)
+
+    def can_offload_sync_work(self) -> bool:
+        """
+        :return: True if synchronous work may be moved off the event loop onto
+                 a worker thread, which follows from this factory's executor
+                 type. Sessions are handed this rather than working it out, so
+                 nothing deeper has to know the executor type.
+        """
+        return self.executor_type != AsyncioExecutorTypes.SHARED_LOOP
 
     def get_agent_network(self, agent_name: str) -> AgentNetwork:
         """

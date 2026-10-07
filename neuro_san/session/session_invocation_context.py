@@ -23,11 +23,16 @@ from typing import Dict
 from typing import List
 
 from asyncio import AbstractEventLoop
+from asyncio import TimeoutError as AsyncTimeoutError
 from asyncio import get_running_loop
 from asyncio import run_coroutine_threadsafe
+from asyncio import wait_for
+from asyncio import wrap_future
 from copy import copy
 from concurrent.futures import Future
 from functools import partial
+from logging import getLogger
+from logging import Logger
 from threading import Event
 
 from leaf_common.asyncio.task_executor import TaskExecutor
@@ -57,6 +62,11 @@ class SessionInvocationContext(InvocationContext):
     configured.
     """
 
+    # How long each clean-up step gets before it is reported and abandoned.
+    # Clean up that hangs must not hang the caller with it, and in a shared-loop
+    # runtime it would hang everything sharing that loop.
+    CLEANUP_TIMEOUT_SECONDS: float = 30.0
+
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
     def __init__(self, agent_name: str,
@@ -68,7 +78,8 @@ class SessionInvocationContext(InvocationContext):
                  reservationist: Reservationist = None,
                  port: int = None,
                  effective_invocation: str = "chatbot",
-                 event_work_queue: AsyncCollatingQueue = None):
+                 event_work_queue: AsyncCollatingQueue = None,
+                 can_offload_sync_work: bool = True):
         """
         Constructor
 
@@ -87,6 +98,14 @@ class SessionInvocationContext(InvocationContext):
         :param effective_invocation: A string representing the effective invocation of the session.
         :param event_work_queue: The AsyncCollatingQueue instance to use to queue up work
                             for events that will be finished up after the request ends.
+        :param can_offload_sync_work: True when the executors handed out by
+                            async_executors_pool have worker threads to run
+                            synchronous work on, so blocking work can be moved
+                            off the event loop. False in a shared-loop runtime,
+                            where there is no thread to move it to and running
+                            it would block the one loop everything shares.
+                            Passed in rather than discovered, so nothing has to
+                            consult ambient state to find out.
         """
 
         # From args
@@ -98,6 +117,7 @@ class SessionInvocationContext(InvocationContext):
         self.metadata: Dict[str, str] = metadata
         self.reservationist: Reservationist = reservationist
         self.port: int = port
+        self.offload_sync_work: bool = can_offload_sync_work
         self.effective_invocation: str = effective_invocation
         self.event_work_queue: AsyncCollatingQueue = event_work_queue
 
@@ -115,6 +135,7 @@ class SessionInvocationContext(InvocationContext):
         self.work_done_event: Event = Event()
         self.request_finished: bool = False
         self.cloned: bool = False
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def start(self):
         """
@@ -142,6 +163,15 @@ class SessionInvocationContext(InvocationContext):
         :return: The AsyncAgentSessionFactory associated with the invocation
         """
         return self.async_session_factory
+
+    def can_offload_sync_work(self) -> bool:
+        """
+        :return: True if synchronous work may be moved off the event loop onto
+                 a worker thread. False in a shared-loop runtime, where running
+                 it would block the one loop everything shares, so callers must
+                 refuse the work rather than run it.
+        """
+        return self.offload_sync_work
 
     def get_asyncio_executor(self) -> TaskExecutor:
         """
@@ -378,6 +408,137 @@ class SessionInvocationContext(InvocationContext):
             if close_of_work_now:
                 # Still need to close resources, per above determination
                 self.done_with_work("finish_request")
+
+    async def afinish_request(self, timeout: float = None):
+        """
+        Await the clean up of our resources.
+
+        The asynchronous counterpart to finish_request(). Prefer it wherever
+        there is a loop to await on: finish_request() can only complete the
+        work by blocking a thread, which a shared-loop runtime does not have,
+        and where it cannot block it merely schedules the clean up and returns
+        before it has happened.
+
+        :param timeout: Seconds to allow each clean-up step, or None for the
+                    default. A step that outlasts it is reported and abandoned.
+        """
+        # Only ever do this once
+        if self.request_finished:
+            return
+        self.request_finished = True
+
+        close_of_work_now: bool = True
+        try:
+            await self._arun_until_complete("afinish_request", self.close_of_request(),
+                                            "close_of_request", timeout)
+
+            if self.get_effective_invocation() == "event":
+                # Finish the event work later only if there is something that will finish it for us.
+                if self.event_work_queue is not None:
+                    close_of_work_now = False
+                    await self._arun_until_complete("afinish_request",
+                                                    self.event_work_queue.put(self, synchronous=True),
+                                                    "event_work_queue.put", timeout)
+        finally:
+            if close_of_work_now:
+                # Still need to close resources, per above determination
+                await self.adone_with_work("afinish_request", timeout)
+
+    async def adone_with_work(self, submitter_id: str = None, timeout: float = None):
+        """
+        Await close_of_work() and then hand the executor back to the pool.
+
+        The order matters: returning an executor cancels its tasks, so handing
+        it back before the clean up has finished would cancel the very clean up
+        we are waiting for.
+
+        :param submitter_id: A string id denoting who is doing the submitting
+        :param timeout: Seconds to allow each step, or None for the default
+        """
+        await self._arun_until_complete(submitter_id, self.close_of_work(), "close_of_work", timeout)
+
+        if self.cloned:
+            # Clones via safe_shallow_copy() share the same executor,
+            # so don't return it back to the pool just yet. Let the mama do that.
+            return
+
+        if self.asyncio_executor is None:
+            return
+
+        # Clear our handle first: the executor is spoken for either way, and a
+        # failed hand-back must not leave us thinking we still own it.
+        executor: TaskExecutor = self.asyncio_executor
+        self.asyncio_executor = None
+        await self._areturn_executor(executor, timeout)
+
+    async def _areturn_executor(self, executor: TaskExecutor, timeout: float):
+        """
+        Hand an executor back to its pool, awaiting completion where the pool
+        offers a way to.
+
+        areturn_executor() is the pool method that actually awaits clean up,
+        but only the shared-loop pool has one: leaf-common has no interface
+        type for pools, so this asks rather than assumes. The threaded pool's
+        synchronous return_executor() already completes before it returns.
+
+        :param executor: The executor to hand back
+        :param timeout: Seconds to allow, or None for the default
+        """
+        areturn: Callable = getattr(self.async_executors_pool, "areturn_executor", None)
+        if not callable(areturn):
+            self.async_executors_pool.return_executor(executor)
+            return
+
+        use_timeout: float = self.CLEANUP_TIMEOUT_SECONDS if timeout is None else timeout
+        try:
+            await areturn(executor, timeout=use_timeout)
+        except AsyncTimeoutError:
+            self.logger.error(
+                "TIMED OUT after %.1f seconds returning the executor for agent '%s'. "
+                "Its tasks did not finish, so it stays retiring in the pool and its "
+                "resources are still held. Await the pool's ashutdown() to retry.",
+                use_timeout, self.agent_name)
+
+    async def _arun_until_complete(self, submitter_id: str, coroutine: Awaitable,
+                                   what: str, timeout: float) -> bool:
+        """
+        Await a clean-up coroutine on the executor's own loop, without blocking.
+
+        The asynchronous counterpart to _run_in_executor_until_complete(), and
+        it keeps that method's loop discipline: resources were created on the
+        executor's loop, so they are closed there. When that is the loop we are
+        already on -- the shared-loop case -- awaiting directly does it. When it
+        is another loop's, the coroutine is scheduled there and we await the
+        result rather than blocking a thread for it.
+
+        :param submitter_id: A string id denoting who is doing the submitting
+        :param coroutine: The clean-up coroutine to run
+        :param what: What is being awaited, for the timeout message
+        :param timeout: Seconds to allow, or None for the default
+        :return: True if it finished, False if it timed out
+        """
+        _ = submitter_id
+        other_loop: AbstractEventLoop = self.asyncio_executor.get_event_loop()
+        loop: AbstractEventLoop = None
+        try:
+            loop = get_running_loop()
+        except RuntimeError:
+            pass
+
+        awaitable: Awaitable = coroutine
+        if loop is not other_loop:
+            awaitable = wrap_future(run_coroutine_threadsafe(coroutine, other_loop))
+
+        use_timeout: float = self.CLEANUP_TIMEOUT_SECONDS if timeout is None else timeout
+        try:
+            await wait_for(awaitable, timeout=use_timeout)
+            return True
+        except AsyncTimeoutError:
+            self.logger.error(
+                "TIMED OUT after %.1f seconds awaiting %s for agent '%s'. Clean up is "
+                "incomplete and the resources it owns may not have been released.",
+                use_timeout, what, self.agent_name)
+            return False
 
     def _run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Future:
         """

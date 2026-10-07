@@ -47,6 +47,7 @@ from leaf_common.persistence.interface.restorer import Restorer
 from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
+from neuro_san.internals.graph.persistence.serial_executor import SerialExecutor
 from neuro_san.internals.graph.persistence.manifest_filter_chain import ManifestFilterChain
 from neuro_san.internals.graph.persistence.mcp_manifest_dict_config_filter import McpManifestDictConfigFilter
 from neuro_san.internals.graph.persistence.raw_manifest_restorer import RawManifestRestorer
@@ -321,6 +322,11 @@ class RegistryManifestRestorer(Restorer):
             # for more details.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
                                        mp_context=get_context(lower_concurrency_context))
+        elif lower_concurrency_context == "serial":
+            # Read the manifest inline, with no workers at all. The only option
+            # that works in a runtime which cannot create threads or processes,
+            # such as Pyodide in a browser. Slowest of all, necessarily.
+            executor_factory = SerialExecutor
         elif lower_concurrency_context == "thread":
             # Use a ThreadPoolExecutor for "thread".
             # The default of "thread" is best for servers who know their manifest content will be

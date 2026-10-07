@@ -25,6 +25,7 @@ from os import environ
 from janus import Queue
 
 from leaf_common.asyncio.asyncio_executor_factory import AsyncioExecutorFactory
+from leaf_common.asyncio.asyncio_executor_types import AsyncioExecutorTypes
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
@@ -121,10 +122,28 @@ class ServerContext(ServerContextLite):
             with self._executor_pool_lock:
                 if self.executor_pool is None:
                     self.executor_pool = AsyncioExecutorFactory.create_pool(
+                        self.get_executor_type(),
                         reuse_mode=True,
                         idle_timeout_seconds=30,
                         max_workers=max_workers)
         return self.executor_pool
+
+    def get_executor_type(self) -> str:
+        """
+        :return: The AsyncioExecutorTypes value this worker's executors are
+                 built from. Read here, beside the other executor settings,
+                 rather than consulted from deeper in the stack.
+        """
+        return environ.get("AGENT_ASYNCIO_EXECUTOR_TYPE", AsyncioExecutorTypes.THREADED)
+
+    def can_offload_sync_work(self) -> bool:
+        """
+        :return: True if synchronous work may be moved off the event loop onto
+                 a worker thread, which follows from the kind of executor this
+                 worker builds. Callers are handed this rather than working it
+                 out, so nothing deeper has to know the executor type.
+        """
+        return self.get_executor_type() != AsyncioExecutorTypes.SHARED_LOOP
 
     def set_worker_info(self, worker_id: int, num_workers: int):
         """

@@ -227,7 +227,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
             #    interrupted by caller-side "aclose" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
             with suppress(Exception):
-                self.invocation_context.finish_request()
+                await self.invocation_context.afinish_request()
 
     def reset(self):
         """
@@ -237,10 +237,30 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
     def close(self):
         """
-        Tears down all resources created
+        Tears down all resources created.
+
+        Prefer aclose() wherever there is a loop to await on. This synchronous
+        form can only complete the clean up by blocking a thread, which a
+        shared-loop runtime does not have; there it merely schedules the clean
+        up and returns before it has happened.
         """
         if self.invocation_context is None:
             return
 
         self.invocation_context.finish_request()
         self.invocation_context = None
+
+    async def aclose(self):
+        """
+        Awaits the tear-down of all resources created.
+
+        The asynchronous counterpart to close(), and the one to use in a
+        shared-loop runtime, where it is the only form that can report whether
+        the clean up actually finished.
+        """
+        if self.invocation_context is None:
+            return
+
+        invocation_context: SessionInvocationContext = self.invocation_context
+        self.invocation_context = None
+        await invocation_context.afinish_request()

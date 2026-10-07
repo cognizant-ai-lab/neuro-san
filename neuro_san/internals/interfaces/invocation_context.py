@@ -62,6 +62,15 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    def can_offload_sync_work(self) -> bool:
+        """
+        :return: True if synchronous work may be moved off the event loop onto
+                 a worker thread. False in a shared-loop runtime, where there
+                 is no thread to move it to and running it would block the one
+                 loop everything shares, so callers must refuse such work.
+        """
+        raise NotImplementedError
+
     def get_asyncio_executor(self) -> TaskExecutor:
         """
         :return: The TaskExecutor associated with the invocation

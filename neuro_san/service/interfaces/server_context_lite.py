@@ -42,6 +42,14 @@ class ServerContextLite:
         """
         raise NotImplementedError
 
+    def can_offload_sync_work(self) -> bool:
+        """
+        :return: True if synchronous work may be moved off the event loop onto
+                 a worker thread, given the kind of executors this context's
+                 pool hands out.
+        """
+        raise NotImplementedError
+
     def get_executor_pool(self) -> AsyncioExecutorPool:
         """
         :return: The AsyncioExecutorPool

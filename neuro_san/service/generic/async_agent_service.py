@@ -97,6 +97,7 @@ class AsyncAgentService:
         self.port: int = server_context.get_server_port()
 
         self.async_executor_pool: AsyncioExecutorPool = server_context.get_executor_pool()
+        self.can_offload_sync_work: bool = server_context.can_offload_sync_work()
         self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
         self.network_storage_dict: Dict[str, Any] = server_context.get_network_storage_dict()
 
@@ -286,7 +287,8 @@ class AsyncAgentService:
             reservationist,
             self.port,
             effective_invocation=effective_invocation,
-            event_work_queue=self.event_work_queue)
+            event_work_queue=self.event_work_queue,
+            can_offload_sync_work=self.can_offload_sync_work)
         invocation_context.start()
 
         # Set up logging inside async thread

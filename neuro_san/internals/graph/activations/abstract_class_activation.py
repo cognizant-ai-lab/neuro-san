@@ -427,9 +427,23 @@ Some hints:
                 retval = await coded_tool.async_invoke(self.arguments, self.sly_data)
 
             except NotImplementedError:
-                # That didn't work, so try running the synchronous method as an async task
-                # within the confines of the proper executor.
-                # Warn that there is a better alternative
+                # No async_invoke(), so the only way to run this tool is its
+                # synchronous invoke(). Whether that is allowed depends on
+                # whether there is a worker thread to run it on.
+                invocation_context = self.run_context.get_invocation_context()
+                if not invocation_context.can_offload_sync_work():
+                    # Nothing to offload to: running invoke() here would block
+                    # the loop every request on this runtime shares. CodedTools
+                    # are required not to block, so refuse rather than freeze.
+                    raise NotImplementedError(
+                        f"CodedTool class {coded_tool.__class__.__name__} implements only the "
+                        "synchronous invoke(). This runtime shares a single event loop with no "
+                        "worker threads, so running invoke() would block every other request on "
+                        "it. Implement async_invoke() for this CodedTool."
+                    ) from None
+
+                # There is a worker thread to run it on, so run it there, but
+                # say that async_invoke() would be better.
                 info_message = f"""
 Running CodedTool class {coded_tool.__class__.__name__}.invoke() synchronously in an asynchronous environment.
 This can lead to performance problems when running within a server. Consider porting to the async_invoke() method.
@@ -438,7 +452,6 @@ This can lead to performance problems when running within a server. Consider por
                 await self.journal.write_message(AgentMessage(content=info_message))
 
                 # Try to run in the executor.
-                invocation_context = self.run_context.get_invocation_context()
                 executor: TaskExecutor = invocation_context.get_asyncio_executor()
                 loop: AbstractEventLoop = executor.get_event_loop()
                 retval = await loop.run_in_executor(None, coded_tool.invoke, args, sly_data)
