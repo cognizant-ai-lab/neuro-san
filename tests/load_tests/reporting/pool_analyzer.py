@@ -46,11 +46,11 @@ class PoolAnalyzer:
     def log_pool_reuse_analysis(self) -> None:
         """Log executor pool reuse analysis across stages."""
         stages_with_data: List[Dict[str, Any]] = [
-            s for s in self._summaries
-            if s.get("before_threads") is not None
-            and s.get("after_threads") is not None
-            and s.get("total_started") is not None
-            and s.get("total_started") > 0
+            stage_summary for stage_summary in self._summaries
+            if stage_summary.get("before_threads") is not None
+            and stage_summary.get("after_threads") is not None
+            and stage_summary.get("total_started") is not None
+            and stage_summary.get("total_started") > 0
         ]
         if not stages_with_data:
             return
@@ -68,43 +68,43 @@ class PoolAnalyzer:
         ]
         rows: List[tuple] = []
         total_new_threads: int = 0
-        reuse_pcts: List[float] = []
+        reuse_percentages: List[float] = []
 
-        for idx, stage in enumerate(stages_with_data):
-            batch_num: int = idx + 1
+        for index, stage in enumerate(stages_with_data):
+            batch_number: int = index + 1
             server_calls: int = stage.get("total_started")
             before_threads: int = stage.get("before_threads")
             after_threads: int = stage.get("after_threads")
             new_threads: int = max(after_threads - before_threads, 0)
             total_new_threads += new_threads
             reused: int = max(server_calls - new_threads, 0)
-            reuse_pct: float = (
+            reuse_percentage: float = (
                 (reused / server_calls * 100.0)
                 if server_calls > 0 else 0.0
             )
-            reuse_pcts.append(reuse_pct)
-            pool_avail: int = max(before_threads - base_threads, 0)
+            reuse_percentages.append(reuse_percentage)
+            pool_available_threads: int = max(before_threads - base_threads, 0)
 
-            primary: int = (
+            primary_requests: int = (
                 stage.get("primary_started")
                 or stage.get("concurrent")
             )
-            exec_per_req: float = (
-                server_calls / primary if primary > 0 else 0.0
+            executors_per_request: float = (
+                server_calls / primary_requests if primary_requests > 0 else 0.0
             )
 
-            peak_t: Optional[int] = stage.get("peak_threads")
-            peak_str: str = str(peak_t) if peak_t is not None else "-"
+            peak_threads: Optional[int] = stage.get("peak_threads")
+            peak_threads_text: str = str(peak_threads) if peak_threads is not None else "-"
 
             rows.append((
-                str(batch_num),
+                str(batch_number),
                 str(server_calls),
                 f"+{new_threads}",
-                peak_str,
+                peak_threads_text,
                 str(reused),
-                f"{reuse_pct:.1f}%",
-                str(pool_avail),
-                f"{exec_per_req:.1f}",
+                f"{reuse_percentage:.1f}%",
+                str(pool_available_threads),
+                f"{executors_per_request:.1f}",
             ))
 
         TableFormatter.log_table(header, rows)
@@ -114,24 +114,24 @@ class PoolAnalyzer:
             - stages_with_data[0].get("before_threads"), 0,
         )
         self._log_pool_diagnostics(
-            reuse_pcts, total_new_threads,
+            reuse_percentages, total_new_threads,
             first_demand=first_demand,
         )
 
     @staticmethod
-    def _log_pool_diagnostics(reuse_pcts: List[float], total_new_threads: int, first_demand: int) -> None:
+    def _log_pool_diagnostics(reuse_percentages: List[float], total_new_threads: int, first_demand: int) -> None:
         """
         Log summary diagnostics for pool reuse.
 
-        :param reuse_pcts: Pool reuse percent of each batch, in order
+        :param reuse_percentages: Pool reuse percent of each batch, in order
         :param total_new_threads: New threads created across all batches
         :param first_demand: Thread demand of the first batch
         """
-        if len(reuse_pcts) < 2:
+        if len(reuse_percentages) < 2:
             return
         logger.info(
             "\n  Pool reuse: %.1f%% (batch 1) -> %.1f%% (batch %d)",
-            reuse_pcts[0], reuse_pcts[-1], len(reuse_pcts),
+            reuse_percentages[0], reuse_percentages[-1], len(reuse_percentages),
         )
         if total_new_threads > first_demand > 0:
             excess: int = total_new_threads - first_demand

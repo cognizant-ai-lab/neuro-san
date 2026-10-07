@@ -21,16 +21,16 @@ class Formatters:
     """
 
     @staticmethod
-    def format_rss(rss_mb: float) -> str:
+    def format_rss(rss_megabytes: float) -> str:
         """
         Format RSS in human-readable units.
 
-        :param rss_mb: Resident set size in megabytes
+        :param rss_megabytes: Resident set size in megabytes
         :return: e.g. '512M' or '1.5G'
         """
-        if rss_mb >= 1024:
-            return f"{rss_mb / 1024:.1f}G"
-        return f"{rss_mb:.0f}M"
+        if rss_megabytes >= 1024:
+            return f"{rss_megabytes / 1024:.1f}G"
+        return f"{rss_megabytes:.0f}M"
 
     @staticmethod
     def fmt_duration(seconds: float, precision: int = 0) -> str:
@@ -43,8 +43,8 @@ class Formatters:
         """
         base: str = f"{seconds:.{precision}f}s"
         if seconds >= 60:
-            mins: int = int(seconds) // 60
-            return f"{base} ({mins}m)"
+            minutes: int = int(seconds) // 60
+            return f"{base} ({minutes}m)"
         return base
 
     @staticmethod
