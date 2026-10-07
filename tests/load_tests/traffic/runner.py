@@ -514,9 +514,9 @@ class TrafficRunner:
         """
         pending_futures: Set[Future] = set(futures)
         interrupted: bool = False
-        elapsed_seconds: float
-        remaining_seconds: float
-        wait_slice_seconds: float
+        elapsed_seconds: float = 0.0
+        remaining_seconds: float = 0.0
+        wait_slice_seconds: float = 0.0
         while pending_futures:
             if cancel_event.is_set():
                 interrupted = True
@@ -559,7 +559,7 @@ class TrafficRunner:
         :param results_list: Receives the results that finish within the grace
         """
         grace_deadline_seconds: float = time.perf_counter() + INTERRUPT_GRACE_SECONDS
-        remaining_seconds: float
+        remaining_seconds: float = 0.0
         for future in list(pending_futures):
             remaining_seconds = max(0.0, grace_deadline_seconds - time.perf_counter())
             try:
@@ -617,7 +617,7 @@ class TrafficRunner:
         failure_reason: Optional[str] = result.get("failure_reason")
         is_failure: bool = RequestStatusPolicy.is_failure(status)
         if is_failure:
-            rank: int
+            rank: int = 0
             with self._failure_log_lock:
                 self._failures_logged += 1
                 rank = self._failures_logged
