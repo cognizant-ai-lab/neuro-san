@@ -353,17 +353,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         stop_event = None
         monitor = None
         if has_server_log:
-            stop_event, monitor, _peak = (
-                self.log_monitor.start_log_monitor(
-                    log_pos,
-                    stage_requests, time.perf_counter(),
-                    client_proc=client_proc,
-                    primary_start_pattern=(
-                        self.profile.get_primary_start_pattern()
-                    ),
-                    output_dir=self._output_dir,
-                )
-            )
+            stop_event, monitor = self.log_monitor.start_log_monitor(
+                log_pos, stage_requests, time.perf_counter(), client_proc=client_proc,
+                primary_start_pattern=self.profile.get_primary_start_pattern(), output_dir=self._output_dir)
 
         sys_before = SystemResources.snapshot()
         before_sys_mem_pct = sys_before["mem_pct"]
@@ -396,9 +388,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_client = None
         settled_client = None
         if monitor_resources:
-            peak_rss = peak_client_rss.value
-            if peak_rss is not None:
-                peak_client = {"rss": peak_rss}
+            if peak_client_rss is not None:
+                peak_client = {"rss": peak_client_rss}
             settled_client = ResourceMonitor.snapshot(
                 client_proc,
             )
@@ -738,14 +729,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 summary_entry["after_server_rss"] = (
                     after_server.get("rss")
                 )
-        if peak_threads.value is not None:
-            summary_entry["peak_threads"] = (
-                peak_threads.value
-            )
-        if peak_server_rss.value is not None:
-            summary_entry["peak_server_rss"] = (
-                peak_server_rss.value
-            )
+        if peak_threads is not None:
+            summary_entry["peak_threads"] = peak_threads
+        if peak_server_rss is not None:
+            summary_entry["peak_server_rss"] = peak_server_rss
         if before_client:
             summary_entry["before_client_rss"] = (
                 before_client.get("rss")
@@ -766,18 +753,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_entry["after_sys_mem_pct"] = (
                 after_sys_mem_pct
             )
-        if (peak_sys_mem_pct is not None
-                and peak_sys_mem_pct.value is not None):
-            peak_data = peak_sys_mem_pct.value
-            summary_entry["peak_sys_mem_pct"] = (
-                peak_data["pct"]
-            )
-            summary_entry["peak_sys_mem_avail_gb"] = (
-                peak_data["avail_gb"]
-            )
-        if (peak_sys_cpu is not None
-                and peak_sys_cpu.value is not None):
-            summary_entry["peak_sys_cpu"] = peak_sys_cpu.value
+        if peak_sys_mem_pct is not None:
+            summary_entry["peak_sys_mem_pct"] = peak_sys_mem_pct.get("memory_percent")
+            summary_entry["peak_sys_mem_avail_gb"] = peak_sys_mem_pct.get("available_gigabytes")
+        if peak_sys_cpu is not None:
+            summary_entry["peak_sys_cpu"] = peak_sys_cpu
         if before_sys:
             summary_entry["before_sys_mem_avail_gb"] = (
                 before_sys.get("mem_avail_gb")
@@ -794,9 +774,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_entry["after_sys_threads"] = (
                 after_sys.get("threads")
             )
-        if (peak_sys_threads is not None
-                and peak_sys_threads.value is not None):
-            summary_entry["peak_sys_threads"] = peak_sys_threads.value
+        if peak_sys_threads is not None:
+            summary_entry["peak_sys_threads"] = peak_sys_threads
         return summary_entry
 
     # pylint: disable=too-many-arguments
