@@ -264,11 +264,11 @@ class LatencyAnalyzer:
         :param timeline: Non-empty timeline from _build_timeline
         :return: The largest in-flight count
         """
-        # Each timeline event is (seconds since start, in-flight count).
-        in_flight_counts: List[int] = []
+        # Each timeline event is (seconds since start, in-flight count). Keep the largest count seen so far.
+        peak_in_flight_count: int = timeline[0][1]
         for event in timeline:
-            in_flight_counts.append(event[1])
-        peak_in_flight_count: int = max(in_flight_counts)
+            if event[1] > peak_in_flight_count:
+                peak_in_flight_count = event[1]
         return peak_in_flight_count
 
     @staticmethod
