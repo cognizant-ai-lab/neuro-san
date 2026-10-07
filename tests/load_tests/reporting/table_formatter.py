@@ -41,8 +41,6 @@ class TableFormatter:
                 column_widths[index] = max(column_widths[index], len(str(value)))
         format_pattern: str = "  ".join(f"{{:>{column_width}}}" for column_width in column_widths)
         logger.info("%s", format_pattern.format(*header))
-        logger.info(
-            "%s", "-" * (sum(column_widths) + 2 * (len(header) - 1)),
-        )
+        logger.info("%s", "-" * (sum(column_widths) + 2 * (len(header) - 1)))
         for row in rows:
             logger.info("%s", format_pattern.format(*row))

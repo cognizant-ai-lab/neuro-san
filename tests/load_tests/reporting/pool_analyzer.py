@@ -85,10 +85,7 @@ class PoolAnalyzer:
             reuse_percentages.append(reuse_percentage)
             pool_available_threads: int = max(before_threads - base_threads, 0)
 
-            primary_requests: int = (
-                stage.get("primary_started")
-                or stage.get("concurrent")
-            )
+            primary_requests: int = stage.get("primary_started") or stage.get("concurrent")
             executors_per_request: float = (
                 server_calls / primary_requests if primary_requests > 0 else 0.0
             )
@@ -109,14 +106,8 @@ class PoolAnalyzer:
 
         TableFormatter.log_table(header, rows)
 
-        first_demand: int = max(
-            stages_with_data[0].get("after_threads")
-            - stages_with_data[0].get("before_threads"), 0,
-        )
-        self._log_pool_diagnostics(
-            reuse_percentages, total_new_threads,
-            first_demand=first_demand,
-        )
+        first_demand: int = max(stages_with_data[0].get("after_threads") - stages_with_data[0].get("before_threads"), 0)
+        self._log_pool_diagnostics(reuse_percentages, total_new_threads, first_demand=first_demand)
 
     @staticmethod
     def _log_pool_diagnostics(reuse_percentages: List[float], total_new_threads: int, first_demand: int) -> None:
@@ -136,16 +127,8 @@ class PoolAnalyzer:
         if total_new_threads > first_demand > 0:
             excess: int = total_new_threads - first_demand
             logger.info(
-                "  WARNING: %d new threads created across all "
-                "batches, but batch 1 demand was only %d.",
+                "  WARNING: %d new threads created across all batches, but batch 1 demand was only %d.",
                 total_new_threads, first_demand,
             )
-            logger.info(
-                "           %d excess threads indicate pool lock "
-                "contention in return_executor().",
-                excess,
-            )
-            logger.info(
-                "           cancel_current_tasks() holds the pool "
-                "lock for up to 5s, blocking reuse.",
-            )
+            logger.info("           %d excess threads indicate pool lock contention in return_executor().", excess)
+            logger.info("           cancel_current_tasks() holds the pool lock for up to 5s, blocking reuse.")
