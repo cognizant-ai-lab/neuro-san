@@ -51,10 +51,7 @@ class DisconnectionReporter:
         if not all_disconnections:
             return
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        logger.info(
-            "  CLIENT DISCONNECTIONS (%s detected in server log)",
-            len(all_disconnections),
-        )
+        logger.info("  CLIENT DISCONNECTIONS (%s detected in server log)", len(all_disconnections))
         logger.info("=" * SEPARATOR_WIDTH)
         for disconnection in all_disconnections:
             logger.info(

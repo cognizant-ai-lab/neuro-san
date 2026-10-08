@@ -30,9 +30,7 @@ from tests.load_tests.reporting.table_formatter import TableFormatter
 ServerResourceRow = Tuple[tuple, Dict[str, Any], Dict[str, Any]]
 
 # (display_row, before_snapshot, peak_snapshot, settled_snapshot)
-ClientResourceRow = Tuple[
-    tuple, Dict[str, Any], Dict[str, Any], Dict[str, Any],
-]
+ClientResourceRow = Tuple[tuple, Dict[str, Any], Dict[str, Any], Dict[str, Any]]
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -151,15 +149,11 @@ class ResourceReporter:
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         if total_server_calls > 0:
             logger.info(
-                "  RESOURCE ANALYSIS"
-                " (%s client requests, %s server calls)",
+                "  RESOURCE ANALYSIS (%s client requests, %s server calls)",
                 total_client_requests, total_server_calls,
             )
         else:
-            logger.info(
-                "  RESOURCE ANALYSIS (%s total requests)",
-                total_client_requests,
-            )
+            logger.info("  RESOURCE ANALYSIS (%s total requests)", total_client_requests)
         logger.info("=" * SEPARATOR_WIDTH)
         TableFormatter.log_table(header, rows)
         self._log_resource_deltas()
@@ -248,15 +242,10 @@ class ResourceReporter:
         :param fields: (display name, snapshot key, % format) of each field to log
         """
         maximum_name_length: int = max(len(name) for name, _, _ in fields)
-        logger.info(
-            "\n  %s overall deltas (first stage vs last stage):",
-            label,
-        )
+        logger.info("\n  %s overall deltas (first stage vs last stage):", label)
         for name, key, format_pattern in fields:
             delta: float = after_snapshot.get(key) - before_snapshot.get(key)
             padded: str = f"{name}:".ljust(maximum_name_length + 1)
             formatted: str = format_pattern % abs(delta)
             sign: str = "+" if delta >= 0 else "-"
-            logger.info(
-                "    %s %s%s", padded, sign, formatted,
-            )
+            logger.info("    %s %s%s", padded, sign, formatted)

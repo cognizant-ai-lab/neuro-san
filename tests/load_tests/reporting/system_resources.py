@@ -82,10 +82,7 @@ class SystemResources:
                 user_limit = "n/a"
         system_maximum: str = "n/a"
         try:
-            with open(
-                "/proc/sys/kernel/threads-max",
-                encoding="utf-8",
-            ) as file_handle:
+            with open("/proc/sys/kernel/threads-max", encoding="utf-8") as file_handle:
                 system_maximum = f"{int(file_handle.read().strip()):,}"
         except (OSError, ValueError):
             pass
@@ -122,10 +119,7 @@ class SystemResources:
             "  System RAM: %.1fG (%.1fG available, %.0f%% used)",
             total_gigabytes, available_gigabytes, memory_stats.percent,
         )
-        logger.info(
-            "  System CPU: %d cores (%.0f%% in use)",
-            core_count, cpu_percentage,
-        )
+        logger.info("  System CPU: %d cores (%.0f%% in use)", core_count, cpu_percentage)
         logger.info(
             "  System threads: %s in use / limit %s per-user (%s max)",
             f"{cls.total_threads():,}", user_limit, system_maximum,
@@ -160,20 +154,13 @@ class SystemResources:
         user_limit, system_maximum = cls.thread_limits()
         for tag, snapshot in rows:
             if snapshot is not None and snapshot.get("mem_pct") is not None:
-                cls._log_row(
-                    "System memory", tag, cls._fmt_mem(snapshot, total_gigabytes),
-                )
+                cls._log_row("System memory", tag, cls._fmt_mem(snapshot, total_gigabytes))
         for tag, snapshot in rows:
             if snapshot is not None and snapshot.get("cpu_pct") is not None:
-                cls._log_row(
-                    "System CPU", tag, cls._fmt_cpu(snapshot, core_count),
-                )
+                cls._log_row("System CPU", tag, cls._fmt_cpu(snapshot, core_count))
         for tag, snapshot in rows:
             if snapshot is not None and snapshot.get("threads") is not None:
-                cls._log_row(
-                    "System threads", tag,
-                    cls._fmt_threads(snapshot, tag, user_limit, system_maximum),
-                )
+                cls._log_row("System threads", tag, cls._fmt_threads(snapshot, tag, user_limit, system_maximum))
 
     @staticmethod
     def _log_row(metric: str, tag: str, value: str) -> None:
@@ -198,10 +185,7 @@ class SystemResources:
         memory_percentage: float = snapshot.get("mem_pct", 0.0)
         available_gigabytes: float = snapshot.get("mem_avail_gb", 0.0)
         used_megabytes: float = memory_percentage / 100.0 * total_gigabytes * 1024.0
-        return (
-            f"{used_megabytes:.0f}M used / {available_gigabytes:.1f}G free"
-            f" ({memory_percentage:.0f}% used)"
-        )
+        return f"{used_megabytes:.0f}M used / {available_gigabytes:.1f}G free ({memory_percentage:.0f}% used)"
 
     @staticmethod
     def _fmt_cpu(snapshot: SysSnapshot, core_count: int) -> str:
@@ -228,8 +212,5 @@ class SystemResources:
         """
         threads: int = int(snapshot.get("threads", 0))
         if tag == "before":
-            return (
-                f"{threads:,} in use / limit {user_limit}"
-                f" per-user ({system_maximum} max)"
-            )
+            return f"{threads:,} in use / limit {user_limit} per-user ({system_maximum} max)"
         return f"{threads:,} in use"

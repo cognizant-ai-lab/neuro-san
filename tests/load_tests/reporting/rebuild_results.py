@@ -40,17 +40,11 @@ from tests.load_tests.traffic.output_parser import OutputParser
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-_TIMING_RE: re.Pattern = re.compile(
-    r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s",
-)
+_TIMING_RE: re.Pattern = re.compile(r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s")
 
-_CONFIG_AGENT_RE: re.Pattern = re.compile(
-    r"Config:.*agent=([^,]+)",
-)
+_CONFIG_AGENT_RE: re.Pattern = re.compile(r"Config:.*agent=([^,]+)")
 
-_CONFIG_NUM_REQ_RE: re.Pattern = re.compile(
-    r"Requests:\s*(\d+)",
-)
+_CONFIG_NUM_REQ_RE: re.Pattern = re.compile(r"Requests:\s*(\d+)")
 
 
 class ResultsRebuilder:
@@ -75,9 +69,7 @@ class ResultsRebuilder:
         raw_results.json.
         """
         requests_dir: str = os.path.join(self._output_dir, "requests")
-        json_path: str = os.path.join(
-            self._output_dir, "raw_results.json",
-        )
+        json_path: str = os.path.join(self._output_dir, "raw_results.json")
         if os.path.isdir(requests_dir):
             if os.path.isfile(json_path) and self._force:
                 self._reclassify(json_path, requests_dir)
@@ -102,9 +94,7 @@ class ResultsRebuilder:
             if os.path.isfile(json_path):
                 if self._force:
                     logger.info("Reclassifying: %s", entry)
-                    ResultsRebuilder(
-                        sub_dir, force=True,
-                    ).run()
+                    ResultsRebuilder(sub_dir, force=True).run()
                     reclassified += 1
                 else:
                     skipped += 1
@@ -112,19 +102,13 @@ class ResultsRebuilder:
             logger.info("Rebuilding: %s", entry)
             ResultsRebuilder(sub_dir).run()
             rebuilt += 1
-        logger.info(
-            "Done: %s rebuilt, %s reclassified, "
-            "%s skipped",
-            rebuilt, reclassified, skipped,
-        )
+        logger.info("Done: %s rebuilt, %s reclassified, %s skipped", rebuilt, reclassified, skipped)
 
     def _rebuild_single(self) -> None:
         """Rebuild raw_results.json for a single run directory."""
         requests_dir: str = os.path.join(self._output_dir, "requests")
         if not os.path.isdir(requests_dir):
-            logger.error(
-                "No requests/ directory in %s", self._output_dir,
-            )
+            logger.error("No requests/ directory in %s", self._output_dir)
             return
 
         timing: Dict[int, Dict[str, Any]] = self._parse_timing()
@@ -186,17 +170,11 @@ class ResultsRebuilder:
         }
         rebuilt_results.update(JsonMetadata.build())
 
-        json_path: str = os.path.join(
-            self._output_dir, "raw_results.json",
-        )
+        json_path: str = os.path.join(self._output_dir, "raw_results.json")
         with open(json_path, "w", encoding="utf-8") as file_handle:
             json.dump(rebuilt_results, file_handle, indent=2, default=str)
 
-        logger.info(
-            "Rebuilt raw_results.json: %s requests "
-            "(%s passed, %s failed)",
-            total, passed, total - passed,
-        )
+        logger.info("Rebuilt raw_results.json: %s requests (%s passed, %s failed)", total, passed, total - passed)
         logger.info("  Saved to: %s", json_path)
 
     def _parse_timing(self) -> Dict[int, Dict[str, Any]]:
@@ -217,10 +195,7 @@ class ResultsRebuilder:
                         request_id: int = int(match.group(1))
                         status: str = match.group(2)
                         elapsed_seconds: float = float(match.group(3))
-                        timing[request_id] = {
-                            "status": status,
-                            "elapsed": elapsed_seconds,
-                        }
+                        timing[request_id] = {"status": status, "elapsed": elapsed_seconds}
         return timing
 
     def _parse_config(self) -> Tuple[str, int]:
@@ -231,9 +206,7 @@ class ResultsRebuilder:
         """
         agent: str = "unknown"
         request_count: int = 0
-        log_path: str = os.path.join(
-            self._output_dir, "load_test.log",
-        )
+        log_path: str = os.path.join(self._output_dir, "load_test.log")
         if not os.path.isfile(log_path):
             return agent, request_count
         with open(log_path, "r", encoding="utf-8") as file_handle:
@@ -262,18 +235,12 @@ class ResultsRebuilder:
             if not match:
                 continue
             request_id: int = int(match.group(1))
-            stdout_path: str = os.path.join(
-                requests_dir, filename,
-            )
+            stdout_path: str = os.path.join(requests_dir, filename)
             stdout: str = ""
-            with open(
-                stdout_path, "r", encoding="utf-8",
-            ) as file_handle:
+            with open(stdout_path, "r", encoding="utf-8") as file_handle:
                 stdout = file_handle.read()
 
-            result: Dict[str, Any] = self._build_result(
-                request_id, stdout, timing,
-            )
+            result: Dict[str, Any] = self._build_result(request_id, stdout, timing)
             results.append(result)
         return results
 
@@ -350,16 +317,12 @@ class ResultsRebuilder:
         for filename in os.listdir(requests_dir):
             if not filename.endswith("_stdout.txt"):
                 continue
-            match: Optional[re.Match] = re.search(
-                r"request_(\d+)_stdout", filename,
-            )
+            match: Optional[re.Match] = re.search(r"request_(\d+)_stdout", filename)
             if not match:
                 continue
             request_id: int = int(match.group(1))
             path: str = os.path.join(requests_dir, filename)
-            with open(
-                path, "r", encoding="utf-8",
-            ) as file_handle:
+            with open(path, "r", encoding="utf-8") as file_handle:
                 cache[request_id] = file_handle.read()
         return cache
 
@@ -376,9 +339,7 @@ class ResultsRebuilder:
 
         self._fix_config(raw_results)
 
-        stdout_cache: Dict[int, str] = ResultsRebuilder._load_stdout_cache(
-            requests_dir,
-        )
+        stdout_cache: Dict[int, str] = ResultsRebuilder._load_stdout_cache(requests_dir)
 
         updated: int = 0
         for stage in raw_results.get("stage_summaries", []):
@@ -389,9 +350,7 @@ class ResultsRebuilder:
                 match: Optional[re.Match] = re.search(r"(\d+)$", request_id)
                 if not match:
                     continue
-                stdout: str = stdout_cache.get(
-                    int(match.group(1)), "",
-                )
+                stdout: str = stdout_cache.get(int(match.group(1)), "")
                 parsed: Dict[str, Optional[str]] = {
                     "reservation_id": result.get(
                         "reservation_id",
@@ -400,18 +359,14 @@ class ResultsRebuilder:
                         "agent_network_name",
                     ),
                 }
-                reason: Optional[str] = ResultsRebuilder._diagnose(
-                    result.get("status"), stdout, parsed,
-                )
+                reason: Optional[str] = ResultsRebuilder._diagnose(result.get("status"), stdout, parsed)
                 if reason != result.get("failure_reason"):
                     result["failure_reason"] = reason
                     updated += 1
 
         with open(json_path, "w", encoding="utf-8") as output_file:
             json.dump(raw_results, output_file, indent=2, default=str)
-        logger.info(
-            "  Updated %s failure reason(s)", updated,
-        )
+        logger.info("  Updated %s failure reason(s)", updated)
 
     def _fix_config(self, raw_results: Dict[str, Any]) -> None:
         """
@@ -428,10 +383,7 @@ class ResultsRebuilder:
         previous_request_count: int = config.get("num_requests", 0)
         if previous_request_count != request_count:
             config["num_requests"] = request_count
-            logger.info(
-                "  Fixed num_requests: %s -> %s",
-                previous_request_count, request_count,
-            )
+            logger.info("  Fixed num_requests: %s -> %s", previous_request_count, request_count)
 
     @staticmethod
     def _resolve_status(timing_info: Dict[str, Any]) -> str:
@@ -448,9 +400,7 @@ class ResultsRebuilder:
         :return: The status from the log line, or FAILED when there is none
         """
         log_status: str = timing_info.get("status", "")
-        if log_status in (
-            STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED,
-        ):
+        if log_status in (STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
             return log_status
         return STATUS_FAILED
 
@@ -478,8 +428,7 @@ class ResultsRebuilder:
             completion_tokens: int = tokens.get("completion_tokens", 0)
             if empty_response_count > 0:
                 reasons.append(
-                    f"empty LLM response "
-                    f"({completion_tokens} completion tokens, "
+                    f"empty LLM response ({completion_tokens} completion tokens, "
                     f"{empty_response_count} empty response(s))"
                 )
             else:

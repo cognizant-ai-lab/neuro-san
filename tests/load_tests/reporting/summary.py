@@ -136,26 +136,19 @@ class SummaryReporter:
             total_time_seconds += summary.get("elapsed", 0)
             total_retries += summary.get("total_retries", 0)
 
-        total_sent: int = (
-            total_created + total_failed + total_timeout + total_killed
-        )
+        total_sent: int = total_created + total_failed + total_timeout + total_killed
 
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  OVERALL RESULTS")
         logger.info("=" * SEPARATOR_WIDTH)
         if self._neuro_san_version:
-            logger.info(
-                "  neuro-san version: %s", self._neuro_san_version,
-            )
+            logger.info("  neuro-san version: %s", self._neuro_san_version)
         logger.info("  Total requests: %s", total_sent)
         logger.info("    Created:   %s", total_created)
         logger.info("    Failed:    %s", total_failed)
         logger.info("    Timed out: %s", total_timeout)
         logger.info("    Killed:    %s", total_killed)
-        logger.info(
-            "  Total wall time: %s",
-            Formatters.fmt_duration(total_time_seconds, precision=2),
-        )
+        logger.info("  Total wall time: %s", Formatters.fmt_duration(total_time_seconds, precision=2))
         self._log_performance_stats()
 
         if total_retries > 0:
@@ -169,9 +162,7 @@ class SummaryReporter:
             )
             logger.info("\n  Overall retry totals:")
             logger.info("    Total retries:   %s", total_retries)
-            logger.info(
-                "    Amplification:   %.2fx", amplification,
-            )
+            logger.info("    Amplification:   %.2fx", amplification)
 
         self._log_llm_token_usage()
         self._log_system_resources()
@@ -181,8 +172,7 @@ class SummaryReporter:
         first_response_stats: Optional[Dict[str, float]] = self._time_to_first_response_stats()
         if first_response_stats is not None:
             logger.info(
-                "  Time to first response: %s min"
-                " / %s avg / %s max",
+                "  Time to first response: %s min / %s avg / %s max",
                 Formatters.fmt_duration(first_response_stats.get("min", 0)),
                 Formatters.fmt_duration(first_response_stats.get("avg", 0)),
                 Formatters.fmt_duration(first_response_stats.get("max", 0)),
@@ -191,8 +181,7 @@ class SummaryReporter:
         request_duration_stats: Optional[Dict[str, float]] = self._request_duration_stats()
         if request_duration_stats is not None:
             logger.info(
-                "  Request duration: %s min / %s avg"
-                " / %s max",
+                "  Request duration: %s min / %s avg / %s max",
                 Formatters.fmt_duration(request_duration_stats.get("min", 0)),
                 Formatters.fmt_duration(request_duration_stats.get("avg", 0)),
                 Formatters.fmt_duration(request_duration_stats.get("max", 0)),
@@ -217,10 +206,7 @@ class SummaryReporter:
         else:
             client = self._token_stats("")
             server = None
-        printed: bool = SummaryReporter.render_token_usage(
-            client, server,
-            client_source=self._client_token_source,
-        )
+        printed: bool = SummaryReporter.render_token_usage(client, server, client_source=self._client_token_source)
         if printed:
             self._log_model_distribution()
 
@@ -243,9 +229,7 @@ class SummaryReporter:
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  LLM & TOKEN USAGE")
         logger.info("=" * SEPARATOR_WIDTH)
-        SummaryReporter._log_token_source(
-            f"Client ({client_source})", client,
-        )
+        SummaryReporter._log_token_source(f"Client ({client_source})", client)
         SummaryReporter._log_token_source("Server log", server)
         if client is not None and server is not None:
             SummaryReporter._log_token_match(client, server)
@@ -269,8 +253,7 @@ class SummaryReporter:
             stats.get("calls_avg", 0), stats.get("calls_max", 0),
         )
         logger.info(
-            "    Tokens:    %s total  (%s / %s / %s min/avg/max),"
-            "  %s prompt + %s completion",
+            "    Tokens:    %s total  (%s / %s / %s min/avg/max),  %s prompt + %s completion",
             f"{stats.get('tok_total', 0):,}", f"{stats.get('tok_min', 0):,}",
             f"{stats.get('tok_avg', 0):,}", f"{stats.get('tok_max', 0):,}",
             f"{stats.get('prompt_total', 0):,}", f"{stats.get('comp_total', 0):,}",
@@ -290,8 +273,7 @@ class SummaryReporter:
             logger.info("  Match: OK")
             return
         logger.info(
-            "  Match: MISMATCH — LLM calls %s vs %s, "
-            "tokens %s vs %s",
+            "  Match: MISMATCH — LLM calls %s vs %s, tokens %s vs %s",
             client.get("calls_total", 0), server.get("calls_total", 0),
             f"{client.get('tok_total', 0):,}", f"{server.get('tok_total', 0):,}",
         )
@@ -489,10 +471,7 @@ class SummaryReporter:
             ),
         )
         if fallback_requests > 0:
-            logger.info(
-                "    Fallback LLM used: %s request(s)",
-                fallback_requests,
-            )
+            logger.info("    Fallback LLM used: %s request(s)", fallback_requests)
 
     def _time_to_first_response_stats(self) -> Optional[Dict[str, float]]:
         """
@@ -533,8 +512,7 @@ class SummaryReporter:
         for event in all_events:
             all_errors.extend(event.get("errors", []))
         logger.info(
-            "\n  Validation: %s of %s requests needed"
-            " fixes (%s fix cycles total)",
+            "\n  Validation: %s of %s requests needed fixes (%s fix cycles total)",
             affected, total_requests, total_cycles,
         )
         self._log_validation_time_impact(all_events)
@@ -564,8 +542,7 @@ class SummaryReporter:
                 sum(durations_without_fixes_seconds) / len(durations_without_fixes_seconds)
             )
             logger.info(
-                "    Requests with fixes took %s avg"
-                " vs %s avg without",
+                "    Requests with fixes took %s avg vs %s avg without",
                 Formatters.fmt_duration(average_with_fixes_seconds),
                 Formatters.fmt_duration(average_without_fixes_seconds),
             )
@@ -582,10 +559,7 @@ class SummaryReporter:
         parts: List[str] = [
             f"{error} ({count}x)" for error, count in top
         ]
-        logger.info(
-            "    %s errors found: %s",
-            len(all_errors), ", ".join(parts),
-        )
+        logger.info("    %s errors found: %s", len(all_errors), ", ".join(parts))
 
     def _collect_validation_events(self) -> List[Dict[str, Any]]:
         """
@@ -595,7 +569,5 @@ class SummaryReporter:
         """
         events: List[Dict[str, Any]] = []
         for summary in self._summaries:
-            events.extend(
-                summary.get("validation_events", []),
-            )
+            events.extend(summary.get("validation_events", []))
         return events
