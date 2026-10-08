@@ -81,11 +81,12 @@ class CrossRunComparison:
                 else self._deduplicate(groups[agent_name])
             )
             if self._baseline_requests > 0:
-                runs = [
-                    run_metrics for run_metrics in runs
-                    if run_metrics.get("num_requests", 0)
-                    >= self._baseline_requests
-                ]
+                # Keep only the runs with at least the baseline number of requests.
+                baseline_runs: List[Dict[str, Any]] = []
+                for run_metrics in runs:
+                    if run_metrics.get("num_requests", 0) >= self._baseline_requests:
+                        baseline_runs.append(run_metrics)
+                runs = baseline_runs
             runs.sort(key=lambda run_metrics: run_metrics.get("num_requests", 0))
             if not runs:
                 continue
@@ -147,9 +148,12 @@ class CrossRunComparison:
 
         aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
         stages: List[Dict[str, Any]] = raw_results.get("stage_summaries", [])
+        # Gather every stage's results, and each stage's peak server RSS.
         all_results: List[Dict[str, Any]] = []
+        peak_rss_values_megabytes: List[float] = []
         for stage in stages:
             all_results.extend(stage.get("results", []))
+            peak_rss_values_megabytes.append(stage.get("peak_server_rss", 0))
         created_results: List[Dict[str, Any]] = []
         result: Dict[str, Any]
         for result in all_results:
@@ -158,6 +162,8 @@ class CrossRunComparison:
 
         agent: str = raw_results.get("config", {}).get("agent", "unknown")
 
+        # The run's peak RSS is the largest stage peak, or 0 with no stages.
+        peak_rss_megabytes: float = max(peak_rss_values_megabytes, default=0)
         run_metrics: Dict[str, Any] = {
             "agent": agent,
             "folder": folder_name,
@@ -165,11 +171,7 @@ class CrossRunComparison:
             "wall_time": aggregates.get("total_elapsed_seconds", 0),
             "avg_success": CrossRunComparison._avg(created_results, "elapsed"),
             "time_to_first_response_avg": CrossRunComparison._avg(created_results, "time_to_first_response"),
-            "peak_rss": max(
-                (stage_summary.get("peak_server_rss", 0)
-                 for stage_summary in stages),
-                default=0,
-            ),
+            "peak_rss": peak_rss_megabytes,
             "succeeded": aggregates.get("passed", 0),
             "failed": aggregates.get("failed", 0),
             "fail_breakdown": CrossRunComparison._classify_failures(all_results),
@@ -211,10 +213,12 @@ class CrossRunComparison:
         :param key: Result field to average
         :return: Average of the values above 0, or 0 when there are none
         """
-        values: List[float] = [
-            result.get(key, 0) for result in results
-            if result.get(key, 0) > 0
-        ]
+        # Keep only the values above 0.
+        values: List[float] = []
+        for result in results:
+            field_value: float = result.get(key, 0)
+            if field_value > 0:
+                values.append(field_value)
         if not values:
             return 0
         average_value: float = sum(values) / len(values)
@@ -356,15 +360,14 @@ class CrossRunComparison:
         :param folder: Run folder name shown in the summary
         :param loops: Validation loop entries from _parse_validation_loops
         """
-        total_retries: int = sum(
-            loop_entry.get("retries", 0) for loop_entry in loops
-        )
-        total_tokens: int = sum(
-            loop_entry.get("total_tokens", 0) for loop_entry in loops
-        )
-        total_cost_dollars: float = sum(
-            loop_entry.get("cost_usd", 0.0) for loop_entry in loops
-        )
+        # Add up retries, tokens and cost over all validation-loop requests in one pass.
+        total_retries: int = 0
+        total_tokens: int = 0
+        total_cost_dollars: float = 0.0
+        for loop_entry in loops:
+            total_retries += loop_entry.get("retries", 0)
+            total_tokens += loop_entry.get("total_tokens", 0)
+            total_cost_dollars += loop_entry.get("cost_usd", 0.0)
         logger.info("")
         logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
         logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
@@ -463,7 +466,10 @@ class CrossRunComparison:
         """
         if count == 0:
             return "0"
-        percentage: int = (count * 100 // total) if total else 0
+        percentage: int = 0
+        if total:
+            # Whole-number percentage: int() drops the fraction, so 2 of 3 is 66%.
+            percentage = int(count * 100 / total)
         base: str = f"{count} ({percentage}%)"
         if not breakdown:
             return base

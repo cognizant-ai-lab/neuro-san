@@ -53,7 +53,6 @@ from tests.load_tests.config import VALIDATION_ERROR_PATTERN
 from tests.load_tests.config import VALIDATION_REINVOKE_PATTERN
 from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
-from tests.load_tests.shared_ref import SharedRef
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -557,7 +556,7 @@ class ServerLogMonitor:
     def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time_seconds: float,
                           client_proc: Optional[psutil.Process], primary_start_pattern: str,
                           output_dir: Optional[str] = None,
-                          ) -> Tuple[Optional[threading.Event], Optional[threading.Thread], Optional[SharedRef]]:
+                          ) -> Tuple[Optional[threading.Event], Optional[threading.Thread]]:
         """
         Start a background thread to monitor server log for request arrivals.
 
@@ -567,31 +566,29 @@ class ServerLogMonitor:
         :param client_proc: Client process for the snapshot once all requests arrive, or None
         :param primary_start_pattern: Regex for the log line of a primary agent request arriving
         :param output_dir: Directory for server_receipts.log, or None for console only
-        :return: (stop_event, thread, peak_client_ref), or (None, None, None) if monitoring is not available
+        :return: (stop_event, thread), or (None, None) if monitoring is not available
         """
         if self._server_log is None or position is None:
-            return None, None, None
+            return None, None
         stop_event: threading.Event = threading.Event()
-        peak_client_ref: SharedRef = SharedRef()
         monitor: threading.Thread = threading.Thread(
             target=ServerLogMonitor._log_monitor_worker,
             args=(self._server_log, position, expected_count, stop_event, fire_time_seconds),
             kwargs={
                 "client_proc": client_proc,
-                "peak_client_ref": peak_client_ref,
                 "primary_start_pattern": primary_start_pattern,
                 "output_dir": output_dir,
             },
             daemon=True,
         )
         monitor.start()
-        return stop_event, monitor, peak_client_ref
+        return stop_event, monitor
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     def _log_monitor_worker(server_log: str, position: int, expected_count: int, stop_event: threading.Event,
-                            fire_time_seconds: float, client_proc: Optional[psutil.Process], peak_client_ref: SharedRef,
-                            primary_start_pattern: str, output_dir: Optional[str] = None) -> None:
+                            fire_time_seconds: float, client_proc: Optional[psutil.Process], primary_start_pattern: str,
+                            output_dir: Optional[str] = None) -> None:
         """
         Background worker that tails server log and reports arrivals.
 
@@ -601,7 +598,6 @@ class ServerLogMonitor:
         :param stop_event: Set to stop tailing
         :param fire_time_seconds: time.perf_counter() value taken when the stage fired
         :param client_proc: Client process for the snapshot once all requests arrive, or None
-        :param peak_client_ref: Receives the client snapshot once all requests arrive
         :param primary_start_pattern: Regex for the log line of a primary agent request arriving
         :param output_dir: Directory for server_receipts.log, or None for console only
         """
@@ -616,8 +612,7 @@ class ServerLogMonitor:
                     server_log_file.seek(position)
                     ServerLogMonitor._tail_arrivals(server_log_file, stop_event, primary_start_re, expected_count,
                                                     fire_time_seconds, agent_label=agent_label,
-                                                    receipt_file=receipt_file, client_proc=client_proc,
-                                                    peak_client_ref=peak_client_ref)
+                                                    receipt_file=receipt_file, client_proc=client_proc)
         except OSError as exc:
             logger.debug("Log monitor stopped: %s", exc)
 
@@ -637,7 +632,7 @@ class ServerLogMonitor:
     @staticmethod
     def _tail_arrivals(server_log_file: TextIO, stop_event: threading.Event, primary_start_re: re.Pattern,
                        expected_count: int, fire_time_seconds: float, agent_label: str, receipt_file: Optional[TextIO],
-                       client_proc: Optional[psutil.Process], peak_client_ref: SharedRef) -> None:
+                       client_proc: Optional[psutil.Process]) -> None:
         """
         Tail log for arrivals, printing dots or full lines.
 
@@ -649,7 +644,6 @@ class ServerLogMonitor:
         :param agent_label: Agent name shown in the receipt lines
         :param receipt_file: Open server_receipts.log, or None to log each receipt to the console
         :param client_proc: Client process for the snapshot once all requests arrive, or None
-        :param peak_client_ref: Receives the client snapshot once all requests arrive
         """
         count: int = 0
         use_dots: bool = receipt_file is not None
@@ -673,19 +667,26 @@ class ServerLogMonitor:
             else:
                 logger.info("%s", detail)
             if count >= expected_count:
-                ServerLogMonitor._log_all_received(use_dots, count, expected_count, delta_seconds, client_proc,
-                                                   peak_client_ref)
+                ServerLogMonitor._log_all_received(use_dots, count, expected_count, delta_seconds, client_proc)
 
     @staticmethod
-    def _log_all_received(use_dots, count, expected_count, elapsed_seconds, client_proc, peak_client_ref) -> None:
-        """Log the final receipt summary and client snapshot."""
+    def _log_all_received(use_dots: bool, count: int, expected_count: int, elapsed_seconds: float,
+                          client_proc: Optional[psutil.Process]) -> None:
+        """
+        Log the final receipt summary and client snapshot.
+
+        :param use_dots: True when arrivals were shown as dots, so the dot line needs ending
+        :param count: Number of arrivals seen
+        :param expected_count: Number of arrivals waited for
+        :param elapsed_seconds: Seconds from firing to the last arrival
+        :param client_proc: Client process for the snapshot, or None
+        """
         if use_dots:
             _progress_logger.info("\n")
             logger.info("  All %s/%s requests received by server (%.1fs)", count, expected_count, elapsed_seconds)
         snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_proc)
         if snapshot:
             logger.info("  Client AFTER: RSS %.1fM, CPU %.1f%%", snapshot.get("rss"), snapshot.get("cpu"))
-            peak_client_ref.value = snapshot
         virtual_memory_stats: Any = psutil.virtual_memory()
         used_megabytes: float = (virtual_memory_stats.total - virtual_memory_stats.available) / (1024 ** 2)
         available_gigabytes: float = virtual_memory_stats.available / (1024 ** 3)
