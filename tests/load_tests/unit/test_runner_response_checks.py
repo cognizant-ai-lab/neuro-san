@@ -34,8 +34,8 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.shared_ref import SharedRef
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
@@ -221,8 +221,8 @@ class TestRunnerResponseChecks(TestCase):
         """
         run_stage() returns one result per request, numbered from the plan's global offset.
         """
-        stage: Tuple[float, List[Dict[str, Any]], SharedRef, SharedRef, SharedRef, SharedRef, SharedRef, SharedRef,
-                     bool, bool]
+        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
+                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
             stage = self._stage_runner().run_stage(StagePlan(3, 2, 10, None))
         global_ids: List[int] = []
@@ -236,8 +236,8 @@ class TestRunnerResponseChecks(TestCase):
         """
         Requests still running at --stage-timeout come back KILLED with the reason as stderr.
         """
-        stage: Tuple[float, List[Dict[str, Any]], SharedRef, SharedRef, SharedRef, SharedRef, SharedRef, SharedRef,
-                     bool, bool]
+        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
+                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.5)):
             stage = self._stage_runner(stage_timeout=0.1).run_stage(StagePlan(2, 2, 0, None))
         self.assertEqual(2, len(stage[1]))
@@ -245,3 +245,49 @@ class TestRunnerResponseChecks(TestCase):
             self.assertEqual(STATUS_KILLED, result.get("status"))
             self.assertEqual("Killed by --stage-timeout", result.get("stderr"))
         self.assertEqual((False, False), stage[8:])
+
+    def test_run_stage_returns_heartbeat_peaks(self) -> None:
+        """
+        run_stage() returns the heartbeat's system peaks read after join(), and None for unmonitored processes.
+        """
+        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
+                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
+        with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
+            stage = self._stage_runner().run_stage(StagePlan(1, 1, 0, None))
+        self.assertIsNone(stage[2])
+        self.assertIsNone(stage[3])
+        self.assertIsNone(stage[4])
+        self.assertEqual(["available_gigabytes", "memory_percent"], sorted(stage[5].keys()))
+        self.assertGreater(stage[5].get("memory_percent"), 0.0)
+        self.assertGreaterEqual(stage[6], 0.0)
+        self.assertGreater(stage[7], 0)
+
+    def test_run_stage_counts_failed_requests_on_the_heartbeat(self) -> None:
+        """
+        Every request that does not end CREATED is counted once on the heartbeat.
+        """
+        statuses: List[Dict[str, Any]] = [{"status": STATUS_CREATED}, {"status": STATUS_FAILED},
+                                          {"status": STATUS_FAILED}]
+        with patch.object(TrafficRunner, "run_one_http", side_effect=statuses), \
+                patch.object(Heartbeat, "count_failed_request") as count_failed_request:
+            self._stage_runner().run_stage(StagePlan(3, 1, 0, None))
+        self.assertEqual(2, count_failed_request.call_count)
+
+    def test_heartbeat_failed_request_count(self) -> None:
+        """
+        The heartbeat's failed count starts at 0 and goes up by one per failed request.
+        """
+        heartbeat: Heartbeat = Heartbeat(None)
+        self.assertEqual(0, heartbeat.get_failed_request_count())
+        heartbeat.count_failed_request()
+        heartbeat.count_failed_request()
+        self.assertEqual(2, heartbeat.get_failed_request_count())
+
+    def test_peaks_ignore_zero_and_lower_readings(self) -> None:
+        """
+        A peak is only kept for a reading above zero and above the peak so far, the rule used before.
+        """
+        self.assertFalse(Heartbeat.is_new_peak(0, None))
+        self.assertTrue(Heartbeat.is_new_peak(5, None))
+        self.assertFalse(Heartbeat.is_new_peak(5, 5))
+        self.assertTrue(Heartbeat.is_new_peak(6.5, 5))

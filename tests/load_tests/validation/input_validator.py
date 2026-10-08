@@ -99,9 +99,7 @@ class InputValidator:
             return []
 
         if not os.path.isabs(parent_dir):
-            project_root: Optional[str] = ProjectPaths.resolve_project_root(
-                self._args.project_root
-            )
+            project_root: Optional[str] = ProjectPaths.resolve_project_root(self._args.project_root)
             parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)
 
         agent_base: str = ProjectPaths.agent_base_name(self._args.agent)
@@ -123,9 +121,7 @@ class InputValidator:
             and os.path.isfile(os.path.join(hocon_dir, name))
         )
         if not files:
-            logger.error(
-                "ERROR: no *.hocon files found in:\n  %s", hocon_dir,
-            )
+            logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
             sys.exit(1)
 
         return files
@@ -150,25 +146,17 @@ class InputValidator:
                     ]
                 except ValueError:
                     logger.error(
-                        "--stages must be comma-separated integers "
-                        "(e.g. 3,10,30). Got: '%s'",
+                        "--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
                         self._args.stages,
                     )
                     sys.exit(1)
                 if not stages or any(s <= 0 for s in stages):
-                    logger.error(
-                        "--stages values must be positive integers. "
-                        "Got: '%s'",
-                        self._args.stages,
-                    )
+                    logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     sys.exit(1)
                 return stages
             return list(DEFAULT_STAGES)
         if self._args.num_requests <= 0:
-            logger.error(
-                "--num-requests must be a positive integer. Got: %s",
-                self._args.num_requests,
-            )
+            logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
             sys.exit(1)
         return [self._args.num_requests]
 
@@ -180,17 +168,11 @@ class InputValidator:
         :return: --max-requests when given, else sum(stages) * --num-rounds
         """
         if self._args.num_rounds <= 0:
-            logger.error(
-                "--num-rounds must be a positive integer. Got: %s",
-                self._args.num_rounds,
-            )
+            logger.error("--num-rounds must be a positive integer. Got: %s", self._args.num_rounds)
             sys.exit(1)
         if self._args.max_requests is not None:
             if self._args.max_requests <= 0:
-                logger.error(
-                    "--max-requests must be a positive integer. Got: %s",
-                    self._args.max_requests,
-                )
+                logger.error("--max-requests must be a positive integer. Got: %s", self._args.max_requests)
                 sys.exit(1)
             return self._args.max_requests
         return sum(stages) * self._args.num_rounds
@@ -225,28 +207,19 @@ class InputValidator:
 
         warnings: List[str] = []
         if self._args.no_dry_run or self._args.level == LEVEL_ADV:
-            warnings = self._collect_warnings(
-                capped=capped,
-                total_planned=total_planned,
-                stale_log_age=stale_log_age,
-            )
+            warnings = self._collect_warnings(capped=capped, total_planned=total_planned, stale_log_age=stale_log_age)
             self._print_warnings(warnings)
             logger.info("=" * SEPARATOR_WIDTH)
             return None
 
         probe_result: Dict[str, Any] = {}
         probe_data: Dict[str, Any] = {}
-        probe_result, probe_data = (
-            self._run_cost_probe(runner, output_dir)
-        )
+        probe_result, probe_data = self._run_cost_probe(runner, output_dir)
 
         remaining: int = max(capped - 1, 0)
-        est_stage_duration: float = self._estimate_stage_duration(
-            probe_data.get("elapsed", 0), remaining,
-        )
+        est_stage_duration: float = self._estimate_stage_duration(probe_data.get("elapsed", 0), remaining)
         logger.info(
-            "  Estimated stage duration: ~%ss "
-            "(%.1fs x %s requests)",
+            "  Estimated stage duration: ~%ss (%.1fs x %s requests)",
             int(est_stage_duration),
             probe_data.get("elapsed", 0),
             remaining,
@@ -270,9 +243,7 @@ class InputValidator:
 
         logger.info("=" * SEPARATOR_WIDTH)
 
-        if not Confirm.ask(
-            f"\nProceed with remaining {capped - 1} requests?"
-        ):
+        if not Confirm.ask(f"\nProceed with remaining {capped - 1} requests?"):
             logger.info("Aborted by user.")
             sys.exit(0)
 
@@ -293,9 +264,7 @@ class InputValidator:
         logger.info("  Agent:    %s", args.agent)
         logger.info("  Level:    %s", args.level)
         if args.ramp:
-            logger.info(
-                "  Stages:   %s", stages,
-            )
+            logger.info("  Stages:   %s", stages)
         logger.info(
             "  Requests: %s x %s round%s = %s total",
             args.num_requests,
@@ -304,16 +273,10 @@ class InputValidator:
             total_planned,
         )
         if capped < total_planned:
-            logger.info(
-                "  Capped:   %s (--max-requests)", capped,
-            )
+            logger.info("  Capped:   %s (--max-requests)", capped)
+        logger.info("  Workers:  %s (concurrent)", args.max_workers)
         logger.info(
-            "  Workers:  %s (concurrent)", args.max_workers,
-        )
-        logger.info(
-            "  Timeouts: --request-timeout %ss (%sm) / "
-            "--idle-timeout %ss (%sm) / "
-            "--stage-timeout %ss (%sm)",
+            "  Timeouts: --request-timeout %ss (%sm) / --idle-timeout %ss (%sm) / --stage-timeout %ss (%sm)",
             args.request_timeout, args.request_timeout // 60,
             args.idle_timeout, args.idle_timeout // 60,
             args.stage_timeout, args.stage_timeout // 60,
@@ -324,9 +287,7 @@ class InputValidator:
                 args.total_timeout, args.total_timeout // 60,
             )
         else:
-            logger.info(
-                "            --total-timeout disabled",
-            )
+            logger.info("            --total-timeout disabled")
         SystemResources.log_prerun()
 
     @staticmethod
@@ -366,46 +327,29 @@ class InputValidator:
             if est_total_cost > 1.0:
                 warnings.append(
                     f"Estimated cost exceeds $1:\n"
-                    f"     Probe used ~{probe_tokens:,} "
-                    f"tokens (${probe_cost:.2f}) "
-                    f"x {capped} requests = "
-                    f"~{est_total_tokens:,} tokens "
-                    f"(~${est_total_cost:.2f})\n"
+                    f"     Probe used ~{probe_tokens:,} tokens (${probe_cost:.2f}) x {capped} requests = "
+                    f"~{est_total_tokens:,} tokens (~${est_total_cost:.2f})\n"
                     f"     Model: {probe_model}"
                 )
 
         max_w: int = self._args.max_workers
         num_r: int = self._args.num_requests
         if not self._args.ramp and max_w < num_r:
-            warnings.append(
-                f"--max-workers ({max_w}) < "
-                f"--num-requests ({num_r}): "
-                f"requests run in batches"
-            )
+            warnings.append(f"--max-workers ({max_w}) < --num-requests ({num_r}): requests run in batches")
 
         if (est_stage_duration is not None
-                and est_stage_duration
-                > self._args.stage_timeout):
+                and est_stage_duration > self._args.stage_timeout):
             stage_to: int = self._args.stage_timeout
             warnings.append(
-                f"Estimated stage duration "
-                f"~{int(est_stage_duration)}s "
-                f"exceeds --stage-timeout ({stage_to}s).\n"
-                f"     Requests may be killed "
-                f"before completing."
+                f"Estimated stage duration ~{int(est_stage_duration)}s exceeds --stage-timeout ({stage_to}s).\n"
+                f"     Requests may be killed before completing."
             )
 
         if capped < total_planned:
-            warnings.append(
-                f"--max-requests ({capped}) "
-                f"caps planned total ({total_planned})"
-            )
+            warnings.append(f"--max-requests ({capped}) caps planned total ({total_planned})")
 
         if stale_log_age is not None:
-            warnings.append(
-                f"Server log appears stale "
-                f"(last modified {stale_log_age}m ago)"
-            )
+            warnings.append(f"Server log appears stale (last modified {stale_log_age}m ago)")
 
         warnings.extend(self._token_reporting_warnings())
 
@@ -432,17 +376,13 @@ class InputValidator:
             return []
         if args.client_only or args.no_server_log:
             return [
-                "--minimal drops the token-accounting"
-                " message, and this run has no server log to fall"
-                " back on:\n"
+                "--minimal drops the token-accounting message, and this run has no server log to fall back on:\n"
                 "     no LLM or token usage will be reported.\n"
                 "     Omit --minimal to report them."
             ]
         return [
-            "--minimal drops the token-accounting"
-            " message:\n"
-            "     client-side LLM/token numbers will be"
-            " unavailable (server-log values still apply).\n"
+            "--minimal drops the token-accounting message:\n"
+            "     client-side LLM/token numbers will be unavailable (server-log values still apply).\n"
             "     Omit --minimal to report both."
         ]
 
@@ -462,16 +402,10 @@ class InputValidator:
         needed_gb: float = (num_requests * per_request_mb) / 1024
         if needed_gb > avail_gb * 0.8:
             return (
-                f"Memory may be insufficient for"
-                f" {num_requests} concurrent requests:\n"
-                f"     Estimated need:"
-                f" ~{needed_gb:.1f}G"
-                f" ({num_requests} x ~{per_request_mb}MB"
-                f" per request)\n"
-                f"     Available: {avail_gb:.1f}G"
-                f" / {mem.total / (1024 ** 3):.1f}G total\n"
-                f"     Consider fewer concurrent workers"
-                f" or a larger instance"
+                f"Memory may be insufficient for {num_requests} concurrent requests:\n"
+                f"     Estimated need: ~{needed_gb:.1f}G ({num_requests} x ~{per_request_mb}MB per request)\n"
+                f"     Available: {avail_gb:.1f}G / {mem.total / (1024 ** 3):.1f}G total\n"
+                f"     Consider fewer concurrent workers or a larger instance"
             )
         return None
 
@@ -486,9 +420,7 @@ class InputValidator:
             logger.info("\n  No warnings.")
             return
 
-        logger.warning(
-            "\n  WARNINGS (%s found):", len(warnings),
-        )
+        logger.warning("\n  WARNINGS (%s found):", len(warnings))
         for idx, warning in enumerate(warnings, 1):
             lines: List[str] = warning.split("\n")
             logger.warning("  %s. %s", idx, lines[0])
@@ -508,15 +440,9 @@ class InputValidator:
         :param output_dir: Directory for the probe's output files, or None
         :return: (probe_result, probe_data), where probe_data holds tokens, cost, model and elapsed
         """
-        logger.info(
-            "\n  Running 1 dry-run probe to measure actual "
-            "cost...",
-        )
+        logger.info("\n  Running 1 dry-run probe to measure actual cost...")
 
-        probe_result: Dict[str, Any] = runner.run_one_http(
-            request_id=0, global_request_id=0,
-            output_dir=output_dir,
-        )
+        probe_result: Dict[str, Any] = runner.run_one_http(request_id=0, global_request_id=0, output_dir=output_dir)
 
         probe_tokens: int = probe_result.get("total_tokens", 0)
         probe_cost: float = probe_result.get("cost_usd", 0.0)
@@ -524,21 +450,12 @@ class InputValidator:
         probe_status: str = probe_result.get("status", "FAILED")
         probe_elapsed: float = probe_result.get("elapsed", 0)
 
-        logger.info(
-            "\n  Probe request completed in %.1fs (%s)",
-            probe_elapsed, probe_status,
-        )
+        logger.info("\n  Probe request completed in %.1fs (%s)", probe_elapsed, probe_status)
 
         if probe_tokens > 0:
-            logger.info(
-                "  Probe tokens: %s (model: %s, cost: $%.4f)",
-                f"{probe_tokens:,}", probe_model, probe_cost,
-            )
+            logger.info("  Probe tokens: %s (model: %s, cost: $%.4f)", f"{probe_tokens:,}", probe_model, probe_cost)
         else:
-            logger.info(
-                "  No token data from probe (agent may not "
-                "track tokens).",
-            )
+            logger.info("  No token data from probe (agent may not track tokens).")
 
         probe_data: Dict[str, Any] = {
             "tokens": probe_tokens,
