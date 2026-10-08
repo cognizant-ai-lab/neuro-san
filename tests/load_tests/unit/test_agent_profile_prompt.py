@@ -29,36 +29,21 @@ class TestAgentProfilePrompt(TestCase):
 
     def setUp(self) -> None:
         """Build a profile with a two-prompt pool."""
-        self.profile: AgentProfile = AgentProfile(
-            "music_nerd", {"prompts": ["first", "second"]},
-        )
+        self.profile: AgentProfile = AgentProfile("music_nerd", {"prompts": ["first", "second"]})
 
     def test_varied_mode_appends_request_id(self) -> None:
         """Default mode makes every prompt unique."""
-        self.assertEqual(
-            self.profile.get_prompt(0), "first (request 0)",
-        )
-        self.assertEqual(
-            self.profile.get_prompt(3), "second (request 3)",
-        )
+        self.assertEqual(self.profile.get_prompt(0), "first (request 0)")
+        self.assertEqual(self.profile.get_prompt(3), "second (request 3)")
 
     def test_allow_caching_keeps_pool_prompt_verbatim(self) -> None:
         """Cacheable mode still cycles the pool, without a suffix."""
-        self.assertEqual(
-            self.profile.get_prompt(0, allow_caching=True), "first",
-        )
-        self.assertEqual(
-            self.profile.get_prompt(3, allow_caching=True), "second",
-        )
+        self.assertEqual(self.profile.get_prompt(0, allow_caching=True), "first")
+        self.assertEqual(self.profile.get_prompt(3, allow_caching=True), "second")
 
     def test_same_prompt_wins_over_allow_caching(self) -> None:
         """same_prompt already repeats prompt zero verbatim."""
-        self.assertEqual(
-            self.profile.get_prompt(
-                3, same_prompt=True, allow_caching=True,
-            ),
-            "first",
-        )
+        self.assertEqual(self.profile.get_prompt(3, same_prompt=True, allow_caching=True), "first")
 
     def test_empty_prompt_pool_aborts(self) -> None:
         """A profile with no prompts is a hard error."""

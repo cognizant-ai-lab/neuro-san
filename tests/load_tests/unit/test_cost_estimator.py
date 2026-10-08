@@ -36,10 +36,7 @@ class TestCostEstimator(TestCase):
         pricing: Dict[str, float] = MODEL_PRICING.get("gpt-4o", {})
         expected: float = pricing.get("prompt", 0.0) + pricing.get("completion", 0.0)
 
-        self.assertAlmostEqual(
-            CostEstimator.estimate(1_000_000, 1_000_000, "gpt-4o"),
-            expected,
-        )
+        self.assertAlmostEqual(CostEstimator.estimate(1_000_000, 1_000_000, "gpt-4o"), expected)
 
     def test_longest_matching_model_key_wins(self) -> None:
         """A more specific model must not be priced as its base model.
