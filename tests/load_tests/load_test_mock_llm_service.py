@@ -139,24 +139,9 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             default="math_guy",
             help="Agent network name to test (default: math_guy)",
         )
-        parser.add_argument(
-            "--num-requests",
-            type=int,
-            default=10,
-            help="Number of requests per round (default: 10)",
-        )
-        parser.add_argument(
-            "--max-workers",
-            type=int,
-            default=10,
-            help="Max concurrent workers (default: 10)",
-        )
-        parser.add_argument(
-            "--num-rounds",
-            type=int,
-            default=5,
-            help="Number of rounds to run (default: 5)",
-        )
+        parser.add_argument("--num-requests", type=int, default=10, help="Number of requests per round (default: 10)")
+        parser.add_argument("--max-workers", type=int, default=10, help="Max concurrent workers (default: 10)")
+        parser.add_argument("--num-rounds", type=int, default=5, help="Number of rounds to run (default: 5)")
         parser.add_argument(
             "--prompt",
             type=str,
@@ -177,18 +162,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             default=False,
             help="Do not pass --sly_data to agent_cli",
         )
-        parser.add_argument(
-            "--host",
-            type=str,
-            default="localhost",
-            help="Neuro-san server host (default: localhost)",
-        )
-        parser.add_argument(
-            "--port",
-            type=int,
-            default=8080,
-            help="Neuro-san server port (default: 8080)",
-        )
+        parser.add_argument("--host", type=str, default="localhost", help="Neuro-san server host (default: localhost)")
+        parser.add_argument("--port", type=int, default=8080, help="Neuro-san server port (default: 8080)")
         parser.add_argument(
             "--settle-time",
             type=int,
@@ -232,13 +207,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _run_one(request_id, cmd):
         """Execute a single agent_cli request and return timing + status."""
         start = time.time()
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=MOCK_REQUEST_TIMEOUT,
-            check=False,
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=MOCK_REQUEST_TIMEOUT, check=False)
         elapsed = time.time() - start
         ok = result.returncode == 0
         status = "OK" if ok else "FAIL"
@@ -294,8 +263,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             if preset is None:
                 known = ", ".join(sorted(self.AGENT_PRESETS.keys()))
                 logger.error(
-                    "No preset for agent '%s'. "
-                    "Please provide --prompt explicitly.\n"
+                    "No preset for agent '%s'. Please provide --prompt explicitly.\n"
                     "Known presets: %s",
                     self.args.agent, known,
                 )
@@ -431,11 +399,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         )
 
         # The overlay keeps openai-class models on Chat Completions, the only endpoint the mock serves.
-        server_env = {
-            **os.environ,
-            "OPENAI_API_BASE": api_base,
-            "AGENT_LLM_INFO_FILE": CHAT_COMPLETIONS_LLM_INFO_PATH,
-        }
+        server_env = {**os.environ, "OPENAI_API_BASE": api_base, "AGENT_LLM_INFO_FILE": CHAT_COMPLETIONS_LLM_INFO_PATH}
         logger.info("Auto-starting neuro-san server (log: %s)", self.SERVER_LOG_PATH)
         self._server_log_fh = open(  # pylint: disable=consider-using-with
             self.SERVER_LOG_PATH, "w", encoding="utf-8",
@@ -447,21 +411,15 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             env=server_env,
         )
 
-        logger.info(
-            "Waiting %ss for servers to start...", self.STARTUP_WAIT_SECONDS,
-        )
+        logger.info("Waiting %ss for servers to start...", self.STARTUP_WAIT_SECONDS)
         time.sleep(self.STARTUP_WAIT_SECONDS)
 
         if self._auto_mock_popen.poll() is not None:
-            logger.error(
-                "Mock LLM server exited unexpectedly. Check %s", self.MOCK_LOG_PATH,
-            )
+            logger.error("Mock LLM server exited unexpectedly. Check %s", self.MOCK_LOG_PATH)
             sys.exit(1)
 
         if self._auto_server_popen.poll() is not None:
-            logger.error(
-                "Neuro-san server exited unexpectedly. Check %s", self.SERVER_LOG_PATH,
-            )
+            logger.error("Neuro-san server exited unexpectedly. Check %s", self.SERVER_LOG_PATH)
             self._auto_mock_popen.terminate()
             sys.exit(1)
 
@@ -477,17 +435,11 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _stop_servers(self):
         """Terminate auto-started servers and close log file handles."""
         if self._auto_server_popen is not None:
-            logger.info(
-                "Stopping neuro-san server (PID %s)...",
-                self._auto_server_popen.pid,
-            )
+            logger.info("Stopping neuro-san server (PID %s)...", self._auto_server_popen.pid)
             self._auto_server_popen.terminate()
             self._auto_server_popen.wait(timeout=PROCESS_WAIT_TIMEOUT)
         if self._auto_mock_popen is not None:
-            logger.info(
-                "Stopping mock LLM server (PID %s)...",
-                self._auto_mock_popen.pid,
-            )
+            logger.info("Stopping mock LLM server (PID %s)...", self._auto_mock_popen.pid)
             self._auto_mock_popen.terminate()
             self._auto_mock_popen.wait(timeout=PROCESS_WAIT_TIMEOUT)
         if self._server_log_fh is not None:
@@ -558,11 +510,9 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 ResourceMonitor.log_snapshot("Server AFTER", after_server)
 
             if before_server and after_server:
-                server_rows.append(
-                    self._build_snapshot_row(round_num, before_server, after_server))
+                server_rows.append(self._build_snapshot_row(round_num, before_server, after_server))
             if before_mock and after_mock:
-                mock_rows.append(
-                    self._build_snapshot_row(round_num, before_mock, after_mock))
+                mock_rows.append(self._build_snapshot_row(round_num, before_mock, after_mock))
 
         return server_rows, mock_rows, totals
 
@@ -571,30 +521,12 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         """Log overall resource deltas between the first and last rounds."""
         first = rows[0]
         last = rows[-1]
-        logger.info(
-            "\n%s overall deltas (round 1 before vs round %s settled):",
-            label, num_rounds,
-        )
-        logger.info(
-            "  RSS:         +%.1f MB",
-            float(last[2].rstrip("M")) - float(first[1].rstrip("M")),
-        )
-        logger.info(
-            "  FDs:         +%s",
-            int(last[4]) - int(first[4]),
-        )
-        logger.info(
-            "  Threads:     +%s",
-            int(last[5].split(" -> ")[1]) - int(first[5].split(" -> ")[0]),
-        )
-        logger.info(
-            "  Connections: +%s",
-            int(last[7]) - int(first[7]),
-        )
-        logger.info(
-            "  Children:    +%s",
-            int(last[9]) - int(first[9]),
-        )
+        logger.info("\n%s overall deltas (round 1 before vs round %s settled):", label, num_rounds)
+        logger.info("  RSS:         +%.1f MB", float(last[2].rstrip("M")) - float(first[1].rstrip("M")))
+        logger.info("  FDs:         +%s", int(last[4]) - int(first[4]))
+        logger.info("  Threads:     +%s", int(last[5].split(" -> ")[1]) - int(first[5].split(" -> ")[0]))
+        logger.info("  Connections: +%s", int(last[7]) - int(first[7]))
+        logger.info("  Children:    +%s", int(last[9]) - int(first[9]))
 
     def _log_results(self, totals, server_rows, mock_rows):
         """Log the overall results summary and leak analysis tables."""
@@ -609,19 +541,14 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         )
         logger.info("  Total time:     %.2fs", totals.get("time"))
         if total_requests > 0:
-            logger.info(
-                "  Avg per request: %.2fs", totals.get("time") / total_requests,
-            )
+            logger.info("  Avg per request: %.2fs", totals.get("time") / total_requests)
 
         header = ["Round", "Before RSS", "Settled RSS", "RSS Delta",
                   "FDs", "Threads", "Thread Delta",
                   "Conns", "CPU%", "Children"]
 
         logger.info("\n%s", "=" * 60)
-        logger.info(
-            "  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)",
-            self.args.num_rounds, total_requests,
-        )
+        logger.info("  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)", self.args.num_rounds, total_requests)
         logger.info("=" * 60)
 
         if server_rows:
@@ -642,9 +569,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         """Add a file handler to capture all output to a timestamped log file."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         self._test_log_path = f"/tmp/load_test_{timestamp}.log"
-        self._test_log_handler = logging.FileHandler(
-            self._test_log_path, encoding="utf-8",
-        )
+        self._test_log_handler = logging.FileHandler(self._test_log_path, encoding="utf-8")
         self._test_log_handler.setLevel(logging.INFO)
         self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(self._test_log_handler)
@@ -675,9 +600,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         if self.args.auto_start:
             if not is_local:
-                logger.error(
-                    "--auto-start can only be used with local mode (localhost)."
-                )
+                logger.error("--auto-start can only be used with local mode (localhost).")
                 sys.exit(1)
             self._auto_start_servers()
         elif is_local:
@@ -702,22 +625,14 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             self._log_results(totals, server_rows, mock_rows)
             if is_local and not self.args.auto_start:
                 logger.info("\n%s", "=" * 60)
-                logger.info(
-                    "  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE "
-                    "ON NEURO-SAN SERVER"
-                )
+                logger.info("  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE ON NEURO-SAN SERVER")
                 logger.info("  Key:   OPENAI_API_BASE")
                 logger.info("  Value: %s", self._api_base)
-                logger.info(
-                    "  All agent requests are routed to the mock LLM server."
-                )
+                logger.info("  All agent requests are routed to the mock LLM server.")
                 logger.info("  To restore normal operation:")
                 logger.info("    1. Stop the neuro-san server")
                 logger.info("    2. unset OPENAI_API_BASE")
-                logger.info(
-                    "    3. Restart: python -m neuro_san.service"
-                    ".main_loop.server_main_loop"
-                )
+                logger.info("    3. Restart: python -m neuro_san.service.main_loop.server_main_loop")
                 logger.info("=" * 60)
         finally:
             if self.args.auto_start:
