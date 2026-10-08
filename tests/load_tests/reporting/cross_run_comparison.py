@@ -361,15 +361,13 @@ class CrossRunComparison:
         :param loops: Validation loop entries from _parse_validation_loops
         """
         # Add up retries, tokens and cost over all validation-loop requests in one pass.
-        # Costs are summed with sum() afterwards, so the float total stays exactly as before.
         total_retries: int = 0
         total_tokens: int = 0
-        costs_dollars: List[float] = []
+        total_cost_dollars: float = 0.0
         for loop_entry in loops:
             total_retries += loop_entry.get("retries", 0)
             total_tokens += loop_entry.get("total_tokens", 0)
-            costs_dollars.append(loop_entry.get("cost_usd", 0.0))
-        total_cost_dollars: float = sum(costs_dollars)
+            total_cost_dollars += loop_entry.get("cost_usd", 0.0)
         logger.info("")
         logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
         logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
