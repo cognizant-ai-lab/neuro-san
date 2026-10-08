@@ -162,9 +162,11 @@ class LatencyAnalyzer:
             if not has_degradation:
                 logger.info("\n  Latency degradation (round-over-round):")
                 has_degradation = True
-            parts: str = " -> ".join(
-                f"{average_latency_seconds:.1f}s" for average_latency_seconds in average_latencies_seconds
-            )
+            # One "12.3s" text per round, in round order.
+            latency_texts: List[str] = []
+            for average_latency_seconds in average_latencies_seconds:
+                latency_texts.append(f"{average_latency_seconds:.1f}s")
+            parts: str = " -> ".join(latency_texts)
             change_percentage: float = (
                 (average_latencies_seconds[-1] - average_latencies_seconds[0]) / average_latencies_seconds[0] * 100
                 if average_latencies_seconds[0] > 0 else 0
@@ -188,7 +190,7 @@ class LatencyAnalyzer:
             stage: Union[int, str] = summary.get("stage", "?")
             round_number: Union[int, str] = summary.get("round", "?")
             concurrent: Union[int, str] = summary.get("concurrent", "?")
-            peak_in_flight_count: int = max(in_flight_count for _, in_flight_count in timeline)
+            peak_in_flight_count: int = LatencyAnalyzer._peak_in_flight_count(timeline)
             logger.info("\n  Concurrency timeline (stage %s, round %s, %s planned):", stage, round_number, concurrent)
             logger.info("    Peak in-flight: %s", peak_in_flight_count)
             self._log_timeline_chart(timeline)
@@ -206,11 +208,13 @@ class LatencyAnalyzer:
         :return: Elapsed seconds of each result, leaving out results with no elapsed time
         """
         results: List[Dict[str, Any]] = summary.get("results", [])
-        return [
-            result.get("elapsed", 0)
-            for result in results
-            if result.get("elapsed", 0) > 0
-        ]
+        # Keep only the results that have an elapsed time.
+        latencies_seconds: List[float] = []
+        for result in results:
+            elapsed_seconds: float = result.get("elapsed", 0)
+            if elapsed_seconds > 0:
+                latencies_seconds.append(elapsed_seconds)
+        return latencies_seconds
 
     def _group_by_concurrency(self) -> Dict[int, List[Dict[str, Any]]]:
         """
@@ -253,6 +257,21 @@ class LatencyAnalyzer:
         return timeline
 
     @staticmethod
+    def _peak_in_flight_count(timeline: List[Tuple[float, int]]) -> int:
+        """
+        Return the highest in-flight count in a timeline.
+
+        :param timeline: Non-empty timeline from _build_timeline
+        :return: The largest in-flight count
+        """
+        # Each timeline event is (seconds since start, in-flight count). Keep the largest count seen so far.
+        peak_in_flight_count: int = timeline[0][1]
+        for event in timeline:
+            if event[1] > peak_in_flight_count:
+                peak_in_flight_count = event[1]
+        return peak_in_flight_count
+
+    @staticmethod
     def _log_timeline_chart(timeline: List[Tuple[float, int]]) -> None:
         """
         Log a simple ASCII chart of concurrency over time.
@@ -261,7 +280,7 @@ class LatencyAnalyzer:
         """
         if not timeline:
             return
-        maximum_in_flight_count: int = max(in_flight_count for _, in_flight_count in timeline)
+        maximum_in_flight_count: int = LatencyAnalyzer._peak_in_flight_count(timeline)
         total_duration_seconds: float = timeline[-1][0]
         if total_duration_seconds <= 0 or maximum_in_flight_count <= 0:
             return
@@ -282,6 +301,10 @@ class LatencyAnalyzer:
                 event_index += 1
         for index, peak_in_flight_count in enumerate(bucket_peaks):
             bucket_start_seconds: float = index * bucket_size_seconds
-            chart: str = "#" * (peak_in_flight_count * 40 // maximum_in_flight_count) if maximum_in_flight_count else ""
+            bar_length_characters: int = 0
+            if maximum_in_flight_count:
+                # Bar length scaled so the busiest bucket fills 40 characters; int() drops the fraction.
+                bar_length_characters = int(peak_in_flight_count * 40 / maximum_in_flight_count)
+            chart: str = "#" * bar_length_characters
             label: str = Formatters.fmt_duration(bucket_start_seconds)
             logger.info("    %8s |%-40s| %d", label, chart, peak_in_flight_count)
