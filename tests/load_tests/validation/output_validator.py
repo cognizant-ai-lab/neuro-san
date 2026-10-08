@@ -50,12 +50,7 @@ class OutputValidator:
         :param results: Request results of the stage
         :return: Count per status; unknown statuses count as failed
         """
-        counts: Dict[str, Any] = {
-            STATUS_CREATED: 0,
-            STATUS_FAILED: 0,
-            STATUS_TIMEOUT: 0,
-            STATUS_KILLED: 0,
-        }
+        counts: Dict[str, Any] = {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0}
         for result in results:
             status: str = result.get("status", STATUS_FAILED)
             if status not in counts:
@@ -82,18 +77,9 @@ class OutputValidator:
         """
         if show_counts:
             logger.info("\n  Requests: %s", actual_requests)
-            logger.info(
-                "    Created: %s  (success criteria met)",
-                counts.get(STATUS_CREATED, 0),
-            )
-            logger.info(
-                "    Failed:  %s  (error or crash)",
-                counts.get(STATUS_FAILED, 0),
-            )
-            logger.info(
-                "    Timed out: %s  (hit %ss hard cap)",
-                counts.get(STATUS_TIMEOUT, 0), timeout,
-            )
+            logger.info("    Created: %s  (success criteria met)", counts.get(STATUS_CREATED, 0))
+            logger.info("    Failed:  %s  (error or crash)", counts.get(STATUS_FAILED, 0))
+            logger.info("    Timed out: %s  (hit %ss hard cap)", counts.get(STATUS_TIMEOUT, 0), timeout)
             logger.info(
                 "    Killed:  %s  (no output for %ss, presumed hanging)",
                 counts.get(STATUS_KILLED, 0), idle_timeout,
@@ -117,20 +103,15 @@ class OutputValidator:
         :param total_retries: Retries of every type
         :param actual_requests: Requests sent in the stage, used for the amplification
         """
-        logger.info(
-            "\n  Retry activity (from server log):",
-        )
+        logger.info("\n  Retry activity (from server log):")
         for error_type in RETRY_ERROR_TYPES:
             count: int = retries.get(error_type, 0)
             label: str = RETRY_LABELS.get(error_type, f"{error_type} retries")
             logger.info("    %s: %s", label, count)
         logger.info("    Total retries:  %s", total_retries)
-        amplification: float = Formatters.compute_amplification(
-            actual_requests, total_retries,
-        )
+        amplification: float = Formatters.compute_amplification(actual_requests, total_retries)
         logger.info(
-            "    Amplification:  %.2fx "
-            "(%s total LLM attempts for %s requests)",
+            "    Amplification:  %.2fx (%s total LLM attempts for %s requests)",
             amplification,
             actual_requests + total_retries,
             actual_requests,
@@ -161,31 +142,15 @@ class OutputValidator:
         match_label: str = (
             "OK" if pri_started >= actual_requests else "MISMATCH"
         )
-        logger.info(
-            "\n  Server-side validation (from server log):",
-        )
-        logger.info(
-            "    %s received:  %s/%s  (%s)",
-            agent_name, pri_started, actual_requests, match_label,
-        )
-        logger.info(
-            "    %s completed: %s/%s",
-            agent_name, pri_finished, actual_requests,
-        )
+        logger.info("\n  Server-side validation (from server log):")
+        logger.info("    %s received:  %s/%s  (%s)", agent_name, pri_started, actual_requests, match_label)
+        logger.info("    %s completed: %s/%s", agent_name, pri_finished, actual_requests)
         if internal_calls > 0:
-            logger.info(
-                "    Internal calls: %s additional "
-                "streaming_chat calls (recursive)",
-                internal_calls,
-            )
-        logger.info(
-            "    Total server calls: %s started, %s finished",
-            total_started, total_finished,
-        )
+            logger.info("    Internal calls: %s additional streaming_chat calls (recursive)", internal_calls)
+        logger.info("    Total server calls: %s started, %s finished", total_started, total_finished)
         if pri_started < actual_requests:
             logger.warning(
-                "    WARNING: Server received %s %s requests "
-                "but %s were sent",
+                "    WARNING: Server received %s %s requests but %s were sent",
                 pri_started, agent_name, actual_requests,
             )
 
@@ -198,10 +163,7 @@ class OutputValidator:
         """
         if not disconnections:
             return
-        logger.warning(
-            "\n  Client disconnections detected: %s",
-            len(disconnections),
-        )
+        logger.warning("\n  Client disconnections detected: %s", len(disconnections))
         for disc in disconnections:
             agent: str = disc.get("agent", "unknown")
             req_id: str = disc.get("request_id", "unknown")
@@ -210,10 +172,7 @@ class OutputValidator:
                 f"{client_req}/{req_id}" if client_req
                 else req_id
             )
-            logger.warning(
-                "    %s: %s still running at disconnect",
-                label, agent,
-            )
+            logger.warning("    %s: %s still running at disconnect", label, agent)
 
     @staticmethod
     def log_server_errors(server_errors: List[Dict[str, str]]) -> None:
@@ -224,10 +183,7 @@ class OutputValidator:
         """
         if not server_errors:
             return
-        logger.warning(
-            "\n  Server errors detected: %s",
-            len(server_errors),
-        )
+        logger.warning("\n  Server errors detected: %s", len(server_errors))
         for err in server_errors:
             req_id: str = err.get("request_id", "unknown")
             message: str = err.get("message", "")
@@ -245,10 +201,7 @@ class OutputValidator:
         """
         if not tool_warnings:
             return
-        logger.warning(
-            "\n  Tool-creation warnings: %s",
-            len(tool_warnings),
-        )
+        logger.warning("\n  Tool-creation warnings: %s", len(tool_warnings))
         for warn in tool_warnings:
             req_id: str = warn.get("request_id", "unknown")
             message: str = warn.get("message", "")
@@ -288,20 +241,16 @@ class OutputValidator:
             return False
         if "/" in agent_name:
             logger.error(
-                "\n  ERROR: All requests failed with a permissions "
-                "error for agent '%s'.\n"
-                "  Verify that the agent is registered in the "
-                "server's AGENT_REGISTRY_PATH and that your user\n"
+                "\n  ERROR: All requests failed with a permissions error for agent '%s'.\n"
+                "  Verify that the agent is registered in the server's AGENT_REGISTRY_PATH and that your user\n"
                 "  has the correct permissions for the network.\n\n"
                 "  Aborting test.",
                 agent_name,
             )
         else:
             logger.error(
-                "\n  ERROR: All requests failed with a permissions "
-                "error.\n"
-                "  The --agent value '%s' may need a registry "
-                "subdirectory prefix.\n"
+                "\n  ERROR: All requests failed with a permissions error.\n"
+                "  The --agent value '%s' may need a registry subdirectory prefix.\n"
                 "  For example, if the agent is registered under\n"
                 "  registries/basic/, use:\n"
                 "    --agent basic/%s\n\n"
@@ -328,13 +277,9 @@ class OutputValidator:
             return False
         parts: List[str] = []
         if timed_out:
-            parts.append(
-                f"{timed_out} timed out"
-            )
+            parts.append(f"{timed_out} timed out")
         if killed:
-            parts.append(
-                f"{killed} killed by stage-timeout"
-            )
+            parts.append(f"{killed} killed by stage-timeout")
         logger.warning(
             "\n  ABORT: %s — %s.\n"
             "  Stopping test and reporting available results.",

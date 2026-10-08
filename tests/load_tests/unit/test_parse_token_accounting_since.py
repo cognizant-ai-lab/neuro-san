@@ -79,9 +79,7 @@ class TestParseTokenAccountingSince(TestCase):
             "caller_model": model,
         }
         message: str = "Request reporting: " + json.dumps(payload, indent=4)
-        return LOG_RECORD_FORMAT.format(
-            message=message, request_id=request_id,
-        )
+        return LOG_RECORD_FORMAT.format(message=message, request_id=request_id)
 
     def _write(self, text: str) -> None:
         """
@@ -109,10 +107,7 @@ class TestParseTokenAccountingSince(TestCase):
 
     def test_each_request_is_keyed_separately(self) -> None:
         """Concurrent requests must not overwrite one another."""
-        self._write(
-            self._reporting_record("req-1", total=1500)
-            + self._reporting_record("req-2", total=2500)
-        )
+        self._write(self._reporting_record("req-1", total=1500) + self._reporting_record("req-2", total=2500))
         monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
@@ -150,11 +145,7 @@ class TestParseTokenAccountingSince(TestCase):
 
     def test_unrelated_log_traffic_is_ignored(self) -> None:
         """Ordinary log lines produce no entries."""
-        self._write(
-            LOG_RECORD_FORMAT.format(
-                message="Starting agent server", request_id="None",
-            )
-        )
+        self._write(LOG_RECORD_FORMAT.format(message="Starting agent server", request_id="None"))
         monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
         self.assertEqual(monitor.parse_token_accounting_since(0), {})

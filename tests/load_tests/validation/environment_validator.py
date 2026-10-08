@@ -72,18 +72,12 @@ class EnvironmentValidator:
             issues.append(f"  OPENAI_API_BASE={api_base}")
         mock_proc: Optional[psutil.Process] = ResourceMonitor.find_process("mock_llm_server")
         if mock_proc is not None:
-            issues.append(
-                f"  mock_llm_server process running "
-                f"(PID {mock_proc.pid})"
-            )
+            issues.append(f"  mock_llm_server process running (PID {mock_proc.pid})")
         if issues:
             logger.error(
-                "Mock LLM environment detected — this test requires "
-                "real LLM calls.\n%s\n\n"
-                "Unset OPENAI_API_BASE and stop the mock server "
-                "before running this test.\n"
-                "For mock-based load testing, use "
-                "load_test_mock_llm_service.py instead.",
+                "Mock LLM environment detected — this test requires real LLM calls.\n%s\n\n"
+                "Unset OPENAI_API_BASE and stop the mock server before running this test.\n"
+                "For mock-based load testing, use load_test_mock_llm_service.py instead.",
                 "\n".join(issues),
             )
             sys.exit(1)
@@ -99,9 +93,7 @@ class EnvironmentValidator:
         :return: True if a connection succeeds within SOCKET_CHECK_TIMEOUT, False otherwise
         """
         try:
-            with socket.create_connection(
-                (host, port), timeout=SOCKET_CHECK_TIMEOUT,
-            ):
+            with socket.create_connection((host, port), timeout=SOCKET_CHECK_TIMEOUT):
                 return True
         except (ConnectionRefusedError, OSError):
             return False
@@ -117,38 +109,23 @@ class EnvironmentValidator:
         :return: The server process, or None when it is not found locally
         """
         if not EnvironmentValidator.is_port_open(args.host, args.port):
-            logger.error(
-                "No service listening on %s:%s.\n"
-                "Start the server first.",
-                args.host, args.port,
-            )
+            logger.error("No service listening on %s:%s.\nStart the server first.", args.host, args.port)
             sys.exit(1)
 
         server_proc: Optional[psutil.Process] = None
         for keyword in ["neuro_san_studio", "server_main_loop"]:
             server_proc = ResourceMonitor.find_process(keyword)
             if server_proc is not None:
-                logger.info(
-                    "Found neuro-san server (PID %s) via %s",
-                    server_proc.pid, keyword,
-                )
+                logger.info("Found neuro-san server (PID %s) via %s", server_proc.pid, keyword)
                 break
 
         if server_proc is None:
-            server_proc = ResourceMonitor.find_process_by_port(
-                args.port,
-            )
+            server_proc = ResourceMonitor.find_process_by_port(args.port)
             if server_proc is not None:
-                logger.info(
-                    "Found neuro-san server (PID %s) via port %s",
-                    server_proc.pid, args.port,
-                )
+                logger.info("Found neuro-san server (PID %s) via port %s", server_proc.pid, args.port)
 
         if server_proc is None:
-            logger.info(
-                "neuro-san server process not found locally. "
-                "Resource monitoring disabled."
-            )
+            logger.info("neuro-san server process not found locally. Resource monitoring disabled.")
             return None
 
         return server_proc
@@ -165,9 +142,7 @@ class EnvironmentValidator:
         :param args: Parsed arguments; host and port are used
         :return: Path to logs/server.log in the server's working directory, or None when it cannot be found
         """
-        if not EnvironmentValidator.is_port_open(
-                args.host, args.port,
-        ):
+        if not EnvironmentValidator.is_port_open(args.host, args.port):
             return None
         server_proc: Optional[psutil.Process] = None
         for keyword in ["neuro_san_studio", "server_main_loop"]:
@@ -175,15 +150,11 @@ class EnvironmentValidator:
             if server_proc is not None:
                 break
         if server_proc is None:
-            server_proc = ResourceMonitor.find_process_by_port(
-                args.port,
-            )
+            server_proc = ResourceMonitor.find_process_by_port(args.port)
         if server_proc is None:
             return None
         try:
-            candidate: str = os.path.join(
-                server_proc.cwd(), "logs", "server.log",
-            )
+            candidate: str = os.path.join(server_proc.cwd(), "logs", "server.log")
             if os.path.isfile(candidate):
                 return candidate
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
@@ -202,29 +173,22 @@ class EnvironmentValidator:
         :return: Path to logs/server.log in the server's working directory
         """
         if server_proc is None:
-            logger.error(
-                "Cannot auto-detect server log: "
-                "server process not found.",
-            )
+            logger.error("Cannot auto-detect server log: server process not found.")
             sys.exit(1)
         try:
             cwd: str = server_proc.cwd()
             candidate: str = os.path.join(cwd, "logs", "server.log")
             if os.path.isfile(candidate):
-                logger.info(
-                    "  Auto-detected server log: %s", candidate,
-                )
+                logger.info("  Auto-detected server log: %s", candidate)
                 return candidate
             logger.error(
                 "Server log not found at %s\n"
-                "  Provide the path explicitly: "
-                "--server-log /path/to/server.log",
+                "  Provide the path explicitly: --server-log /path/to/server.log",
                 candidate,
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             logger.error(
                 "Could not determine server working directory.\n"
-                "  Provide the path explicitly: "
-                "--server-log /path/to/server.log",
+                "  Provide the path explicitly: --server-log /path/to/server.log",
             )
         sys.exit(1)

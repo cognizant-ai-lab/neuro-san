@@ -14,7 +14,10 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
+from typing import Dict
 from typing import List
+from typing import Tuple
 from unittest import TestCase
 
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
@@ -24,7 +27,9 @@ from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 # protected-access warnings file-wide.
 # pylint: disable=protected-access
 class TestLatencyAnalyzer(TestCase):
-    """Unit tests for LatencyAnalyzer._percentile()."""
+    """
+    Unit tests for LatencyAnalyzer helpers: _percentile(), _extract_latencies() and _peak_in_flight_count().
+    """
 
     def test_percentile_of_no_values_is_zero(self) -> None:
         """An empty list has no percentile, so the result is 0.0."""
@@ -50,3 +55,23 @@ class TestLatencyAnalyzer(TestCase):
         """A percentile between two values lies on the straight line between them."""
         self.assertEqual(LatencyAnalyzer._percentile([1.0, 2.0, 3.0, 4.0], 50), 2.5)
         self.assertAlmostEqual(LatencyAnalyzer._percentile([10.0, 20.0], 90), 19.0)
+
+    def test_extract_latencies_skips_results_without_elapsed_time(self) -> None:
+        """
+        Results with no elapsed time, or 0, are left out; the others keep their order.
+        """
+        summary: Dict[str, Any] = {"results": [{"elapsed": 3.0}, {"elapsed": 0}, {}, {"elapsed": 1.5}]}
+        self.assertEqual(LatencyAnalyzer._extract_latencies(summary), [3.0, 1.5])
+
+    def test_extract_latencies_of_no_results_is_empty(self) -> None:
+        """
+        A stage with no results has no latencies.
+        """
+        self.assertEqual(LatencyAnalyzer._extract_latencies({}), [])
+
+    def test_peak_in_flight_count_is_the_largest_count(self) -> None:
+        """
+        The peak is the largest in-flight count, wherever it is in the timeline.
+        """
+        timeline: List[Tuple[float, int]] = [(0.0, 1), (0.5, 4), (1.0, 2)]
+        self.assertEqual(LatencyAnalyzer._peak_in_flight_count(timeline), 4)

@@ -53,11 +53,7 @@ class TestValidateFixturesHoconDir(TestCase):
         :param project_root: --project-root value
         :return: Validator over those args
         """
-        return InputValidator(Namespace(
-            agent=agent,
-            fixtures_hocon_dir=fixtures_hocon_dir,
-            project_root=project_root,
-        ))
+        return InputValidator(Namespace(agent=agent, fixtures_hocon_dir=fixtures_hocon_dir, project_root=project_root))
 
     def test_flag_absent_returns_empty_list(self) -> None:
         """No flag means prompts come from the JSON profile."""
@@ -66,9 +62,7 @@ class TestValidateFixturesHoconDir(TestCase):
 
     def test_default_dir_resolves_hello_world_fixtures(self) -> None:
         """DIR default + agent name -> tests/fixtures/load_tests/hello_world."""
-        files: List[str] = self._validator(
-            fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
-        ).validate_fixtures_hocon_dir()
+        files: List[str] = self._validator(fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR).validate_fixtures_hocon_dir()
 
         expected: List[str] = sorted(
             os.path.join(HELLO_WORLD_FIXTURES, name)
@@ -111,7 +105,5 @@ class TestValidateFixturesHoconDir(TestCase):
         with tempfile.TemporaryDirectory() as parent:
             os.mkdir(os.path.join(parent, "hello_world"))
             with self.assertRaises(SystemExit) as ctx:
-                self._validator(
-                    fixtures_hocon_dir=parent,
-                ).validate_fixtures_hocon_dir()
+                self._validator(fixtures_hocon_dir=parent).validate_fixtures_hocon_dir()
         self.assertEqual(ctx.exception.code, 1)

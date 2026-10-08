@@ -56,12 +56,7 @@ class FakeSession:
         for _ in range(self._message_count):
             time.sleep(self._message_interval)
             self.sent += 1
-            yield {
-                "response": {
-                    "type": "AI",
-                    "text": "answer",
-                },
-            }
+            yield {"response": {"type": "AI", "text": "answer"}}
 
 
 class FakeProcessor:
@@ -121,18 +116,13 @@ class TestAgentRequestExecutor(TestCase):
         :param message_interval: Seconds between fake messages
         :return: The AgentRequestResult and the FakeSession that produced it
         """
-        session: FakeSession = FakeSession(
-            message_count=message_count,
-            message_interval=message_interval,
-        )
+        session: FakeSession = FakeSession(message_count=message_count, message_interval=message_interval)
         result: Optional[AgentRequestResult] = None
         with patch(
-            "tests.load_tests.traffic.agent_request_executor."
-            "HttpServiceAgentSession",
+            "tests.load_tests.traffic.agent_request_executor.HttpServiceAgentSession",
             return_value=session,
         ), patch(
-            "tests.load_tests.traffic.agent_request_executor."
-            "StreamingInputProcessor",
+            "tests.load_tests.traffic.agent_request_executor.StreamingInputProcessor",
             FakeProcessor,
         ):
             result = AgentRequestExecutor.execute_request(
@@ -145,9 +135,7 @@ class TestAgentRequestExecutor(TestCase):
         """A stream that outruns the cap reports TIMEOUT."""
         result: Optional[AgentRequestResult] = None
         _session: Optional[FakeSession] = None
-        result, _session = self._execute(
-            timeout=0.3, message_count=20, message_interval=0.05,
-        )
+        result, _session = self._execute(timeout=0.3, message_count=20, message_interval=0.05)
 
         self.assertEqual(result.get_status(), STATUS_TIMEOUT)
 
@@ -161,9 +149,7 @@ class TestAgentRequestExecutor(TestCase):
         start: float = time.perf_counter()
         _result: Optional[AgentRequestResult] = None
         session: Optional[FakeSession] = None
-        _result, session = self._execute(
-            timeout=0.3, message_count=20, message_interval=0.05,
-        )
+        _result, session = self._execute(timeout=0.3, message_count=20, message_interval=0.05)
         elapsed: float = time.perf_counter() - start
 
         self.assertLess(session.sent, 20)
@@ -173,9 +159,7 @@ class TestAgentRequestExecutor(TestCase):
         """A request that finishes in time is unaffected."""
         result: Optional[AgentRequestResult] = None
         session: Optional[FakeSession] = None
-        result, session = self._execute(
-            timeout=30, message_count=3, message_interval=0.01,
-        )
+        result, session = self._execute(timeout=30, message_count=3, message_interval=0.01)
 
         self.assertEqual(result.get_status(), STATUS_CREATED)
         self.assertEqual(result.get_response_text(), "answer")

@@ -50,14 +50,9 @@ class TestRebuiltAggregates(TestCase):
         """
         lines: List[str] = []
         for req_id, elapsed in elapsed_by_id.items():
-            path: str = os.path.join(
-                self._dir, "requests", f"request_{req_id}_stdout.txt",
-            )
+            path: str = os.path.join(self._dir, "requests", f"request_{req_id}_stdout.txt")
             with open(path, "w", encoding="utf-8") as handle:
-                handle.write(
-                    '{"reservation_id": "abc-%s",'
-                    ' "agent_network_name": "music_nerd"}\n' % req_id
-                )
+                handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % req_id)
             lines.append(f"Request {req_id}: CREATED ({elapsed:.2f}s)\n")
         log_path: str = os.path.join(self._dir, "load_test.log")
         with open(log_path, "w", encoding="utf-8") as handle:

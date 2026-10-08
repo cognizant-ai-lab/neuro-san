@@ -56,10 +56,7 @@ class TestReadRecords(TestCase):
 
     def test_records_are_read_in_file_order(self) -> None:
         """Every well-formed line becomes one record."""
-        self._write(
-            json.dumps({"agent": "one"}) + "\n"
-            + json.dumps({"agent": "two"}) + "\n"
-        )
+        self._write(json.dumps({"agent": "one"}) + "\n" + json.dumps({"agent": "two"}) + "\n")
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
@@ -69,10 +66,7 @@ class TestReadRecords(TestCase):
 
     def test_truncated_final_line_does_not_lose_earlier_records(self) -> None:
         """An interrupted run leaves a partial line; the rest survives."""
-        self._write(
-            json.dumps({"agent": "one"}) + "\n"
-            + '{"agent": "two", "requ'
-        )
+        self._write(json.dumps({"agent": "one"}) + "\n" + '{"agent": "two", "requ')
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
@@ -94,6 +88,4 @@ class TestReadRecords(TestCase):
 
     def test_unreadable_file_yields_nothing(self) -> None:
         """A missing file warns and returns empty rather than raising."""
-        self.assertEqual(
-            TrendHistory._read_records("/nonexistent/history.jsonl"), [],
-        )
+        self.assertEqual(TrendHistory._read_records("/nonexistent/history.jsonl"), [])

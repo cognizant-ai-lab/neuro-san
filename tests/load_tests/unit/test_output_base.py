@@ -59,10 +59,7 @@ class TestOutputBase(TestCase):
         get_user.return_value = "alice"
         get_temp_dir.return_value = "/tmp"
 
-        self.assertEqual(
-            self._orchestrator()._output_base(),
-            "/tmp/load_test_alice",
-        )
+        self.assertEqual(self._orchestrator()._output_base(), "/tmp/load_test_alice")
 
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
     def test_output_dir_argument_wins(self, get_user: MagicMock) -> None:
@@ -73,10 +70,7 @@ class TestOutputBase(TestCase):
         """
         get_user.side_effect = AssertionError("user name not needed")
 
-        self.assertEqual(
-            self._orchestrator(output_dir="/data/runs")._output_base(),
-            "/data/runs",
-        )
+        self.assertEqual(self._orchestrator(output_dir="/data/runs")._output_base(), "/data/runs")
 
     @patch("tests.load_tests.load_test_cli.os.getuid")
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
@@ -95,10 +89,7 @@ class TestOutputBase(TestCase):
         get_temp_dir.return_value = "/tmp"
         get_uid.return_value = 1000
 
-        self.assertEqual(
-            self._orchestrator()._output_base(),
-            "/tmp/load_test_1000",
-        )
+        self.assertEqual(self._orchestrator()._output_base(), "/tmp/load_test_1000")
 
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
@@ -112,7 +103,4 @@ class TestOutputBase(TestCase):
         get_user.return_value = "CORP\\alice"
         get_temp_dir.return_value = "/tmp"
 
-        self.assertEqual(
-            self._orchestrator()._output_base(),
-            "/tmp/load_test_CORP_alice",
-        )
+        self.assertEqual(self._orchestrator()._output_base(), "/tmp/load_test_CORP_alice")

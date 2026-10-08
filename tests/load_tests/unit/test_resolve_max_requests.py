@@ -39,10 +39,7 @@ class TestResolveMaxRequests(TestCase):
         :param max_requests: --max-requests value; None when not given
         :return: Validator over those args
         """
-        return InputValidator(Namespace(
-            num_rounds=num_rounds,
-            max_requests=max_requests,
-        ))
+        return InputValidator(Namespace(num_rounds=num_rounds, max_requests=max_requests))
 
     def test_cap_is_stage_total_times_rounds(self) -> None:
         """The default cap covers every stage of every round."""
