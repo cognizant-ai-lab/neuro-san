@@ -366,8 +366,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         # Unlike the other peaks, a 0% first reading is kept, so every tick reports a CPU peak.
         if self._peak_system_cpu_percent is None:
             self._peak_system_cpu_percent = current_cpu_percent
-        if current_cpu_percent > self._peak_system_cpu_percent:
-            self._peak_system_cpu_percent = current_cpu_percent
+        self._peak_system_cpu_percent = max(self._peak_system_cpu_percent, current_cpu_percent)
         return f"  syscpu: {current_cpu_percent:.0f}% (peak {self._peak_system_cpu_percent:.0f}%)"
 
     @staticmethod
