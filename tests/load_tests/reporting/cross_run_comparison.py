@@ -470,8 +470,8 @@ class CrossRunComparison:
             return "0"
         percentage: int = 0
         if total:
-            # Whole-number percentage, rounded down: 2 of 3 is 66%.
-            percentage = count * 100 // total
+            # Whole-number percentage: int() drops the fraction, so 2 of 3 is 66%.
+            percentage = int(count * 100 / total)
         base: str = f"{count} ({percentage}%)"
         if not breakdown:
             return base
