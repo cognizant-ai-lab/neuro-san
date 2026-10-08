@@ -43,7 +43,8 @@ class Formatters:
         """
         base: str = f"{seconds:.{precision}f}s"
         if seconds >= 60:
-            minutes: int = int(seconds) // 60
+            # Whole minutes: int() drops the fraction, so 1870s is 31m.
+            minutes: int = int(seconds / 60)
             return f"{base} ({minutes}m)"
         return base
 
