@@ -46,62 +46,44 @@ class JsonMetadata:
             "test_metadata.verdict":
                 "PASSED if all requests succeeded, FAILED otherwise.",
             "config.level":
-                "Test depth: min (traffic only), norm (+resources), "
-                "adv (+tokens, JSON, pool analysis).",
+                "Test depth: min (traffic only), norm (+resources), adv (+tokens, JSON, pool analysis).",
             "config.mode":
-                "flat = same concurrency every stage; "
-                "ramp = increasing concurrency per stage.",
+                "flat = same concurrency every stage; ramp = increasing concurrency per stage.",
             "config.same_prompt":
-                "If true, all requests use the same prompt "
-                "(collision stress test).",
+                "If true, all requests use the same prompt (collision stress test).",
             "config.allow_caching":
-                "If true, prompts are sent verbatim and caches may "
-                "serve responses. If false, a unique per-request "
+                "If true, prompts are sent verbatim and caches may serve responses. If false, a unique per-request "
                 "suffix defeats caching.",
             "config.profile_source":
-                "Where the profile (prompts and checks) came from: "
-                "'json profile' or 'hocon (N files)' when "
+                "Where the profile (prompts and checks) came from: 'json profile' or 'hocon (N files)' when "
                 "--fixtures-hocon-dir was used.",
             "config.fixtures_hocon_dir":
-                "Parent directory of the test-case hocon files, "
-                "or null when the JSON profile was used.",
+                "Parent directory of the test-case hocon files, or null when the JSON profile was used.",
             "config.hocon_files":
-                "Test-case hocon files the profile was built from "
-                "(one prompt per file). Empty when the JSON profile "
+                "Test-case hocon files the profile was built from (one prompt per file). Empty when the JSON profile "
                 "was used.",
             "aggregates.total_elapsed_seconds":
                 "Sum of wall-clock time across all stages.",
             "aggregates.avg_latency_seconds":
-                "Mean per-request duration. Requests overlap, so this "
-                "is not total elapsed / total requests.",
+                "Mean per-request duration. Requests overlap, so this is not total elapsed / total requests.",
             "stage_summaries[].counts":
-                "Per-status request counts: "
-                "CREATED=success, FAILED=error/crash, "
-                "TIMEOUT=hit hard timeout cap, "
+                "Per-status request counts: CREATED=success, FAILED=error/crash, TIMEOUT=hit hard timeout cap, "
                 "KILLED=no output for idle_timeout.",
             "stage_summaries[].retries":
-                "Server-side retries by type: neuro-san max_attempts "
-                "retries (e.g. RateLimitError, APIError) plus "
-                "ProviderRetry for retries the LLM provider SDK "
-                "performed internally. "
-                "Empty dict means zero retries.",
+                "Server-side retries by type: neuro-san max_attempts retries (e.g. RateLimitError, APIError) plus "
+                "ProviderRetry for retries the LLM provider SDK performed internally. Empty dict means zero retries.",
             "stage_summaries[].amplification":
-                "Ratio of total server LLM attempts to client "
-                "requests. 1.0 = no retries. "
+                "Ratio of total server LLM attempts to client requests. 1.0 = no retries. "
                 ">1.0 means some requests were retried.",
             "stage_summaries[].disconnections":
-                "Client disconnections: list of "
-                "{request_id, agent} for requests where the "
+                "Client disconnections: list of {request_id, agent} for requests where the "
                 "client disconnected before the server finished.",
             "stage_summaries[].primary_started":
-                "Server-side count of requests received for the "
-                "target agent network.",
+                "Server-side count of requests received for the target agent network.",
             "stage_summaries[].primary_finished":
-                "Server-side count of requests completed for the "
-                "target agent network.",
+                "Server-side count of requests completed for the target agent network.",
             "stage_summaries[].total_started":
-                "Total server calls started (includes sub-network "
-                "calls for multi-agent networks).",
+                "Total server calls started (includes sub-network calls for multi-agent networks).",
             "stage_summaries[].total_finished":
                 "Total server calls completed.",
             "stage_summaries[].before_threads":
@@ -109,26 +91,20 @@ class JsonMetadata:
             "stage_summaries[].after_threads":
                 "Server thread count after settle period.",
             "stage_summaries[].peak_threads":
-                "Peak server thread count during stage execution "
-                "(only present when heartbeat captured it).",
+                "Peak server thread count during stage execution (only present when heartbeat captured it).",
             "results[].status":
-                "CREATED=success, FAILED=error/crash, "
-                "TIMEOUT=exceeded request timeout, "
+                "CREATED=success, FAILED=error/crash, TIMEOUT=exceeded request timeout, "
                 "KILLED=no output for idle_timeout.",
             "results[].error":
-                "Error message string when status != CREATED, "
-                "null on success.",
+                "Error message string when status != CREATED, null on success.",
             "results[].total_tokens":
-                "Total LLM tokens (prompt + completion) for "
-                "this request.",
+                "Total LLM tokens (prompt + completion) for this request.",
             "results[].cost_usd":
                 "Estimated OpenAI API cost for this request.",
             "network_tokens[].network":
-                "Sub-agent network name. For multi-agent systems "
-                "(e.g. AND), each sub-network appears separately.",
+                "Sub-agent network name. For multi-agent systems (e.g. AND), each sub-network appears separately.",
             "network_tokens[].duration":
-                "Server-side LLM processing time for this "
-                "sub-network (excludes client overhead).",
+                "Server-side LLM processing time for this sub-network (excludes client overhead).",
             "network_tokens[].cost":
                 "Server-side cost for this sub-network.",
             "resource_rows[].before":
@@ -152,26 +128,19 @@ class JsonMetadata:
             "client_resource_rows[].peak":
                 "Client process peak snapshot during stage.",
             "client_resource_rows[].settled":
-                "Client process snapshot after all requests "
-                "completed.",
+                "Client process snapshot after all requests completed.",
             "config.request_timeout":
-                "Hard timeout per request in seconds. "
-                "Kills the request if it exceeds this limit.",
+                "Hard timeout per request in seconds. Kills the request if it exceeds this limit.",
             "config.idle_timeout":
-                "Per-request idle timeout in seconds. "
-                "Kills a request if no stream chunk arrives for "
+                "Per-request idle timeout in seconds. Kills a request if no stream chunk arrives for "
                 "this duration. Resets on every activity.",
             "config.stage_timeout":
-                "Hard timeout for an entire stage/round in "
-                "seconds. Kills all remaining in-flight "
+                "Hard timeout for an entire stage/round in seconds. Kills all remaining in-flight "
                 "requests when the stage exceeds this limit.",
             "config.total_timeout":
-                "Hard timeout for the entire load test in "
-                "seconds. 0 means disabled.",
+                "Hard timeout for the entire load test in seconds. 0 means disabled.",
             "config.settle_time":
-                "Seconds to wait after each stage for server "
-                "cleanup before taking the post-stage resource "
-                "snapshot.",
+                "Seconds to wait after each stage for server cleanup before taking the post-stage resource snapshot.",
             "results[].start_time":
                 "Unix timestamp when the request started.",
             "results[].end_time":
@@ -212,33 +181,23 @@ class JsonMetadata:
         :return: One sentence per pattern
         """
         return [
-            "Compare thread counts across rounds — growth "
-            "without reclaiming suggests a thread leak.",
-            "Compare RSS across rounds — growth without "
-            "reclaiming suggests a memory leak.",
-            "Compare pool reuse % vs pool available — low "
-            "reuse with high availability suggests executor "
+            "Compare thread counts across rounds — growth without reclaiming suggests a thread leak.",
+            "Compare RSS across rounds — growth without reclaiming suggests a memory leak.",
+            "Compare pool reuse % vs pool available — low reuse with high availability suggests executor "
             "pool lock contention.",
-            "Check if avg duration increases across rounds "
-            "at the same concurrency — indicates resource "
+            "Check if avg duration increases across rounds at the same concurrency — indicates resource "
             "pressure or degradation.",
-            "Check completion_tokens variance across "
-            "requests — high variance means LLM behavior "
+            "Check completion_tokens variance across requests — high variance means LLM behavior "
             "is unpredictable and cost estimates unreliable.",
-            "Compare primary_started/finished vs expected "
-            "request count — mismatch suggests server-side "
+            "Compare primary_started/finished vs expected request count — mismatch suggests server-side "
             "request routing issues.",
-            "Check amplification factor — values above 1.0 "
-            "mean the server retried LLM calls, increasing "
+            "Check amplification factor — values above 1.0 mean the server retried LLM calls, increasing "
             "cost and latency.",
-            "Check for TIMEOUT or KILLED requests — these "
-            "indicate the server or LLM is too slow for the "
+            "Check for TIMEOUT or KILLED requests — these indicate the server or LLM is too slow for the "
             "configured timeout thresholds.",
-            "Compare client-side elapsed vs server-side "
-            "network_tokens duration — large gaps indicate "
+            "Compare client-side elapsed vs server-side network_tokens duration — large gaps indicate "
             "client overhead (HTTP streaming, response parsing).",
-            "Check FD growth across rounds — unclosed file "
-            "descriptors indicate resource leaks.",
+            "Check FD growth across rounds — unclosed file descriptors indicate resource leaks.",
         ]
 
     @staticmethod
@@ -279,14 +238,10 @@ class JsonMetadata:
         :return: The instructions as one string
         """
         return (
-            "Report ALL checks explicitly, including clean "
-            "results (e.g. '0 errors found', '0 retries', "
-            "'no thread growth'). Do not skip checks with "
-            "zero or normal values — explicitly confirming "
-            "that something is healthy is as important as "
-            "flagging issues. For each check in "
-            "_analysis_hints, state the finding and rate it "
-            "as OK, WARNING, or CRITICAL using _thresholds."
+            "Report ALL checks explicitly, including clean results (e.g. '0 errors found', '0 retries', "
+            "'no thread growth'). Do not skip checks with zero or normal values — explicitly confirming "
+            "that something is healthy is as important as flagging issues. For each check in "
+            "_analysis_hints, state the finding and rate it as OK, WARNING, or CRITICAL using _thresholds."
         )
 
     @staticmethod

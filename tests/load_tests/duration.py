@@ -54,7 +54,5 @@ class DurationParser:
                 "suffix, e.g. 90s, 20m, 2h"
             ) from exc
         if seconds < 0:
-            raise argparse.ArgumentTypeError(
-                f"duration must be non-negative: '{value}'"
-            )
+            raise argparse.ArgumentTypeError(f"duration must be non-negative: '{value}'")
         return int(round(seconds))

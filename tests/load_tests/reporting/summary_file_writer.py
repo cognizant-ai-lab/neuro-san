@@ -99,21 +99,14 @@ class SummaryFileWriter:
         lines.append("=" * 60)
         lines.append(f"  Agent:       {agent}")
         lines.append(f"  Date:        {date_text} UTC")
-        lines.append(
-            f"  Requests:    {request_count} x {round_count}"
-            f" round(s) = {total_requests} total",
-        )
+        lines.append(f"  Requests:    {request_count} x {round_count} round(s) = {total_requests} total")
         lines.append(f"  Workers:     {workers} (concurrent)")
-        lines.append(
-            f"  Total wall time:"
-            f" {Formatters.fmt_duration(total_elapsed_seconds, precision=1)}"
-        )
+        lines.append(f"  Total wall time: {Formatters.fmt_duration(total_elapsed_seconds, precision=1)}")
         first_response_seconds: List[float] = self._time_to_first_response_values()
         if first_response_seconds:
             average_first_response_seconds: float = sum(first_response_seconds) / len(first_response_seconds)
             lines.append(
-                f"  Time to first response:"
-                f" {Formatters.fmt_duration(min(first_response_seconds))} min"
+                f"  Time to first response: {Formatters.fmt_duration(min(first_response_seconds))} min"
                 f" / {Formatters.fmt_duration(average_first_response_seconds)} avg"
                 f" / {Formatters.fmt_duration(max(first_response_seconds))} max"
             )
@@ -125,8 +118,7 @@ class SummaryFileWriter:
         if durations_seconds:
             average_duration_seconds: float = sum(durations_seconds) / len(durations_seconds)
             lines.append(
-                f"  Request duration:"
-                f" {Formatters.fmt_duration(min(durations_seconds))} min"
+                f"  Request duration: {Formatters.fmt_duration(min(durations_seconds))} min"
                 f" / {Formatters.fmt_duration(average_duration_seconds)} avg"
                 f" / {Formatters.fmt_duration(max(durations_seconds))} max"
             )
@@ -138,12 +130,7 @@ class SummaryFileWriter:
         ]
         if llm_calls:
             average_calls: int = round(sum(llm_calls) / len(llm_calls))
-            lines.append(
-                f"  LLM calls:"
-                f" {min(llm_calls)} min"
-                f" / {average_calls} avg"
-                f" / {max(llm_calls)} max"
-            )
+            lines.append(f"  LLM calls: {min(llm_calls)} min / {average_calls} avg / {max(llm_calls)} max")
         self._write_rss_trajectory(lines)
         self._write_client_rss_trajectory(lines)
         self._write_sys_mem_trajectory(lines)
@@ -189,8 +176,7 @@ class SummaryFileWriter:
         if peak_rss_megabytes is None:
             return
         lines.append(
-            f"  Server RSS:"
-            f" {Formatters.format_rss(start_rss_megabytes or 0)} start"
+            f"  Server RSS: {Formatters.format_rss(start_rss_megabytes or 0)} start"
             f" \u2192 {Formatters.format_rss(peak_rss_megabytes)} peak"
             f" \u2192 {Formatters.format_rss(end_rss_megabytes or 0)} end"
         )
@@ -218,8 +204,7 @@ class SummaryFileWriter:
         if peak_rss_megabytes is None:
             return
         lines.append(
-            f"  Client RSS:"
-            f" {Formatters.format_rss(start_rss_megabytes or 0)} start"
+            f"  Client RSS: {Formatters.format_rss(start_rss_megabytes or 0)} start"
             f" \u2192 {Formatters.format_rss(peak_rss_megabytes)} peak"
             f" \u2192 {Formatters.format_rss(end_rss_megabytes or 0)} end"
         )
@@ -249,18 +234,12 @@ class SummaryFileWriter:
                     peak_available_gigabytes = available_gigabytes
         if peak_memory_percentage is None:
             return
-        total_gigabytes: float = (
-            psutil.virtual_memory().total / (1024 ** 3)
-        )
+        total_gigabytes: float = psutil.virtual_memory().total / (1024 ** 3)
         peak_detail: str = (
-            f"{peak_memory_percentage:.0f}% peak"
-            f" ({peak_available_gigabytes or 0:.1f}G free"
-            f" / {total_gigabytes:.1f}G)"
+            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes or 0:.1f}G free / {total_gigabytes:.1f}G)"
         )
         lines.append(
-            f"  System memory:"
-            f" {start_memory_percentage or 0:.0f}% start"
-            f" \u2192 {peak_detail}"
+            f"  System memory: {start_memory_percentage or 0:.0f}% start \u2192 {peak_detail}"
             f" \u2192 {end_memory_percentage or 0:.0f}% end"
         )
 
@@ -272,9 +251,7 @@ class SummaryFileWriter:
         """
         all_events: List[Dict[str, Any]] = []
         for summary in self._summaries:
-            all_events.extend(
-                summary.get("validation_events", []),
-            )
+            all_events.extend(summary.get("validation_events", []))
         if not all_events:
             return
         total_cycles: int = sum(
@@ -285,13 +262,9 @@ class SummaryFileWriter:
         )
         affected: int = len(all_events)
         lines.append(
-            f"  Validation: {affected} of {total_requests}"
-            f" requests needed fixes"
-            f" ({total_cycles} fix cycles total)"
+            f"  Validation: {affected} of {total_requests} requests needed fixes ({total_cycles} fix cycles total)"
         )
-        self._write_validation_time_impact(
-            lines, all_events,
-        )
+        self._write_validation_time_impact(lines, all_events)
         all_errors: List[str] = []
         for event in all_events:
             all_errors.extend(event.get("errors", []))
@@ -301,10 +274,7 @@ class SummaryFileWriter:
             parts: List[str] = [
                 f"{error} ({count}x)" for error, count in top
             ]
-            lines.append(
-                f"    {len(all_errors)} errors found:"
-                f" {', '.join(parts)}"
-            )
+            lines.append(f"    {len(all_errors)} errors found: {', '.join(parts)}")
 
     def _write_validation_time_impact(self, lines: List[str], events: List[Dict[str, Any]]) -> None:
         """
@@ -330,10 +300,8 @@ class SummaryFileWriter:
                 sum(durations_without_fixes_seconds) / len(durations_without_fixes_seconds)
             )
             lines.append(
-                f"    Requests with fixes took"
-                f" {Formatters.fmt_duration(average_with_fixes_seconds)} avg"
-                f" vs {Formatters.fmt_duration(average_without_fixes_seconds)} avg"
-                f" without"
+                f"    Requests with fixes took {Formatters.fmt_duration(average_with_fixes_seconds)} avg"
+                f" vs {Formatters.fmt_duration(average_without_fixes_seconds)} avg without"
             )
 
     def _write_request_results(self, lines: List[str]) -> None:
@@ -369,15 +337,9 @@ class SummaryFileWriter:
         status: str = result.get("status", "?")
         detail: str = self._extract_detail(result)
         if detail:
-            lines.append(
-                f"  {request_id:<12s} {elapsed_seconds:7.1f}s"
-                f"  {status:<8s}  {detail}",
-            )
+            lines.append(f"  {request_id:<12s} {elapsed_seconds:7.1f}s  {status:<8s}  {detail}")
         else:
-            lines.append(
-                f"  {request_id:<12s} {elapsed_seconds:7.1f}s"
-                f"  {status:<8s}",
-            )
+            lines.append(f"  {request_id:<12s} {elapsed_seconds:7.1f}s  {status:<8s}")
 
     @staticmethod
     def _format_result_totals(lines: List[str], all_results: List[Dict[str, Any]]) -> None:
@@ -397,15 +359,11 @@ class SummaryFileWriter:
             result.get("elapsed", 0) for result in all_results
         ]
         lines.append("")
-        lines.append(
-            f"  Overall: {passed}/{total} CREATED,"
-            f" {failed} failed",
-        )
+        lines.append(f"  Overall: {passed}/{total} CREATED, {failed} failed")
         if latencies_seconds:
             average_latency_seconds: float = sum(latencies_seconds) / len(latencies_seconds)
             lines.append(
-                f"  Avg: {average_latency_seconds:.1f}s"
-                f" | Min: {min(latencies_seconds):.1f}s"
+                f"  Avg: {average_latency_seconds:.1f}s | Min: {min(latencies_seconds):.1f}s"
                 f" | Max: {max(latencies_seconds):.1f}s",
             )
         lines.append("")
@@ -432,18 +390,14 @@ class SummaryFileWriter:
 
         previous_count: int = -1
         for percentage in milestones:
-            index: int = min(
-                int(total * percentage / 100 + 0.999999) - 1,
-                total - 1,
-            )
+            index: int = min(int(total * percentage / 100 + 0.999999) - 1, total - 1)
             count: int = index + 1
             latency_seconds: float = all_latencies_seconds[index]
             if count == previous_count:
                 continue
             previous_count = count
             lines.append(
-                f"  {percentage:4d}% ({count} requests)"
-                f" completed by"
+                f"  {percentage:4d}% ({count} requests) completed by"
                 f" {Formatters.fmt_duration(latency_seconds, precision=1)}",
             )
         self._write_count_milestones(lines, all_latencies_seconds)
@@ -468,10 +422,7 @@ class SummaryFileWriter:
         lines.append("  Completion by count:")
         for count in milestones:
             duration_seconds: float = sorted_latencies_seconds[count - 1]
-            lines.append(
-                f"  {count:5d} requests completed by"
-                f" {Formatters.fmt_duration(duration_seconds, precision=1)}",
-            )
+            lines.append(f"  {count:5d} requests completed by {Formatters.fmt_duration(duration_seconds, precision=1)}")
 
     def _write_server_timing(self, lines: List[str]) -> None:
         """
@@ -500,13 +451,9 @@ class SummaryFileWriter:
             if not entries:
                 continue
             top_start_seconds: float = entries[0].get("start_ts", 0)
-            client: Dict[str, Any] = self._match_client(
-                top_start_seconds, client_results,
-            )
+            client: Dict[str, Any] = self._match_client(top_start_seconds, client_results)
             label: str = client.get("id", server_request_id)
-            self._format_request_timing(
-                lines, label, entries, client,
-            )
+            self._format_request_timing(lines, label, entries, client)
         lines.append("")
 
     def _collect_client_times(self) -> List[Dict[str, Any]]:
@@ -522,11 +469,7 @@ class SummaryFileWriter:
                 start_time_seconds: float = result.get("start_time", 0)
                 end_time_seconds: float = result.get("end_time", 0)
                 if request_id and start_time_seconds and end_time_seconds:
-                    results.append({
-                        "id": request_id,
-                        "start": start_time_seconds,
-                        "end": end_time_seconds,
-                    })
+                    results.append({"id": request_id, "start": start_time_seconds, "end": end_time_seconds})
         return results
 
     @staticmethod
@@ -539,9 +482,7 @@ class SummaryFileWriter:
         :return: The matching client entry, or {} when none matches
         """
         for client in client_results:
-            if (client.get("start", 0)
-                    <= server_start_seconds
-                    <= client.get("end", 0)):
+            if client.get("start", 0) <= server_start_seconds <= client.get("end", 0):
                 return client
         return {}
 
@@ -568,22 +509,11 @@ class SummaryFileWriter:
         lines.append("")
         lines.append(f"  {request_id} ({total_duration_seconds:.1f}s total):")
         if client_start_seconds and server_start_seconds and server_start_seconds > client_start_seconds:
-            lines.append(
-                f"    Client -> Server: "
-                f" {server_start_seconds - client_start_seconds:6.1f}s",
-            )
-        lines.append(
-            f"    Server: {top_agent:<25s}"
-            f" {top.get('duration_seconds', 0):6.1f}s",
-        )
-        SummaryFileWriter._format_sub_agents(
-            lines, entries, top_agent,
-        )
+            lines.append(f"    Client -> Server:  {server_start_seconds - client_start_seconds:6.1f}s")
+        lines.append(f"    Server: {top_agent:<25s} {top.get('duration_seconds', 0):6.1f}s")
+        SummaryFileWriter._format_sub_agents(lines, entries, top_agent)
         if client_end_seconds and server_finish_seconds and client_end_seconds > server_finish_seconds:
-            lines.append(
-                f"    Server -> Client: "
-                f" {client_end_seconds - server_finish_seconds:6.1f}s",
-            )
+            lines.append(f"    Server -> Client:  {client_end_seconds - server_finish_seconds:6.1f}s")
 
     @staticmethod
     def _format_sub_agents(lines: List[str], entries: List[Dict[str, Any]], top_agent: str) -> None:
@@ -606,9 +536,7 @@ class SummaryFileWriter:
             )
             name: str = sub_agent.get("agent", "?")
             duration_seconds: float = sub_agent.get("duration_seconds", 0)
-            lines.append(
-                f"      {prefix} {name:<23s} {duration_seconds:6.1f}s",
-            )
+            lines.append(f"      {prefix} {name:<23s} {duration_seconds:6.1f}s")
 
     @staticmethod
     def _extract_detail(result: Dict[str, Any]) -> str:
