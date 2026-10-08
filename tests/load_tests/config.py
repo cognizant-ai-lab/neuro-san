@@ -39,17 +39,9 @@ LEVEL_ADV: str = "adv"
 # Tracked retry error types.  All but ProviderRetry are neuro-san's own
 # max_attempts retries; ProviderRetry counts retries the LLM provider
 # SDK performs internally.
-RETRY_ERROR_TYPES: List[str] = [
-    "RateLimitError",
-    "APIError",
-    "KeyError",
-    "ValueError",
-    "ProviderRetry",
-]
+RETRY_ERROR_TYPES: List[str] = ["RateLimitError", "APIError", "KeyError", "ValueError", "ProviderRetry"]
 # Console labels for retry types whose key alone reads poorly.
-RETRY_LABELS: Dict[str, str] = {
-    "ProviderRetry": "Provider SDK retries",
-}
+RETRY_LABELS: Dict[str, str] = {"ProviderRetry": "Provider SDK retries"}
 
 # Console formatting
 SEPARATOR_WIDTH: int = 60
@@ -87,45 +79,21 @@ HISTORY_THRESHOLDS_SECONDS: Tuple[int, int] = (70, 300)
 HEARTBEAT_INTERVAL_SECONDS: int = 30
 
 # Server log regex patterns
-RETRY_LOG_PATTERN: re.Pattern = re.compile(
-    r"retrying from (RateLimit error |)(\w+)"
-)
+RETRY_LOG_PATTERN: re.Pattern = re.compile(r"retrying from (RateLimit error |)(\w+)")
 # Retries performed inside the LLM provider SDK (e.g. openai's
 # "Retrying request to /chat/completions in 0.45 seconds"), which
 # neuro-san never sees and so never logs as "retrying from ...".
-PROVIDER_RETRY_PATTERN: re.Pattern = re.compile(
-    r"Retrying request to (\S+) in "
-)
-REQUEST_START_PATTERN: re.Pattern = re.compile(
-    r"Start .*/streaming_chat"
-)
-REQUEST_FINISH_PATTERN: re.Pattern = re.compile(
-    r"Finish .*/streaming_chat"
-)
-CLIENT_DISCONNECT_PATTERN: re.Pattern = re.compile(
-    r"Request handler stream closed"
-)
-STREAM_CLOSED_REQUEST_PATTERN: re.Pattern = re.compile(
-    r'"request_id":\s*"(request-\d+)"'
-)
-TASK_CANCELLED_PATTERN: re.Pattern = re.compile(
-    r"Task from ([^:]+):.*was cancelled"
-)
-DONE_STREAMING_PATTERN: re.Pattern = re.compile(
-    r'Done with (\S+)\.StreamingChat'
-)
-VALIDATION_ATTEMPT_PATTERN: re.Pattern = re.compile(
-    r'Validating toolbox agents'
-)
-VALIDATION_ERROR_PATTERN: re.Pattern = re.compile(
-    r'"Validation errors: \[(.+?)\]"'
-)
-VALIDATION_REINVOKE_PATTERN: re.Pattern = re.compile(
-    r'Invoking agent network designer to fix the issues'
-)
-VALIDATION_REQUEST_ID_PATTERN: re.Pattern = re.compile(
-    r'"request_id":\s*"(request-\d+)"'
-)
+PROVIDER_RETRY_PATTERN: re.Pattern = re.compile(r"Retrying request to (\S+) in ")
+REQUEST_START_PATTERN: re.Pattern = re.compile(r"Start .*/streaming_chat")
+REQUEST_FINISH_PATTERN: re.Pattern = re.compile(r"Finish .*/streaming_chat")
+CLIENT_DISCONNECT_PATTERN: re.Pattern = re.compile(r"Request handler stream closed")
+STREAM_CLOSED_REQUEST_PATTERN: re.Pattern = re.compile(r'"request_id":\s*"(request-\d+)"')
+TASK_CANCELLED_PATTERN: re.Pattern = re.compile(r"Task from ([^:]+):.*was cancelled")
+DONE_STREAMING_PATTERN: re.Pattern = re.compile(r'Done with (\S+)\.StreamingChat')
+VALIDATION_ATTEMPT_PATTERN: re.Pattern = re.compile(r'Validating toolbox agents')
+VALIDATION_ERROR_PATTERN: re.Pattern = re.compile(r'"Validation errors: \[(.+?)\]"')
+VALIDATION_REINVOKE_PATTERN: re.Pattern = re.compile(r'Invoking agent network designer to fix the issues')
+VALIDATION_REQUEST_ID_PATTERN: re.Pattern = re.compile(r'"request_id":\s*"(request-\d+)"')
 # Server "Errors detected:" event.  Logged as JSON whose "message"
 # value starts with "Errors detected:" and spans literal newlines,
 # ending just before the "user_id" field; matched with re.DOTALL

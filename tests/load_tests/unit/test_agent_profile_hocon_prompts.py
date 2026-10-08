@@ -73,9 +73,7 @@ class TestAgentProfileHoconPrompts(TestCase):
         :param hocon_files: Test-case hocon paths to read prompts from
         :return: Profile built from those hocons
         """
-        return AgentProfileFactory().create(
-            agent, project_root=PROJECT_ROOT, hocon_files=hocon_files,
-        )
+        return AgentProfileFactory().create(agent, project_root=PROJECT_ROOT, hocon_files=hocon_files)
 
     @staticmethod
     def _write_hocon(folder: str, name: str, agent: str, texts: List[str], **extra: Any) -> str:
@@ -149,9 +147,7 @@ class TestAgentProfileHoconPrompts(TestCase):
         """
         A JSON profile's success_fields turn into sly_data not_value checks.
         """
-        profile: AgentProfile = AgentProfileFactory().create(
-            "agent_network_designer", project_root=PROJECT_ROOT,
-        )
+        profile: AgentProfile = AgentProfileFactory().create("agent_network_designer", project_root=PROJECT_ROOT)
         self.assertEqual(
             profile.get_response(0),
             {"sly_data": {"agent_reservations": {"not_value": ""}, "agent_network_name": {"not_value": ""}}},
@@ -211,9 +207,7 @@ class TestAgentProfileHoconPrompts(TestCase):
     def test_multiple_interactions_exits_1(self) -> None:
         """A multi-turn hocon is not a load-test prompt; abort."""
         with tempfile.TemporaryDirectory() as tmp:
-            path: str = self._write_hocon(
-                tmp, "multi.hocon", "hello_world", ["first", "second"],
-            )
+            path: str = self._write_hocon(tmp, "multi.hocon", "hello_world", ["first", "second"])
             with self.assertRaises(SystemExit) as ctx:
                 self._load("hello_world", [path])
         self.assertEqual(ctx.exception.code, 1)
@@ -221,9 +215,7 @@ class TestAgentProfileHoconPrompts(TestCase):
     def test_agent_mismatch_exits_1(self) -> None:
         """A hocon for a different agent aborts the run."""
         with tempfile.TemporaryDirectory() as tmp:
-            path: str = self._write_hocon(
-                tmp, "other.hocon", "music_nerd", ["hi"],
-            )
+            path: str = self._write_hocon(tmp, "other.hocon", "music_nerd", ["hi"])
             with self.assertRaises(SystemExit) as ctx:
                 self._load("hello_world", [path])
         self.assertEqual(ctx.exception.code, 1)
