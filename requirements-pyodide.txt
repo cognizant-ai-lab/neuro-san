@@ -1,0 +1,174 @@
+# Requirements for running neuro-san as a LIBRARY under Pyodide.
+#
+# Scope: AsyncDirectAgentSession only -- DirectAgentSessionFactory.create_async_session(),
+# a SHARED_LOOP executor pool, and the "openai-wire" chat model. No server, no CLI,
+# no provider SDKs. See neuro_san/internals/run_context/langchain/llms/wire/
+# openai_wire_chat_model.md.
+#
+# HOW THIS WAS DERIVED
+#
+#   Measured, not guessed, in two passes.
+#
+#   1. A full agent run (multi-agent tool calls against a real OpenAI-compatible
+#      server) was traced for every module it imported, and those modules mapped back
+#      to distributions. 98 distributions were imported; 28 came only from this
+#      developer's environment (requirements-build.txt: the optional provider packages
+#      and their google/grpc/opentelemetry trees). That left 70 from requirements.txt.
+#
+#   2. This file was then installed into a clean venv and the library actually run,
+#      which is what turned the drop list from hypothesis into fact. Two packages had
+#      to be added back -- aiofiles and aiohttp, both module-scope imports on the
+#      library path (see below). Nothing else was missing, and every drop below was
+#      confirmed absent from the working environment.
+#
+#   VERIFIED on 2026-10-08: clean venv (Python 3.12.9) + this file + leaf-common,
+#   running neuro_san.client.shared_loop_agent_cli against the bundled mock LLM
+#   server (tests/mock_llm_server) with threads made unavailable, SHARED_LOOP
+#   executor pools and a serial manifest read. Full request/response round trip,
+#   clean session close.
+#
+# WHAT IS STILL NOT PROVEN: that this runs under Pyodide itself. The native-code
+# section at the bottom now has measured answers rather than open questions, but
+# nothing here has been executed in a browser.
+
+# -- In-house ---------------------------------------------------------------
+# NOT YET ON PyPI. The latest published leaf-common is 1.4.4; 1.5.0 is the
+# AsyncioExecutorFactory / SHARED_LOOP work still open as leaf-common PR #199.
+# Until that merges and releases, this line cannot resolve -- install the local
+# working copy instead:
+#     pip install -r requirements-pyodide.txt    # will fail on this line
+#     pip install -e /path/to/leaf-common        # what the verification used
+# The verified run below used 1.4.5.dev25+g3393a42 from that branch.
+leaf-common>=1.5.0
+
+# -- Agent network and config parsing ---------------------------------------
+pyhocon>=0.3.60
+ruamel.yaml>=0.18.6
+json-repair>=0.47.3,<1.0
+
+# Both imported at module scope on the session path, so neither is optional:
+# periodic_manifest_dict_config_filter.py imports croniter, agent_network.py objsize.
+croniter>=6.2.2
+objsize>=0.8.0
+
+# abstract_async_config_restorer.py:28 imports it at module scope to read agent
+# network files. Found by the clean-venv run, not by the trace.
+aiofiles>=25.1.0
+
+# -- The agent runtime ------------------------------------------------------
+langchain>=1.2.0,<2.0
+langchain-core>=1.5.0,<2.0
+pydantic>=2.9.2,<3.0
+jsonschema>=4.19.0
+
+# Sync/async queue, used by async_collating_queue.py
+janus>=2.0.0
+
+# langsmith (a hard dependency of langchain-core) imports httpx at module scope in
+# langsmith/utils.py, so httpx stays even though the wire model does not use it.
+httpx>=0.28.1
+
+# -- HTTP -------------------------------------------------------------------
+# Required by neuro-san CORE, not just by AiohttpChatTransport. Three library-path
+# modules import it at module scope, each only for exception types:
+#   internals/graph/activations/branch_activation.py:23    ClientConnectionError
+#   internals/graph/activations/external_activation.py:29  ClientPayloadError
+#   internals/run_context/utils/activation_capsule.py:23   ClientConnectionError
+# So selecting transport: "pyodide" does not drop aiohttp today. Two separate
+# changes would be needed: make those three imports lazy or provider-neutral, and
+# make openai_wire_llm_policy.py stop importing both transports at module scope.
+# Pyodide does ship aiohttp, so this is a cleanup, not a blocker.
+aiohttp>=3.13.0,<4.0
+
+# -- MCP tools --------------------------------------------------------------
+# Only needed by agent networks that use MCP tools. Drop both if yours do not:
+# together they pull starlette, uvicorn, sse-starlette and python-multipart, none of
+# which a browser-hosted library has any use for.
+langchain-mcp-adapters>=0.1.7,<0.2.0
+mcp>=1.23.0,<2.0
+
+# ===========================================================================
+# DELIBERATELY DROPPED from requirements.txt, with the reason for each
+# ===========================================================================
+#
+# All confirmed absent from the clean venv that ran successfully.
+#
+# Replaced by the wire chat model -- see the .md above:
+#   langchain-openai, openai
+#       The openai SDK cannot work under Pyodide regardless of configuration: every
+#       client's first request calls get_platform() through asyncify(), i.e.
+#       asyncio.to_thread. Confirmed on the Chat Completions path with the async
+#       client, so use_responses_api: false does not avoid it.
+#       neuro-san imports neither directly (0 modules); langchain resolves them lazily.
+#
+# Server-only -- nothing on the library path reaches them:
+#   tornado        the HTTP server (12 neuro_san modules, all service-side). It was
+#                  imported during the trace only because tenacity probes for it when
+#                  it happens to be installed; not installing it is enough.
+#   watchdog       filesystem registry watcher
+#   psutil         langsmith's import of it is guarded by try/except ImportError, and
+#                  /proc does not exist in WASM anyway
+#   pyOpenSSL      TLS plumbing the browser provides
+#   grpcio         CONFIRMED dev-environment-only. It reached the trace through
+#                  google-api-core; the clean venv never installed it and the run
+#                  did not need it.
+#
+# CLI-only:
+#   timedinput     requirements.txt already marks it "not used in deployment"
+#
+# Pulled in transitively, not worth naming as roots:
+#   idna, urllib3
+#
+# ===========================================================================
+# NATIVE CODE -- measured against Pyodide's package index
+# ===========================================================================
+#
+# The verified closure is 72 distributions, of which 18 ship compiled extensions.
+# Checked against pyodide-lock.json for Pyodide 0.28.3 (which is Python 3.13.2):
+#
+#   SHIPPED BY PYODIDE (15) -- no build needed:
+#       aiohttp   cffi      charset-normalizer  cryptography  frozenlist
+#       multidict orjson    propcache           pydantic-core pyyaml
+#       rpds-py   wrapt     xxhash              yarl          zstandard
+#
+#   NOT IN PYODIDE (3), each confirmed genuinely required by uninstalling it and
+#   re-running until the import failed:
+#       websockets   langgraph_sdk/stream/transport/sync_ws.py
+#                    NOT a problem: websockets publishes a pure-Python
+#                    py3-none-any wheel, so micropip can install it as-is.
+#                    Its C speedups extension is optional.
+#       uuid-utils   langchain_core/callbacks/manager.py
+#                    Rust, no pure-Python fallback. Needs an emscripten build.
+#       ormsgpack    langgraph/checkpoint/serde/jsonplus.py:30
+#                    Rust, no pure-Python fallback. Already hand-built:
+#                    neuro-san-wasm-build/wheelhouse holds
+#                    ormsgpack-1.12.2-cp314-cp314-pyemscripten_2026_0_wasm32.whl.
+#
+# So the build burden is ONE package: uuid-utils. ormsgpack is done.
+#
+# VERSION GAP -- the part that actually needs a decision.
+#
+# Every native Pyodide bundles is older than what this closure resolves to today,
+# and four of those gaps violate a hard constraint rather than merely lagging:
+#
+#       package         pyodide 0.28.3    required by
+#       orjson          3.10.16           langgraph-sdk needs >=3.11.5
+#       pydantic-core   2.27.2            pydantic 2.14 pins ==2.50.0
+#       rpds-py         0.23.1            jsonschema needs >=0.25.0
+#       aiohttp         3.11.13           neuro-san's own pin, >=3.13.0 (ours to relax)
+#
+# (cffi and yarl also look too old, but only as a consequence of the newer
+# cryptography and aiohttp above them; against Pyodide's own versions of those two
+# they are fine.)
+#
+# Two ways out, and they are not equivalent:
+#   1. Target a newer Pyodide. The hand-built ormsgpack wheel above is cp314, so the
+#      build already assumes a Pyodide newer than public 0.28.x, which will ship
+#      newer natives. Re-run this comparison against the Pyodide actually being
+#      targeted before building anything -- these numbers are for 0.28.3 and are
+#      probably pessimistic.
+#   2. Pin the Python side down to what Pyodide bundles. Attempted here and pip
+#      returned "resolution-too-deep", so it is not a one-line change; it would mean
+#      older pydantic, jsonschema and langgraph, which may not satisfy langchain 1.x.
+#
+# Option 1 is the one to try first.
