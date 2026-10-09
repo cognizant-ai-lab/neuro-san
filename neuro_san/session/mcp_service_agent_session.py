@@ -185,6 +185,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         result_dict: Dict[str, Any] = response_dict.get("result", empty_dict)
         tools_list: List[Dict[str, Any]] = result_dict.get("tools", empty_list)
 
+        # Potentially limit the tools list to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER env var
         tools_list = SessionUtil.limit_agents_list(tools_list)
         use_tool: Dict[str, Any] = self.find_tool_for_network(tools_list)
         if use_tool is None:

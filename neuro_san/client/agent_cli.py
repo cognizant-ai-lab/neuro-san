@@ -143,6 +143,9 @@ Some suggestions:
 4. Servers will skip manifest entries that have errors. They will also print out which
    agents they are actually serving.  Check your server output for each of these.
 5. Is the server itself actually running?
+6. Connecting with --mcp while MAX_AGENTS_FROM_EXTERNAL_SERVER is set to a positive number?
+   If so, this client only checked that many of the agents the server lists, so the agent you
+   named may be past the cut-off.  Raise or unset it and try again.
 """
 
         empty: Dict[str, Any] = {}

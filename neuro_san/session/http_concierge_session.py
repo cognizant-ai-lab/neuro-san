@@ -48,12 +48,10 @@ class HttpConciergeSession(AbstractHttpServiceAgentSession, ConciergeSession):
                                 timeout=self.timeout_in_seconds)
             result_dict = loads(response.text)
 
-            # Potentially limit the number of agents to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER env var,
-            empty_list: List[str] = []
+            # Potentially limit the number of agents to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER env var
+            empty_list: List[Dict[str, Any]] = []
             agent_infos: List[Dict[str, Any]] = result_dict.get("agents", empty_list)
-            agent_infos = SessionUtil.limit_agents_list(agent_infos)
-
-            result_dict["agents"] = agent_infos
+            result_dict["agents"] = SessionUtil.limit_agents_list(agent_infos)
             return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc

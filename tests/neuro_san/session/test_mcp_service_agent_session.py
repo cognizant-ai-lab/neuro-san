@@ -20,12 +20,16 @@ from typing import List
 
 from functools import partial
 import json
+import os
 
 from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+from typing_extensions import override
+
 from neuro_san.session.mcp_service_agent_session import McpServiceAgentSession
+from neuro_san.session.session_util import SessionUtil
 
 
 class TestMcpServiceAgentSession(TestCase):
@@ -52,6 +56,18 @@ class TestMcpServiceAgentSession(TestCase):
     CUSTOM_TOOL: Dict[str, Any] = {"name": CUSTOM_NAME, "title": NETWORK_NAME, "description": DESCRIPTION}
     # An unrelated top-level network that happens to be literally named "deep__math_guy".
     LOOKALIKE_TOOL: Dict[str, Any] = {"name": TOOL_NAME, "description": "Some other network"}
+
+    @override
+    def setUp(self) -> None:
+        """
+        Clears MAX_AGENTS_FROM_EXTERNAL_SERVER so a value set in the shell cannot affect these tests.
+        """
+        # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
+        # removed or set freely here and in each test.
+        env_patcher: Any = patch.dict(os.environ)
+        env_patcher.start()
+        self.addCleanup(env_patcher.stop)
+        os.environ.pop(SessionUtil.MAX_AGENTS_ENV_VAR, None)
 
     @staticmethod
     def fake_post(tools: List[Dict[str, Any]], path: str, **kwargs: Any) -> MagicMock:
@@ -291,6 +307,19 @@ class TestMcpServiceAgentSession(TestCase):
         with self.patch_post():
             session = McpServiceAgentSession(agent_name=self.NETWORK_NAME)
         self.assertIs(blank_title_tool, session.find_tool_for_network([blank_title_tool]))
+
+    def test_function_applies_max_agents_limit_before_searching(self) -> None:
+        """
+        The limit is applied before the search: with MAX_AGENTS_FROM_EXTERNAL_SERVER=1 a network
+        listed second is not found, and the truncation is logged as a warning.
+        """
+        os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "1"
+        with self.patch_post(self.LOOKALIKE_TOOL, self.CUSTOM_TOOL):
+            session = McpServiceAgentSession(agent_name=self.NETWORK_NAME)
+            with self.assertLogs(SessionUtil.__name__, level="WARNING"):
+                function_dict: Dict[str, Any] = session.function({})
+        self.assertIsNone(function_dict)
+        self.assertIsNone(session.advertised_tool_name)
 
     def test_session_without_network_finds_nothing(self) -> None:
         """
