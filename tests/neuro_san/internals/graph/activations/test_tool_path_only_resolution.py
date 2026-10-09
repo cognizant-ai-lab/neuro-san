@@ -21,12 +21,15 @@ import sys
 from logging import INFO
 from typing import Any
 from typing import Dict
+from typing import Optional
 from typing import Type
 
 from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
+
+from typing_extensions import override
 
 from neuro_san.internals.graph.activations.abstract_class_activation import AbstractClassActivation
 
@@ -47,6 +50,7 @@ class TestToolPathOnlyResolution(TestCase):
     what is asserted.
     """
 
+    @override
     def setUp(self) -> None:
         """
         Create a mock RunContext and an activation pointed at the test tool_path_fixture hierarchy.
@@ -171,7 +175,7 @@ class TestToolPathOnlyResolution(TestCase):
         factory.get_agent_network.return_value = inspector
 
         agent_tool_spec: Dict[str, Any] = {"name": agent_name, "description": "Test tool"}
-        activation: ConcreteClassActivation = None
+        activation: Optional[ConcreteClassActivation] = None
         with patch(CREATE_RUN_CONTEXT_PATH, return_value=self.mock_run_context):
             with patch(GET_FULL_NAME_FROM_ORIGIN_PATH, return_value="test_full_name"):
                 activation = ConcreteClassActivation(
