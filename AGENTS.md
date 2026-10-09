@@ -67,7 +67,8 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
 
   One `:param` line per parameter, in order, using its exact name. Omit `:return:` only when the method returns
   `None`. Add `:raises <ExceptionType>: <description>` after `:return:` if the method can raise something worth
-  documenting.
+  documenting. Write docstrings in present tense: what the code or test does today, not its history (no
+  "used to ...", "Previously ...").
 - Mark overridden methods with `@override` (`from typing_extensions import override`). Comment the non-obvious:
   threading/lifecycle behavior and the reason behind a design decision — not what a line already says.
 
