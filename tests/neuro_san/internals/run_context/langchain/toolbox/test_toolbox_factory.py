@@ -30,7 +30,7 @@ from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import To
 FIXTURE_MODULE = "tests.neuro_san.internals.run_context.langchain.toolbox.real_tool_fixture"
 
 RESOLVER_PATH = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
-VALIDATIOR_PATH = (
+VALIDATOR_PATH: str = (
     "neuro_san.internals.run_context.langchain.util.argument_validator.ArgumentValidator.check_invalid_args"
 )
 
@@ -47,7 +47,7 @@ class TestToolboxFactory:
         """Test that load() reads hocon files on the first call only."""
         # Keep the test hermetic: no user toolbox info file from the environment.
         factory.toolbox_info_file = None
-        restorer_path = "neuro_san.internals.run_context.langchain.toolbox.toolbox_factory.ToolboxInfoRestorer"
+        restorer_path: str = "neuro_san.internals.run_context.langchain.toolbox.toolbox_factory.ToolboxInfoRestorer"
         infos = {"some_tool": {"class": "mock_package.mock_module.SomeTool"}}
         with patch(restorer_path) as mock_restorer:
             mock_restorer.return_value.restore.return_value = infos
@@ -79,7 +79,7 @@ class TestToolboxFactory:
         # Mock user-provided arguments
         user_args = {"param2": "user_value", "param3": "extra_value"}
 
-        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH) as mock_check_invalid:
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
             mock_tool_class = MagicMock(spec=BaseTool)
             mock_resolver.return_value = mock_tool_class
 
@@ -193,7 +193,7 @@ class TestToolboxFactory:
             "community_tool": {"class": "langchain_community.some_module.SomeTool"},
         }
 
-        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH):
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH):
             mock_tool_class = MagicMock(spec=BaseTool)
             mock_resolver.return_value = mock_tool_class
 
@@ -256,7 +256,7 @@ class TestToolboxFactory:
         # Mock user-provided arguments
         user_args = {"param2": "user_value", "param3": "extra_value"}
 
-        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH) as mock_check_invalid:
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
             mock_toolkit_class = MagicMock(spec=BaseToolkit)
             mock_resolver.return_value = mock_toolkit_class
 
@@ -300,7 +300,7 @@ class TestToolboxFactory:
         # Mock user-provided arguments
         user_args = {"param2": "user_value", "param3": "extra_value"}
 
-        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH) as mock_check_invalid:
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
             # Mock the toolkit class
             mock_toolkit_class = MagicMock()
             mock_resolver.return_value = mock_toolkit_class

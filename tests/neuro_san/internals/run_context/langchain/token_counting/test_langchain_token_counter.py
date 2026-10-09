@@ -467,7 +467,7 @@ class TestLangChainTokenCounter:
             cb.total_cost = 0.0
             yield cb
 
-        callback_path = (
+        callback_path: str = (
             "neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter.get_llm_token_callback"
         )
 
@@ -544,7 +544,7 @@ class TestLangChainTokenCounter:
             cb.total_cost = 0.0
             yield cb
 
-        callback_path = (
+        callback_path: str = (
             "neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter.get_llm_token_callback"
         )
 
