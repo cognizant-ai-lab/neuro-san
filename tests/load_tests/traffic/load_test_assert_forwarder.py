@@ -37,17 +37,17 @@ class LoadTestAssertForwarder(AssertForwarder):
     """
 
     @staticmethod
-    def _check(condition: bool, default_msg: str, msg: Optional[str] = None) -> None:
+    def _check(condition: bool, default_message: str, message: Optional[str] = None) -> None:
         """
         Raise AssertionError when condition is false.
 
         :param condition: The result of the assertion
-        :param default_msg: Message to use when the caller gave none
-        :param msg: Optional caller-supplied message
+        :param default_message: Message to use when the caller gave none
+        :param message: Optional caller-supplied message
         :raises AssertionError: When condition is false
         """
         if not condition:
-            raise AssertionError(msg if msg is not None else default_msg)
+            raise AssertionError(message if message is not None else default_message)
 
     # pylint: disable=invalid-name
     @override

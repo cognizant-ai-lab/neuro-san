@@ -36,7 +36,7 @@ class AgentRequestResult:
             status: str,
             processor: Optional[BasicMessageProcessor],
             response_text: str,
-            time_to_first_response: float,
+            time_to_first_response_seconds: float,
             token_accounting: Dict[str, Any],
     ) -> None:
         """
@@ -48,15 +48,15 @@ class AgentRequestResult:
                           did not complete
         :param response_text: The agent's final answer, or the traceback when
                               the request failed before completing
-        :param time_to_first_response: Seconds until the first streamed
-                                       message; 0.0 when none arrived
+        :param time_to_first_response_seconds: Seconds until the first streamed
+                                               message; 0.0 when none arrived
         :param token_accounting: Token usage reported by the server, empty
                                  when not available
         """
         self._status: str = status
         self._processor: Optional[BasicMessageProcessor] = processor
         self._response_text: str = response_text
-        self._time_to_first_response: float = time_to_first_response
+        self._time_to_first_response_seconds: float = time_to_first_response_seconds
         self._token_accounting: Dict[str, Any] = token_accounting
 
     def get_status(self) -> str:
@@ -82,7 +82,7 @@ class AgentRequestResult:
         """
         :return: Seconds until the first streamed message; 0.0 when none arrived
         """
-        return self._time_to_first_response
+        return self._time_to_first_response_seconds
 
     def get_token_accounting(self) -> Dict[str, Any]:
         """

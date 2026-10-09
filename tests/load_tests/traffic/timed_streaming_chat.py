@@ -38,20 +38,20 @@ class TimedStreamingChat:
     def __init__(
             self,
             streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]],
-            start: float,
-            timeout: float,
+            start_seconds: float,
+            timeout_seconds: float,
     ) -> None:
         """
         Constructor.
 
         :param streaming_chat: The session's own streaming_chat to wrap
-        :param start: time.perf_counter() value taken when the request started
-        :param timeout: Cap in seconds on the whole request (--request-timeout)
+        :param start_seconds: time.perf_counter() value taken when the request started
+        :param timeout_seconds: Cap in seconds on the whole request (--request-timeout)
         """
         self._streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]] = streaming_chat
-        self._start: float = start
-        self._timeout: float = timeout
-        self._time_to_first_response: Optional[float] = None
+        self._start_seconds: float = start_seconds
+        self._timeout_seconds: float = timeout_seconds
+        self._time_to_first_response_seconds: Optional[float] = None
 
     def streaming_chat(self, request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
         """
@@ -62,10 +62,10 @@ class TimedStreamingChat:
         :raises RequestTimeoutError: When a message arrives after the cap
         """
         for chat_response in self._streaming_chat(request_dict):
-            elapsed: float = time.perf_counter() - self._start
-            if self._time_to_first_response is None:
-                self._time_to_first_response = elapsed
-            if elapsed >= self._timeout:
+            elapsed_seconds: float = time.perf_counter() - self._start_seconds
+            if self._time_to_first_response_seconds is None:
+                self._time_to_first_response_seconds = elapsed_seconds
+            if elapsed_seconds >= self._timeout_seconds:
                 raise RequestTimeoutError()
             yield chat_response
 
@@ -75,6 +75,6 @@ class TimedStreamingChat:
 
         :return: Seconds from start to the first streamed message; 0.0 when none arrived
         """
-        if self._time_to_first_response is None:
+        if self._time_to_first_response_seconds is None:
             return 0.0
-        return self._time_to_first_response
+        return self._time_to_first_response_seconds
