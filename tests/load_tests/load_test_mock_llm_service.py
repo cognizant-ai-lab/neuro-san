@@ -78,12 +78,12 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Set
 from typing import TextIO
 from typing import Tuple
 
 import psutil
 
+from tests.load_tests.config import LOCAL_HOSTS
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -100,8 +100,6 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     # Sparse llm_info overlay that pins openai-class models to Chat Completions, which is the only
     # endpoint the mock LLM server implements. Relative to the repo root, like the -m module paths.
     CHAT_COMPLETIONS_LLM_INFO_PATH: str = "tests/mock_llm_server/llm_info_chat_completions.hocon"
-
-    LOCAL_HOSTS: Set[str] = {"localhost", "127.0.0.1", "::1"}
 
     AGENT_PRESETS: Dict[str, Dict[str, Optional[str]]] = {
         "math_guy": {
@@ -684,7 +682,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         self.agent_cli_command = self._build_cli_command()
 
-        is_local: bool = self.args.host in self.LOCAL_HOSTS
+        is_local: bool = self.args.host in LOCAL_HOSTS
 
         if self.args.auto_start:
             if not is_local:
