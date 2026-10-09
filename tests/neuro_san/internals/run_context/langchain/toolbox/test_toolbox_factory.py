@@ -131,8 +131,8 @@ class TestToolboxFactory(TestCase):
         """
         Test that a class-less entry for a removed tool also gets the migration
         error. A user toolbox file that overrides only the args of a removed
-        entry used to inherit 'class' from the bundled default via the overlay;
-        it should not die on a generic missing-'class' message.
+        entry has no 'class', because the bundled default does not define
+        removed tools. It should not die on a generic missing-'class' message.
         """
         self.factory.toolbox_infos = {
             "requests_get": {"args": {"headers": {"Authorization": "Bearer token"}}},
@@ -169,9 +169,8 @@ class TestToolboxFactory(TestCase):
 
     def test_create_toolbox_with_unknown_tool_names_sources(self) -> None:
         """
-        Test that an unknown tool name reports the searched sources by name.
-        Previously the message rendered 'not defined in None' when no user
-        toolbox info file was configured.
+        Test that an unknown tool name reports the searched sources by name,
+        both with and without a user toolbox info file.
         """
         self.factory.toolbox_infos = {}
 
