@@ -31,8 +31,7 @@ FIXTURE_MODULE = "tests.neuro_san.internals.run_context.langchain.toolbox.real_t
 
 RESOLVER_PATH = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
 VALIDATIOR_PATH = (
-    "neuro_san.internals.run_context.langchain.util.argument_validator."
-    "ArgumentValidator.check_invalid_args"
+    "neuro_san.internals.run_context.langchain.util.argument_validator.ArgumentValidator.check_invalid_args"
 )
 
 
@@ -48,10 +47,7 @@ class TestToolboxFactory:
         """Test that load() reads hocon files on the first call only."""
         # Keep the test hermetic: no user toolbox info file from the environment.
         factory.toolbox_info_file = None
-        restorer_path = (
-            "neuro_san.internals.run_context.langchain.toolbox."
-            "toolbox_factory.ToolboxInfoRestorer"
-        )
+        restorer_path = "neuro_san.internals.run_context.langchain.toolbox.toolbox_factory.ToolboxInfoRestorer"
         infos = {"some_tool": {"class": "mock_package.mock_module.SomeTool"}}
         with patch(restorer_path) as mock_restorer:
             mock_restorer.return_value.restore.return_value = infos

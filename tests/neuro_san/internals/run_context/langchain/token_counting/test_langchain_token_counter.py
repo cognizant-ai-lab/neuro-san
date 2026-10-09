@@ -468,8 +468,7 @@ class TestLangChainTokenCounter:
             yield cb
 
         callback_path = (
-            "neuro_san.internals.run_context.langchain.token_counting."
-            "langchain_token_counter.get_llm_token_callback"
+            "neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter.get_llm_token_callback"
         )
 
         with patch(callback_path, fake_callback_cm):
@@ -546,8 +545,7 @@ class TestLangChainTokenCounter:
             yield cb
 
         callback_path = (
-            "neuro_san.internals.run_context.langchain.token_counting."
-            "langchain_token_counter.get_llm_token_callback"
+            "neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter.get_llm_token_callback"
         )
 
         with patch(callback_path, fake_callback_cm):
