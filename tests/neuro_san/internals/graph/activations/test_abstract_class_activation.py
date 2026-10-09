@@ -140,7 +140,7 @@ def activation_instance(mock_run_context, mock_factory, basic_agent_tool_spec):
 class TestAbstractClassActivation:
     """Test suite for AbstractClassActivation."""
 
-    RESOLVER_PATH = "neuro_san.internals.graph.activations.abstract_class_activation.Resolver"
+    RESOLVER_PATH: str = "neuro_san.internals.graph.activations.abstract_class_activation.Resolver"
 
     def test_initialization(self, activation_instance):
         """Test that the activation initializes correctly."""

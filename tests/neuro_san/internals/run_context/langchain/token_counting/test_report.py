@@ -15,6 +15,10 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
+from typing import List
+
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -34,12 +38,12 @@ class TestReport(IsolatedAsyncioTestCase):
     single-element origin and a non-cloned InvocationContext.
     """
 
-    FRONT_MAN_ORIGIN = [{"tool": "front_man", "instantiation_index": 0}]
-    INTERNAL_AGENT_ORIGIN = [
+    FRONT_MAN_ORIGIN: List[Dict[str, Any]] = [{"tool": "front_man", "instantiation_index": 0}]
+    INTERNAL_AGENT_ORIGIN: List[Dict[str, Any]] = [
         {"tool": "front_man", "instantiation_index": 0},
         {"tool": "internal_agent", "instantiation_index": 0},
     ]
-    EXTERNAL_FRONT_MAN_ORIGIN = [{"tool": "external_front_man", "instantiation_index": 0}]
+    EXTERNAL_FRONT_MAN_ORIGIN: List[Dict[str, Any]] = [{"tool": "external_front_man", "instantiation_index": 0}]
 
     def _make_counter(self, request_reporting, cloned, journal, origin=None):
         """Build a LangChainTokenCounter around a shared request_reporting dict."""

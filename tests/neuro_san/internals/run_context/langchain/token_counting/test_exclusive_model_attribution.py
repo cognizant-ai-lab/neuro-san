@@ -15,6 +15,9 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
+
 from unittest import IsolatedAsyncioTestCase
 
 from langchain_core.messages import AIMessage
@@ -36,7 +39,7 @@ class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
     models_token_dict into the request-wide accounting counts each call exactly once.
     """
 
-    CHAT_MODEL_START_SERIALIZED = {"id": ["langchain", "chat_models", "openai", "ChatOpenAI"]}
+    CHAT_MODEL_START_SERIALIZED: Dict[str, Any] = {"id": ["langchain", "chat_models", "openai", "ChatOpenAI"]}
 
     def _make_result(self) -> LLMResult:
         """Build an LLMResult wrapping a single AIMessage with usage metadata."""
