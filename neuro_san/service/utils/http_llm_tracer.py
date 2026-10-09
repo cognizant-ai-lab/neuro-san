@@ -23,6 +23,9 @@ from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
+
+from types import ModuleType
 
 import contextvars
 import datetime
@@ -31,16 +34,18 @@ import json
 import logging
 import time
 import uuid
-import httpx
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.resolution.resolver import Resolver
 
 
 class HttpxLlmTracer:
     """
-    HTTP-layer tracer for outbound LLM traffic that flows through
-    httpx.AsyncClient. Emits structured JSON log events so post-run
-    analysis (grep, jq, pandas) can reconstruct per-request lifecycles.
+    HTTP-layer tracer for outbound LLM traffic that flows through an
+    httpx or httpx2 AsyncClient (openai 2.x is built on the former,
+    openai 3.x on the latter; both are patched when installed). Emits
+    structured JSON log events so post-run analysis (grep, jq, pandas)
+    can reconstruct per-request lifecycles.
 
     Events emitted (one line each, via the dedicated logger
     "neuro_san.diagnostics.http_llm_trace"):
@@ -82,9 +87,9 @@ class HttpxLlmTracer:
 
     Installation is one-shot: call install(...) once at server startup,
     before any LLM client is constructed. install() monkey-patches
-    httpx.AsyncClient.__init__ to inject event_hooks on every future
-    client, regardless of which provider SDK creates it. Idempotent --
-    a second call is a no-op.
+    AsyncClient.__init__ of httpx and of httpx2 (whichever are installed)
+    to inject event_hooks on every future client, regardless of which
+    provider SDK creates it. Idempotent -- a second call is a no-op.
 
     Env vars:
     AGENT_HTTP_LLM_TRACE (default "false") — master toggle. When enabled, installs the tracer on server startup.
@@ -113,7 +118,7 @@ class HttpxLlmTracer:
     ================================================================
     Known limitations / future work
     ================================================================
-    1. httpx transport only. Providers using non-httpx clients (notably
+    1. httpx/httpx2 transports only. Providers using other clients (notably
        AWS Bedrock via aiobotocore, and any future gRPC-based provider
        path such as Vertex AI direct) bypass this tracer. Extending to
        Bedrock requires registering hooks on botocore's event system;
@@ -159,9 +164,11 @@ class HttpxLlmTracer:
     _include_chunks: bool = False
     _logger: Optional[logging.Logger] = None
     _sensitive_logger: Optional[SensitiveLogger] = None
-    # Stash of the pre-patch httpx.AsyncClient.__init__ so the patched
-    # replacement can delegate to it.
-    _original_httpx_init: Optional[Callable[..., None]] = None
+    # The httpx libraries whose AsyncClient gets patched when installed.
+    _HTTPX_MODULE_NAMES: Tuple[str, ...] = ("httpx", "httpx2")
+    # Pre-patch AsyncClient.__init__ of each patched class, so the shared
+    # replacement can delegate to the right one.
+    _original_inits: Dict[type, Callable[..., None]] = {}
 
     # Body-capture cap. Applied both to request bodies (immediate) and
     # response bodies (accumulated during aiter_raw).
@@ -172,10 +179,10 @@ class HttpxLlmTracer:
                 include_bodies: bool = False,
                 include_chunks: bool = False) -> None:
         """
-        Monkey-patch httpx.AsyncClient.__init__ so every future client
-        instance gets our event hooks. Must be called BEFORE any provider
-        SDK constructs its client (i.e. at server startup, before the
-        first LLM call).
+        Monkey-patch AsyncClient.__init__ of every installed httpx library
+        so every future client instance gets our event hooks. Must be
+        called BEFORE any provider SDK constructs its client (i.e. at
+        server startup, before the first LLM call).
 
         :param include_bodies: When True, request and response bodies are
                     logged verbatim on http_llm_out and http_llm_end.
@@ -193,24 +200,77 @@ class HttpxLlmTracer:
         cls._logger = logging.getLogger("neuro_san.diagnostics.http_llm_trace")
         cls._sensitive_logger = SensitiveLogger(cls._logger)
 
-        cls._original_httpx_init = httpx.AsyncClient.__init__
-        # Assign the class-level replacement. staticmethod descriptor
-        # resolves to the underlying function on class access, so this
-        # sets AsyncClient.__init__ to a plain function that Python will
-        # invoke as a bound method (with client instance as first arg).
-        httpx.AsyncClient.__init__ = HttpxLlmTracer._patched_httpx_init
+        patched: List[str] = []
+        for module_name in cls._HTTPX_MODULE_NAMES:
+            client_class: Optional[type] = cls._async_client_class(module_name)
+            if client_class is None:
+                continue
+            cls._original_inits[client_class] = client_class.__init__
+            # Assign the class-level replacement. staticmethod descriptor
+            # resolves to the underlying function on class access, so this
+            # sets AsyncClient.__init__ to a plain function that Python will
+            # invoke as a bound method (with client instance as first arg).
+            client_class.__init__ = HttpxLlmTracer._patched_httpx_init
+            patched.append(module_name)
 
         cls._installed = True
         cls._logger.info(
-            "HttpxLlmTracer installed (include_bodies=%s include_chunks=%s)",
-            include_bodies, include_chunks)
+            "HttpxLlmTracer installed on %s (include_bodies=%s include_chunks=%s)",
+            ", ".join(patched), include_bodies, include_chunks)
+
+    @classmethod
+    def uninstall(cls) -> None:
+        """
+        Restores the original __init__ of every client class install() patched.
+
+        Meant for tests; a server installs the tracer once and keeps it.
+        """
+        for client_class, original_init in cls._original_inits.items():
+            client_class.__init__ = original_init
+        cls._original_inits = {}
+        cls._installed = False
+
+    @staticmethod
+    def _async_client_class(module_name: str) -> Optional[type]:
+        """
+        Finds the AsyncClient class of an httpx library, if that library is installed.
+
+        :param module_name: "httpx" or "httpx2"
+        :return: The library's AsyncClient class, or None when the library is not installed
+        """
+        module: Optional[ModuleType] = Resolver().resolve_class_in_module(class_name=None,
+                                                                          module_name=module_name,
+                                                                          raise_if_not_found=False)
+        if module is None:
+            return None
+        return getattr(module, "AsyncClient", None)
+
+    @classmethod
+    def _original_init_for(cls, client_class: type) -> Callable[..., None]:
+        """
+        Finds the original __init__ for a client being constructed.
+
+        Subclasses such as the OpenAI SDK's default client reach the patched
+        __init__ through super(), so the lookup walks the class hierarchy
+        up to the patched base.
+
+        :param client_class: The concrete class of the client being constructed
+        :return: The __init__ that install() replaced on that class or one of its bases
+        :raises ValueError: When no class in the hierarchy was patched by install()
+        """
+        for base in client_class.__mro__:
+            original_init: Optional[Callable[..., None]] = cls._original_inits.get(base)
+            if original_init is not None:
+                return original_init
+        raise ValueError("HttpxLlmTracer.install() must be called before an httpx AsyncClient is constructed")
 
     @staticmethod
     def _patched_httpx_init(client_self, *args, **kwargs) -> None:
         """
-        Replacement for httpx.AsyncClient.__init__. Injects our
-        request/response hooks alongside whatever the SDK already set.
-        Delegates to the original init captured at install() time.
+        Replacement for AsyncClient.__init__ of each patched httpx library.
+        Injects our request/response hooks alongside whatever the SDK
+        already set, then delegates to the original init captured at
+        install() time.
         """
         existing_hooks: Dict[str, list] = kwargs.pop("event_hooks", None) or {}
         merged_hooks: Dict[str, list] = dict(existing_hooks)
@@ -222,19 +282,11 @@ class HttpxLlmTracer:
         )
         kwargs["event_hooks"] = merged_hooks
 
-        # install() sets _original_httpx_init BEFORE monkey-patching
-        # httpx.AsyncClient.__init__ to this method, so it's guaranteed
-        # non-None here. Runtime guard raises early if that invariant is
-        # ever broken (e.g. someone bypassed install() and directly
-        # assigned _patched_httpx_init to httpx.AsyncClient). The pylint
-        # suppression on the call is because pylint's not-callable
-        # checker doesn't infer callability from typing.Callable
-        # annotations even after None-narrowing (known pylint limitation).
-        original_init = HttpxLlmTracer._original_httpx_init
-        if original_init is None:
-            raise ValueError("HttpxLlmTracer.install() must be called before "
-                             "httpx.AsyncClient() can be constructed")
-        original_init(client_self, *args, **kwargs)  # pylint: disable=not-callable
+        # install() stashes each patched class's original __init__ before
+        # assigning this function, so the lookup only fails if a class was
+        # patched some other way.
+        original_init: Callable[..., None] = HttpxLlmTracer._original_init_for(type(client_self))
+        original_init(client_self, *args, **kwargs)
 
     @classmethod
     def set_user_request_id(cls, user_req_id: str) -> None:
