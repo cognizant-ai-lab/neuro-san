@@ -475,10 +475,11 @@ class TrafficRunner:
         :param log_monitor: Server log reader for server-side request timing, or None
         :return: The Heartbeat
         """
-        log_start_pos: Optional[int] = None
+        log_start_position: Optional[int] = None
         if log_monitor is not None:
-            log_start_pos = log_monitor.read_position()
-        return Heartbeat(server_proc, client_proc, output_dir, log_monitor=log_monitor, log_start_pos=log_start_pos,
+            log_start_position = log_monitor.read_position()
+        return Heartbeat(server_proc, client_proc, output_dir, log_monitor=log_monitor,
+                         log_start_pos=log_start_position,
                          primary_start_pattern=self._profile.get_primary_start_pattern())
 
     def _submit_requests(self, pool: ThreadPoolExecutor, plan: StagePlan, futures: List[Future],
@@ -658,11 +659,11 @@ class TrafficRunner:
         field_parts: List[str] = []
         for key, value in parsed_fields.items():
             field_parts.append(f"{key}: {value or ''}")
-        fields_str: str = "  ".join(field_parts)
+        fields_text: str = "  ".join(field_parts)
         line: str = (
             f"Request {request_id}: {status}"
             f" ({Formatters.fmt_duration(elapsed_seconds, precision=2)})"
-            f"  {fields_str}\n"
+            f"  {fields_text}\n"
         )
         with open(path, "a", encoding="utf-8") as progress_log:
             progress_log.write(line)
