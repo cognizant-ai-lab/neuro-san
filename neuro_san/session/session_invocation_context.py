@@ -30,7 +30,7 @@ from concurrent.futures import Future
 from functools import partial
 from threading import Event
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.task_executor import TaskExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from leaf_common.logging.logging_setup import LoggingSetup
 
@@ -103,7 +103,7 @@ class SessionInvocationContext(InvocationContext):
 
         # Internal
         # Get an async executor to run all tasks for this session instance:
-        self.asyncio_executor: AsyncioExecutor = self.async_executors_pool.get_executor()
+        self.asyncio_executor: TaskExecutor = self.async_executors_pool.get_executor()
         self.request_reporting: Dict[str, Any] = {}
         self.origination: Origination = Origination()
 
@@ -120,7 +120,7 @@ class SessionInvocationContext(InvocationContext):
         """
         Starts the active components of this invocation context.
         Do this separately from constructor for more control.
-        Currently, we only start internal AsyncioExecutor.
+        Currently, we only start the internal executor.
         It could be already running, but starting it twice is allowed.
         """
         # Wrap it up into a single function with no parameters
@@ -143,9 +143,9 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.async_session_factory
 
-    def get_asyncio_executor(self) -> AsyncioExecutor:
+    def get_asyncio_executor(self) -> TaskExecutor:
         """
-        :return: The AsyncioExecutor associated with the invocation
+        :return: The TaskExecutor associated with the invocation
         """
         return self.asyncio_executor
 

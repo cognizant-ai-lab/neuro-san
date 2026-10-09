@@ -27,7 +27,9 @@ from datetime import datetime
 
 from croniter import croniter as CronIter
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.asyncio_executor_factory import AsyncioExecutorFactory
+from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+from leaf_common.asyncio.task_executor import TaskExecutor
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.periodic_manifest_dict_config_filter import PeriodicManifestDictConfigFilter
@@ -55,26 +57,30 @@ class PeriodicEventInitiator(WatcherThread):
         """
         super().__init__(server_context, single_instance=True)
         self.verbose: bool = False
-        # NB: do NOT construct the AsyncioExecutor here. When Tornado is
+        # NB: do NOT construct the executor pool here. When Tornado is
         # configured for multiple worker processes (AGENT_HTTP_SERVER_INSTANCES
         # > 1), the server forks *after* this instance is created but before
         # run() is invoked. asyncio event loops -- and their kqueue/epoll
         # selectors -- do not survive fork; a pre-fork loop yields
         # "I/O operation on closed kqueue object" the moment a child tries to
-        # run it. Construct the executor in run() below so each worker gets
+        # run it. Construct the pool in run() below so each worker gets
         # its own fresh loop after fork.
-        self.executor: AsyncioExecutor | None = None
+        self.executor_pool: AsyncioExecutorPool | None = None
+        self.executor: TaskExecutor | None = None
         # Probably need to set up logging in this guy
 
     def run(self):
         """
         Main loop
         """
-        # Construct the executor here, after fork(), so this worker's loop
-        # is fresh and its selector fds are valid. See __init__ note.
-        self.executor = AsyncioExecutor()
-        # Start the executor so our async event initiators have someplace to run
-        self.executor.start()
+        # Construct the pool here, after fork(), so this worker's loop is
+        # fresh and its selector fds are valid. See __init__ note.
+        # A pool-of-one: reuse_mode=False means no GC thread, and
+        # return_executor() below shuts the executor down for us.
+        self.executor_pool = AsyncioExecutorFactory.create_pool(reuse_mode=False)
+        # get_executor() hands back an already-started executor, so our async
+        # event initiators have someplace to run.
+        self.executor = self.executor_pool.get_executor()
 
         # Get the periodic configs from the ServerContext
         # Will need to update these every so often to pick up changes from the file system watcher.
@@ -109,7 +115,8 @@ class PeriodicEventInitiator(WatcherThread):
             # Optimize sleeping for the next iteration
             self.maybe_sleep_at_end_of_iteration(start, verbose=True)
 
-        self.executor.shutdown()
+        self.executor_pool.return_executor(self.executor)
+        self.executor_pool.shutdown()
 
     def set_up_agent_interactions(
                 self,

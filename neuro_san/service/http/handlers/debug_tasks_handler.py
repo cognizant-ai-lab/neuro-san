@@ -35,7 +35,7 @@ class DebugTasksHandler(RequestHandler):
     """
     Handler class for the /debug/tasks endpoint.
     Returns a snapshot of the asyncio tasks currently living on every
-    "used" AsyncioExecutor in this worker's pool. See
+    "used" executor in this worker's pool. See
     ServerContext.dump_tasks_in_used_executors() for the underlying probe.
 
     Intended for on-demand diagnostics when the service appears wedged.
@@ -104,7 +104,7 @@ class DebugTasksHandler(RequestHandler):
         response_format: str = self.get_query_argument("format", default="json").lower()
         if response_format == "text":
             self.set_header("Content-Type", "text/plain; charset=utf-8")
-            self.write(ServerContext.format_task_dump(dump))
+            self.write(self.server_context.format_task_dump(dump))
         else:
             self.set_header("Content-Type", "application/json")
             self.write(json.dumps(dump, indent=2))

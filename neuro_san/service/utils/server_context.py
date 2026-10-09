@@ -24,6 +24,7 @@ from os import environ
 
 from janus import Queue
 
+from leaf_common.asyncio.asyncio_executor_factory import AsyncioExecutorFactory
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
@@ -119,9 +120,10 @@ class ServerContext(ServerContextLite):
 
             with self._executor_pool_lock:
                 if self.executor_pool is None:
-                    self.executor_pool = AsyncioExecutorPool(reuse_mode=True,
-                                                             idle_timeout_seconds=30,
-                                                             max_workers=max_workers)
+                    self.executor_pool = AsyncioExecutorFactory.create_pool(
+                        reuse_mode=True,
+                        idle_timeout_seconds=30,
+                        max_workers=max_workers)
         return self.executor_pool
 
     def set_worker_info(self, worker_id: int, num_workers: int):
@@ -148,7 +150,7 @@ class ServerContext(ServerContextLite):
     def dump_tasks_in_used_executors(self, per_loop_timeout_s: float = 2.0) -> Dict[str, Any]:
         """
         Debug helper: snapshot the asyncio tasks currently living on every
-        AsyncioExecutor in the pool's "used" list. For each executor, this
+        executor in the pool's "used" list. For each executor, this
         schedules a one-shot coroutine on that executor's event loop that
         enumerates asyncio.all_tasks() and captures each task's name, coro
         qualname, done/cancelled state, and suspended stack. Results are
@@ -180,19 +182,23 @@ class ServerContext(ServerContextLite):
         result = self.executor_pool.dump_tasks_in_used_executors(per_loop_timeout_s=per_loop_timeout_s)
         return result
 
-    @staticmethod
-    def format_task_dump(dump: Dict[str, Any]) -> str:
+    def format_task_dump(self, dump: Dict[str, Any]) -> str:
         """
         Render the output of dump_tasks_in_used_executors() as a printable
         multi-line string. Useful for logging or writing into a debug HTTP
         response.
+
+        Renders through this worker's own pool rather than a hard-coded pool
+        class, so the rendering matches the kind of pool the factory built.
+        A non-empty dump can only have come from that pool, so it exists by
+        the time we get here.
 
         :param dump: A dict returned by dump_tasks_in_used_executors().
         :return: A human-readable multi-line string.
         """
         if not dump:
             return "(no used executors)"
-        return AsyncioExecutorPool.format_task_dump(dump)
+        return self.get_executor_pool().format_task_dump(dump)
 
     def set_server_status(self, server_status: ServerStatus):
         """
