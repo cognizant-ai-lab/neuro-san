@@ -27,9 +27,9 @@ from langchain_core.tools.base import BaseToolkit
 
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 
-FIXTURE_MODULE = "tests.neuro_san.internals.run_context.langchain.toolbox.real_tool_fixture"
+FIXTURE_MODULE: str = "tests.neuro_san.internals.run_context.langchain.toolbox.real_tool_fixture"
 
-RESOLVER_PATH = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
+RESOLVER_PATH: str = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
 VALIDATOR_PATH: str = (
     "neuro_san.internals.run_context.langchain.util.argument_validator.ArgumentValidator.check_invalid_args"
 )
