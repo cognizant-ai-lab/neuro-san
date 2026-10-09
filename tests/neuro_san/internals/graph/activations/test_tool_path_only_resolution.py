@@ -31,9 +31,9 @@ from tests.neuro_san.internals.graph.activations.concrete_class_activation impor
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import GET_FULL_NAME_FROM_ORIGIN_PATH
 
 
-FIXTURE_TOOL_PATH_PACKAGE = "tests.neuro_san.internals.graph.activations.tool_path_fixture"
+FIXTURE_TOOL_PATH_PACKAGE: str = "tests.neuro_san.internals.graph.activations.tool_path_fixture"
 # A canary module deliberately outside any tool path; see resolution_canary.py.
-CANARY_MODULE = "tests.neuro_san.internals.graph.activations.resolution_canary"
+CANARY_MODULE: str = "tests.neuro_san.internals.graph.activations.resolution_canary"
 
 
 @pytest.fixture

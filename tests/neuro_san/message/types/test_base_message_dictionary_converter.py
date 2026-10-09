@@ -57,7 +57,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
     text block included, emits no such key.
     """
 
-    ORIGIN = [{"tool": "front_man", "instantiation_index": 0}]
+    ORIGIN: List[Dict[str, Any]] = [{"tool": "front_man", "instantiation_index": 0}]
 
     @staticmethod
     def block_types(chat_message: Dict[str, Any]) -> List[str]:
