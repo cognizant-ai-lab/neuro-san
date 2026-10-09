@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from unittest import TestCase
 
@@ -154,9 +155,9 @@ class TestBaseMessageDictionaryConverter(TestCase):
         """
         converter = BaseMessageDictionaryConverter()
         originals: List[BaseMessage] = [SystemMessage(content="s"), HumanMessage(content="h"), AIMessage(content="a")]
-        original: BaseMessage = None
-        wire_dict: Dict[str, Any] = None
-        restored: BaseMessage = None
+        original: Optional[BaseMessage] = None
+        wire_dict: Optional[Dict[str, Any]] = None
+        restored: Optional[BaseMessage] = None
         for original in originals:
             wire_dict = converter.to_dict(original)
             restored = converter.from_dict(wire_dict)
@@ -311,7 +312,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
         """
         converter = BaseMessageDictionaryConverter()
         message = AIMessage(content=[{"type": "text"}], response_metadata={"model_provider": "anthropic"})
-        result: Dict[str, Any] = None
+        result: Optional[Dict[str, Any]] = None
         with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
             result = converter.to_dict(message)
         self.assertEqual(result, {
@@ -334,7 +335,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
                 {"type": "text", "text": "world"},
             ],
             response_metadata={"model_provider": "anthropic"})
-        result: Dict[str, Any] = None
+        result: Optional[Dict[str, Any]] = None
         with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
             result = converter.to_dict(message)
         self.assertEqual(result, {
