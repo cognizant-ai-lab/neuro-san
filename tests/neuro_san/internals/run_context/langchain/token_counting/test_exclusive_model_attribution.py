@@ -51,6 +51,7 @@ class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
             await handler.on_chat_model_start(self.CHAT_MODEL_START_SERIALIZED, [])
             await handler.on_llm_end(self._make_result())
 
+        # DictionaryExtractor splits keys on ".", so these lookups only work for model names without a dot.
         models_token_extractor = DictionaryExtractor(handler.models_token_dict)
         self.assertEqual(handler.total_tokens, 15)
         self.assertEqual(handler.successful_requests, 1)
