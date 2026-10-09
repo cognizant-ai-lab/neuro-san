@@ -45,9 +45,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
 
     The plain-string tests lock down the EXACT ChatMessage dictionaries
     produced for text-only traffic - the shapes every deployed client sees.
-    The content-block work (see issue #1222) must keep every one of them
-    green untouched: byte-identical wire output for text-only messages
-    is the backward-compatibility guarantee of that whole effort.
+    Every one of them must stay green untouched: byte-identical wire
+    output for text-only messages is the backward-compatibility guarantee.
 
     The list-content tests cover the full text projection of block content:
     the text joins every text block, so thinking-first content gives the
@@ -70,7 +69,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
         :return: The "type" of each block inside its content_blocks wrapper
         """
         types: List[str] = []
-        block: Dict[str, Any] = None
+        block: Optional[Dict[str, Any]] = None
         for block in chat_message.get("content_blocks", {}).get("blocks", []):
             types.append(block.get("type"))
         return types
@@ -202,8 +201,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
 
     def test_to_dict_concatenates_all_text_blocks(self) -> None:
         """
-        The text keeps every text block, not only the first, and a
-        reasoning-only message emits text="".
+        The text comes from the text block even when a reasoning block is
+        first, and a reasoning-only message emits text="".
         """
         converter = BaseMessageDictionaryConverter()
         result: Dict[str, Any] = converter.to_dict(ContentFixtures.openai_responses_reasoning())
