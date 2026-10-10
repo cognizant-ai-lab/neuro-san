@@ -173,7 +173,7 @@ class TestReport(IsolatedAsyncioTestCase):
             if "An additional 20 tokens" in caveat:
                 found_unattributed_caveat = True
                 break
-        self.assertTrue(found_unattributed_caveat)
+        self.assertTrue(found_unattributed_caveat, total_accounting.get("caveats"))
 
     async def test_report_network_message_gating(self) -> None:
         """
@@ -202,9 +202,8 @@ class TestReport(IsolatedAsyncioTestCase):
 
             self.assertEqual(journal.write_message.call_count, expected_writes, f"origin={origin} cloned={cloned}")
             # The merge into request_reporting happens for everyone.
-            # DictionaryExtractor splits keys on ".", so this lookup only works for keys without a dot.
-            request_reporting_extractor = DictionaryExtractor(request_reporting)
-            self.assertEqual(request_reporting_extractor.get("total_token_accounting.total_tokens"), 10)
+            total_accounting: Dict[str, Any] = request_reporting.get("total_token_accounting")
+            self.assertEqual(total_accounting.get("total_tokens"), 10)
 
         # For the main front man (last case), the two messages are exactly the two
         # accounting entries of request_reporting, so the client-visible accounting
