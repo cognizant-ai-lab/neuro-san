@@ -296,6 +296,175 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         chat_classes: Dict[str, Any] = self.llm_infos.get("classes", {})
         return chat_class_name in chat_classes
 
+    def get_llm_info_file(self) -> Optional[str]:
+        """
+        Tells which user llm_info file this factory reads on top of the stock one.
+
+        :return: The "llm_info_file" from the network config, or the AGENT_LLM_INFO_FILE
+                environment variable when the config has none, as resolved by the constructor.
+                None means only the stock default_llm_info.hocon is read.
+        """
+        return self.llm_info_file
+
+    def get_chat_class_name(self, config: Dict[str, Any]) -> Optional[str]:
+        """
+        Tells which llm_info class an llm_config resolves to, without building anything.
+
+        This mirrors the class selection that create_full_llm_config() performs, for callers
+        such as load-time validators that only need to know which provider an agent would end
+        up talking to. Nothing is instantiated, no defaults are merged in, and unlike
+        create_full_llm_config() nothing is raised for a model llm_info does not know.
+
+        :param config: The llm_config from the user
+        :return: The value of a string "class" key as given (a short llm_info class such as
+                "openai", or the dotted path of a user chat model class). Otherwise the "class"
+                of the llm_info entry that model_name resolves to after any alias hop, where a
+                missing model_name falls back to default_config's model_name the same way
+                create_full_llm_config() does. None when that entry is unknown, is not a
+                dictionary, or has no "class".
+        """
+        class_from_llm_config: Any = config.get("class")
+        if isinstance(class_from_llm_config, str) and len(class_from_llm_config) > 0:
+            # Returned as given: create_full_llm_config() keeps the user's class too.
+            return class_from_llm_config
+
+        model_name: Any = config.get("model_name")
+        if model_name is None:
+            # Same fallback create_full_llm_config() gets from overlaying default_config.
+            default_config: Any = self.llm_infos.get("default_config")
+            if isinstance(default_config, dict):
+                model_name = default_config.get("model_name")
+        if not isinstance(model_name, str):
+            return None
+
+        entry: Any = self.llm_infos.get(model_name)
+        if not isinstance(entry, dict):
+            # Unknown model, or a user llm_info_file entry that is not a dictionary at all.
+            # _find_llm_entry() would trip over the latter; here it just means "no class".
+            return None
+
+        use_model_name: Any = entry.get("use_model_name")
+        if use_model_name is not None and not isinstance(use_model_name, str):
+            # _find_llm_entry() looks the alias target up as a dictionary key, so a list or
+            # dictionary there would raise. Such an entry cannot name a class anyway.
+            # None is fine: _find_llm_entry() treats it as "not an alias".
+            return None
+
+        found: Tuple[Optional[Dict[str, Any]], str] = self._find_llm_entry(model_name)
+        llm_entry: Optional[Dict[str, Any]] = found[0]
+        if not isinstance(llm_entry, dict):
+            # A dangling alias, or an alias whose target entry is not a dictionary.
+            return None
+        return llm_entry.get("class")
+
+    def get_chat_class_family(self, chat_class_name: Optional[str]) -> Optional[str]:
+        """
+        Tells which root llm_info class a class descends from through "extends".
+
+        The lookup is lowercased because the runtime lowercases "class" before its policy
+        lookup (StandardLangChainLlmFactory.create_llm_resources), so "Gemini" builds a
+        Gemini model just the same. Nothing is raised for a malformed table: a cycle or a
+        dangling "extends" ends the walk at the last class that is in the table.
+
+        :param chat_class_name: A "class" value from an llm_config or an llm_info entry, or None
+        :return: The lowercased name of the class at the top of the "extends" chain, for
+                example "openai" for "azure-openai" and "anthropic" for "anthropic-bedrock".
+                None when chat_class_name is None or not in the llm_info "classes" table.
+        """
+        if not isinstance(chat_class_name, str):
+            return None
+        chat_classes: Any = self.llm_infos.get("classes")
+        if not isinstance(chat_classes, dict):
+            return None
+
+        current: str = chat_class_name.lower()
+        if current not in chat_classes:
+            return None
+
+        seen: Set[str] = set()
+        while current not in seen:
+            seen.add(current)
+            entry: Any = chat_classes.get(current)
+            if not isinstance(entry, dict):
+                break
+            extends: Any = entry.get("extends")
+            if not isinstance(extends, str):
+                break
+            parent: str = extends.lower()
+            if parent not in chat_classes:
+                # A dangling "extends": the class we have is the last one in the table.
+                break
+            current = parent
+        return current
+
+    def declares_provider_tools(self, chat_class_name: Optional[str]) -> bool:
+        """
+        Tells whether an llm_info class supports provider_tools.
+
+        A class opts in by declaring the "provider_tools" key in its own "args"; the stock
+        file does this for openai, azure-openai, anthropic and gemini. The class's own args
+        are read here instead of get_chat_class_args(), because that merges the parent's args
+        in through "extends": support is the class's own choice, and anthropic-bedrock, which
+        extends anthropic without the key, must not look supported.
+
+        :param chat_class_name: A "class" value from an llm_config or an llm_info entry, or None
+        :return: True when the class is in the llm_info "classes" table (lowercased lookup)
+                and its own "args" dictionary has a "provider_tools" key
+        """
+        if not isinstance(chat_class_name, str):
+            return False
+        chat_classes: Any = self.llm_infos.get("classes")
+        if not isinstance(chat_classes, dict):
+            return False
+        entry: Any = chat_classes.get(chat_class_name.lower())
+        if not isinstance(entry, dict):
+            return False
+        args: Any = entry.get("args")
+        if not isinstance(args, dict):
+            return False
+        return "provider_tools" in args
+
+    def get_default_arg_value(self, config: Dict[str, Any], key: str) -> Any:
+        """
+        Tells what value the runtime fills in for an llm_config key the user left unset.
+
+        This mirrors create_full_llm_config(): when the llm_config names a "class", only that
+        class's args (merged through "extends") supply defaults; otherwise the class is the
+        one model_name resolves to, and llm_info's default_config is overlaid on its args.
+        Nothing is raised for an unknown class or model; the result is then None.
+
+        :param config: The llm_config from the user, or one fallbacks entry
+        :param key: The llm_config key to look up
+        :return: The default value, or None when nothing supplies one
+        """
+        class_from_llm_config: Any = config.get("class")
+        if isinstance(class_from_llm_config, str) and len(class_from_llm_config) > 0:
+            return self._class_args_or_empty(class_from_llm_config).get(key)
+
+        class_args: Dict[str, Any] = self._class_args_or_empty(self.get_chat_class_name(config))
+        default_config: Any = self.llm_infos.get("default_config")
+        if not isinstance(default_config, dict):
+            default_config = {}
+        defaults: Dict[str, Any] = self.overlayer.overlay(class_args, default_config)
+        return defaults.get(key)
+
+    def _class_args_or_empty(self, chat_class_name: Optional[str]) -> Dict[str, Any]:
+        """
+        Reads a class's args from the llm_info "classes" table, merged through "extends".
+
+        :param chat_class_name: The class name as the runtime would look it up, or None
+        :return: The merged args, or an empty dictionary when the class is not in the table
+        """
+        chat_classes: Any = self.llm_infos.get("classes")
+        if not isinstance(chat_class_name, str) or not isinstance(chat_classes, dict):
+            return {}
+        if chat_class_name not in chat_classes:
+            return {}
+        args: Any = self.get_chat_class_args(chat_class_name)
+        if not isinstance(args, dict):
+            return {}
+        return args
+
     def _find_llm_entry(self, model_name: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Looks up the llm_info entry for a model name, following at most one alias hop.
