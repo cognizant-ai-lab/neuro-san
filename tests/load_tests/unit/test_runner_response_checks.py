@@ -67,9 +67,7 @@ class TestRunnerResponseChecks(TestCase):
         processor: BasicMessageProcessor = BasicMessageProcessor()
         processor.process_message({"type": "AI", "text": answer})
         if sly_data is not None:
-            processor.process_message({
-                "type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data,
-            })
+            processor.process_message({"type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data})
         return processor
 
     @staticmethod
@@ -96,15 +94,13 @@ class TestRunnerResponseChecks(TestCase):
         """
         checks: Dict[str, Any] = {"sly_data": {"agent_reservations": {"not_value": ""}}}
         runner: TrafficRunner = self._runner()
-        self.assertIsNone(runner.check_response(
-            self._processor("ok", {"agent_reservations": [{"reservation_id": "r-1"}]}), checks,
-        ))
-        self.assertIn("agent_reservations", runner.check_response(
-            self._processor("ok", {"agent_network_name": "n"}), checks,
-        ))
-        self.assertIn("agent_reservations", runner.check_response(
-            self._processor("ok", {"agent_reservations": ""}), checks,
-        ))
+        reservations: List[Dict[str, Any]] = [{"reservation_id": "r-1"}]
+        with_reservations: BasicMessageProcessor = self._processor("ok", {"agent_reservations": reservations})
+        without_reservations: BasicMessageProcessor = self._processor("ok", {"agent_network_name": "n"})
+        empty_reservations: BasicMessageProcessor = self._processor("ok", {"agent_reservations": ""})
+        self.assertIsNone(runner.check_response(with_reservations, checks))
+        self.assertIn("agent_reservations", runner.check_response(without_reservations, checks))
+        self.assertIn("agent_reservations", runner.check_response(empty_reservations, checks))
 
     def test_keywords_check_on_answer_text(self) -> None:
         """
@@ -172,19 +168,20 @@ class TestRunnerResponseChecks(TestCase):
         :return: A CREATED request result
         """
         time.sleep(delay)
-        return {
+        fake_result: Dict[str, Any] = {
             "request_id": f"request-{request_id}", "status": STATUS_CREATED,
             "global_request_id": global_request_id, "output_dir": output_dir,
         }
+        return fake_result
 
     def test_created_request_keeps_timing_and_timestamps(self) -> None:
         """
         A CREATED request with passing checks has no failure, a duration and wall-clock start/end times.
         """
         before: float = time.time()
-        result: Dict[str, Any] = self._run_one_http(
-            AgentRequestResult(STATUS_CREATED, self._processor("hi"), "hi", 0.1, {}),
-        )
+        answer_processor: BasicMessageProcessor = self._processor("hi")
+        request_result: AgentRequestResult = AgentRequestResult(STATUS_CREATED, answer_processor, "hi", 0.1, {})
+        result: Dict[str, Any] = self._run_one_http(request_result)
         self.assertEqual(STATUS_CREATED, result.get("status"))
         self.assertIsNone(result.get("failure_reason"))
         self.assertIsNone(result.get("error"))

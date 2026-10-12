@@ -46,8 +46,9 @@ class TestBaseToolFactory(IsolatedAsyncioTestCase):
     """
 
     MCP_ADAPTER_PATH: str = "neuro_san.internals.run_context.langchain.tools.mcp_tool_creator.LangChainMcpAdapter"
-    EXTERNAL_ADAPTER_PATH: str = ("neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator."
-                                  "ExternalToolAdapter")
+    EXTERNAL_ADAPTER_PATH: str = (
+        "neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator.ExternalToolAdapter"
+    )
     AGENT_LOCATION: str = "agent 'researcher' of agent network 'deep/math_guy'"
     FUNCTION_JSON: Dict[str, Any] = {
         "description": "Answers questions.",

@@ -70,9 +70,9 @@ class EnvironmentValidator:
         api_base: Optional[str] = os.environ.get("OPENAI_API_BASE")
         if api_base:
             issues.append(f"  OPENAI_API_BASE={api_base}")
-        mock_proc: Optional[psutil.Process] = ResourceMonitor.find_process("mock_llm_server")
-        if mock_proc is not None:
-            issues.append(f"  mock_llm_server process running (PID {mock_proc.pid})")
+        mock_server_process: Optional[psutil.Process] = ResourceMonitor.find_process("mock_llm_server")
+        if mock_server_process is not None:
+            issues.append(f"  mock_llm_server process running (PID {mock_server_process.pid})")
         if issues:
             logger.error(
                 "Mock LLM environment detected — this test requires real LLM calls.\n%s\n\n"
@@ -112,23 +112,23 @@ class EnvironmentValidator:
             logger.error("No service listening on %s:%s.\nStart the server first.", args.host, args.port)
             sys.exit(1)
 
-        server_proc: Optional[psutil.Process] = None
+        server_process: Optional[psutil.Process] = None
         for keyword in ["neuro_san_studio", "server_main_loop"]:
-            server_proc = ResourceMonitor.find_process(keyword)
-            if server_proc is not None:
-                logger.info("Found neuro-san server (PID %s) via %s", server_proc.pid, keyword)
+            server_process = ResourceMonitor.find_process(keyword)
+            if server_process is not None:
+                logger.info("Found neuro-san server (PID %s) via %s", server_process.pid, keyword)
                 break
 
-        if server_proc is None:
-            server_proc = ResourceMonitor.find_process_by_port(args.port)
-            if server_proc is not None:
-                logger.info("Found neuro-san server (PID %s) via port %s", server_proc.pid, args.port)
+        if server_process is None:
+            server_process = ResourceMonitor.find_process_by_port(args.port)
+            if server_process is not None:
+                logger.info("Found neuro-san server (PID %s) via port %s", server_process.pid, args.port)
 
-        if server_proc is None:
+        if server_process is None:
             logger.info("neuro-san server process not found locally. Resource monitoring disabled.")
             return None
 
-        return server_proc
+        return server_process
 
     @staticmethod
     def try_auto_detect_server_log(args: Namespace) -> Optional[str]:
@@ -144,47 +144,47 @@ class EnvironmentValidator:
         """
         if not EnvironmentValidator.is_port_open(args.host, args.port):
             return None
-        server_proc: Optional[psutil.Process] = None
+        server_process: Optional[psutil.Process] = None
         for keyword in ["neuro_san_studio", "server_main_loop"]:
-            server_proc = ResourceMonitor.find_process(keyword)
-            if server_proc is not None:
+            server_process = ResourceMonitor.find_process(keyword)
+            if server_process is not None:
                 break
-        if server_proc is None:
-            server_proc = ResourceMonitor.find_process_by_port(args.port)
-        if server_proc is None:
+        if server_process is None:
+            server_process = ResourceMonitor.find_process_by_port(args.port)
+        if server_process is None:
             return None
         try:
-            candidate: str = os.path.join(server_proc.cwd(), "logs", "server.log")
-            if os.path.isfile(candidate):
-                return candidate
+            server_log_path: str = os.path.join(server_process.cwd(), "logs", "server.log")
+            if os.path.isfile(server_log_path):
+                return server_log_path
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             return None
         return None
 
     @staticmethod
-    def auto_detect_server_log(server_proc: Optional[psutil.Process]) -> str:
+    def auto_detect_server_log(server_process: Optional[psutil.Process]) -> str:
         """Auto-detect server log from server process CWD.
 
         Looks for logs/server.log relative to the server's working
         directory.  Aborts with sys.exit(1) when auto-detection
         fails because the user explicitly requested --server-log.
 
-        :param server_proc: Local server process, or None when it was not found
+        :param server_process: Local server process, or None when it was not found
         :return: Path to logs/server.log in the server's working directory
         """
-        if server_proc is None:
+        if server_process is None:
             logger.error("Cannot auto-detect server log: server process not found.")
             sys.exit(1)
         try:
-            cwd: str = server_proc.cwd()
-            candidate: str = os.path.join(cwd, "logs", "server.log")
-            if os.path.isfile(candidate):
-                logger.info("  Auto-detected server log: %s", candidate)
-                return candidate
+            working_directory: str = server_process.cwd()
+            server_log_path: str = os.path.join(working_directory, "logs", "server.log")
+            if os.path.isfile(server_log_path):
+                logger.info("  Auto-detected server log: %s", server_log_path)
+                return server_log_path
             logger.error(
                 "Server log not found at %s\n"
                 "  Provide the path explicitly: --server-log /path/to/server.log",
-                candidate,
+                server_log_path,
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             logger.error(

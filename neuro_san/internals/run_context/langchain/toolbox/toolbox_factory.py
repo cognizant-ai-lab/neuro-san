@@ -262,7 +262,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if "class" not in tool_info:
             if tool_name in self.REMOVED_TOOLS:
                 # A user toolbox file that overrides only part of a removed
-                # entry used to inherit "class" from the bundled default.
+                # entry has no "class", because the bundled default does not
+                # define removed tools.
                 raise self._removed_tool_error(tool_name)
             raise ValueError(
                 f"Tool '{tool_name}' is missing required key: 'class'.\n"

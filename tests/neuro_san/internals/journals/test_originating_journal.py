@@ -52,7 +52,7 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
     the projection every block-content answer would leak both copies.
     """
 
-    ORIGIN = [{"tool": "front_man", "instantiation_index": 0}]
+    ORIGIN: List[Dict[str, Any]] = [{"tool": "front_man", "instantiation_index": 0}]
 
     def _make_journal(self):
         """Build a journal whose wrapped journal records written messages."""

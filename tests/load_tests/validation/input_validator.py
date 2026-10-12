@@ -102,8 +102,8 @@ class InputValidator:
             project_root: Optional[str] = ProjectPaths.resolve_project_root(self._args.project_root)
             parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)
 
-        agent_base: str = ProjectPaths.agent_base_name(self._args.agent)
-        hocon_dir: str = os.path.join(parent_dir, agent_base)
+        agent_base_name: str = ProjectPaths.agent_base_name(self._args.agent)
+        hocon_dir: str = os.path.join(parent_dir, agent_base_name)
 
         if not os.path.isdir(hocon_dir):
             logger.error(
@@ -114,17 +114,17 @@ class InputValidator:
             )
             sys.exit(1)
 
-        files: List[str] = sorted(
-            os.path.join(hocon_dir, name)
-            for name in os.listdir(hocon_dir)
-            if name.endswith(".hocon")
-            and os.path.isfile(os.path.join(hocon_dir, name))
+        hocon_files: List[str] = sorted(
+            os.path.join(hocon_dir, file_name)
+            for file_name in os.listdir(hocon_dir)
+            if file_name.endswith(".hocon")
+            and os.path.isfile(os.path.join(hocon_dir, file_name))
         )
-        if not files:
+        if not hocon_files:
             logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
             sys.exit(1)
 
-        return files
+        return hocon_files
 
     def resolve_stages(self) -> List[int]:
         """Return the list of concurrency stages to run.
@@ -140,9 +140,9 @@ class InputValidator:
                 stages: List[int] = []
                 try:
                     stages = [
-                        int(s.strip())
-                        for s in self._args.stages.split(",")
-                        if s.strip()
+                        int(stage_text.strip())
+                        for stage_text in self._args.stages.split(",")
+                        if stage_text.strip()
                     ]
                 except ValueError:
                     logger.error(
@@ -150,7 +150,7 @@ class InputValidator:
                         self._args.stages,
                     )
                     sys.exit(1)
-                if not stages or any(s <= 0 for s in stages):
+                if not stages or any(stage <= 0 for stage in stages):
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     sys.exit(1)
                 return stages
@@ -178,8 +178,8 @@ class InputValidator:
         return sum(stages) * self._args.num_rounds
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def confirm_cost(self, stages: List[int], total_cap: int, runner: TrafficRunner, output_dir: Optional[str] = None,
-                     stale_log_age: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    def confirm_cost(self, stages: List[int], total_cap_requests: int, runner: TrafficRunner,
+                     output_dir: Optional[str] = None, stale_log_age: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
         The dry-run probe + cost confirmation runs by default at min
@@ -194,45 +194,48 @@ class InputValidator:
         Returns the probe result dict if a probe was run, else None.
 
         :param stages: Requests per stage
-        :param total_cap: Most requests to send, from resolve_max_requests
+        :param total_cap_requests: Most requests to send, from resolve_max_requests
         :param runner: Traffic runner used to fire the probe request
         :param output_dir: Directory for the probe's output files, or None
         :param stale_log_age: Minutes since the server log was last modified when it looks stale, or None
         :return: The probe result, or None when no probe was run
         """
-        total_planned: int = sum(stages) * self._args.num_rounds
-        capped: int = min(total_planned, total_cap)
+        total_planned_requests: int = sum(stages) * self._args.num_rounds
+        capped_requests: int = min(total_planned_requests, total_cap_requests)
 
-        self._print_summary_header(stages, total_planned, capped)
+        self._print_summary_header(stages, total_planned_requests, capped_requests)
 
         warnings: List[str] = []
         if self._args.no_dry_run or self._args.level == LEVEL_ADV:
-            warnings = self._collect_warnings(capped=capped, total_planned=total_planned, stale_log_age=stale_log_age)
+            warnings = self._collect_warnings(capped_requests=capped_requests,
+                                              total_planned_requests=total_planned_requests,
+                                              stale_log_age_minutes=stale_log_age)
             self._print_warnings(warnings)
             logger.info("=" * SEPARATOR_WIDTH)
             return None
 
         probe_result: Dict[str, Any] = {}
-        probe_data: Dict[str, Any] = {}
-        probe_result, probe_data = self._run_cost_probe(runner, output_dir)
+        probe_measurements: Dict[str, Any] = {}
+        probe_result, probe_measurements = self._run_cost_probe(runner, output_dir)
 
-        remaining: int = max(capped - 1, 0)
-        est_stage_duration: float = self._estimate_stage_duration(probe_data.get("elapsed", 0), remaining)
+        remaining_requests: int = max(capped_requests - 1, 0)
+        estimated_stage_duration_seconds: float = self._estimate_stage_duration(probe_measurements.get("elapsed", 0),
+                                                                                remaining_requests)
         logger.info(
             "  Estimated stage duration: ~%ss (%.1fs x %s requests)",
-            int(est_stage_duration),
-            probe_data.get("elapsed", 0),
-            remaining,
+            int(estimated_stage_duration_seconds),
+            probe_measurements.get("elapsed", 0),
+            remaining_requests,
         )
 
         warnings = self._collect_warnings(
-            capped=capped,
-            total_planned=total_planned,
-            stale_log_age=stale_log_age,
-            est_stage_duration=est_stage_duration,
-            probe_tokens=probe_data.get("tokens", 0),
-            probe_cost=probe_data.get("cost", 0.0),
-            probe_model=probe_data.get("model", "unknown"),
+            capped_requests=capped_requests,
+            total_planned_requests=total_planned_requests,
+            stale_log_age_minutes=stale_log_age,
+            estimated_stage_duration_seconds=estimated_stage_duration_seconds,
+            probe_tokens=probe_measurements.get("tokens", 0),
+            probe_cost_dollars=probe_measurements.get("cost", 0.0),
+            probe_model=probe_measurements.get("model", "unknown"),
         )
         self._print_warnings(warnings)
 
@@ -243,19 +246,19 @@ class InputValidator:
 
         logger.info("=" * SEPARATOR_WIDTH)
 
-        if not Confirm.ask(f"\nProceed with remaining {capped - 1} requests?"):
+        if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
             logger.info("Aborted by user.")
             sys.exit(0)
 
         return probe_result
 
-    def _print_summary_header(self, stages: List[int], total_planned: int, capped: int) -> None:
+    def _print_summary_header(self, stages: List[int], total_planned_requests: int, capped_requests: int) -> None:
         """
         Print the PRE-RUN SUMMARY header block.
 
         :param stages: Requests per stage, shown with --ramp
-        :param total_planned: Planned requests: sum(stages) * --num-rounds
-        :param capped: Requests after the --max-requests cap
+        :param total_planned_requests: Planned requests: sum(stages) * --num-rounds
+        :param capped_requests: Requests after the --max-requests cap
         """
         args: Namespace = self._args
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
@@ -270,10 +273,10 @@ class InputValidator:
             args.num_requests,
             args.num_rounds,
             "s" if args.num_rounds > 1 else "",
-            total_planned,
+            total_planned_requests,
         )
-        if capped < total_planned:
-            logger.info("  Capped:   %s (--max-requests)", capped)
+        if capped_requests < total_planned_requests:
+            logger.info("  Capped:   %s (--max-requests)", capped_requests)
         logger.info("  Workers:  %s (concurrent)", args.max_workers)
         logger.info(
             "  Timeouts: --request-timeout %ss (%sm) / --idle-timeout %ss (%sm) / --stage-timeout %ss (%sm)",
@@ -291,71 +294,74 @@ class InputValidator:
         SystemResources.log_prerun()
 
     @staticmethod
-    def _estimate_stage_duration(probe_elapsed: float, remaining: int) -> float:
+    def _estimate_stage_duration(probe_elapsed_seconds: float, remaining_requests: int) -> float:
         """Estimate stage wall time from probe duration.
 
         LLM is the bottleneck, so concurrent requests do not
         scale linearly.  Estimate as probe_time x remaining
         requests (the probe already ran, so it is excluded).
 
-        :param probe_elapsed: Seconds the probe request took
-        :param remaining: Requests still to send after the probe
-        :return: Estimated stage seconds: probe_elapsed * remaining
+        :param probe_elapsed_seconds: Seconds the probe request took
+        :param remaining_requests: Requests still to send after the probe
+        :return: Estimated stage seconds: probe_elapsed_seconds * remaining_requests
         """
-        return probe_elapsed * remaining
+        return probe_elapsed_seconds * remaining_requests
 
-    def _collect_warnings(self, capped: int, total_planned: int, stale_log_age: Optional[int] = None,
-                          est_stage_duration: Optional[float] = None, probe_tokens: Optional[int] = None,
-                          probe_cost: Optional[float] = None, probe_model: Optional[str] = None) -> List[str]:
+    def _collect_warnings(self, capped_requests: int, total_planned_requests: int,
+                          stale_log_age_minutes: Optional[int] = None,
+                          estimated_stage_duration_seconds: Optional[float] = None, probe_tokens: Optional[int] = None,
+                          probe_cost_dollars: Optional[float] = None, probe_model: Optional[str] = None) -> List[str]:
         """
         Collect all pre-run warnings as a list of strings.
 
-        :param capped: Requests after the --max-requests cap
-        :param total_planned: Planned requests before the cap
-        :param stale_log_age: Minutes since the server log was last modified when it looks stale, or None
-        :param est_stage_duration: Estimated stage seconds, or None when no probe ran
+        :param capped_requests: Requests after the --max-requests cap
+        :param total_planned_requests: Planned requests before the cap
+        :param stale_log_age_minutes: Minutes since the server log was last modified when it looks stale, or None
+        :param estimated_stage_duration_seconds: Estimated stage seconds, or None when no probe ran
         :param probe_tokens: Tokens the probe used, or None
-        :param probe_cost: Probe cost in USD, or None
+        :param probe_cost_dollars: Probe cost in USD, or None
         :param probe_model: Model the probe used, or None
         :return: Warning texts; empty when there is nothing to warn about
         """
         warnings: List[str] = []
 
-        if probe_cost is not None and probe_tokens:
-            est_total_cost: float = probe_cost * capped
-            est_total_tokens: int = probe_tokens * capped
-            if est_total_cost > 1.0:
+        if probe_cost_dollars is not None and probe_tokens:
+            estimated_total_cost_dollars: float = probe_cost_dollars * capped_requests
+            estimated_total_tokens: int = probe_tokens * capped_requests
+            if estimated_total_cost_dollars > 1.0:
                 warnings.append(
                     f"Estimated cost exceeds $1:\n"
-                    f"     Probe used ~{probe_tokens:,} tokens (${probe_cost:.2f}) x {capped} requests = "
-                    f"~{est_total_tokens:,} tokens (~${est_total_cost:.2f})\n"
+                    f"     Probe used ~{probe_tokens:,} tokens (${probe_cost_dollars:.2f}) "
+                    f"x {capped_requests} requests = "
+                    f"~{estimated_total_tokens:,} tokens (~${estimated_total_cost_dollars:.2f})\n"
                     f"     Model: {probe_model}"
                 )
 
-        max_w: int = self._args.max_workers
-        num_r: int = self._args.num_requests
-        if not self._args.ramp and max_w < num_r:
-            warnings.append(f"--max-workers ({max_w}) < --num-requests ({num_r}): requests run in batches")
+        max_workers: int = self._args.max_workers
+        num_requests: int = self._args.num_requests
+        if not self._args.ramp and max_workers < num_requests:
+            warnings.append(f"--max-workers ({max_workers}) < --num-requests ({num_requests}): requests run in batches")
 
-        if (est_stage_duration is not None
-                and est_stage_duration > self._args.stage_timeout):
-            stage_to: int = self._args.stage_timeout
+        if (estimated_stage_duration_seconds is not None
+                and estimated_stage_duration_seconds > self._args.stage_timeout):
+            stage_timeout_seconds: int = self._args.stage_timeout
             warnings.append(
-                f"Estimated stage duration ~{int(est_stage_duration)}s exceeds --stage-timeout ({stage_to}s).\n"
+                f"Estimated stage duration ~{int(estimated_stage_duration_seconds)}s exceeds "
+                f"--stage-timeout ({stage_timeout_seconds}s).\n"
                 f"     Requests may be killed before completing."
             )
 
-        if capped < total_planned:
-            warnings.append(f"--max-requests ({capped}) caps planned total ({total_planned})")
+        if capped_requests < total_planned_requests:
+            warnings.append(f"--max-requests ({capped_requests}) caps planned total ({total_planned_requests})")
 
-        if stale_log_age is not None:
-            warnings.append(f"Server log appears stale (last modified {stale_log_age}m ago)")
+        if stale_log_age_minutes is not None:
+            warnings.append(f"Server log appears stale (last modified {stale_log_age_minutes}m ago)")
 
         warnings.extend(self._token_reporting_warnings())
 
-        mem_warning: Optional[str] = self._check_memory_headroom(capped)
-        if mem_warning:
-            warnings.append(mem_warning)
+        memory_warning: Optional[str] = self._check_memory_headroom(capped_requests)
+        if memory_warning:
+            warnings.append(memory_warning)
 
         return warnings
 
@@ -396,15 +402,16 @@ class InputValidator:
         :param num_requests: Requests that may run at once
         :return: Warning text, or None when available memory looks sufficient
         """
-        mem = psutil.virtual_memory()
-        avail_gb: float = mem.available / (1024 ** 3)
-        per_request_mb: int = 2
-        needed_gb: float = (num_requests * per_request_mb) / 1024
-        if needed_gb > avail_gb * 0.8:
+        virtual_memory_stats: Any = psutil.virtual_memory()
+        available_gigabytes: float = virtual_memory_stats.available / (1024 ** 3)
+        per_request_megabytes: int = 2
+        needed_gigabytes: float = (num_requests * per_request_megabytes) / 1024
+        if needed_gigabytes > available_gigabytes * 0.8:
             return (
                 f"Memory may be insufficient for {num_requests} concurrent requests:\n"
-                f"     Estimated need: ~{needed_gb:.1f}G ({num_requests} x ~{per_request_mb}MB per request)\n"
-                f"     Available: {avail_gb:.1f}G / {mem.total / (1024 ** 3):.1f}G total\n"
+                f"     Estimated need: ~{needed_gigabytes:.1f}G "
+                f"({num_requests} x ~{per_request_megabytes}MB per request)\n"
+                f"     Available: {available_gigabytes:.1f}G / {virtual_memory_stats.total / (1024 ** 3):.1f}G total\n"
                 f"     Consider fewer concurrent workers or a larger instance"
             )
         return None
@@ -421,9 +428,9 @@ class InputValidator:
             return
 
         logger.warning("\n  WARNINGS (%s found):", len(warnings))
-        for idx, warning in enumerate(warnings, 1):
+        for warning_number, warning in enumerate(warnings, 1):
             lines: List[str] = warning.split("\n")
-            logger.warning("  %s. %s", idx, lines[0])
+            logger.warning("  %s. %s", warning_number, lines[0])
             for line in lines[1:]:
                 logger.warning("  %s", line)
 
@@ -438,29 +445,30 @@ class InputValidator:
 
         :param runner: Traffic runner used to fire the probe request
         :param output_dir: Directory for the probe's output files, or None
-        :return: (probe_result, probe_data), where probe_data holds tokens, cost, model and elapsed
+        :return: (probe_result, probe_measurements), where probe_measurements holds tokens, cost, model and elapsed
         """
         logger.info("\n  Running 1 dry-run probe to measure actual cost...")
 
         probe_result: Dict[str, Any] = runner.run_one_http(request_id=0, global_request_id=0, output_dir=output_dir)
 
         probe_tokens: int = probe_result.get("total_tokens", 0)
-        probe_cost: float = probe_result.get("cost_usd", 0.0)
+        probe_cost_dollars: float = probe_result.get("cost_usd", 0.0)
         probe_model: str = probe_result.get("model", "unknown")
         probe_status: str = probe_result.get("status", "FAILED")
-        probe_elapsed: float = probe_result.get("elapsed", 0)
+        probe_elapsed_seconds: float = probe_result.get("elapsed", 0)
 
-        logger.info("\n  Probe request completed in %.1fs (%s)", probe_elapsed, probe_status)
+        logger.info("\n  Probe request completed in %.1fs (%s)", probe_elapsed_seconds, probe_status)
 
         if probe_tokens > 0:
-            logger.info("  Probe tokens: %s (model: %s, cost: $%.4f)", f"{probe_tokens:,}", probe_model, probe_cost)
+            logger.info("  Probe tokens: %s (model: %s, cost: $%.4f)", f"{probe_tokens:,}", probe_model,
+                        probe_cost_dollars)
         else:
             logger.info("  No token data from probe (agent may not track tokens).")
 
-        probe_data: Dict[str, Any] = {
+        probe_measurements: Dict[str, Any] = {
             "tokens": probe_tokens,
-            "cost": probe_cost,
+            "cost": probe_cost_dollars,
             "model": probe_model,
-            "elapsed": probe_elapsed,
+            "elapsed": probe_elapsed_seconds,
         }
-        return probe_result, probe_data
+        return probe_result, probe_measurements
