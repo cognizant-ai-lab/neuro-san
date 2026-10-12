@@ -49,31 +49,31 @@ class TestParseTokenAccountingSince(TestCase):
 
     def setUp(self) -> None:
         """Create a scratch log file removed again after each test."""
-        handle: int = 0
+        file_descriptor: int = 0
         self._log_path: str = ""
-        handle, self._log_path = tempfile.mkstemp(suffix=".log")
-        os.close(handle)
+        file_descriptor, self._log_path = tempfile.mkstemp(suffix=".log")
+        os.close(file_descriptor)
         self.addCleanup(os.unlink, self._log_path)
 
     @staticmethod
-    def _reporting_record(request_id: str, total: int = 1500, model: str = "gpt-4o") -> str:
+    def _reporting_record(request_id: str, total_tokens: int = 1500, model: str = "gpt-4o") -> str:
         """
         Render one 'Request reporting' record as the server writes it.
 
-        Prompt and completion tokens are split 4:1 out of ``total`` so
+        Prompt and completion tokens are split 4:1 out of ``total_tokens`` so
         the three counts stay consistent with one another.
 
         :param request_id: Request id in the log record
-        :param total: Total tokens
+        :param total_tokens: Total tokens
         :param model: caller_model value
         :return: One formatted log record
         """
-        prompt: int = total * 4 // 5
+        prompt: int = total_tokens * 4 // 5
         payload: Dict[str, Any] = {
             "total_cost": 0.0075,
-            "total_tokens": total,
+            "total_tokens": total_tokens,
             "prompt_tokens": prompt,
-            "completion_tokens": total - prompt,
+            "completion_tokens": total_tokens - prompt,
             "successful_requests": 2,
             "time_taken_in_seconds": 12.5,
             "caller_model": model,
@@ -87,8 +87,8 @@ class TestParseTokenAccountingSince(TestCase):
 
         :param text: Log text to write
         """
-        with open(self._log_path, "w", encoding="utf-8") as handle:
-            handle.write(text)
+        with open(self._log_path, "w", encoding="utf-8") as file_handle:
+            file_handle.write(text)
 
     def test_fields_are_extracted_from_a_multiline_record(self) -> None:
         """One record yields its token counts, call count, and model."""
@@ -107,7 +107,8 @@ class TestParseTokenAccountingSince(TestCase):
 
     def test_each_request_is_keyed_separately(self) -> None:
         """Concurrent requests must not overwrite one another."""
-        self._write(self._reporting_record("req-1", total=1500) + self._reporting_record("req-2", total=2500))
+        self._write(self._reporting_record("req-1", total_tokens=1500)
+                    + self._reporting_record("req-2", total_tokens=2500))
         monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)

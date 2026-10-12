@@ -45,15 +45,15 @@ class TestScanRequests(TestCase):
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
 
-    def _write_request(self, req_id: int) -> None:
+    def _write_request(self, request_id: int) -> None:
         """
         Write stdout for a request that got as far as reserving.
 
-        :param req_id: Request id used in the file name and reservation id
+        :param request_id: Request id used in the file name and reservation id
         """
-        path: str = os.path.join(self._dir, "requests", f"request_{req_id}_stdout.txt")
+        path: str = os.path.join(self._dir, "requests", f"request_{request_id}_stdout.txt")
         with open(path, "w", encoding="utf-8") as handle:
-            handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % req_id)
+            handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % request_id)
 
     def _write_log(self, text: str) -> None:
         """

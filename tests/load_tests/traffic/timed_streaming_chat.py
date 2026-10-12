@@ -69,7 +69,7 @@ class TimedStreamingChat:
                 raise RequestTimeoutError()
             yield chat_response
 
-    def get_time_to_first_response(self) -> float:
+    def get_time_to_first_response_seconds(self) -> float:
         """
         Report when the first streamed message arrived.
 

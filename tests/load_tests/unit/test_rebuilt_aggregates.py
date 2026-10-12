@@ -41,19 +41,19 @@ class TestRebuiltAggregates(TestCase):
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
 
-    def _build_run(self, elapsed_by_id: Dict[int, float]) -> Dict[str, Any]:
+    def _build_run(self, elapsed_seconds_by_id: Dict[int, float]) -> Dict[str, Any]:
         """
         Rebuild a run of successful requests with the given timings.
 
-        :param elapsed_by_id: Elapsed seconds per request id
+        :param elapsed_seconds_by_id: Elapsed seconds per request id
         :return: Aggregates read back from raw_results.json
         """
         lines: List[str] = []
-        for req_id, elapsed in elapsed_by_id.items():
-            path: str = os.path.join(self._dir, "requests", f"request_{req_id}_stdout.txt")
+        for request_id, elapsed_seconds in elapsed_seconds_by_id.items():
+            path: str = os.path.join(self._dir, "requests", f"request_{request_id}_stdout.txt")
             with open(path, "w", encoding="utf-8") as handle:
-                handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % req_id)
-            lines.append(f"Request {req_id}: CREATED ({elapsed:.2f}s)\n")
+                handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % request_id)
+            lines.append(f"Request {request_id}: CREATED ({elapsed_seconds:.2f}s)\n")
         log_path: str = os.path.join(self._dir, "load_test.log")
         with open(log_path, "w", encoding="utf-8") as handle:
             handle.writelines(lines)
