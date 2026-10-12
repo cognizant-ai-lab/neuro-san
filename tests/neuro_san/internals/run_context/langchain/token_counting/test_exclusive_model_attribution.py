@@ -23,6 +23,7 @@ from unittest import IsolatedAsyncioTestCase
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration
 from langchain_core.outputs import LLMResult
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
 
@@ -41,28 +42,23 @@ class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
 
     CHAT_MODEL_START_SERIALIZED: Dict[str, Any] = {"id": ["langchain", "chat_models", "openai", "ChatOpenAI"]}
 
-    def _make_result(self) -> LLMResult:
-        """Build an LLMResult wrapping a single AIMessage with usage metadata."""
-        message = AIMessage(
-            content="an answer",
-            usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-            response_metadata={"model_name": "gpt-4"},
-        )
-        return LLMResult(generations=[[ChatGeneration(message=message)]])
-
-    async def test_own_call_updates_models_and_scalars(self):
-        """An LLM call belonging to this handler's own agent updates both tallies."""
+    async def test_own_call_updates_models_and_scalars(self) -> None:
+        """
+        An LLM call belonging to this handler's own agent updates both tallies.
+        """
         handler = LlmTokenCallbackHandler(llm_infos={})
         with owning_agent_scope(handler):
             await handler.on_chat_model_start(self.CHAT_MODEL_START_SERIALIZED, [])
             await handler.on_llm_end(self._make_result())
 
-        assert handler.total_tokens == 15
-        assert handler.successful_requests == 1
-        assert handler.models_token_dict["openai"]["gpt-4"]["total_tokens"] == 15
-        assert handler.models_token_dict["openai"]["gpt-4"]["successful_requests"] == 1
+        # DictionaryExtractor splits keys on ".", so these lookups only work for model names without a dot.
+        models_token_extractor = DictionaryExtractor(handler.models_token_dict)
+        self.assertEqual(handler.total_tokens, 15)
+        self.assertEqual(handler.successful_requests, 1)
+        self.assertEqual(models_token_extractor.get("openai.gpt-4.total_tokens"), 15)
+        self.assertEqual(models_token_extractor.get("openai.gpt-4.successful_requests"), 1)
 
-    async def test_downstream_call_updates_scalars_only(self):
+    async def test_downstream_call_updates_scalars_only(self) -> None:
         """
         A downstream agent's LLM call updates the subtree scalars of an ancestor
         handler, but not its per-model (exclusive) stats.
@@ -79,23 +75,40 @@ class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
                 await handler.on_llm_end(self._make_result())
 
         # The owning agent counts the call in both tallies.
-        assert downstream_handler.total_tokens == 15
-        assert downstream_handler.models_token_dict["openai"]["gpt-4"]["total_tokens"] == 15
+        downstream_models_token_extractor = DictionaryExtractor(downstream_handler.models_token_dict)
+        self.assertEqual(downstream_handler.total_tokens, 15)
+        self.assertEqual(downstream_models_token_extractor.get("openai.gpt-4.total_tokens"), 15)
 
         # The ancestor's subtree totals include the downstream call...
-        assert ancestor_handler.total_tokens == 15
-        assert ancestor_handler.successful_requests == 1
+        self.assertEqual(ancestor_handler.total_tokens, 15)
+        self.assertEqual(ancestor_handler.successful_requests, 1)
         # ... but its per-model stats do not: the call is not its own.
-        assert not ancestor_handler.models_token_dict
-        # And its per-call timer state was never touched.
-        assert ancestor_handler.start_time is None
+        self.assertFalse(ancestor_handler.models_token_dict)
+        # And its per-call timer state stays unset.
+        self.assertIsNone(ancestor_handler.start_time)
 
-    async def test_call_outside_any_agent_scope_updates_scalars_only(self):
-        """With no owning agent scope at all, treat the call as not our own."""
+    async def test_call_outside_any_agent_scope_updates_scalars_only(self) -> None:
+        """
+        With no owning agent scope at all, the handler treats the call as not its own.
+        """
         handler = LlmTokenCallbackHandler(llm_infos={})
 
         await handler.on_chat_model_start(self.CHAT_MODEL_START_SERIALIZED, [])
         await handler.on_llm_end(self._make_result())
 
-        assert handler.total_tokens == 15
-        assert not handler.models_token_dict
+        self.assertEqual(handler.total_tokens, 15)
+        self.assertFalse(handler.models_token_dict)
+
+    def _make_result(self) -> LLMResult:
+        """
+        Build an LLMResult that wraps a single AIMessage with usage metadata.
+
+        :return: An LLMResult holding one ChatGeneration for a gpt-4 answer of 15 total tokens
+        """
+        message = AIMessage(
+            content="an answer",
+            usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+            response_metadata={"model_name": "gpt-4"},
+        )
+        generation = ChatGeneration(message=message)
+        return LLMResult(generations=[[generation]])

@@ -672,7 +672,7 @@
     # For deprecated models, "model_retirement_date" is the actual retirement date.
     # For active models, it is the "not sooner than" tentative retirement date and may be pushed out.
     "claude-haiku": {
-        "use_model_name": "claude-haiku-4-5-20251001"
+        "use_model_name": "claude-haiku-5-5"
     },
     "claude-sonnet": {
         "use_model_name": "claude-sonnet-5-5"
@@ -704,6 +704,24 @@
         "price_per_1k_output_tokens": 0.005,
         "model_launch_date": "2025-10-16",
         "model_retirement_date": "2026-10-15",
+    },
+    "claude-haiku-5-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.0001,
+        "price_per_1k_output_tokens": 0.0005,
+        "model_launch_date": "2026-10-07",
+        "model_retirement_date": null,
     },
 
     "claude-sonnet-4-5": {
@@ -1072,7 +1090,19 @@
         "knowledge_cutoff": "01/2026",
     },
     "bedrock-claude-haiku": {
-        "use_model_name": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        "use_model_name": "global.anthropic.claude-haiku-5-5"
+    },
+    "global.anthropic.claude-haiku-5-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
     },
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "class": "anthropic-bedrock",
