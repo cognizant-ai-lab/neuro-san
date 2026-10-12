@@ -29,7 +29,9 @@
         ]
     },
     "llm_config": {
-        "model_name": "gpt-5.2"
+        "class": "openai-wire",
+        "model_name": "gpt-5.2",
+        "transport": "pyodide"
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which

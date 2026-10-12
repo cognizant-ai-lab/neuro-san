@@ -15,4 +15,5 @@ include neuro_san/deploy/entrypoint.sh
 include neuro_san/deploy/logging.hocon
 include neuro_san/deploy/run.sh
 include neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon
+include neuro_san/internals/run_context/langchain/llms/wire/llm_info_openai_wire.hocon
 include neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon

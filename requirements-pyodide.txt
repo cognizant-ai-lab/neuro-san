@@ -39,7 +39,7 @@
 #     pip install -r requirements-pyodide.txt    # will fail on this line
 #     pip install -e /path/to/leaf-common        # what the verification used
 # The verified run below used 1.4.5.dev25+g3393a42 from that branch.
-leaf-common>=1.5.0
+## ASD HACK! leaf-common>=1.5.0
 
 # -- Agent network and config parsing ---------------------------------------
 pyhocon>=0.3.60
@@ -58,7 +58,10 @@ aiofiles>=25.1.0
 # -- The agent runtime ------------------------------------------------------
 langchain>=1.2.0,<2.0
 langchain-core>=1.5.0,<2.0
-pydantic>=2.9.2,<3.0
+# Upper bound set by Pyodide, not by neuro-san: pydantic pins an exact pydantic-core,
+# and Pyodide 314.0.7 ships pydantic-core 2.41.5, which is what pydantic 2.12.5 pins.
+# Anything 2.13 or newer demands a pydantic-core that has no wasm32 wheel.
+pydantic>=2.9.2,<2.13
 jsonschema>=4.19.0
 
 # Sync/async queue, used by async_collating_queue.py
@@ -78,14 +81,28 @@ httpx>=0.28.1
 # changes would be needed: make those three imports lazy or provider-neutral, and
 # make openai_wire_llm_policy.py stop importing both transports at module scope.
 # Pyodide does ship aiohttp, so this is a cleanup, not a blocker.
-aiohttp>=3.13.0,<4.0
+# Same reasoning: Pyodide 314.0.7 ships aiohttp 3.13.5. Allowing 3.14 pulls a yarl
+# newer than the 1.23.0 Pyodide has, and neither has a pure-Python wheel to fall
+# back on, so the install fails outright.
+aiohttp>=3.13.0,<3.14
 
 # -- MCP tools --------------------------------------------------------------
-# Only needed by agent networks that use MCP tools. Drop both if yours do not:
-# together they pull starlette, uvicorn, sse-starlette and python-multipart, none of
-# which a browser-hosted library has any use for.
+# NOT optional, despite only MCP-using agent networks needing the feature. The import
+# chain is module scope the whole way on the session path:
+#   core/base_tool_factory.py:31   -> tools/mcp_tool_creator.py
+#   tools/mcp_tool_creator.py:30   -> mcp/langchain_mcp_adapter.py
+#   mcp/langchain_mcp_adapter.py:30 -> langchain_mcp_adapters.client
+# Verified by uninstalling langchain-mcp-adapters: importing
+# DirectAgentSessionFactory then fails outright.
 langchain-mcp-adapters>=0.1.7,<0.2.0
-mcp>=1.23.0,<2.0
+
+# Pinned exactly, not ranged. langchain-mcp-adapters asks for "mcp>=1.9.2" with no upper
+# bound, and micropip's resolver followed that rather than intersecting it with a range
+# here -- landing on mcp 2.x, which renamed McpError to MCPError and breaks the adapter:
+#   ImportError: cannot import name 'McpError' from 'mcp.shared.exceptions'
+# pip intersects correctly, so this only bites under micropip. An exact pin removes the
+# ambiguity; also name it explicitly in the micropip.install([...]) list to be certain.
+mcp==1.30.0
 
 # ===========================================================================
 # DELIBERATELY DROPPED from requirements.txt, with the reason for each
@@ -118,6 +135,18 @@ mcp>=1.23.0,<2.0
 #
 # Pulled in transitively, not worth naming as roots:
 #   idna, urllib3
+#
+# ===========================================================================
+# TARGET: Pyodide 314.0.7 (CPython 3.14.2)
+# ===========================================================================
+#
+# Verified 2026-10-08 against that release's own pyodide-lock.json. The whole
+# closure resolves cleanly under its native versions as hard constraints, and the
+# resulting environment runs a full agent request. Two upper bounds above exist
+# solely to keep that true -- see the comments on pydantic and aiohttp.
+#
+# Re-check these if the Pyodide version in the loader changes:
+#     script.src = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"
 #
 # ===========================================================================
 # NATIVE CODE -- measured against Pyodide's package index

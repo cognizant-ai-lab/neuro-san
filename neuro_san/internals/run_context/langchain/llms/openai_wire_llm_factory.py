@@ -33,13 +33,14 @@ class OpenAiWireLlmFactory(StandardLangChainLlmFactory):
     """
     LlmFactory that adds the "openai-wire" class on top of the stock ones.
 
-    Registered from an llm_info hocon file, which is how a deployment opts in:
+    Registered from a llm_info hocon file, which is how a deployment opts in.
+    There is one ready to use next to the model it registers:
 
-        "classes": {
-            "factories": [
-       "neuro_san.internals.run_context.langchain.llms.openai_wire_llm_factory.OpenAiWireLlmFactory"
-            ]
-        }
+        export AGENT_LLM_INFO_FILE=\
+            neuro_san/internals/run_context/langchain/llms/wire/llm_info_openai_wire.hocon
+
+    See wire/openai_wire_chat_model.md for what the class is for, what it
+    gives up, and the gotchas worth knowing before using it.
 
     Factories are resolved by class name and instantiated with no arguments,
     so everything this adds has to be expressible in configuration. It is: the

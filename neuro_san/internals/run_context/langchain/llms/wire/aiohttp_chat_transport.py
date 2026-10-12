@@ -34,6 +34,13 @@ class AiohttpChatTransport(ChatTransport):
     The counterpart to PyodideChatTransport, and the one every test uses: a
     browser transport cannot be exercised outside a browser, so the wire format
     and SSE handling above it are proven here instead.
+
+    Needs no threads of its own, with one caveat worth knowing when proving
+    that: resolving a host name does. asyncio runs getaddrinfo() on its default
+    thread pool, so a base_url naming "localhost" starts a worker thread, while
+    one naming "127.0.0.1" does not -- asyncio skips resolution entirely for an
+    address that is already numeric. Use a numeric host when the point is to
+    show that nothing on the path needs a thread.
     """
 
     def __init__(self, timeout_in_seconds: float = None):
