@@ -510,6 +510,13 @@ things for llm_configs that never set `use_responses_api`:
 - `tests/mock_llm_server/llm_info_chat_completions.hocon` is a ready-made server-wide override that pins the
   bundled test servers, and any other Chat-Completions-only gateway, back to `/chat/completions`.
 
+**Proxies and TLS.** `openai_proxy` in the llm_config, or the `OPENAI_PROXY` environment variable, sends the
+requests of the `openai` and `azure-openai` classes through an HTTP proxy. With openai 3 or later installed,
+those requests check TLS certificates against the operating system's trust store instead of the `certifi`
+bundle that earlier versions used. A proxy or gateway whose certificate comes from a private CA therefore
+needs that CA in the system store, or `SSL_CERT_FILE` pointing at a bundle file, or `SSL_CERT_DIR` pointing at
+a directory of certificates. A minimal container image without system CA certificates needs the same.
+
 ### Azure OpenAI
 
 The `azure-openai` class extends `openai` and shares its defaults, including `use_responses_api: true`,

@@ -23,16 +23,20 @@ import os
 from typing import Any
 from typing import Dict
 from typing import List
+from types import ModuleType
 from unittest import TestCase
+from unittest.mock import create_autospec
 from unittest.mock import patch
 
 from typing_extensions import override
 
 from langchain_core.messages import HumanMessage
 from langchain_openai.chat_models.base import ChatOpenAI
+from openai import DefaultAsyncHttpxClient
 from openai.resources.responses import AsyncResponses
 
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
+from neuro_san.internals.run_context.langchain.util.openai_httpx import OpenAIHttpx
 
 
 class TestOpenAILlmPolicy(TestCase):
@@ -210,6 +214,52 @@ class TestOpenAILlmPolicy(TestCase):
         self.assertNotIn("reasoning_effort", payload)
         self.assertNotIn("n", payload)
         self._assert_binds_to_responses_create(payload)
+
+    def test_create_http_client_builds_the_sdk_default_client(self) -> None:
+        """
+        The http client is the SDK's own default client class, given the proxy and timeout from
+        llm_config and an unlimited connection pool. Going through the SDK's class is what makes the
+        client come from whichever httpx library the installed SDK uses.
+        """
+        config: Dict[str, Any] = dict(self.BASE_CONFIG)
+        # A closed local port, so nothing can reach a real proxy.
+        config["openai_proxy"] = "http://127.0.0.1:9"
+        config["request_timeout"] = 12
+
+        policy: OpenAILlmPolicy = OpenAILlmPolicy()
+        self.policies.append(policy)
+
+        # The policy asks its resolver for the SDK class at call time, so a mock class handed back by
+        # the resolver captures the constructor arguments.
+        client_class: Any = create_autospec(DefaultAsyncHttpxClient)
+        with patch.object(policy.resolver, "resolve_class_in_module", return_value=client_class) as resolve:
+            policy.create_http_client(config)
+
+        resolve.assert_called_once_with("DefaultAsyncHttpxClient", module_name="openai",
+                                        install_if_missing="langchain-openai")
+        client_class.assert_called_once_with(proxy="http://127.0.0.1:9", timeout=12,
+                                             limits=OpenAIHttpx.limits(None, None))
+        self.assertIs(policy.http_client, client_class.return_value)
+
+    def test_http_client_comes_from_the_sdk_httpx_library(self) -> None:
+        """
+        Unpatched, the client is an instance of the SDK's default client class and so of the
+        AsyncClient of the httpx library behind the SDK, with the timeout from llm_config and the
+        SDK's defaults for the rest, such as following redirects.
+        """
+        config: Dict[str, Any] = dict(self.BASE_CONFIG)
+        config["request_timeout"] = 12
+
+        policy: OpenAILlmPolicy = OpenAILlmPolicy()
+        self.policies.append(policy)
+
+        policy.create_http_client(config)
+
+        sdk_httpx: ModuleType = OpenAIHttpx.module()
+        self.assertIsInstance(policy.http_client, DefaultAsyncHttpxClient)
+        self.assertIsInstance(policy.http_client, sdk_httpx.AsyncClient)
+        self.assertEqual(policy.http_client.timeout, sdk_httpx.Timeout(12))
+        self.assertTrue(policy.http_client.follow_redirects)
 
     def test_create_llm_reads_openai_proxy_from_its_own_env_var(self) -> None:
         """

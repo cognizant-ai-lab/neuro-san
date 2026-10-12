@@ -28,15 +28,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+from types import ModuleType
 from unittest import TestCase
 from unittest.mock import patch
 
 from typing_extensions import override
 
-from httpx import AsyncClient
-from httpx import MockTransport
-from httpx import Request
-from httpx import Response
 from langchain_core.load.dump import dumpd
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
@@ -50,6 +47,7 @@ from neuro_san.internals.run_context.langchain.llms.default_llm_factory import D
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
+from neuro_san.internals.run_context.langchain.util.openai_httpx import OpenAIHttpx
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 
 from tests.neuro_san.internals.run_context.langchain.token_counting.owning_agent_scope import owning_agent_scope
@@ -61,9 +59,12 @@ class TestAzureLlmPolicy(TestCase):
 
     The tests build the chat model exactly the way production does (create_client() followed by
     create_llm()) and inspect what was built. The wire-level tests swap the policy's httpx client
-    for one with an httpx.MockTransport, so a request is really sent through the OpenAI SDK and
-    captured, without any network access.
+    for one with a MockTransport, so a request is really sent through the OpenAI SDK and
+    captured, without any network access. The transport comes from the httpx library behind
+    the installed SDK (httpx or httpx2), as the SDK requires.
     """
+
+    HTTPX: ModuleType = OpenAIHttpx.module()
 
     ENDPOINT: str = "https://unit-test.openai.azure.com"
     V1_BASE_URL: str = ENDPOINT + "/openai/v1/"
@@ -128,7 +129,7 @@ class TestAzureLlmPolicy(TestCase):
         self.addCleanup(setattr, AzureLlmPolicy, "legacy_keys_warned", False)
 
         self.policies: List[AzureLlmPolicy] = []
-        self.requests: List[Request] = []
+        self.requests: List[Any] = []
 
     @override
     def tearDown(self) -> None:
@@ -192,14 +193,15 @@ class TestAzureLlmPolicy(TestCase):
         :param config: The fully specified llm config (unused, the signature must match)
         """
         _ = config
-        policy.http_client = AsyncClient(transport=MockTransport(self._handle_request))
+        policy.http_client = self.HTTPX.AsyncClient(transport=self.HTTPX.MockTransport(self._handle_request))
 
-    def _handle_request(self, request: Request) -> Response:
+    def _handle_request(self, request: Any) -> Any:
         """
         MockTransport handler: records the request and answers like Azure's v1 API would.
 
-        :param request: The request the OpenAI SDK built
-        :return: A canned Chat Completions or Responses API body, chosen by the request path
+        :param request: The Request the OpenAI SDK built, of the httpx library behind the SDK
+        :return: A Response of that library with a canned Chat Completions or Responses API body,
+                chosen by the request path
         """
         self.requests.append(request)
         body: Dict[str, Any] = self.CHAT_RESPONSE
@@ -207,7 +209,7 @@ class TestAzureLlmPolicy(TestCase):
             # Azure's Responses API echoes whatever deployment it was asked for as the response model.
             body = dict(self.RESPONSES_RESPONSE)
             body["model"] = json.loads(request.content).get("model")
-        return Response(200, json=body, request=request)
+        return self.HTTPX.Response(200, json=body, request=request)
 
     @staticmethod
     def _request_payload(llm: ChatOpenAI) -> Dict[str, Any]:
@@ -233,11 +235,11 @@ class TestAzureLlmPolicy(TestCase):
         signature.bind(None, **payload)
 
     @staticmethod
-    def _sent_body(request: Request) -> Dict[str, Any]:
+    def _sent_body(request: Any) -> Dict[str, Any]:
         """
         Decodes the JSON body of a captured request.
 
-        :param request: A request recorded by _handle_request()
+        :param request: A Request recorded by _handle_request()
         :return: The decoded body
         """
         body: Dict[str, Any] = json.loads(request.content)
@@ -532,7 +534,7 @@ class TestAzureLlmPolicy(TestCase):
 
         self.assertIsInstance(result, AIMessage)
         self.assertEqual(len(self.requests), 1)
-        request: Request = self.requests[0]
+        request: Any = self.requests[0]
         self.assertEqual(request.url.path, "/openai/v1/chat/completions")
         self.assertEqual(request.url.query, b"")
         self.assertEqual(request.headers.get("authorization"), "Bearer " + self.API_KEY)
@@ -549,7 +551,7 @@ class TestAzureLlmPolicy(TestCase):
         result: AIMessage = asyncio.run(llm.ainvoke([HumanMessage("hi")]))
 
         self.assertIsInstance(result, AIMessage)
-        request: Request = self.requests[0]
+        request: Any = self.requests[0]
         self.assertEqual(request.url.path, "/openai/v1/responses")
         self.assertEqual(request.url.query, b"")
         body: Dict[str, Any] = self._sent_body(request)
@@ -726,7 +728,7 @@ class TestAzureLlmPolicy(TestCase):
         The inherited delete_resources() closes the httpx client and drops both client references.
         """
         policy, _ = self._build_policy({}, capture=True)
-        http_client: AsyncClient = policy.http_client
+        http_client: Any = policy.http_client
 
         asyncio.run(policy.delete_resources())
 
