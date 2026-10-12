@@ -37,27 +37,27 @@ class RequestStatusPolicy:
 
         :param timeout: Cap in seconds on the whole request (--request-timeout)
         """
-        self._timeout: float = timeout
+        self._timeout_seconds: float = timeout
 
-    def is_timed_out(self, elapsed: float) -> bool:
+    def is_timed_out(self, elapsed_seconds: float) -> bool:
         """
         Tell whether a request has run out of --request-timeout.
 
-        :param elapsed: Seconds the request has taken so far
+        :param elapsed_seconds: Seconds the request has taken so far
         :return: True when the request has reached the cap
         """
-        return elapsed >= self._timeout
+        return elapsed_seconds >= self._timeout_seconds
 
-    def status_for(self, elapsed: float, answer_text: str, error_text: str = "") -> str:
+    def status_for(self, elapsed_seconds: float, answer_text: str, error_text: str = "") -> str:
         """
         Decide the status of one finished request.
 
-        :param elapsed: Seconds the request took
+        :param elapsed_seconds: Seconds the request took
         :param answer_text: The final chat response text, empty when none
         :param error_text: Traceback text when the request raised, empty otherwise
         :return: STATUS_TIMEOUT, STATUS_FAILED or STATUS_CREATED
         """
-        if self.is_timed_out(elapsed):
+        if self.is_timed_out(elapsed_seconds):
             return STATUS_TIMEOUT
         if error_text or not answer_text:
             return STATUS_FAILED

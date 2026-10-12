@@ -31,8 +31,8 @@ from tests.load_tests.traffic.timed_streaming_chat import TimedStreamingChat
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# Timeout for the initial TCP connection (seconds).
-_CONNECT_TIMEOUT: int = 30
+# Timeout for the initial TCP connection.
+CONNECT_TIMEOUT_SECONDS: int = 30
 
 
 class AgentRequestExecutor:
@@ -70,7 +70,7 @@ class AgentRequestExecutor:
         """
         # The argument list tracks the streaming_chat request surface.
         # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-        start: float = time.perf_counter()
+        start_seconds: float = time.perf_counter()
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout)
 
         security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
@@ -79,13 +79,13 @@ class AgentRequestExecutor:
             port=str(port),
             agent_name=agent,
             security_cfg=security_cfg,
-            timeout_in_seconds=_CONNECT_TIMEOUT,
+            timeout_in_seconds=CONNECT_TIMEOUT_SECONDS,
             streaming_timeout_in_seconds=idle_timeout,
         )
 
         # process_once() iterates session.streaming_chat internally, so the
         # timing wrapper is installed on the session.
-        timed_chat: TimedStreamingChat = TimedStreamingChat(session.streaming_chat, start, timeout)
+        timed_chat: TimedStreamingChat = TimedStreamingChat(session.streaming_chat, start_seconds, timeout)
         session.streaming_chat = timed_chat.streaming_chat
 
         processor: StreamingInputProcessor = StreamingInputProcessor(
@@ -105,7 +105,6 @@ class AgentRequestExecutor:
             },
         }
 
-        elapsed: float
         error_text: str = ""
         try:
             state = processor.process_once(state)
@@ -125,10 +124,10 @@ class AgentRequestExecutor:
             error_text = traceback.format_exc()
             logger.debug("HTTP request failed:\n%s", error_text)
 
-        elapsed = time.perf_counter() - start
+        elapsed_seconds: float = time.perf_counter() - start_seconds
         answer_text: str = state.get("last_chat_response") or ""
-        status: str = policy.status_for(elapsed, answer_text, error_text)
-        if policy.is_timed_out(elapsed):
+        status: str = policy.status_for(elapsed_seconds, answer_text, error_text)
+        if policy.is_timed_out(elapsed_seconds):
             return AgentRequestResult(status, None, "", 0.0, {})
         if error_text:
             return AgentRequestResult(status, None, error_text, 0.0, {})
