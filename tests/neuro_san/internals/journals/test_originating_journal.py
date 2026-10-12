@@ -21,7 +21,6 @@ from typing import List
 from typing import Optional
 
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
 from langchain_core.messages.ai import AIMessage
@@ -38,7 +37,7 @@ from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 class TestOriginatingJournal(IsolatedAsyncioTestCase):
     """
-    Tests for OriginatingJournal's held-message dupe suppression.
+    Tests for OriginatingJournal's held-message dupe suppression and its chat-history copies.
 
     JournalingCallbackHandler.on_llm_end holds intermediate LLM output as a
     STRIPPED AGENT message via write_message_if_next_not_dupe, while the AI
@@ -238,7 +237,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         :return: A Journal mock whose write_message records each written message
         """
         wrapped: MagicMock = MagicMock(spec=Journal)
-        wrapped.write_message = AsyncMock()
         return wrapped
 
     def _make_journal(self, wrapped: MagicMock, chat_history: Optional[List[BaseMessage]] = None) -> OriginatingJournal:
