@@ -25,7 +25,9 @@
         "tags": ["example", "mcp"],
     },
     "llm_config": {
-        "model_name": "gpt-5.2"
+        "class": "openai-wire",
+        "model_name": "gpt-5.2",
+        "transport": "pyodide"
     },
     "tools": [
         # These tool definitions do not have to be in any particular order

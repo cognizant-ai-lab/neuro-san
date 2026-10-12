@@ -65,6 +65,43 @@ class ProxyHandler(tornado.web.RequestHandler):
 
     SSE_FRAME_DELIMITER: str = "\n\n"
 
+    # Headers allowed on a cross-origin request. An OpenAI-compatible chat call sends
+    # Content-Type: application/json and Authorization: Bearer ..., and neither is
+    # CORS-safelisted, so the browser preflights and will not send the POST unless both
+    # are named here.
+    CORS_ALLOW_HEADERS: str = "Content-Type, Authorization"
+    CORS_ALLOW_METHODS: str = "GET, POST, OPTIONS"
+
+    def set_default_headers(self) -> None:
+        """
+        Put CORS headers on every response, preflight and real alike.
+
+        A browser-hosted client (neuro-san under Pyodide, which reaches the network
+        through fetch()) is refused by the browser without these, and the failure
+        surfaces on the client as a bare "Failed to fetch" with no detail. This is a
+        test server reached from a local page, so the origin is not restricted.
+        """
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", self.CORS_ALLOW_METHODS)
+        self.set_header("Access-Control-Allow-Headers", self.CORS_ALLOW_HEADERS)
+        self.set_header("Access-Control-Max-Age", "86400")
+
+    def options(self, *args: str, **kwargs: str) -> None:
+        """
+        Answer the CORS preflight.
+
+        Without this, Tornado has no OPTIONS method for the route and answers 405, which
+        the browser reads as "preflight failed" and drops the request that follows.
+
+        :param args: Any path arguments the route captured; unused
+        :param kwargs: Any path keywords the route captured; unused
+        """
+        _ = args
+        _ = kwargs
+        # 204: the preflight answer carries headers only, never a body.
+        self.set_status(204)
+        self.finish()
+
     def initialize(self, state: ProxyState, upstream_path: str) -> None:
         """
         Receive shared state and the upstream sub-path for this route.
