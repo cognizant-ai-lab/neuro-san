@@ -29,29 +29,29 @@ class TestRequestStatusPolicy(TestCase):
 
     def test_timed_out_at_and_past_the_cap(self) -> None:
         """Elapsed equal to or past the cap is a timeout; below it is not."""
-        policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
         self.assertFalse(policy.is_timed_out(9.99))
         self.assertTrue(policy.is_timed_out(10.0))
         self.assertTrue(policy.is_timed_out(10.5))
 
     def test_status_for_timeout_wins_over_answer(self) -> None:
         """A late answer is still a TIMEOUT."""
-        policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
         self.assertEqual(policy.status_for(10.0, "answer"), STATUS_TIMEOUT)
 
     def test_status_for_empty_answer_is_failed(self) -> None:
         """No answer text within the cap is FAILED."""
-        policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
         self.assertEqual(policy.status_for(1.0, ""), STATUS_FAILED)
 
     def test_status_for_error_is_failed(self) -> None:
         """A raised request within the cap is FAILED even with answer text."""
-        policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
         self.assertEqual(policy.status_for(1.0, "answer", "Traceback"), STATUS_FAILED)
 
     def test_status_for_answer_is_created(self) -> None:
         """Answer text within the cap is CREATED."""
-        policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
         self.assertEqual(policy.status_for(1.0, "answer"), STATUS_CREATED)
 
     def test_is_failure(self) -> None:

@@ -71,22 +71,22 @@ class TestExportRawJsonAggregates(TestCase):
         )
         return orchestrator
 
-    def _export(self, elapsed_values: List[float]) -> Dict[str, Any]:
+    def _export(self, elapsed_values_seconds: List[float]) -> Dict[str, Any]:
         """
         Export one stage of successful requests and read it back.
 
-        :param elapsed_values: Elapsed seconds, one per request
+        :param elapsed_values_seconds: Elapsed seconds, one per request
         :return: Aggregates read back from raw_results.json
         """
         results: List[Dict[str, Any]] = []
-        for index, elapsed in enumerate(elapsed_values, start=1):
-            results.append({"request_id": f"request-{index}", "status": STATUS_CREATED, "elapsed": elapsed})
+        for index, elapsed_seconds in enumerate(elapsed_values_seconds, start=1):
+            results.append({"request_id": f"request-{index}", "status": STATUS_CREATED, "elapsed": elapsed_seconds})
         # One stage whose wall-clock time is the slowest request,
         # because the requests ran concurrently.
         stage_summaries: List[Dict[str, Any]] = [{
             "concurrent": len(results),
             "results": results,
-            "elapsed": max(elapsed_values),
+            "elapsed": max(elapsed_values_seconds),
         }]
 
         self._orchestrator()._export_raw_json(stage_summaries, exit_code=0)

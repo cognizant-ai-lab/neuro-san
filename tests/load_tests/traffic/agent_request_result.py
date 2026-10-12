@@ -78,7 +78,7 @@ class AgentRequestResult:
         """
         return self._response_text
 
-    def get_time_to_first_response(self) -> float:
+    def get_time_to_first_response_seconds(self) -> float:
         """
         :return: Seconds until the first streamed message; 0.0 when none arrived
         """

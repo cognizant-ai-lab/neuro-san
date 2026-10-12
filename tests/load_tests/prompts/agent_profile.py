@@ -171,14 +171,14 @@ class AgentProfile:
         return responses[self._pool_index(request_id, same_prompt, len(responses))]
 
     @staticmethod
-    def _pool_index(request_id: int, same_prompt: bool, size: int) -> int:
+    def _pool_index(request_id: int, same_prompt: bool, pool_size: int) -> int:
         """
         Index into a per-prompt pool.
 
         :param request_id: Global request number
         :param same_prompt: When True always pick the first entry
-        :param size: Number of entries in the pool
-        :return: 0 in same_prompt mode, else request_id modulo size
+        :param pool_size: Number of entries in the pool
+        :return: 0 in same_prompt mode, else request_id modulo pool_size
         """
         if same_prompt:
             return 0
@@ -187,4 +187,4 @@ class AgentProfile:
         # in order so consecutive requests get different prompts, and wraps
         # back to the first entry once every prompt has been used, so the
         # same prompt (and its response checks) recur evenly over a long run.
-        return request_id % size
+        return request_id % pool_size

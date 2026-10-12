@@ -31,13 +31,13 @@ class RequestStatusPolicy:
     and CREATED when it produced one.
     """
 
-    def __init__(self, timeout: float) -> None:
+    def __init__(self, timeout_seconds: float) -> None:
         """
         Constructor.
 
-        :param timeout: Cap in seconds on the whole request (--request-timeout)
+        :param timeout_seconds: Cap in seconds on the whole request (--request-timeout)
         """
-        self._timeout_seconds: float = timeout
+        self._timeout_seconds: float = timeout_seconds
 
     def is_timed_out(self, elapsed_seconds: float) -> bool:
         """
