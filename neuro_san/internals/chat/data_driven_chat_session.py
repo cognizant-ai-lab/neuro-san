@@ -311,10 +311,12 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         converter = BaseMessageDictionaryConverter(origin=self.front_man.get_origin())
         chat_messages: List[Dict[str, Any]] = []
         for raw_message in raw_messages:
-            chat_message: Dict[str, Any] = converter.to_dict(raw_message)
+            use_raw_message: BaseMessage = raw_message
+            chat_message: Dict[str, Any] = converter.to_dict(use_raw_message)
             chat_messages.append(chat_message)
 
-        return iter(chat_messages)
+        iterator: Iterator[Dict[str, Any]] = iter(chat_messages)
+        return iterator
 
     async def finalize_request(self, message: BaseMessage):
         """
