@@ -45,7 +45,7 @@ from tests.load_tests.reporting.system_resources import SystemResources
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-CONSOLE_TICK_INTERVAL: int = 1
+CONSOLE_INTERVAL_TICKS: int = 1
 OUT_OF_MEMORY_WARNING_THRESHOLD: float = 0.80
 
 
@@ -61,8 +61,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
-            self, server_proc: Optional[psutil.Process],
-            client_proc: Optional[psutil.Process] = None,
+            self, server_process: Optional[psutil.Process],
+            client_process: Optional[psutil.Process] = None,
             output_dir: Optional[str] = None,
             log_monitor: Optional[ServerLogMonitor] = None,
             log_start_pos: Optional[int] = None,
@@ -71,17 +71,17 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         Constructor.
 
-        :param server_proc: Server process for thread count and RSS readings, or None
-        :param client_proc: Client process for RSS readings, or None
+        :param server_process: Server process for thread count and RSS readings, or None
+        :param client_process: Client process for RSS readings, or None
         :param output_dir: Directory for progress.log, or None for console only
         :param log_monitor: Server log reader for server-side request timing, or None
         :param log_start_pos: Server log offset where the stage started, or None
         :param primary_start_pattern: Regex for the log line of a primary agent request starting, or None
         """
-        self._server_proc: Optional[psutil.Process] = server_proc
-        self._client_proc: Optional[psutil.Process] = client_proc
+        self._server_process: Optional[psutil.Process] = server_process
+        self._client_process: Optional[psutil.Process] = client_process
         self._output_dir: Optional[str] = output_dir
-        self._total_system_ram: int = psutil.virtual_memory().total
+        self._total_system_ram_bytes: int = psutil.virtual_memory().total
         self._out_of_memory_warned: bool = False
         self._swap_warned: bool = False
         self._console_started: bool = False
@@ -104,10 +104,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         # streaming_chat Start/Finish pairs to report cumulative
         # server-side min/avg/max durations.
         self._log_monitor: Optional[ServerLogMonitor] = log_monitor
-        self._log_start_pos: Optional[int] = log_start_pos
-        self._primary_start_re: Optional[re.Pattern] = None
+        self._log_start_position: Optional[int] = log_start_pos
+        self._primary_start_regex: Optional[re.Pattern] = None
         if primary_start_pattern:
-            self._primary_start_re = re.compile(primary_start_pattern)
+            self._primary_start_regex = re.compile(primary_start_pattern)
 
     def get_peak_server_threads(self) -> Optional[int]:
         """
@@ -163,10 +163,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         Sample client RSS and keep it when it is a new peak.
         """
-        if self._client_proc is None:
+        if self._client_process is None:
             return
         try:
-            rss_megabytes: float = self._client_proc.memory_info().rss / (1024 * 1024)
+            rss_megabytes: float = self._client_process.memory_info().rss / (1024 * 1024)
             if Heartbeat.is_new_peak(rss_megabytes, self._peak_client_rss_megabytes):
                 self._peak_client_rss_megabytes = rss_megabytes
         except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -178,10 +178,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :return: (rss_megabytes, swap_megabytes), or (None, None) if unavailable
         """
-        if self._server_proc is None:
+        if self._server_process is None:
             return None, None
         try:
-            memory_info: Any = self._server_proc.memory_full_info()
+            memory_info: Any = self._server_process.memory_full_info()
             rss_megabytes: float = memory_info.rss / (1024 * 1024)
             swap_megabytes: float = memory_info.swap / (1024 * 1024)
             return rss_megabytes, swap_megabytes
@@ -194,10 +194,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
         :return: True if the server process is still running
         """
-        if self._server_proc is None:
+        if self._server_process is None:
             return True
         try:
-            return self._server_proc.is_running()
+            return self._server_process.is_running()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return False
 
@@ -234,9 +234,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                             f" ({available_gigabytes:.1f}G free / {total_gigabytes:.1f}G total) — risk of OOM kill")
             logger.warning("%s", warning)
             self._write_to_file(progress_file, warning)
-            swap: Any = psutil.swap_memory()
-            if swap.total > 0 and swap.used > 0:
-                swap_used_gigabytes: float = swap.used / (1024 ** 3)
+            swap_memory_stats: Any = psutil.swap_memory()
+            if swap_memory_stats.total > 0 and swap_memory_stats.used > 0:
+                swap_used_gigabytes: float = swap_memory_stats.used / (1024 ** 3)
                 swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f}G"
                                      " — severe performance impact")
                 logger.warning("%s", swap_warning)
@@ -263,7 +263,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :param fires_done_event: Set by the caller once every request is fired
         :param server_dead_event: Set when the server process is found dead
         """
-        last_done: int = 0
+        last_done_count: int = 0
         last_change_seconds: float = start_seconds
         tick_count: int = 0
         self._sample_client_rss()
@@ -278,27 +278,27 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                     server_dead_event.set()
                     break
                 self._sample_client_rss()
-                done: int = Heartbeat._count_done(futures)
+                done_count: int = Heartbeat._count_done(futures)
                 elapsed_seconds: int = int(time.perf_counter() - start_seconds)
                 timestamp: str = time.strftime("%H:%M:%S", time.localtime())
-                percent_done: int = Heartbeat._percent(done, total)
+                percent_done: int = Heartbeat._percent(done_count, total)
                 suffix: str = ""
-                in_flight: int = total - done
-                if done == last_done and done < total:
+                in_flight: int = total - done_count
+                if done_count == last_done_count and done_count < total:
                     stall_seconds: int = int(time.perf_counter() - last_change_seconds)
-                    suffix = f"  !! {in_flight} request(s) stalled for {Heartbeat._fmt_elapsed(stall_seconds)}"
-                if done > last_done:
+                    suffix = f"  !! {in_flight} request(s) stalled for {Heartbeat._format_elapsed(stall_seconds)}"
+                if done_count > last_done_count:
                     last_change_seconds = time.perf_counter()
-                    last_done = done
+                    last_done_count = done_count
                 thread_info: str = ""
                 server_rss_info: str = ""
                 thread_info, server_rss_info = self._sample_server_metrics(progress_file)
                 tick_count += 1
-                failed: int = self.get_failed_request_count()
+                failed_count: int = self.get_failed_request_count()
                 fail_info: str = ""
-                if failed > 0:
-                    failed_percent: int = Heartbeat._percent(failed, done)
-                    fail_info = f", {failed} failed {failed_percent}%"
+                if failed_count > 0:
+                    failed_percent: int = Heartbeat._percent(failed_count, done_count)
+                    fail_info = f", {failed_count} failed {failed_percent}%"
                 system_memory_info: str = ""
                 current_memory_percent: float = 0.0
                 current_available_gigabytes: float = 0.0
@@ -313,8 +313,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 current_system_threads: int = SystemResources.total_threads()
                 if Heartbeat.is_new_peak(current_system_threads, self._peak_system_threads):
                     self._peak_system_threads = current_system_threads
-                line: str = (f"  [progress] {done} of {total} completed ({percent_done}%{fail_info}) --"
-                             f" {Heartbeat._fmt_elapsed(elapsed_seconds)} elapsed [{timestamp}]{suffix}"
+                line: str = (f"  [progress] {done_count} of {total} completed ({percent_done}%{fail_info}) --"
+                             f" {Heartbeat._format_elapsed(elapsed_seconds)} elapsed [{timestamp}]{suffix}"
                              f"  {duration_info.strip()}{thread_info}{server_rss_info}"
                              f"{system_memory_info}{system_cpu_info}")
                 self._write_to_file(progress_file, line)
@@ -397,7 +397,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         return int(part * 100 / whole)
 
     @staticmethod
-    def _fmt_elapsed(seconds: int) -> str:
+    def _format_elapsed(seconds: int) -> str:
         """
         Format seconds with minutes when >= 60.
 
@@ -421,8 +421,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         min_seconds: int = int(min(durations))
         max_seconds: int = int(max(durations))
         average_seconds: int = int(sum(durations) / len(durations))
-        return (f"{Heartbeat._fmt_elapsed(min_seconds)} min / {Heartbeat._fmt_elapsed(average_seconds)} avg /"
-                f" {Heartbeat._fmt_elapsed(max_seconds)} max")
+        return (f"{Heartbeat._format_elapsed(min_seconds)} min / {Heartbeat._format_elapsed(average_seconds)} avg /"
+                f" {Heartbeat._format_elapsed(max_seconds)} max")
 
     @staticmethod
     def _count_done(futures: List[Future]) -> int:
@@ -432,11 +432,11 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :param futures: Futures of the requests fired in this stage
         :return: Number of futures that are done
         """
-        done: int = 0
+        done_count: int = 0
         for future in futures:
             if future.done():
-                done += 1
-        return done
+                done_count += 1
+        return done_count
 
     @staticmethod
     def _client_durations(futures: List[Future]) -> List[float]:
@@ -476,19 +476,19 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Durations in seconds, or None when no server log is available
                  (so the caller can render ``n/a`` and distinguish "no data source" from "no requests yet")
         """
-        if self._log_monitor is None or self._log_start_pos is None:
+        if self._log_monitor is None or self._log_start_position is None:
             return None
         pairs: List[Dict[str, object]] = []
         try:
-            pairs = self._log_monitor.parse_streaming_chat_timing_since(self._log_start_pos)
+            pairs = self._log_monitor.parse_streaming_chat_timing_since(self._log_start_position)
         except (OSError, ValueError):
             return []
         durations: List[float] = []
         for pair in pairs:
-            if self._primary_start_re is not None:
+            if self._primary_start_regex is not None:
                 agent: object = pair.get("agent", "")
                 start_line: str = f"Start {agent}/streaming_chat"
-                if not self._primary_start_re.search(start_line):
+                if not self._primary_start_regex.search(start_line):
                     continue
             duration_seconds: object = pair.get("duration_seconds")
             if isinstance(duration_seconds, (int, float)) and duration_seconds > 0:
@@ -504,17 +504,17 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         thread_info: str = ""
         server_rss_info: str = ""
-        if self._server_proc is None:
+        if self._server_process is None:
             return thread_info, server_rss_info
         try:
-            threads: int = self._server_proc.num_threads()
-            if Heartbeat.is_new_peak(threads, self._peak_server_threads):
-                self._peak_server_threads = threads
-                thread_info = f"  threads: {threads} (peak)"
+            server_thread_count: int = self._server_process.num_threads()
+            if Heartbeat.is_new_peak(server_thread_count, self._peak_server_threads):
+                self._peak_server_threads = server_thread_count
+                thread_info = f"  threads: {server_thread_count} (peak)"
             else:
-                thread_info = f"  threads: {threads}"
-        except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
-            logger.debug("Heartbeat thread count unavailable: %s", exc)
+                thread_info = f"  threads: {server_thread_count}"
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as error:
+            logger.debug("Heartbeat thread count unavailable: %s", error)
         rss_megabytes: Optional[float] = None
         swap_megabytes: Optional[float] = None
         rss_megabytes, swap_megabytes = self._sample_server_memory()
@@ -558,7 +558,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         Write progress to console.
 
         Prints the full line on tick 1, then every
-        ``CONSOLE_TICK_INTERVAL`` ticks (currently every tick), and
+        ``CONSOLE_INTERVAL_TICKS`` ticks (currently every tick), and
         always when ``force`` is set (e.g. the final line once all
         requests are done).  A single blank separator is emitted only
         before the first console line so the heartbeats are
@@ -568,7 +568,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :param line: The progress line
         :param force: Write the line even when this tick would be skipped
         """
-        if force or tick_count == 1 or tick_count % CONSOLE_TICK_INTERVAL == 0:
+        if force or tick_count == 1 or tick_count % CONSOLE_INTERVAL_TICKS == 0:
             if not self._console_started:
                 sys.stdout.write("\n")
                 self._console_started = True
