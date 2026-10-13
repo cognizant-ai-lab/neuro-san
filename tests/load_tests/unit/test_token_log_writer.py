@@ -58,8 +58,8 @@ class TestTokenLogWriter(TestCase):
         :param output_dir: Directory that holds server_tokens.log
         :return: Contents of server_tokens.log
         """
-        with open(os.path.join(output_dir, "server_tokens.log"), encoding="utf-8") as fh:
-            return fh.read()
+        with open(os.path.join(output_dir, "server_tokens.log"), encoding="utf-8") as file_handle:
+            return file_handle.read()
 
     def test_no_tokens_writes_and_logs_nothing(self) -> None:
         """

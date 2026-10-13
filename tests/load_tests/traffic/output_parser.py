@@ -49,21 +49,21 @@ class OutputParser:
         :return: The parsed Token Accounting block, or {} when it is missing or invalid
         """
         marker: str = "Token Accounting:"
-        idx: int = stdout.find(marker)
-        if idx < 0:
+        marker_index: int = stdout.find(marker)
+        if marker_index < 0:
             return {}
-        json_start: int = stdout.find("{", idx)
+        json_start: int = stdout.find("{", marker_index)
         if json_start < 0:
             return {}
         depth: int = 0
         json_end: int = json_start
-        for i in range(json_start, len(stdout)):
-            if stdout[i] == "{":
+        for char_index in range(json_start, len(stdout)):
+            if stdout[char_index] == "{":
                 depth += 1
-            elif stdout[i] == "}":
+            elif stdout[char_index] == "}":
                 depth -= 1
                 if depth == 0:
-                    json_end = i + 1
+                    json_end = char_index + 1
                     break
         try:
             return json.loads(stdout[json_start:json_end])
