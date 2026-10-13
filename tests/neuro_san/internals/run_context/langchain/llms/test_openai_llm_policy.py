@@ -352,13 +352,25 @@ class TestOpenAILlmPolicy(TestCase):
         self.assertIsInstance(llm, ToolStrictChatOpenAI)
         self.assertIsInstance(llm, ChatOpenAI)
 
-    def test_tool_strict_absent_leaves_strict_out_of_every_tool(self) -> None:
+    def test_tool_strict_absent_falls_back_to_false(self) -> None:
         """
-        With tool_strict absent from llm_config the policy forwards None and the tools carry no strict value,
-        exactly as a stock ChatOpenAI sends them. The hocon class default of false is applied by
-        DefaultLlmFactory and is not exercised by this policy-level test.
+        With tool_strict absent from llm_config the policy falls back to False, the same value the hocon
+        class default gives once DefaultLlmFactory has filled in the config, so every tool carries
+        "strict": false.
         """
         llm: ChatOpenAI = self._build_llm({"use_responses_api": True})
+        payload: Dict[str, Any] = self._request_payload_with_search_tool(llm)
+
+        self.assertIs(llm.tool_strict, False)
+        self.assertIs(payload.get("tools")[0].get("strict"), False)
+        self._assert_binds_to_responses_create(payload)
+
+    def test_tool_strict_null_leaves_strict_out_of_every_tool(self) -> None:
+        """
+        An explicit "tool_strict": null reaches the chat model as None, not as the False fallback, and the
+        tools then carry no strict value, exactly as a stock ChatOpenAI sends them.
+        """
+        llm: ChatOpenAI = self._build_llm({"use_responses_api": True, "tool_strict": None})
         payload: Dict[str, Any] = self._request_payload_with_search_tool(llm)
 
         self.assertIsNone(llm.tool_strict)

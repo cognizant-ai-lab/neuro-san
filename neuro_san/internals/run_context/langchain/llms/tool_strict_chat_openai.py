@@ -117,6 +117,9 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         such as entries of the llm_config's provider_tools, and name no strict of their own, since
         langchain passes those through unchanged.
 
+        Only dicts are candidates. Every other kind of tool comes back untouched, since langchain
+        converts those itself and writes the value in as it does so.
+
         :param tools: The tool definitions handed to bind_tools()
         :param strict: The strict value to write, or None to leave every definition alone
         :return: The tool definitions, with the value written in where it was missing
@@ -125,31 +128,40 @@ class ToolStrictChatOpenAI(ChatOpenAI):
             return list(tools)
         updated: List[Any] = []
         for tool in tools:
-            updated.append(ToolStrictChatOpenAI.with_strict_on_one(tool, strict))
+            if isinstance(tool, dict):
+                updated.append(ToolStrictChatOpenAI.with_strict_on_one(tool, strict))
+            else:
+                updated.append(tool)
         return updated
 
     @staticmethod
-    def with_strict_on_one(tool: Any, strict: bool) -> Any:
+    def with_strict_on_one(tool: Dict[str, Any], strict: bool) -> Dict[str, Any]:
         """
-        Writes the strict value into one function definition in OpenAI tool format, if it names none.
+        Writes the strict value into one tool dict, if it is a function definition that names none.
 
         Both shapes OpenAI accepts are handled: Chat Completions' {"type": "function", "function": {...}}
         and the Responses API's flat {"type": "function", "name": ...}. langchain's converter writes the
-        value and, for True, rewrites the schema the way strict mode needs. Built-in tool dicts and every
-        other kind of tool come back untouched; langchain converts the latter itself.
+        value and, for True, rewrites the schema the way strict mode needs. Built-in tool dicts such as
+        web_search come back untouched.
 
-        :param tool: One tool definition
+        :param tool: One tool definition in dict form
         :param strict: The strict value to write
-        :return: The definition with the value written in, or the definition as given
+        :return: A copy of the definition with the value written in, or the definition as given
         """
-        if not isinstance(tool, dict) or tool.get("type") != "function":
+        if tool.get("type") != "function":
             return tool
         function: Any = tool.get("function")
         if isinstance(function, dict):
             if "strict" in function:
                 return tool
-            return {**tool, "function": convert_to_openai_function(function, strict=strict)}
+            nested: Dict[str, Any] = dict(tool)
+            nested["function"] = convert_to_openai_function(function, strict=strict)
+            return nested
         if "name" in tool and "strict" not in tool:
-            # The converter keeps only the function keys, so the type and any extras are merged back.
-            return {**tool, **convert_to_openai_function(tool, strict=strict)}
+            # The converter returns only the function keys (name, description, parameters, strict).
+            # They are written over a copy of the definition, which keeps the type and any other keys.
+            converted: Dict[str, Any] = convert_to_openai_function(tool, strict=strict)
+            flat: Dict[str, Any] = dict(tool)
+            flat.update(converted)
+            return flat
         return tool

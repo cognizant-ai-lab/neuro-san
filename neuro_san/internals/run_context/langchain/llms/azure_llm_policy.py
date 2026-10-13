@@ -21,7 +21,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
-from typing import Type
 
 from logging import Logger
 from logging import getLogger
@@ -33,6 +32,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from leaf_common.config.config_util import ConfigUtil
 
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
+from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
 
@@ -71,7 +71,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     and warned about once.
 
     This class is a child of OpenAILlmPolicy, and inherits its implementation of
-    create_http_client(), resolve_chat_model_class() and delete_resources().
+    create_http_client() and delete_resources().
     """
 
     # Path Azure's v1 API lives under, relative to the resource endpoint.
@@ -166,16 +166,13 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :return: A BaseLanguageModel (can be Chat or LLM)
         :raises OpenAIError: When no deployment name can be resolved (see resolve_deployment_name())
         """
-        # The chat model of the "openai" class is all Azure's v1 API needs once the client points at it and
-        # the model is the deployment. Same lazy-loading resolver rigamarole as OpenAILlmPolicy.
-        # pylint: disable=invalid-name
-        ChatModelClass: Type[Any] = self.resolve_chat_model_class()
-
         self.warn_about_legacy_keys(config)
 
         deployment_name: str = self.resolve_deployment_name(config, model_name)
 
-        llm: BaseLanguageModel = ChatModelClass(
+        # The chat model of the "openai" class is all Azure's v1 API needs once the client points at it and
+        # the model is the deployment.
+        llm: BaseLanguageModel = ToolStrictChatOpenAI(
             async_client=client,
             root_async_client=self.async_openai_client,
             # Azure routes by deployment: this is what goes in the "model" field on both
@@ -232,7 +229,8 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             verbosity=config.get("verbosity"),
 
             # Endpoint selection, server-side storage and the strict default for function tools, forwarded
-            # raw for the same reasons as in OpenAILlmPolicy (a null must reach the chat model as None).
+            # the same way as in OpenAILlmPolicy (a null must reach the chat model as None, and an absent
+            # tool_strict falls back to false).
             # The "azure-openai" class inherits the "openai" defaults, so Azure requests go to
             # /openai/v1/responses unless an llm_config says "use_responses_api": false, and every tool
             # carries "strict": false. Azure's Responses API is not offered in every region and not for
@@ -240,7 +238,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             use_responses_api=config.get("use_responses_api"),
             store=config.get("store"),
             include=config.get("include"),
-            tool_strict=config.get("tool_strict"),
+            tool_strict=config.get("tool_strict", False),
 
             # Explicitly False for the same reason as in OpenAILlmPolicy: reading the global verbose
             # value during concurrent initialization can trigger a langchain UserWarning.

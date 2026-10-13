@@ -366,6 +366,9 @@ class TestAzureLlmPolicy(TestCase):
             policy, llm = self._build_policy({})
 
         self.assertEqual(policy.async_openai_client.api_key, self.API_KEY)
+        # When pylint resolves the chat model class, it reads openai_api_key as the pydantic field
+        # declaration (a FieldInfo) rather than the SecretStr value the instance holds.
+        # pylint: disable=no-member
         self.assertEqual(llm.openai_api_key.get_secret_value(), self.API_KEY)
 
     def test_azure_key_environment_variable_wins_over_openai_key(self) -> None:
@@ -557,21 +560,32 @@ class TestAzureLlmPolicy(TestCase):
     def test_tool_strict_is_forwarded_to_every_tool(self) -> None:
         """
         The strict default for function tools reaches Azure requests exactly as it does for the "openai" class:
-        false puts "strict": false on each tool, and an absent key leaves strict out.
+        false and an absent key both put "strict": false on each tool, and an explicit null leaves strict out.
         """
         _, relaxed = self._build_policy({"use_responses_api": True, "tool_strict": False})
-        _, unset = self._build_policy({"use_responses_api": True})
+        _, absent = self._build_policy({"use_responses_api": True})
+        # _make_config() treats None as "remove the key", so the explicit null is set afterwards.
+        nulled_config: Dict[str, Any] = self._make_config({"use_responses_api": True})
+        nulled_config["tool_strict"] = None
+        nulled_policy: AzureLlmPolicy = AzureLlmPolicy()
+        self.policies.append(nulled_policy)
+        nulled: ChatOpenAI = nulled_policy.create_llm(nulled_config, self.MODEL_NAME,
+                                                      nulled_policy.create_client(nulled_config))
 
         relaxed_bound: RunnableBinding = relaxed.bind_tools([self._search_tool()])
         relaxed_payload: Dict[str, Any] = relaxed._get_request_payload([HumanMessage("hi")], **relaxed_bound.kwargs)
-        unset_bound: RunnableBinding = unset.bind_tools([self._search_tool()])
-        unset_payload: Dict[str, Any] = unset._get_request_payload([HumanMessage("hi")], **unset_bound.kwargs)
+        absent_bound: RunnableBinding = absent.bind_tools([self._search_tool()])
+        absent_payload: Dict[str, Any] = absent._get_request_payload([HumanMessage("hi")], **absent_bound.kwargs)
+        nulled_bound: RunnableBinding = nulled.bind_tools([self._search_tool()])
+        nulled_payload: Dict[str, Any] = nulled._get_request_payload([HumanMessage("hi")], **nulled_bound.kwargs)
 
         self.assertIs(relaxed.tool_strict, False)
         self.assertIs(relaxed_payload.get("tools")[0].get("strict"), False)
         self._assert_binds_to_responses_create(relaxed_payload)
-        self.assertIsNone(unset.tool_strict)
-        self.assertNotIn("strict", unset_payload.get("tools")[0])
+        self.assertIs(absent.tool_strict, False)
+        self.assertIs(absent_payload.get("tools")[0].get("strict"), False)
+        self.assertIsNone(nulled.tool_strict)
+        self.assertNotIn("strict", nulled_payload.get("tools")[0])
 
     # ---- On the wire ----------------------------------------------------------------------------
 
