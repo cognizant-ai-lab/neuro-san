@@ -333,12 +333,23 @@ class TestToolStrictChatOpenAI(TestCase):
     def test_a_response_format_on_chat_completions_leaves_strict_to_langchain(self) -> None:
         """
         When a response_format is bound on Chat Completions, langchain's own rule (strict tools next to a
-        response_format) still applies: tool_strict False does not force the tools non-strict.
+        response_format) still applies: tool_strict False does not force the tools non-strict, and the
+        preformatted definitions langchain would pass through get the same strict True, with the schema
+        rewrite, so OpenAI accepts them next to the response_format.
         """
         llm: ToolStrictChatOpenAI = self._build_llm(False, use_responses_api=False)
-        bound: RunnableBinding = llm.bind_tools([self._search_tool()], response_format=self.ANSWER_FORMAT)
+        bound: RunnableBinding = llm.bind_tools([self._search_tool(),
+                                                 self._search_tool_in_openai_format(None),
+                                                 self._search_tool_in_responses_format()],
+                                                response_format=self.ANSWER_FORMAT)
 
-        self.assertIs(self._bound_function(bound).get("strict"), True)
+        self.assertIs(self._bound_function(bound, 0).get("strict"), True)
+        nested: Dict[str, Any] = self._bound_function(bound, 1)
+        self.assertIs(nested.get("strict"), True)
+        self.assertIs(nested.get("parameters").get("additionalProperties"), False)
+        flat_tool: Dict[str, Any] = bound.kwargs.get("tools")[2]
+        self.assertIs(flat_tool.get("strict"), True)
+        self.assertIs(flat_tool.get("parameters").get("additionalProperties"), False)
 
     def test_a_response_format_on_the_responses_api_keeps_the_default(self) -> None:
         """

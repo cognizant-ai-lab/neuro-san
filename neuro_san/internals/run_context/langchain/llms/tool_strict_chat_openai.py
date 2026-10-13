@@ -93,7 +93,11 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         langchain_decides: bool = bool(response_format) and not self.use_responses_api
         use_default: bool = strict is None and not langchain_decides
         effective_strict: Optional[bool] = self.tool_strict if use_default else strict
-        return super().bind_tools(self.with_strict_on_preformatted(tools, effective_strict),
+        # Preformatted definitions get the value langchain ends up writing into the tools it converts:
+        # True where its response_format rule fires (unless the caller said False), else the value above.
+        forced_strict: bool = langchain_decides and effective_strict is not False
+        written_strict: Optional[bool] = True if forced_strict else effective_strict
+        return super().bind_tools(self.with_strict_on_preformatted(tools, written_strict),
                                   tool_choice=tool_choice,
                                   strict=effective_strict,
                                   parallel_tool_calls=parallel_tool_calls,
