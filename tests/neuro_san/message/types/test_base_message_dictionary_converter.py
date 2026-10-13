@@ -51,8 +51,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
     output for text-only messages is the backward-compatibility guarantee.
 
     The list-content tests cover the full text projection of block content:
-    the text joins every text block, so thinking-first content gives the
-    answer text and list-of-str content gives its joined strings.
+    thinking-first content gives the answer text and list-of-str content
+    gives its joined strings.
 
     The content_blocks tests cover the outbound content_blocks mapping:
     block content that says more than its text also rides in the
