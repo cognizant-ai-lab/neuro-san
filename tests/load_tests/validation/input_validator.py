@@ -16,7 +16,6 @@
 
 import logging
 import os
-import sys
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -33,6 +32,7 @@ from tests.load_tests.confirm import Confirm
 from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class InputValidator:
                 "  --agent basic/hello_world",
                 agent,
             )
-            sys.exit(1)
+            raise LoadTestAbortError(1)
 
     def validate_fixtures_hocon_dir(self) -> List[str]:
         """
@@ -112,7 +112,7 @@ class InputValidator:
                 "  Check --fixtures-hocon-dir / --project-root.",
                 self._args.agent, hocon_dir,
             )
-            sys.exit(1)
+            raise LoadTestAbortError(1)
 
         hocon_files: List[str] = sorted(
             os.path.join(hocon_dir, file_name)
@@ -122,7 +122,7 @@ class InputValidator:
         )
         if not hocon_files:
             logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
-            sys.exit(1)
+            raise LoadTestAbortError(1)
 
         return hocon_files
 
@@ -145,20 +145,20 @@ class InputValidator:
                         for stage_text in self._args.stages.split(",")
                         if stage_text.strip()
                     ]
-                except ValueError:
+                except ValueError as value_error:
                     logger.error(
                         "--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
                         self._args.stages,
                     )
-                    sys.exit(1)
+                    raise LoadTestAbortError(1) from value_error
                 if not stages or any(stage <= 0 for stage in stages):
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
-                    sys.exit(1)
+                    raise LoadTestAbortError(1)
                 return stages
             return list(DEFAULT_STAGES)
         if self._args.num_requests <= 0:
             logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
-            sys.exit(1)
+            raise LoadTestAbortError(1)
         return [self._args.num_requests]
 
     def resolve_max_requests(self, stages: List[int]) -> int:
@@ -170,11 +170,11 @@ class InputValidator:
         """
         if self._args.num_rounds <= 0:
             logger.error("--num-rounds must be a positive integer. Got: %s", self._args.num_rounds)
-            sys.exit(1)
+            raise LoadTestAbortError(1)
         if self._args.max_requests is not None:
             if self._args.max_requests <= 0:
                 logger.error("--max-requests must be a positive integer. Got: %s", self._args.max_requests)
-                sys.exit(1)
+                raise LoadTestAbortError(1)
             return self._args.max_requests
         return sum(stages) * self._args.num_rounds
 
@@ -248,7 +248,7 @@ class InputValidator:
 
         if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
             logger.info("Aborted by user.")
-            sys.exit(0)
+            raise LoadTestAbortError(0)
 
         return probe_result
 

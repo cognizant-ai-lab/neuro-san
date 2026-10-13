@@ -286,8 +286,8 @@ When the server is on another machine, run the load test twice, once on each mac
 
 ## Troubleshooting
 
-- **Run stops right away about a mock LLM.** `OPENAI_API_BASE` is set, or
-  `mock_llm_server` is running. Unset it or stop it.
+- **Run stops right away about a mock LLM.** `mock_llm_server` is running.
+  Stop it.
 - **`--level min` rejected.** Use `norm` or `adv`. `min` is only for
   `--client-only` and `--server-only`.
 - **Asked about a missing server log.** Pass `--server-log PATH`, or

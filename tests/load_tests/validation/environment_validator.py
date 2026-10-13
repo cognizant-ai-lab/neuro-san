@@ -17,15 +17,14 @@
 import logging
 import os
 import socket
-import sys
 from argparse import Namespace
-from typing import List
 from typing import Optional
 
 import psutil
 
 from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -34,9 +33,8 @@ class EnvironmentValidator:
     """
     Validates the runtime environment for real-LLM load testing.
 
-    Ensures that real LLM infrastructure is in place and no mock
-    environment is accidentally active (no mock_llm_server process and
-    no OPENAI_API_BASE override).  Also checks that the target server
+    Ensures that no mock_llm_server process is running, so the test
+    makes real LLM calls.  Also checks that the target server
     is reachable on the given host/port, locates the neuro-san server
     process for resource monitoring, and finds its server log.
     """
@@ -44,7 +42,7 @@ class EnvironmentValidator:
     @staticmethod
     def validate_environment() -> None:
         """
-        Validate that no mock LLM environment is active.
+        Validate that no mock_llm_server process is running.
 
         API key checks are intentionally omitted — the load test
         client communicates with the server over HTTP, so API keys
@@ -82,7 +80,7 @@ class EnvironmentValidator:
         """
         if not EnvironmentValidator.is_port_open(args.host, args.port):
             logger.error("No service listening on %s:%s.\nStart the server first.", args.host, args.port)
-            sys.exit(1)
+            raise LoadTestAbortError(1)
 
         server_process: Optional[psutil.Process] = None
         for keyword in ["neuro_san_studio", "server_main_loop"]:
@@ -140,7 +138,7 @@ class EnvironmentValidator:
         Auto-detect server log from server process CWD.
 
         Looks for logs/server.log relative to the server's working
-        directory.  Aborts with sys.exit(1) when auto-detection
+        directory.  Raises LoadTestAbortError when auto-detection
         fails because the user explicitly requested --server-log.
 
         :param server_process: Local server process, or None when it was not found
@@ -148,7 +146,7 @@ class EnvironmentValidator:
         """
         if server_process is None:
             logger.error("Cannot auto-detect server log: server process not found.")
-            sys.exit(1)
+            raise LoadTestAbortError(1)
         try:
             working_directory: str = server_process.cwd()
             server_log_path: str = os.path.join(working_directory, "logs", "server.log")
@@ -165,26 +163,25 @@ class EnvironmentValidator:
                 "Could not determine server working directory.\n"
                 "  Provide the path explicitly: --server-log /path/to/server.log",
             )
-        sys.exit(1)
+        raise LoadTestAbortError(1)
 
     @staticmethod
     def _check_no_mock_environment() -> None:
         """
-        Exit if a mock LLM environment is detected.
+        Stop the run if a mock_llm_server process is running.
+
+        OPENAI_API_BASE on its own does not mean the mock is in use: it is also
+        how openai-class models reach LiteLLM or another OpenAI-compatible
+        gateway, so it is only logged.
         """
-        issues: List[str] = []
         api_base: Optional[str] = os.environ.get("OPENAI_API_BASE")
         if api_base:
-            issues.append(f"  OPENAI_API_BASE={api_base}")
+            logger.info("OPENAI_API_BASE is set: %s", api_base)
         mock_server_process: Optional[psutil.Process] = ResourceMonitor.find_process("mock_llm_server")
         if mock_server_process is not None:
-            issues.append(f"  mock_llm_server process running (PID {mock_server_process.pid})")
-        if issues:
             logger.error(
-                "Mock LLM environment detected — this test requires real LLM calls.\n%s\n\n"
-                "Unset OPENAI_API_BASE and stop the mock server before running this test.\n"
-                "For mock-based load testing, use load_test_mock_llm_service.py instead.",
-                "\n".join(issues),
+                "mock_llm_server is running (PID %s): stop it, or use load_test_mock_llm_service.py instead.",
+                mock_server_process.pid,
             )
-            sys.exit(1)
+            raise LoadTestAbortError(1)
         logger.info("No mock LLM environment detected.")
