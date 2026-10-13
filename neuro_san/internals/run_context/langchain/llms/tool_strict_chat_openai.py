@@ -50,6 +50,12 @@ class ToolStrictChatOpenAI(ChatOpenAI):
     the simplest place to set it. tool_strict is the llm_config value: False sends "strict": false
     on every tool, True sends "strict": true, None sends nothing and lets each endpoint apply its
     own default.
+
+    Tools reach bind_tools() in two shapes. Coded tools, MCP tools and agent tools arrive as
+    langchain BaseTools, which langchain converts to OpenAI format and stamps with the value
+    itself. The llm_config's provider_tools arrive as raw dicts, which langchain passes through
+    unchanged, so a function definition among them gets the value written in here; the built-in
+    tools among them need no flag and go through untouched.
     """
 
     # The default strict value for bind_tools(). Set from the "tool_strict" key of the llm_config.
@@ -107,8 +113,9 @@ class ToolStrictChatOpenAI(ChatOpenAI):
     @staticmethod
     def with_strict_on_preformatted(tools: Sequence[Any], strict: Optional[bool]) -> List[Any]:
         """
-        Writes the strict value into function definitions that are already in OpenAI tool format
-        and name no strict of their own, since langchain passes those through unchanged.
+        Writes the strict value into function definitions that are already in OpenAI tool format,
+        such as entries of the llm_config's provider_tools, and name no strict of their own, since
+        langchain passes those through unchanged.
 
         :param tools: The tool definitions handed to bind_tools()
         :param strict: The strict value to write, or None to leave every definition alone
