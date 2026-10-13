@@ -85,6 +85,7 @@ import psutil
 
 from tests.load_tests.config import LOCAL_HOSTS
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger: Logger = logging.getLogger(__name__)
@@ -119,6 +120,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     MOCK_LOG_PATH: str = "/tmp/mock_llm_server.log"
     SERVER_LOG_PATH: str = "/tmp/neuro_san_server.log"
     STARTUP_WAIT_SECONDS: int = 10
+    # 60 "=" characters.
+    SEPARATOR_LINE: str = "============================================================"
 
     def __init__(self, args: Namespace) -> None:
         """
@@ -232,12 +235,14 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         :param agent_cli_command: The agent_cli command from _build_cli_command()
         :return: "ok" (bool, exit code 0) and "elapsed_seconds" (float)
         """
-        start_seconds: float = time.time()
+        start_seconds: float = time.perf_counter()
         result: CompletedProcess = subprocess.run(agent_cli_command, capture_output=True, text=True,
                                                   timeout=MockLlmLoadTest.MOCK_REQUEST_TIMEOUT_SECONDS, check=False)
-        elapsed_seconds: float = time.time() - start_seconds
+        elapsed_seconds: float = time.perf_counter() - start_seconds
         succeeded: bool = result.returncode == 0
-        status: str = "OK" if succeeded else "FAIL"
+        status: str = "FAIL"
+        if succeeded:
+            status = "OK"
         logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed_seconds)
         if not succeeded:
             # Show last line of stderr for quick diagnosis
@@ -253,39 +258,23 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         """
         passed: int = 0
         failed: int = 0
-        start_seconds: float = time.time()
+        start_seconds: float = time.perf_counter()
         with ThreadPoolExecutor(max_workers=self.args.max_workers) as pool:
-            futures: List[Future] = [
-                pool.submit(self._run_one, i + 1, self.agent_cli_command)
-                for i in range(self.args.num_requests)
-            ]
+            # Submit every request first so the requests run at the same time, numbered from 1,
+            # then wait for each one in submit order.
+            futures: List[Future] = []
+            for request_id in range(1, self.args.num_requests + 1):
+                request_future: Future = pool.submit(self._run_one, request_id, self.agent_cli_command)
+                futures.append(request_future)
             for future in futures:
                 result: Dict[str, Any] = future.result()
                 if result.get("ok"):
                     passed += 1
                 else:
                     failed += 1
-        round_seconds: float = time.time() - start_seconds
+        round_seconds: float = time.perf_counter() - start_seconds
         logger.info("\nResult: %s passed, %s failed in %.2fs", passed, failed, round_seconds)
         return passed, failed, round_seconds
-
-    @staticmethod
-    def _log_table(header: List[str], rows: List[Tuple[str, ...]]) -> None:
-        """
-        Log an aligned table given a header list and list-of-lists rows.
-
-        :param header: Column names
-        :param rows: Rows of cell text, one per column
-        """
-        column_widths_characters: List[int] = [len(h) for h in header]
-        for row in rows:
-            for i, val in enumerate(row):
-                column_widths_characters[i] = max(column_widths_characters[i], len(str(val)))
-        fmt: str = "  ".join(f"{{:>{w}}}" for w in column_widths_characters)
-        logger.info("%s", fmt.format(*header))
-        logger.info("%s", "-" * (sum(column_widths_characters) + 2 * (len(header) - 1)))
-        for row in rows:
-            logger.info("%s", fmt.format(*row))
 
     def _apply_presets(self) -> None:
         """
@@ -501,32 +490,70 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def _build_snapshot_row(round_num: int, before_snapshot: Dict[str, Any],
-                            after_snapshot: Dict[str, Any]) -> Tuple[str, ...]:
+                            after_snapshot: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Build a summary table row from before/after snapshots.
+        Build one round's resource numbers from before/after snapshots.
 
         :param round_num: Round number, starting at 1
         :param before_snapshot: ResourceMonitor.snapshot() taken before the round
         :param after_snapshot: ResourceMonitor.snapshot() taken after the round settled
-        :return: Cell text in the column order of the header in _log_results()
+        :return: "round_num", "before_rss_megabytes", "settled_rss_megabytes", "rss_delta_megabytes", "fds",
+                 "before_threads", "settled_threads", "thread_delta", "connections", "cpu_percent" and "children"
         """
         rss_delta_megabytes: float = after_snapshot.get("rss") - before_snapshot.get("rss")
         thread_delta: int = after_snapshot.get("threads") - before_snapshot.get("threads")
-        return (
-            str(round_num),
-            f"{before_snapshot.get('rss'):.1f}M",
-            f"{after_snapshot.get('rss'):.1f}M",
-            f"+{rss_delta_megabytes:.1f}M",
-            str(after_snapshot.get("fds")),
-            f"{before_snapshot.get('threads')} -> {after_snapshot.get('threads')}",
-            f"+{thread_delta}",
-            str(after_snapshot.get("connections")),
-            f"{after_snapshot.get('cpu'):.1f}%",
-            str(after_snapshot.get("children")),
-        )
+        snapshot_row: Dict[str, Any] = {
+            "round_num": round_num,
+            "before_rss_megabytes": before_snapshot.get("rss"),
+            "settled_rss_megabytes": after_snapshot.get("rss"),
+            "rss_delta_megabytes": rss_delta_megabytes,
+            "fds": after_snapshot.get("fds"),
+            "before_threads": before_snapshot.get("threads"),
+            "settled_threads": after_snapshot.get("threads"),
+            "thread_delta": thread_delta,
+            "connections": after_snapshot.get("connections"),
+            "cpu_percent": after_snapshot.get("cpu"),
+            "children": after_snapshot.get("children"),
+        }
+        return snapshot_row
 
-    # pylint: disable=too-many-locals
-    def _run_rounds(self) -> Tuple[List[Tuple[str, ...]], List[Tuple[str, ...]], Dict[str, float]]:
+    @staticmethod
+    def _format_snapshot_row(snapshot_row: Dict[str, Any]) -> List[str]:
+        """
+        Format one row from _build_snapshot_row() as table cells.
+
+        :param snapshot_row: Row from _build_snapshot_row()
+        :return: Cell text in the column order of the header in _log_results()
+        """
+        cells: List[str] = [
+            str(snapshot_row.get("round_num")),
+            f"{snapshot_row.get('before_rss_megabytes'):.1f}M",
+            f"{snapshot_row.get('settled_rss_megabytes'):.1f}M",
+            f"+{snapshot_row.get('rss_delta_megabytes'):.1f}M",
+            str(snapshot_row.get("fds")),
+            f"{snapshot_row.get('before_threads')} -> {snapshot_row.get('settled_threads')}",
+            f"+{snapshot_row.get('thread_delta')}",
+            str(snapshot_row.get("connections")),
+            f"{snapshot_row.get('cpu_percent'):.1f}%",
+            str(snapshot_row.get("children")),
+        ]
+        return cells
+
+    @staticmethod
+    def _log_snapshot_table(header: List[str], snapshot_rows: List[Dict[str, Any]]) -> None:
+        """
+        Log the per-round resource table.
+
+        :param header: Column names
+        :param snapshot_rows: Rows from _build_snapshot_row(), one per round
+        """
+        table_rows: List[List[str]] = []
+        for snapshot_row in snapshot_rows:
+            cells: List[str] = MockLlmLoadTest._format_snapshot_row(snapshot_row)
+            table_rows.append(cells)
+        TableFormatter.log_table(header, table_rows)
+
+    def _run_rounds(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, float]]:
         """
         Execute all rounds of the load test, collecting snapshots
         and results per round.
@@ -534,21 +561,21 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         :return: Server rows and mock rows from _build_snapshot_row(), and totals with
                  "passed", "failed" and "time_seconds"
         """
-        server_rows: List[Tuple[str, ...]] = []
-        mock_rows: List[Tuple[str, ...]] = []
+        server_rows: List[Dict[str, Any]] = []
+        mock_rows: List[Dict[str, Any]] = []
         totals: Dict[str, float] = {"passed": 0, "failed": 0, "time_seconds": 0.0}
         passed: int = 0
         failed: int = 0
         elapsed_seconds: float = 0.0
 
         for round_num in range(1, self.args.num_rounds + 1):
-            logger.info("\n%s", "=" * 60)
+            logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
             logger.info(
                 "  ROUND %s of %s (%s requests, %s workers)",
                 round_num, self.args.num_rounds,
                 self.args.num_requests, self.args.max_workers,
             )
-            logger.info("=" * 60)
+            logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
 
             before_server: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self.server_process)
             before_mock: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self.mock_process)
@@ -582,7 +609,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         return server_rows, mock_rows, totals
 
     @staticmethod
-    def _log_overall_deltas(label: str, rows: List[Tuple[str, ...]], num_rounds: int) -> None:
+    def _log_overall_deltas(label: str, rows: List[Dict[str, Any]], num_rounds: int) -> None:
         """
         Log overall resource deltas between the first and last rounds.
 
@@ -590,17 +617,22 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         :param rows: Rows from _build_snapshot_row(), one per round
         :param num_rounds: Number of rounds in the run
         """
-        first_row: Tuple[str, ...] = rows[0]
-        last_row: Tuple[str, ...] = rows[-1]
+        first_row: Dict[str, Any] = rows[0]
+        last_row: Dict[str, Any] = rows[-1]
+        rss_delta_megabytes: float = last_row.get("settled_rss_megabytes") - first_row.get("before_rss_megabytes")
+        fds_delta: int = last_row.get("fds") - first_row.get("fds")
+        thread_delta: int = last_row.get("settled_threads") - first_row.get("before_threads")
+        connections_delta: int = last_row.get("connections") - first_row.get("connections")
+        children_delta: int = last_row.get("children") - first_row.get("children")
         logger.info("\n%s overall deltas (round 1 before vs round %s settled):", label, num_rounds)
-        logger.info("  RSS:         +%.1f MB", float(last_row[2].rstrip("M")) - float(first_row[1].rstrip("M")))
-        logger.info("  FDs:         +%s", int(last_row[4]) - int(first_row[4]))
-        logger.info("  Threads:     +%s", int(last_row[5].split(" -> ")[1]) - int(first_row[5].split(" -> ")[0]))
-        logger.info("  Connections: +%s", int(last_row[7]) - int(first_row[7]))
-        logger.info("  Children:    +%s", int(last_row[9]) - int(first_row[9]))
+        logger.info("  RSS:         +%.1f MB", rss_delta_megabytes)
+        logger.info("  FDs:         +%s", fds_delta)
+        logger.info("  Threads:     +%s", thread_delta)
+        logger.info("  Connections: +%s", connections_delta)
+        logger.info("  Children:    +%s", children_delta)
 
-    def _log_results(self, totals: Dict[str, float], server_rows: List[Tuple[str, ...]],
-                     mock_rows: List[Tuple[str, ...]]) -> None:
+    def _log_results(self, totals: Dict[str, float], server_rows: List[Dict[str, Any]],
+                     mock_rows: List[Dict[str, Any]]) -> None:
         """
         Log the overall results summary and leak analysis tables.
 
@@ -610,9 +642,9 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         """
         total_requests: int = self.args.num_requests * self.args.num_rounds
 
-        logger.info("\n%s", "=" * 60)
+        logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
         logger.info("  OVERALL RESULTS")
-        logger.info("=" * 60)
+        logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
         logger.info(
             "  Total requests: %s (%s passed, %s failed)",
             total_requests, totals.get("passed"), totals.get("failed"),
@@ -625,17 +657,17 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                              "FDs", "Threads", "Thread Delta",
                              "Conns", "CPU%", "Children"]
 
-        logger.info("\n%s", "=" * 60)
+        logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
         logger.info("  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)", self.args.num_rounds, total_requests)
-        logger.info("=" * 60)
+        logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
 
         if server_rows:
             logger.info("\nNEURO-SAN SERVER:")
-            self._log_table(header, server_rows)
+            self._log_snapshot_table(header, server_rows)
 
         if mock_rows:
             logger.info("\nMOCK LLM SERVER:")
-            self._log_table(header, mock_rows)
+            self._log_snapshot_table(header, mock_rows)
 
         if len(server_rows) >= 2:
             self._log_overall_deltas("Server", server_rows, self.args.num_rounds)
@@ -652,7 +684,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         self._test_log_handler = FileHandler(self._test_log_path, encoding="utf-8")
         self._test_log_handler.setLevel(logging.INFO)
         self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(self._test_log_handler)
+        # On the root logger, so the file also gets the lines that TableFormatter and ResourceMonitor log.
+        logging.getLogger().addHandler(self._test_log_handler)
 
     def _finalize_test_log(self, totals: Dict[str, float]) -> None:
         """
@@ -661,7 +694,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         :param totals: Totals from _run_rounds(); only "failed" is read
         """
         if self._test_log_handler is not None:
-            logger.removeHandler(self._test_log_handler)
+            logging.getLogger().removeHandler(self._test_log_handler)
             self._test_log_handler.close()
         if self._test_log_path is None:
             return
@@ -706,13 +739,13 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         logger.info("  settle_time=%ss", self.args.settle_time)
 
         totals: Dict[str, float] = {"passed": 0, "failed": 0, "time_seconds": 0.0}
-        server_rows: List[Tuple[str, ...]] = []
-        mock_rows: List[Tuple[str, ...]] = []
+        server_rows: List[Dict[str, Any]] = []
+        mock_rows: List[Dict[str, Any]] = []
         try:
             server_rows, mock_rows, totals = self._run_rounds()
             self._log_results(totals, server_rows, mock_rows)
             if is_local and not self.args.auto_start:
-                logger.info("\n%s", "=" * 60)
+                logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
                 logger.info("  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE ON NEURO-SAN SERVER")
                 logger.info("  Key:   OPENAI_API_BASE")
                 logger.info("  Value: %s", self._api_base)
@@ -721,7 +754,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 logger.info("    1. Stop the neuro-san server")
                 logger.info("    2. unset OPENAI_API_BASE")
                 logger.info("    3. Restart: python -m neuro_san.service.main_loop.server_main_loop")
-                logger.info("=" * 60)
+                logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
         finally:
             if self.args.auto_start:
                 self._stop_servers()
