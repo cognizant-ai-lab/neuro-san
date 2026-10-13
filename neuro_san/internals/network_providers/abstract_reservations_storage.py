@@ -47,7 +47,7 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
                             If set to 0 or negative, the background thread will not be started.
         """
-        ReservationsStorge.__init__()
+        ReservationsStorage.__init__()
         self._thread: Thread = None
         self._check_interval_seconds: float = check_expirations_interval_seconds
         self._stop_event = Event()
