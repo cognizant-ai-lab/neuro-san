@@ -25,11 +25,10 @@ from langchain_core.messages.human import HumanMessage
 
 class ContentFixtures:
     """
-    Canonical message-content fixtures for the content-block work, shaped
+    Canonical message-content fixtures for the content-block tests, shaped
     exactly like what the pinned langchain provider packages produce (or what
-    clients send). Shared by the ContentUtils unit tests and by the
-    golden-parity suites of the follow-up PRs, so every stage of the pipeline
-    is exercised against the same shapes.
+    clients send). Shared by the tests of every stage that handles message
+    content, so each stage is exercised against the same shapes.
     """
 
     @staticmethod
@@ -37,25 +36,26 @@ class ContentFixtures:
         """
         :return: An AIMessage shaped like a ChatAnthropic response with
                  extended thinking enabled: the thinking block comes FIRST,
-                 which today's first-block flatten reduces to "".
+                 before the text block that holds the answer.
         """
-        return AIMessage(
+        message = AIMessage(
             content=[
                 {"type": "thinking", "thinking": "Let me reason this through.", "signature": "sig-abc"},
                 {"type": "text", "text": "the answer"},
             ],
             response_metadata={"model_provider": "anthropic", "model_name": "claude-sonnet-4-5"},
         )
+        return message
 
     @staticmethod
     def anthropic_tool_use() -> AIMessage:
         """
         :return: An AIMessage shaped like a ChatAnthropic tool-calling turn
                  WITHOUT reasoning enabled - list content of text + tool_use.
-                 Every existing Anthropic tool-calling deployment produces
-                 these today, so their wire shape must not change.
+                 Anthropic tool-calling deployments produce this shape, so
+                 its wire shape must stay the same.
         """
-        return AIMessage(
+        message = AIMessage(
             content=[
                 {"type": "text", "text": "Let me look that up."},
                 {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"query": "q"}},
@@ -63,6 +63,7 @@ class ContentFixtures:
             tool_calls=[{"name": "lookup", "args": {"query": "q"}, "id": "toolu_1", "type": "tool_call"}],
             response_metadata={"model_provider": "anthropic", "model_name": "claude-sonnet-4-5"},
         )
+        return message
 
     @staticmethod
     def openai_responses_reasoning() -> AIMessage:
@@ -70,14 +71,14 @@ class ContentFixtures:
         :return: An AIMessage shaped like a ChatOpenAI (Responses API) reply
                  with reasoning summaries enabled.
         """
-        return AIMessage(
+        message = AIMessage(
             content=[
-                {"type": "reasoning", "id": "rs_1",
-                 "summary": [{"type": "summary_text", "text": "thought one"}]},
+                {"type": "reasoning", "id": "rs_1", "summary": [{"type": "summary_text", "text": "thought one"}]},
                 {"type": "text", "text": "the answer", "id": "msg_1"},
             ],
             response_metadata={"model_provider": "openai", "model_name": "gpt-5"},
         )
+        return message
 
     @staticmethod
     def v1_reasoning_blocks() -> AIMessage:
@@ -85,34 +86,36 @@ class ContentFixtures:
         :return: An AIMessage whose content is already standard v1 blocks,
                  as produced by a chat model constructed with output_version="v1".
         """
-        return AIMessage(
+        message = AIMessage(
             content=[
                 {"type": "reasoning", "reasoning": "deep thought", "extras": {"signature": "sig-v1"}},
                 {"type": "text", "text": "the answer"},
             ],
             response_metadata={"model_provider": "anthropic", "output_version": "v1"},
         )
+        return message
 
     @staticmethod
     def multi_text_blocks() -> AIMessage:
         """
-        :return: An AIMessage whose text is split across multiple text blocks
+        :return: An AIMessage whose text is split across two text blocks
                  with a thinking block in between. Its full text is
-                 "part one, part two"; a first-text-block-only flatten sees
+                 "part one, part two"; the first text block alone holds
                  only "part one, ".
         """
-        return AIMessage(content=[
+        message = AIMessage(content=[
             {"type": "text", "text": "part one, "},
             {"type": "thinking", "thinking": "hmm"},
             {"type": "text", "text": "part two"},
         ])
+        return message
 
     @staticmethod
     def list_of_str() -> AIMessage:
         """
-        :return: An AIMessage with list-of-strings content - legal per the
-                 pydantic annotation, and a crash (AttributeError) in today's
-                 first-block flatten.
+        :return: An AIMessage with list-of-strings content (legal per the
+                 pydantic annotation): two plain strings, no blocks, whose
+                 full text is "part one, part two".
         """
         return AIMessage(content=["part one, ", "part two"])
 
@@ -121,15 +124,16 @@ class ContentFixtures:
         """
         :return: Raw ToolMessage content shaped like what a block-returning
                  tool produces for a multi-part result: a list of content
-                 blocks including binary data. langchain-mcp-adapters>=0.2.0
-                 emits this shape; the repo's <0.2.0 pin puts MCP images in
-                 the ToolMessage artifact instead, so under the pin only
-                 toolbox tools reach it.
+                 blocks including binary data. Newer langchain-mcp-adapters
+                 releases emit this shape; under the repo's pin (see
+                 requirements.txt) MCP images go in the ToolMessage artifact
+                 instead, so only toolbox tools reach it.
         """
-        return [
+        content: List[Dict[str, Any]] = [
             {"type": "text", "text": "Here is the chart."},
             {"type": "image", "base64": "aW1hZ2UtYnl0ZXM=", "mime_type": "image/png"},
         ]
+        return content
 
     @staticmethod
     def whitespace_text() -> AIMessage:
@@ -143,8 +147,8 @@ class ContentFixtures:
     @staticmethod
     def empty_list_content() -> AIMessage:
         """
-        :return: An AIMessage with empty-list content, which today omits the
-                 "text" key on the wire (and must continue to).
+        :return: An AIMessage with empty-list content, which omits the
+                 "text" key on the wire.
         """
         return AIMessage(content=[])
 
@@ -152,9 +156,10 @@ class ContentFixtures:
     def multimodal_human() -> HumanMessage:
         """
         :return: A HumanMessage with standard v1 text + base64 image blocks,
-                 as a multimodal client would send (Phase 3).
+                 as a multimodal client sends.
         """
-        return HumanMessage(content=[
+        message = HumanMessage(content=[
             {"type": "text", "text": "Describe this image."},
             {"type": "image", "base64": "aW1hZ2UtYnl0ZXM=", "mime_type": "image/png"},
         ])
+        return message
