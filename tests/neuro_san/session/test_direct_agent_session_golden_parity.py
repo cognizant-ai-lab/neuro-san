@@ -28,7 +28,7 @@ from time import monotonic
 from time import sleep
 from unittest import TestCase
 
-from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+from leaf_common.asyncio.asyncio_executor_factory import AsyncioExecutorFactory
 from leaf_common.config.file_of_class import FileOfClass
 
 from neuro_san import REGISTRIES_DIR
@@ -130,7 +130,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         # leaves no threads behind for the rest of the suite.
         invocation_context = SessionInvocationContext(self.AGENT_HOCON,
                                                       external_factory,
-                                                      AsyncioExecutorPool(reuse_mode=False),
+                                                      AsyncioExecutorFactory.create_pool(reuse_mode=False),
                                                       llm_factory,
                                                       toolbox_factory)
         invocation_context.start()

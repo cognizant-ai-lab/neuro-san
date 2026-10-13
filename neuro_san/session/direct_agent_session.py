@@ -25,7 +25,7 @@ from asyncio import Task
 from contextlib import suppress
 
 from leaf_common.asyncio.async_to_sync_generator import AsyncToSyncGenerator
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.task_executor import TaskExecutor
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.time.timeout import Timeout
 
@@ -191,7 +191,7 @@ class DirectAgentSession(AgentSession):
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some
         # sockets stay open.
-        asyncio_executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
+        asyncio_executor: TaskExecutor = self.invocation_context.get_asyncio_executor()
         task: Task = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
                                              user_input, self.invocation_context, sly_data,
                                              chat_context)

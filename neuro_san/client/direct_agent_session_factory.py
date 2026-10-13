@@ -18,7 +18,7 @@ from typing import Any
 from typing import Dict
 
 from leaf_common.time.timeout import Timeout
-from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+from leaf_common.asyncio.asyncio_executor_factory import AsyncioExecutorFactory
 
 from neuro_san.client.direct_agent_storage_util import DirectAgentStorageUtil
 from neuro_san.interfaces.agent_session import AgentSession
@@ -91,7 +91,7 @@ class DirectAgentSessionFactory:
         toolbox_factory.load()
 
         factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage_dict=self.network_storage_dict)
-        executors_pool = AsyncioExecutorPool()
+        executors_pool = AsyncioExecutorFactory.create_pool()
 
         # DEF - We could do max_lifetime here, but waiting until that seems necessary.
         reservationist = DirectAgentReservationist(set([self.network_storage_dict.get(StorageClass.TEMP)]))
