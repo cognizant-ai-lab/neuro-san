@@ -426,10 +426,10 @@ not stored server-side by default, tools are bound non-strict, and the reasoning
   every tool and keeps the behavior tools had on Chat Completions. `true` turns strict mode on for every tool;
   langchain then rewrites each schema to mark every property required and to forbid additional properties, so use
   it only for tools whose schemas work with every argument always present. `null` sends no `strict` value and
-  lets each endpoint apply its own default. langchain writes the value into every tool it converts, which covers
-  coded tools and MCP tools. A dict that already carries `"type": "function"` or a built-in tool type, such as the
-  tools of [provider_tools](./provider_tools.md), passes through unchanged, and a flat function dict with a
-  `strict` of its own must match `tool_strict`, or langchain rejects it.
+  lets each endpoint apply its own default. The value is written into every function tool: the coded tools and
+  MCP tools langchain converts, and function definitions given in OpenAI's own tool format, unless such a
+  definition names its own `strict`, which it keeps. The built-in tools of [provider_tools](./provider_tools.md)
+  pass through unchanged.
 
 **Models that need the Responses API for tool calling.** OpenAI's newest models no longer accept function (tool)
 calls together with reasoning on Chat Completions, and every agent that lists `tools` is a tool-calling agent.

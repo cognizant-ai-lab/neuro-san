@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Type
@@ -28,6 +29,7 @@ from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
+from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_openai.chat_models.base import ChatOpenAI
 
 
@@ -72,7 +74,9 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         Binds tools to the chat model, filling in tool_strict when the caller gives no strict value.
 
         The default steps aside only where langchain sets strict itself: for a response_format on
-        Chat Completions, where OpenAI requires strict function tools next to it.
+        Chat Completions, where OpenAI requires strict function tools next to it. A function
+        definition already in OpenAI tool format gets the value too, unless it names its own
+        strict; built-in tool dicts pass through.
 
         :param tools: The tool definitions to bind
         :param tool_choice: Which tool the model must call, as ChatOpenAI.bind_tools() takes it
@@ -83,13 +87,58 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         :return: The chat model with the tools bound
         """
         # langchain forces strict=True for a response_format on Chat Completions only; the Responses
-        # API has no such rule, so the default still applies there.
+        # API has no such rule, so the default still applies there. langchain keys that rule on the
+        # configured use_responses_api value, not on the endpoint it infers for a null value, so null
+        # counts as Chat Completions here as well and the two rules never disagree.
         langchain_decides: bool = bool(response_format) and not self.use_responses_api
         use_default: bool = strict is None and not langchain_decides
         effective_strict: Optional[bool] = self.tool_strict if use_default else strict
-        return super().bind_tools(tools,
+        return super().bind_tools(self.with_strict_on_preformatted(tools, effective_strict),
                                   tool_choice=tool_choice,
                                   strict=effective_strict,
                                   parallel_tool_calls=parallel_tool_calls,
                                   response_format=response_format,
                                   **kwargs)
+
+    @staticmethod
+    def with_strict_on_preformatted(tools: Sequence[Any], strict: Optional[bool]) -> List[Any]:
+        """
+        Writes the strict value into function definitions that are already in OpenAI tool format
+        and name no strict of their own, since langchain passes those through unchanged.
+
+        :param tools: The tool definitions handed to bind_tools()
+        :param strict: The strict value to write, or None to leave every definition alone
+        :return: The tool definitions, with the value written in where it was missing
+        """
+        if strict is None:
+            return list(tools)
+        updated: List[Any] = []
+        for tool in tools:
+            updated.append(ToolStrictChatOpenAI.with_strict_on_one(tool, strict))
+        return updated
+
+    @staticmethod
+    def with_strict_on_one(tool: Any, strict: bool) -> Any:
+        """
+        Writes the strict value into one function definition in OpenAI tool format, if it names none.
+
+        Both shapes OpenAI accepts are handled: Chat Completions' {"type": "function", "function": {...}}
+        and the Responses API's flat {"type": "function", "name": ...}. langchain's converter writes the
+        value and, for True, rewrites the schema the way strict mode needs. Built-in tool dicts and every
+        other kind of tool come back untouched; langchain converts the latter itself.
+
+        :param tool: One tool definition
+        :param strict: The strict value to write
+        :return: The definition with the value written in, or the definition as given
+        """
+        if not isinstance(tool, dict) or tool.get("type") != "function":
+            return tool
+        function: Any = tool.get("function")
+        if isinstance(function, dict):
+            if "strict" in function:
+                return tool
+            return {**tool, "function": convert_to_openai_function(function, strict=strict)}
+        if "name" in tool and "strict" not in tool:
+            # The converter keeps only the function keys, so the type and any extras are merged back.
+            return {**tool, **convert_to_openai_function(tool, strict=strict)}
+        return tool

@@ -196,6 +196,17 @@ class TestToolStrictChatOpenAI(TestCase):
             function["strict"] = strict
         return {"type": "function", "function": function}
 
+    def _search_tool_in_responses_format(self) -> Dict[str, Any]:
+        """
+        Builds the search tool as a dict in the Responses API's flat tool format, without a strict value.
+
+        :return: The tool definition
+        """
+        return {"type": "function",
+                "name": "you_search",
+                "description": "Searches the web.",
+                "parameters": self.SEARCH_SCHEMA}
+
     @staticmethod
     def _bound_function(bound: RunnableBinding, index: int = 0) -> Dict[str, Any]:
         """
@@ -341,17 +352,66 @@ class TestToolStrictChatOpenAI(TestCase):
         self.assertIs(self._payload_tool(payload).get("strict"), False)
         self._assert_binds_to_responses_create(payload)
 
-    def test_a_tool_already_in_openai_format_passes_through_unchanged(self) -> None:
+    def test_a_response_format_with_inferred_routing_follows_langchain(self) -> None:
         """
-        langchain does not touch a definition already in OpenAI tool format, so the default is neither
-        added to one without a strict value nor applied over one that carries its own.
+        With use_responses_api null, langchain's response_format rule keys on that configured value, not on
+        the endpoint it infers from a reasoning dict. The subclass follows the same rule: where a stock
+        ChatOpenAI forces strict for the response_format, so does the subclass, and where it leaves strict
+        unset, the default applies. Whether langchain materializes the inferred endpoint on the instance
+        differs between langchain-openai releases, so the expectation is read off the stock model.
+        """
+        llm: ToolStrictChatOpenAI = ToolStrictChatOpenAI(model="gpt-5.2", tool_strict=False,
+                                                         use_responses_api=None, reasoning={"effort": "low"},
+                                                         openai_api_base="http://127.0.0.1:9", max_retries=0)
+        stock: ChatOpenAI = ChatOpenAI(model="gpt-5.2", use_responses_api=None, reasoning={"effort": "low"},
+                                       openai_api_base="http://127.0.0.1:9", max_retries=0)
+
+        bound: RunnableBinding = llm.bind_tools([self._search_tool()], response_format=self.ANSWER_FORMAT)
+        stock_bound: RunnableBinding = stock.bind_tools([self._search_tool()], response_format=self.ANSWER_FORMAT)
+
+        # The reasoning dict makes langchain route the request to the Responses API either way.
+        self.assertIs(llm._use_responses_api(llm._default_params), True)
+        stock_strict: Optional[bool] = self._bound_function(stock_bound).get("strict")
+        expected: bool = stock_strict if stock_strict is not None else False
+        self.assertIs(self._bound_function(bound).get("strict"), expected)
+
+    def test_preformatted_function_tools_get_the_default_unless_they_set_strict(self) -> None:
+        """
+        langchain passes a definition already in OpenAI tool format through unchanged, so the subclass
+        writes the default into it itself, in the nested and in the flat shape, and leaves a definition
+        that names its own strict alone.
         """
         llm: ToolStrictChatOpenAI = self._build_llm(False)
         bound: RunnableBinding = llm.bind_tools([self._search_tool_in_openai_format(None),
-                                                 self._search_tool_in_openai_format(True)])
+                                                 self._search_tool_in_openai_format(True),
+                                                 self._search_tool_in_responses_format()])
+        payload: Dict[str, Any] = self._request_payload(bound)
 
-        self.assertNotIn("strict", self._bound_function(bound, 0))
+        self.assertIs(self._bound_function(bound, 0).get("strict"), False)
         self.assertIs(self._bound_function(bound, 1).get("strict"), True)
+        flat_tool: Dict[str, Any] = bound.kwargs.get("tools")[2]
+        self.assertEqual(flat_tool.get("type"), "function")
+        self.assertEqual(flat_tool.get("name"), "you_search")
+        self.assertIs(flat_tool.get("strict"), False)
+        # On the wire all three are function tools carrying their value.
+        for index in range(3):
+            with self.subTest(index=index):
+                expected: bool = index == 1
+                self.assertIs(self._payload_tool(payload, index).get("strict"), expected)
+        self._assert_binds_to_responses_create(payload)
+
+    def test_true_rewrites_the_schema_of_a_preformatted_function_tool_too(self) -> None:
+        """
+        A preformatted definition goes through langchain's converter, so tool_strict True gives it the
+        schema rewrite strict mode needs, not only the flag.
+        """
+        llm: ToolStrictChatOpenAI = self._build_llm(True)
+        bound: RunnableBinding = llm.bind_tools([self._search_tool_in_openai_format(None)])
+
+        function: Dict[str, Any] = self._bound_function(bound)
+        self.assertIs(function.get("strict"), True)
+        self.assertEqual(function.get("parameters").get("required"), ["query", "extraction"])
+        self.assertIs(function.get("parameters").get("additionalProperties"), False)
 
     def test_fallbacks_get_the_same_default(self) -> None:
         """
