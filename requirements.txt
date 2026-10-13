@@ -6,6 +6,7 @@
 # requirements-build.txt
 
 # In-house dependencies
+# Temporary pin until some AsyncioExecutorFactory changes can be made at this level.
 leaf-common==1.4.6
 
 # Downgraded secondary dependencies for error-free pip installs
