@@ -431,8 +431,8 @@ not stored server-side by default, tools are bound non-strict, and the reasoning
   definition names its own `strict`, which it keeps. The built-in tools of [provider_tools](./provider_tools.md)
   pass through unchanged. One exception: when a structured-output `response_format` is bound on Chat
   Completions, OpenAI requires strict function tools next to it, and langchain sets `"strict": true` on every
-  tool whatever `tool_strict` says. neuro-san's agents bind no such format, so this only affects code that
-  calls the chat model directly.
+  tool whatever `tool_strict` says; only a definition in OpenAI's format that names its own `strict` keeps that
+  value. neuro-san's agents bind no such format, so this only affects code that calls the chat model directly.
 
 **Models that need the Responses API for tool calling.** OpenAI's newest models no longer accept function (tool)
 calls together with reasoning on Chat Completions, and every agent that lists `tools` is a tool-calling agent.

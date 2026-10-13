@@ -1753,8 +1753,9 @@
                 #   null  - send no strict value and let each endpoint apply its own default (Chat Completions
                 #           non-strict, the Responses API strict whenever the schema allows it).
                 # Exception for all three: with a structured-output response_format bound on Chat Completions, OpenAI
-                # requires strict function tools next to it and langchain sets strict true on every tool. neuro-san's
-                # agents bind no such format, so this only affects code that calls the chat model directly.
+                # requires strict function tools next to it and langchain sets strict true on every tool (a definition
+                # that names its own strict keeps it). neuro-san's agents bind no such format, so this only affects
+                # code that calls the chat model directly.
                 "tool_strict": false,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
