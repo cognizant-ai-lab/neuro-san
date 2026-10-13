@@ -14,19 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Pre-flight environment checks for real-LLM load testing.
-
-Validates that the runtime environment is configured for real LLM calls:
-  - No mock LLM server or OPENAI_API_BASE override detected
-  - Target server must be reachable on the specified host/port
-  - Auto-detects server log from process CWD when requested
-
-API key validation is intentionally omitted because the load test
-communicates with the server over HTTP — API keys are only needed
-on the server side.  Server-side key errors are caught at runtime
-by the failure_patterns mechanism in agent profiles.
-"""
-
 import logging
 import os
 import socket
@@ -44,16 +31,20 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class EnvironmentValidator:
-    """Validates the runtime environment for load testing.
+    """
+    Validates the runtime environment for real-LLM load testing.
 
     Ensures that real LLM infrastructure is in place and no mock
-    environment is accidentally active.  Also locates the neuro-san
-    server process for resource monitoring.
+    environment is accidentally active (no mock_llm_server process and
+    no OPENAI_API_BASE override).  Also checks that the target server
+    is reachable on the given host/port, locates the neuro-san server
+    process for resource monitoring, and finds its server log.
     """
 
     @staticmethod
     def validate_environment() -> None:
-        """Validate that no mock LLM environment is active.
+        """
+        Validate that no mock LLM environment is active.
 
         API key checks are intentionally omitted — the load test
         client communicates with the server over HTTP, so API keys
@@ -62,26 +53,6 @@ class EnvironmentValidator:
         profile.
         """
         EnvironmentValidator._check_no_mock_environment()
-
-    @staticmethod
-    def _check_no_mock_environment() -> None:
-        """Exit if a mock LLM environment is detected."""
-        issues: List[str] = []
-        api_base: Optional[str] = os.environ.get("OPENAI_API_BASE")
-        if api_base:
-            issues.append(f"  OPENAI_API_BASE={api_base}")
-        mock_server_process: Optional[psutil.Process] = ResourceMonitor.find_process("mock_llm_server")
-        if mock_server_process is not None:
-            issues.append(f"  mock_llm_server process running (PID {mock_server_process.pid})")
-        if issues:
-            logger.error(
-                "Mock LLM environment detected — this test requires real LLM calls.\n%s\n\n"
-                "Unset OPENAI_API_BASE and stop the mock server before running this test.\n"
-                "For mock-based load testing, use load_test_mock_llm_service.py instead.",
-                "\n".join(issues),
-            )
-            sys.exit(1)
-        logger.info("No mock LLM environment detected.")
 
     @staticmethod
     def is_port_open(host: str, port: int) -> bool:
@@ -100,10 +71,11 @@ class EnvironmentValidator:
 
     @staticmethod
     def find_local_server(args: Namespace) -> Optional[psutil.Process]:
-        """Locate the neuro-san server process for resource monitoring.
+        """
+        Locate the neuro-san server process for resource monitoring.
 
         Searches by process keyword first, then falls back to port
-        ownership.  Returns the process or None.
+        ownership.
 
         :param args: Parsed arguments; host and port are used
         :return: The server process, or None when it is not found locally
@@ -132,7 +104,8 @@ class EnvironmentValidator:
 
     @staticmethod
     def try_auto_detect_server_log(args: Namespace) -> Optional[str]:
-        """Best-effort local server-log detection; None if unavailable.
+        """
+        Best-effort local server-log detection; None if unavailable.
 
         Unlike auto_detect_server_log, this never aborts.  It is used
         for the default (unrequested) auto-detect so that remote or
@@ -163,7 +136,8 @@ class EnvironmentValidator:
 
     @staticmethod
     def auto_detect_server_log(server_process: Optional[psutil.Process]) -> str:
-        """Auto-detect server log from server process CWD.
+        """
+        Auto-detect server log from server process CWD.
 
         Looks for logs/server.log relative to the server's working
         directory.  Aborts with sys.exit(1) when auto-detection
@@ -192,3 +166,25 @@ class EnvironmentValidator:
                 "  Provide the path explicitly: --server-log /path/to/server.log",
             )
         sys.exit(1)
+
+    @staticmethod
+    def _check_no_mock_environment() -> None:
+        """
+        Exit if a mock LLM environment is detected.
+        """
+        issues: List[str] = []
+        api_base: Optional[str] = os.environ.get("OPENAI_API_BASE")
+        if api_base:
+            issues.append(f"  OPENAI_API_BASE={api_base}")
+        mock_server_process: Optional[psutil.Process] = ResourceMonitor.find_process("mock_llm_server")
+        if mock_server_process is not None:
+            issues.append(f"  mock_llm_server process running (PID {mock_server_process.pid})")
+        if issues:
+            logger.error(
+                "Mock LLM environment detected — this test requires real LLM calls.\n%s\n\n"
+                "Unset OPENAI_API_BASE and stop the mock server before running this test.\n"
+                "For mock-based load testing, use load_test_mock_llm_service.py instead.",
+                "\n".join(issues),
+            )
+            sys.exit(1)
+        logger.info("No mock LLM environment detected.")
