@@ -351,6 +351,22 @@ class TestToolStrictChatOpenAI(TestCase):
         self.assertIs(flat_tool.get("strict"), True)
         self.assertIs(flat_tool.get("parameters").get("additionalProperties"), False)
 
+    def test_an_explicit_false_with_a_response_format_relaxes_every_tool(self) -> None:
+        """
+        An explicit strict=False from the caller is the one value langchain does not override for a
+        response_format on Chat Completions, and the preformatted definitions get that same False, so
+        every tool shape in the binding carries the same value.
+        """
+        llm: ToolStrictChatOpenAI = self._build_llm(True, use_responses_api=False)
+        bound: RunnableBinding = llm.bind_tools([self._search_tool(),
+                                                 self._search_tool_in_openai_format(None),
+                                                 self._search_tool_in_responses_format()],
+                                                response_format=self.ANSWER_FORMAT, strict=False)
+
+        self.assertIs(self._bound_function(bound, 0).get("strict"), False)
+        self.assertIs(self._bound_function(bound, 1).get("strict"), False)
+        self.assertIs(bound.kwargs.get("tools")[2].get("strict"), False)
+
     def test_a_response_format_on_the_responses_api_keeps_the_default(self) -> None:
         """
         The Responses API has no strict-tools rule for a response_format, so the default still applies
