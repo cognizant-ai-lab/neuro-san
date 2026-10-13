@@ -21,6 +21,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Type
 
 from logging import Logger
 from logging import getLogger
@@ -52,13 +53,14 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         * The credential: azure_ad_token / AZURE_OPENAI_AD_TOKEN when set, else openai_api_key /
           AZURE_OPENAI_API_KEY, else OPENAI_API_KEY. Azure's v1 API accepts an API key in the same
           Authorization: Bearer header the SDK sends for OpenAI, so no api-key header is needed.
-        * The model: Azure routes by deployment, so the chat model is a plain ChatOpenAI whose model is
-          deployment_name / AZURE_OPENAI_DEPLOYMENT_NAME, or the llm_info model name when neither is
-          given. The OpenAI model behind the deployment (the llm_config's model_name) is not sent
-          anywhere; it is handed to token accounting through the chat model's metadata, so the usage is
-          priced by it and booked under "azure-openai". langchain's model-name rules therefore see the
-          deployment name: a temperature other than 1 is dropped only for a deployment whose name starts
-          with "gpt-5"; a gpt-5 deployment named any other way sends it as given and Azure rejects it.
+        * The model: Azure routes by deployment, so the chat model is the same ChatOpenAI subclass the
+          "openai" class uses, with deployment_name / AZURE_OPENAI_DEPLOYMENT_NAME as its model, or the
+          llm_info model name when neither is given. The OpenAI model behind the deployment (the
+          llm_config's model_name) is not sent anywhere; it is handed to token accounting through the
+          chat model's metadata, so the usage is priced by it and booked under "azure-openai".
+          langchain's model-name rules therefore see the deployment name: a temperature other than 1 is
+          dropped only for a deployment whose name starts with "gpt-5"; a gpt-5 deployment named any
+          other way sends it as given and Azure rejects it.
 
     Configuration errors (no endpoint, no credential, no deployment) are raised as openai.OpenAIError,
     the same family the OpenAI SDK raises for a missing api_key, so that DefaultLlmFactory turns them
@@ -69,7 +71,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     and warned about once.
 
     This class is a child of OpenAILlmPolicy, and inherits its implementation of
-    create_http_client() and delete_resources().
+    create_http_client(), resolve_chat_model_class() and delete_resources().
     """
 
     # Path Azure's v1 API lives under, relative to the resource endpoint.
@@ -164,18 +166,16 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :return: A BaseLanguageModel (can be Chat or LLM)
         :raises OpenAIError: When no deployment name can be resolved (see resolve_deployment_name())
         """
-        # The plain ChatOpenAI is all Azure's v1 API needs once the client points at it and the model is
-        # the deployment. Same lazy-loading resolver rigamarole as OpenAILlmPolicy.
+        # The chat model of the "openai" class is all Azure's v1 API needs once the client points at it and
+        # the model is the deployment. Same lazy-loading resolver rigamarole as OpenAILlmPolicy.
         # pylint: disable=invalid-name
-        ChatOpenAI = self.resolver.resolve_class_in_module("ChatOpenAI",
-                                                           module_name="langchain_openai.chat_models.base",
-                                                           install_if_missing="langchain-openai")
+        ChatModelClass: Type[Any] = self.resolve_chat_model_class()
 
         self.warn_about_legacy_keys(config)
 
         deployment_name: str = self.resolve_deployment_name(config, model_name)
 
-        llm = ChatOpenAI(
+        llm: BaseLanguageModel = ChatModelClass(
             async_client=client,
             root_async_client=self.async_openai_client,
             # Azure routes by deployment: this is what goes in the "model" field on both
@@ -231,14 +231,16 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             reasoning_effort=config.get("reasoning_effort"),
             verbosity=config.get("verbosity"),
 
-            # Endpoint selection and server-side storage, forwarded raw for the same reasons as in
-            # OpenAILlmPolicy (a null must reach langchain as None). The "azure-openai" class inherits
-            # the "openai" defaults, so Azure requests go to /openai/v1/responses unless an llm_config
-            # says "use_responses_api": false. Azure's Responses API is not offered in every region and
-            # not for every model (see docs/llm_info_hocon_reference.md).
+            # Endpoint selection, server-side storage and the strict default for function tools, forwarded
+            # raw for the same reasons as in OpenAILlmPolicy (a null must reach the chat model as None).
+            # The "azure-openai" class inherits the "openai" defaults, so Azure requests go to
+            # /openai/v1/responses unless an llm_config says "use_responses_api": false, and every tool
+            # carries "strict": false. Azure's Responses API is not offered in every region and not for
+            # every model (see docs/llm_info_hocon_reference.md).
             use_responses_api=config.get("use_responses_api"),
             store=config.get("store"),
             include=config.get("include"),
+            tool_strict=config.get("tool_strict"),
 
             # Explicitly False for the same reason as in OpenAILlmPolicy: reading the global verbose
             # value during concurrent initialization can trigger a langchain UserWarning.
@@ -255,7 +257,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         """
         Builds the chat model metadata that tells LlmTokenCallbackHandler how to book Azure usage.
 
-        The stock ChatOpenAI class would be booked under "openai", and Azure's Responses API names the
+        The chat model class alone would be booked under "openai", and Azure's Responses API names the
         deployment as the response model, which has no llm_info entry to price by. So the metadata names
         the "azure-openai" bucket and, when an OpenAI model is configured behind the deployment, that
         model as the one to price the usage by. A deployment-only llm_config gets no price hint, so the

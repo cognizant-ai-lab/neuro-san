@@ -199,6 +199,11 @@ llm_config {
 - Use the **same** agent network and inputs for record and playback — the
   match key is derived from the request, so a changed prompt is a new
   (unrecorded) request.
+- The `openai` class sends `"strict": false` on every function tool by default
+  (`tool_strict`), and tool definitions are part of the match key. A cassette
+  recorded with tools before that default needs re-recording, or add
+  `tool_strict = null` to the llm_config above; Chat Completions treats a
+  missing `strict` as false anyway.
 
 ## How matching works
 
