@@ -191,6 +191,7 @@ context with which it will proces input, essentially telling it what to do.
 
         # Call each of the the listed tools and collect the results
         # of their function(s).
+        component_tool_call: ToolCall = None
         for component_tool_call in component_tool_calls:
 
             tool_output: Dict[str, Any] = await self.make_one_tool_function_call(component_tool_call)
