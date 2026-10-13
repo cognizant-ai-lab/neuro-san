@@ -22,6 +22,8 @@ from typing import Optional
 
 from unittest import TestCase
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
@@ -49,8 +51,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
     output for text-only messages is the backward-compatibility guarantee.
 
     The list-content tests cover the full text projection of block content:
-    the text joins every text block, so thinking-first content gives the
-    answer text and list-of-str content gives its joined strings.
+    thinking-first content gives the answer text and list-of-str content
+    gives its joined strings.
 
     The content_blocks tests cover the outbound content_blocks mapping:
     block content that says more than its text also rides in the
@@ -59,33 +61,6 @@ class TestBaseMessageDictionaryConverter(TestCase):
     """
 
     ORIGIN: List[Dict[str, Any]] = [{"tool": "front_man", "instantiation_index": 0}]
-
-    @staticmethod
-    def block_types(chat_message: Dict[str, Any]) -> List[str]:
-        """
-        List the block types a wire dictionary carries.
-
-        :param chat_message: A ChatMessage dictionary produced by to_dict
-        :return: The "type" of each block inside its content_blocks wrapper
-        """
-        types: List[str] = []
-        block: Optional[Dict[str, Any]] = None
-        for block in chat_message.get("content_blocks", {}).get("blocks", []):
-            types.append(block.get("type"))
-        return types
-
-    def assert_wrapped_blocks(self, chat_message: Dict[str, Any]) -> None:
-        """
-        Asserts the content_blocks wrapper shape: the langchain_v1 format tag,
-        a non-empty block list, and text equal to the blocks' flattened text.
-
-        :param chat_message: A ChatMessage dictionary produced by to_dict
-        """
-        wrapper: Dict[str, Any] = chat_message.get("content_blocks")
-        self.assertEqual(sorted(wrapper.keys()), ["blocks", "format"])
-        self.assertEqual(wrapper.get("format"), ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1)
-        self.assertGreater(len(wrapper.get("blocks")), 0)
-        self.assertEqual(ContentUtils.flatten_to_text(wrapper.get("blocks")), chat_message.get("text"))
 
     def test_to_dict_human_message_exact_shape(self) -> None:
         """
@@ -199,7 +174,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
         self.assert_wrapped_blocks(result)
         self.assertEqual(self.block_types(result), ["reasoning", "text"])
 
-    def test_to_dict_concatenates_all_text_blocks(self) -> None:
+    def test_to_dict_text_survives_reasoning_first_block(self) -> None:
         """
         The text comes from the text block even when a reasoning block is
         first, and a reasoning-only message emits text="".
@@ -209,8 +184,9 @@ class TestBaseMessageDictionaryConverter(TestCase):
         self.assertEqual(result.get("type"), ChatMessageType.AI)
         self.assertEqual(result.get("text"), "the answer")
         self.assert_wrapped_blocks(result)
-        self.assertEqual(self.block_types(result)[-1], "text")
-        self.assertIn("reasoning", self.block_types(result))
+        result_block_types: List[str] = self.block_types(result)
+        self.assertEqual(result_block_types[-1], "text")
+        self.assertIn("reasoning", result_block_types)
 
         reasoning_only = AIMessage(content=[{"type": "reasoning", "reasoning": "hidden"}])
         self.assertEqual(converter.to_dict(reasoning_only), {
@@ -222,7 +198,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
             },
         })
 
-    def test_to_dict_list_of_str_content_does_not_crash(self) -> None:
+    def test_to_dict_list_of_str_content_joins_strings(self) -> None:
         """
         List-of-strings content, legal per the pydantic annotation, converts
         without an error, and its strings are joined into the text.
@@ -235,7 +211,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "text": "part one, part two",
         })
 
-    def test_to_dict_empty_list_content_still_omits_text(self) -> None:
+    def test_to_dict_empty_list_content_omits_text(self) -> None:
         """
         Empty-list content omits the text key (emitting text="" would make
         such messages answer-eligible in AnswerMessageFilter).
@@ -246,7 +222,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "type": ChatMessageType.AI,
         })
 
-    def test_to_dict_blank_text_block_keeps_emitting_text(self) -> None:
+    def test_to_dict_blank_text_block_emits_text(self) -> None:
         """
         Blank-but-non-empty block content emits its (blank) text; only the
         empty LIST omits the text key. Gating omission on "no visible text"
@@ -270,7 +246,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
         sly_data: Dict[str, Any] = {"secret": "s"}
         message = AgentFrameworkMessage(content="the answer", chat_context=chat_context,
                                         sly_data=sly_data, structure=structure)
-        result: Dict[str, Any] = BaseMessageDictionaryConverter().to_dict(message)
+        converter = BaseMessageDictionaryConverter()
+        result: Dict[str, Any] = converter.to_dict(message)
         self.assertEqual(result, {
             "type": ChatMessageType.AGENT_FRAMEWORK,
             "text": "the answer",
@@ -439,3 +416,33 @@ class TestBaseMessageDictionaryConverter(TestCase):
         framework: BaseMessage = converter.from_dict({"type": ChatMessageType.AGENT_FRAMEWORK, "text": "answer"})
         self.assertIsInstance(framework, AgentFrameworkMessage)
         self.assertEqual(framework.content, "answer")
+
+    @staticmethod
+    def block_types(chat_message: Dict[str, Any]) -> List[str]:
+        """
+        List the block types a wire dictionary carries.
+
+        :param chat_message: A ChatMessage dictionary produced by to_dict
+        :return: The "type" of each block inside its content_blocks wrapper
+        """
+        extractor = DictionaryExtractor(chat_message)
+        blocks: List[Dict[str, Any]] = extractor.get("content_blocks.blocks", [])
+        types: List[str] = []
+        block: Optional[Dict[str, Any]] = None
+        for block in blocks:
+            types.append(block.get("type"))
+        return types
+
+    def assert_wrapped_blocks(self, chat_message: Dict[str, Any]) -> None:
+        """
+        Asserts the content_blocks wrapper shape: the langchain_v1 format tag,
+        a non-empty block list, and text equal to the blocks' flattened text.
+
+        :param chat_message: A ChatMessage dictionary produced by to_dict
+        """
+        wrapper: Dict[str, Any] = chat_message.get("content_blocks")
+        blocks: List[Dict[str, Any]] = wrapper.get("blocks")
+        self.assertEqual(sorted(wrapper.keys()), ["blocks", "format"])
+        self.assertEqual(wrapper.get("format"), ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1)
+        self.assertGreater(len(blocks), 0)
+        self.assertEqual(ContentUtils.flatten_to_text(blocks), chat_message.get("text"))
