@@ -80,7 +80,7 @@ class TestValidateFixturesHoconDir(TestCase):
         ).validate_fixtures_hocon_dir()
         self.assertEqual(len(files), 5)
         self.assertTrue(
-            all(f.startswith(HELLO_WORLD_FIXTURES) for f in files),
+            all(file_path.startswith(HELLO_WORLD_FIXTURES) for file_path in files),
         )
 
     def test_absolute_dir_is_used_as_is(self) -> None:
@@ -93,17 +93,17 @@ class TestValidateFixturesHoconDir(TestCase):
 
     def test_missing_agent_dir_exits(self) -> None:
         """No <DIR>/<agent>/ folder -> exit 1."""
-        with self.assertRaises(SystemExit) as ctx:
+        with self.assertRaises(SystemExit) as caught:
             self._validator(
                 agent="no_such_agent",
                 fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
             ).validate_fixtures_hocon_dir()
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.code, 1)
 
     def test_empty_agent_dir_exits(self) -> None:
         """Folder exists but holds no *.hocon -> exit 1."""
         with tempfile.TemporaryDirectory() as parent:
             os.mkdir(os.path.join(parent, "hello_world"))
-            with self.assertRaises(SystemExit) as ctx:
+            with self.assertRaises(SystemExit) as caught:
                 self._validator(fixtures_hocon_dir=parent).validate_fixtures_hocon_dir()
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.code, 1)

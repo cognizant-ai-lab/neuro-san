@@ -45,8 +45,9 @@ class AgentRequestExecutor:
     """
 
     @staticmethod
-    def execute_request(host: str, port: int, agent: str, prompt: str, timeout: float, idle_timeout: float,
-                        use_https: bool = False, chat_filter_type: str = "MAXIMAL") -> AgentRequestResult:
+    def execute_request(host: str, port: int, agent: str, prompt: str, timeout_seconds: float,
+                        idle_timeout_seconds: float, use_https: bool = False,
+                        chat_filter_type: str = "MAXIMAL") -> AgentRequestResult:
         """
         Send one streaming_chat request in-thread.
 
@@ -59,8 +60,8 @@ class AgentRequestExecutor:
         :param port: Server port
         :param agent: Name of the agent network to call
         :param prompt: User text to send
-        :param timeout: Cap in seconds on the whole request (--request-timeout)
-        :param idle_timeout: Cap in seconds between streamed messages (--idle-timeout)
+        :param timeout_seconds: Cap in seconds on the whole request (--request-timeout)
+        :param idle_timeout_seconds: Cap in seconds between streamed messages (--idle-timeout)
         :param use_https: When True connect over HTTPS/TLS
         :param chat_filter_type: chat_filter_type to send with the request
         :return: The AgentRequestResult; its processor is the
@@ -71,7 +72,7 @@ class AgentRequestExecutor:
         # The argument list tracks the streaming_chat request surface.
         # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
         start_seconds: float = time.perf_counter()
-        policy: RequestStatusPolicy = RequestStatusPolicy(timeout)
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds)
 
         security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
         session: HttpServiceAgentSession = HttpServiceAgentSession(
@@ -80,12 +81,12 @@ class AgentRequestExecutor:
             agent_name=agent,
             security_cfg=security_cfg,
             timeout_in_seconds=CONNECT_TIMEOUT_SECONDS,
-            streaming_timeout_in_seconds=idle_timeout,
+            streaming_timeout_in_seconds=idle_timeout_seconds,
         )
 
         # process_once() iterates session.streaming_chat internally, so the
         # timing wrapper is installed on the session.
-        timed_chat: TimedStreamingChat = TimedStreamingChat(session.streaming_chat, start_seconds, timeout)
+        timed_chat: TimedStreamingChat = TimedStreamingChat(session.streaming_chat, start_seconds, timeout_seconds)
         session.streaming_chat = timed_chat.streaming_chat
 
         processor: StreamingInputProcessor = StreamingInputProcessor(
@@ -135,5 +136,5 @@ class AgentRequestExecutor:
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
         return AgentRequestResult(
             status, processor.get_message_processor(), answer_text,
-            timed_chat.get_time_to_first_response(), token_accounting,
+            timed_chat.get_time_to_first_response_seconds(), token_accounting,
         )

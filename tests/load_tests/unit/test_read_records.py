@@ -39,10 +39,10 @@ class TestReadRecords(TestCase):
 
     def setUp(self) -> None:
         """Create a scratch history file removed again after each test."""
-        handle: int = 0
+        file_descriptor: int = 0
         self._path: str = ""
-        handle, self._path = tempfile.mkstemp(suffix=".jsonl")
-        os.close(handle)
+        file_descriptor, self._path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(file_descriptor)
         self.addCleanup(os.unlink, self._path)
 
     def _write(self, text: str) -> None:
@@ -51,8 +51,8 @@ class TestReadRecords(TestCase):
 
         :param text: History file contents
         """
-        with open(self._path, "w", encoding="utf-8") as handle:
-            handle.write(text)
+        with open(self._path, "w", encoding="utf-8") as file_handle:
+            file_handle.write(text)
 
     def test_records_are_read_in_file_order(self) -> None:
         """Every well-formed line becomes one record."""

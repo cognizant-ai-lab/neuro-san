@@ -121,8 +121,8 @@ class TrafficRunner:
         request_result: AgentRequestResult = AgentRequestExecutor.execute_request(
             self._args.host, self._args.port,
             self._args.agent, prompt,
-            timeout=self._args.request_timeout,
-            idle_timeout=self._args.idle_timeout,
+            timeout_seconds=self._args.request_timeout,
+            idle_timeout_seconds=self._args.idle_timeout,
             use_https=self._args.https,
             chat_filter_type=self._args.chat_filter.upper(),
         )
@@ -139,7 +139,7 @@ class TrafficRunner:
             "request_id": f"request-{request_id}",
             "status": status,
             "elapsed": elapsed_seconds,
-            "time_to_first_response": request_result.get_time_to_first_response(),
+            "time_to_first_response": request_result.get_time_to_first_response_seconds(),
             "start_time": start_unix_seconds,
             "end_time": start_unix_seconds + elapsed_seconds,
             "prompt": prompt,

@@ -167,7 +167,7 @@ class AgentProfileFactory:
             "Create a profile JSON or use --profile-path to specify one.\n"
             "Aborting.",
             agent_name,
-            "".join(f"  - {p}\n" for p in searched),
+            "".join(f"  - {searched_path}\n" for searched_path in searched),
         )
         raise SystemExit(1)
 
