@@ -14,10 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Latency analysis — completion timeline, degradation, concurrency
-timeline, and server-side timing for diagnosing LLM bottlenecks.
-"""
-
 import logging
 import math
 from typing import Any
@@ -40,7 +36,10 @@ COUNT_MILESTONE_STEP: int = 50
 
 
 class LatencyAnalyzer:
-    """Analyse per-request latency data across stages."""
+    """
+    Analyse per-request latency data across stages: completion timeline,
+    round-over-round degradation and concurrency timeline, for diagnosing LLM bottlenecks.
+    """
 
     def __init__(self, stage_summaries: List[Dict[str, Any]]) -> None:
         """
@@ -49,25 +48,6 @@ class LatencyAnalyzer:
         :param stage_summaries: Per-stage summaries collected during the run
         """
         self._summaries: List[Dict[str, Any]] = stage_summaries
-
-    @staticmethod
-    def _percentile(sorted_values_seconds: List[float], percentage: float) -> float:
-        """
-        Compute a percentile of pre-sorted values.
-
-        :param sorted_values_seconds: Values sorted in ascending order
-        :param percentage: Percentile to compute, 0 to 100
-        :return: The interpolated percentile, or 0.0 when there are no values
-        """
-        if not sorted_values_seconds:
-            return 0.0
-        index: float = (percentage / 100.0) * (len(sorted_values_seconds) - 1)
-        lower_index: int = int(math.floor(index))
-        upper_index: int = min(lower_index + 1, len(sorted_values_seconds) - 1)
-        fraction: float = index - lower_index
-        neighbor_gap_seconds: float = sorted_values_seconds[upper_index] - sorted_values_seconds[lower_index]
-        percentile_seconds: float = sorted_values_seconds[lower_index] + fraction * neighbor_gap_seconds
-        return percentile_seconds
 
     # ----------------------------------------------------------
     # 1. Cumulative completion timeline per stage
@@ -84,55 +64,6 @@ class LatencyAnalyzer:
         logger.info("=" * SEPARATOR_WIDTH)
 
         self._log_completion_timeline(is_ramp=is_ramp)
-
-    def _log_completion_timeline(self, is_ramp: bool) -> None:
-        """
-        Log completion latency percentiles per stage on one line.
-
-        :param is_ramp: True to label each stage, False to label each round
-        """
-        for summary in self._summaries:
-            latencies_seconds: List[float] = self._extract_latencies(summary)
-            if not latencies_seconds:
-                continue
-            latencies_seconds.sort()
-            total: int = len(latencies_seconds)
-            stage: Union[int, str] = summary.get("stage", "?")
-            round_number: Union[int, str] = summary.get("round", "?")
-            label: str = ""
-            if is_ramp:
-                label = f"Stage {stage}"
-                if round_number != "?":
-                    label += f", round {round_number}"
-            else:
-                label = f"Round {round_number}"
-            parts_list: List[str] = []
-            for percentage in COMPLETION_MILESTONES:
-                percentile_seconds: float = self._percentile(latencies_seconds, percentage)
-                formatted_duration: str = Formatters.fmt_duration(percentile_seconds, precision=1)
-                parts_list.append(f"p{percentage} {formatted_duration}")
-            parts: str = " / ".join(parts_list)
-            logger.info("\n  Completion percentiles (%s, %s requests): %s", label, total, parts)
-            self._log_count_milestones(latencies_seconds)
-
-    @staticmethod
-    def _log_count_milestones(sorted_latencies_seconds: List[float]) -> None:
-        """
-        Log completion times at round-number request counts.
-
-        :param sorted_latencies_seconds: Request latencies in seconds, sorted in ascending order
-        """
-        total: int = len(sorted_latencies_seconds)
-        if total <= COUNT_MILESTONE_STEP:
-            return
-        milestones: List[int] = list(range(COUNT_MILESTONE_STEP, total, COUNT_MILESTONE_STEP))
-        if not milestones or milestones[-1] != total:
-            milestones.append(total)
-        logger.info("\n  Completion by count:")
-        for count in milestones:
-            duration_seconds: float = sorted_latencies_seconds[count - 1]
-            formatted_duration: str = Formatters.fmt_duration(duration_seconds, precision=1)
-            logger.info("    %4d requests completed by %s", count, formatted_duration)
 
     # ----------------------------------------------------------
     # 2. Round-over-round degradation
@@ -198,6 +129,74 @@ class LatencyAnalyzer:
     # ----------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------
+
+    def _log_completion_timeline(self, is_ramp: bool) -> None:
+        """
+        Log completion latency percentiles per stage on one line.
+
+        :param is_ramp: True to label each stage, False to label each round
+        """
+        for summary in self._summaries:
+            latencies_seconds: List[float] = self._extract_latencies(summary)
+            if not latencies_seconds:
+                continue
+            latencies_seconds.sort()
+            total: int = len(latencies_seconds)
+            stage: Union[int, str] = summary.get("stage", "?")
+            round_number: Union[int, str] = summary.get("round", "?")
+            label: str = ""
+            if is_ramp:
+                label = f"Stage {stage}"
+                if round_number != "?":
+                    label += f", round {round_number}"
+            else:
+                label = f"Round {round_number}"
+            parts_list: List[str] = []
+            for percentage in COMPLETION_MILESTONES:
+                percentile_seconds: float = self._percentile(latencies_seconds, percentage)
+                formatted_duration: str = Formatters.fmt_duration(percentile_seconds, precision=1)
+                parts_list.append(f"p{percentage} {formatted_duration}")
+            parts: str = " / ".join(parts_list)
+            logger.info("\n  Completion percentiles (%s, %s requests): %s", label, total, parts)
+            self._log_count_milestones(latencies_seconds)
+
+    @staticmethod
+    def _log_count_milestones(sorted_latencies_seconds: List[float]) -> None:
+        """
+        Log completion times at round-number request counts.
+
+        :param sorted_latencies_seconds: Request latencies in seconds, sorted in ascending order
+        """
+        total: int = len(sorted_latencies_seconds)
+        if total <= COUNT_MILESTONE_STEP:
+            return
+        milestones: List[int] = list(range(COUNT_MILESTONE_STEP, total, COUNT_MILESTONE_STEP))
+        if not milestones or milestones[-1] != total:
+            milestones.append(total)
+        logger.info("\n  Completion by count:")
+        for count in milestones:
+            duration_seconds: float = sorted_latencies_seconds[count - 1]
+            formatted_duration: str = Formatters.fmt_duration(duration_seconds, precision=1)
+            logger.info("    %4d requests completed by %s", count, formatted_duration)
+
+    @staticmethod
+    def _percentile(sorted_values_seconds: List[float], percentage: float) -> float:
+        """
+        Compute a percentile of pre-sorted values.
+
+        :param sorted_values_seconds: Values sorted in ascending order
+        :param percentage: Percentile to compute, 0 to 100
+        :return: The interpolated percentile, or 0.0 when there are no values
+        """
+        if not sorted_values_seconds:
+            return 0.0
+        index: float = (percentage / 100.0) * (len(sorted_values_seconds) - 1)
+        lower_index: int = int(math.floor(index))
+        upper_index: int = min(lower_index + 1, len(sorted_values_seconds) - 1)
+        fraction: float = index - lower_index
+        neighbor_gap_seconds: float = sorted_values_seconds[upper_index] - sorted_values_seconds[lower_index]
+        percentile_seconds: float = sorted_values_seconds[lower_index] + fraction * neighbor_gap_seconds
+        return percentile_seconds
 
     @staticmethod
     def _extract_latencies(summary: Dict[str, Any]) -> List[float]:
