@@ -55,9 +55,6 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
 - **Docstrings on every class, function and method.** A class docstring explains its purpose and
   responsibilities. A function/method docstring covers what it does, its parameters, its return value, and any
   exception it raises, in this exact format:
-- Keep all code comments brief, written in Standard Technical English.
-- Add code comments for every for loop.
-- Add type hints for every looping variable 
 
   ```text
   """
@@ -73,6 +70,9 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
   `None`. Add `:raises <ExceptionType>: <description>` after `:return:` if the method can raise something worth
   documenting. Write docstrings and comments in present tense: what the code or test does today, not
   its history (no "used to ...", "Previously ...").
+- Keep all code comments brief, written in Standard Technical English.
+- Add code comments for every for loop.
+- Add type hints for every looping variable.
 - Mark overridden methods with `@override` (`from typing_extensions import override`). Comment the non-obvious:
   threading/lifecycle behavior and the reason behind a design decision — not what a line already says.
 
