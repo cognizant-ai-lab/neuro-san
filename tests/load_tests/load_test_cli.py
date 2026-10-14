@@ -85,6 +85,7 @@ from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.traffic.stage_plan import StagePlan
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
 from tests.load_tests.validation.input_validator import InputValidator
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 from tests.load_tests.validation.output_validator import OutputValidator
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -2882,8 +2883,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 run_filter=run_filter,
             ).run()
             return
-        orchestrator = LoadTestOrchestrator(args)
-        exit_code = orchestrator.run()
+        try:
+            orchestrator = LoadTestOrchestrator(args)
+            exit_code = orchestrator.run()
+        except LoadTestAbortError as abort_error:
+            sys.exit(abort_error.get_exit_code())
         if orchestrator.was_interrupted():
             # After Ctrl-C some worker threads (e.g. un-killable
             # in-thread HTTP requests) may still be blocked.  Results

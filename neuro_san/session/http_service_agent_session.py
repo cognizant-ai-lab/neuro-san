@@ -143,13 +143,13 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     self._active_response = response
 
                 # Iterate over the content stream as it comes in.
-                # Note: We used to iterate over lines with the simpler:
+                # Note: We read raw byte chunks instead of the simpler:
                 #           for line in response.iter_lines(decode_unicode=True):
                 #               ...
-                #       but that delegated UTF-8 handling to the response's
+                #       because that line loop delegates UTF-8 handling to the response's
                 #       Content-Type charset (which the server may not set),
-                #       and split on universal newlines instead of strict "\n".
-                #       We now buffer raw bytes, split strictly on "\n",
+                #       and splits on universal newlines instead of strict "\n".
+                #       Here we buffer raw bytes, split strictly on "\n",
                 #       and decode UTF-8 explicitly -- mirroring the async client.
                 for data in response.iter_content(chunk_size=max_chunk_size):
 
