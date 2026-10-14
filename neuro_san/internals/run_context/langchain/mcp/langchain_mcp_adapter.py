@@ -276,7 +276,6 @@ class LangChainMcpAdapter:
         selected: List[str] = self.tool_name_policy.select_allowed(usable_entries, original_names)
 
         filtered_tools: List[BaseTool] = []
-        tool: BaseTool = None
         for tool in mcp_tools:
             if tool.name in selected:
                 filtered_tools.append(tool)

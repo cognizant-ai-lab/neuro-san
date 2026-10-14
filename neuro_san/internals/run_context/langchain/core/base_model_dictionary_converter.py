@@ -26,6 +26,7 @@ from typing import Union
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import create_model
+from pydantic.fields import FieldInfo
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
@@ -213,7 +214,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 field_type = Optional[field_type]
             # Pydantic types Field() as returning Any so its result can be assigned
             # to a field of any declared type, so Any is all that can be said here.
-            field: Any = Field(**field_kwargs)
+            field: FieldInfo = Field(**field_kwargs)
 
             # Add the field to our dictionary with its name as key
             fields[field_name] = (field_type, field)
