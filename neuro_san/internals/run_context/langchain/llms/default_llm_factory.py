@@ -142,6 +142,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if not isinstance(llm_factory_classes, List):
             raise ValueError(f"The classes.factories key in {self.llm_info_file} must be a list of strings")
 
+        llm_factory_class_name: str = None
         for llm_factory_class_name in llm_factory_classes:
             llm_factory: LangChainLlmFactory = self.resolve_one_llm_factory(llm_factory_class_name, self.llm_info_file)
             # Success. Tack it on to the list
@@ -161,7 +162,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                              "must be a list of strings")
 
         # Resolve and instantiate the factory class
-        llm_factory = ResolverUtil.create_instance(
+        llm_factory: LangChainLlmFactory = ResolverUtil.create_instance(
             class_name=llm_factory_class_name,
             class_name_source=llm_info_file,
             type_of_class=LangChainLlmFactory
@@ -422,6 +423,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Loop through each of the config values and replace any "sly_data" values
         # with their corresponding values from the llm_config dictionary.
         required_set: Set[str] = set()
+        key: str = None
+        value: Any = None
         for key, value in config.items():
             # If any value is "sly_data", replace it with the same value from the llm_config dictionary
             small_value: str = str(value).lower()
@@ -473,6 +476,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Loop through the loaded factories in order until we can find one
         # that can create the llm.
         found_exception: Exception = None
+        llm_factory: LangChainLlmFactory = None
         for llm_factory in self.llm_factories:
             try:
                 llm_resources = llm_factory.create_llm_resources(config)
@@ -611,6 +615,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Note: "verbose" is valid for both Neuro SAN and LangChain chat models, but when specified by the user,
         # it should only apply to Neuro SAN (e.g. AgentExecutor) — not passed into the LLM constructor.
         user_config: Dict[str, Any] = {}
+        llm_config_key: str = None
+        llm_config_value: Any = None
         for llm_config_key, llm_config_value in config.items():
             if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
                 user_config[llm_config_key] = llm_config_value
@@ -702,6 +708,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 fallbacks = fallbacks[:num_fallbacks]
 
         # Go through the list of fallbacks in the config.
+        # An entry is normally a config dictionary, but a nested list is a peer group.
+        fallback: Any = None
         for fallback in fallbacks:
 
             # Create a model we might use.
@@ -775,6 +783,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             if provider_tools:
                 main_policy_type = type(main_llm_resources.get_llm_policy())
                 fallback_policy_types: Set[type] = set()
+                resources: LangChainLlmResources = None
                 for resources in fallback_llm_resources:
                     fallback_policy_types.add(type(resources.get_llm_policy()))
 
@@ -784,6 +793,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                     policy_types: Set[type] = {main_policy_type}
                     policy_types.update(fallback_policy_types)
                     policy_names: List[str] = []
+                    policy_type: type = None
                     for policy_type in policy_types:
                         policy_names.append(policy_type.__name__)
                     policy_names.sort()

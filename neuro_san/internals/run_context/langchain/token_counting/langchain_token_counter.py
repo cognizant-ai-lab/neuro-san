@@ -210,7 +210,7 @@ class LangChainTokenCounter:
 
         if self.debug:
             # Print to be sure we have a different callback object.
-            oai_call = llm_token_callback_var.get()
+            oai_call: AsyncCallbackHandler = llm_token_callback_var.get()
             print(f"origin is {origin_str} callback var is {id(oai_call)}")
 
         return task
@@ -345,7 +345,7 @@ class LangChainTokenCounter:
         """
 
         # Organize the token dict for each agent to be the same format
-        agent_token_dict = {
+        agent_token_dict: Dict[str, Any] = {
             "total_tokens": callback.total_tokens,
             "prompt_tokens": callback.prompt_tokens,
             "completion_tokens": callback.completion_tokens,
@@ -372,8 +372,12 @@ class LangChainTokenCounter:
                 nothing to aggregate) so downstream consumers can rely on them.
         """
         aggregated: Dict[str, Any] = dict(ZERO_TOKEN_STATS)
+        models: Dict[str, Any] = None
         for models in token_dict.values():
+            model_stats: Dict[str, Any] = None
             for model_stats in models.values():
+                metric: str = None
+                value: Any = None
                 for metric, value in model_stats.items():
                     if metric != "time_taken_in_seconds":
                         aggregated[metric] = aggregated.get(metric, 0) + value
@@ -382,7 +386,7 @@ class LangChainTokenCounter:
 
         return aggregated
 
-    def merge_dicts(self, dict_1, dict_2):
+    def merge_dicts(self, dict_1: Dict[str, Any], dict_2: Dict[str, Any]) -> Dict[str, Any]:
         """
         Recursively merge two dictionaries.
 
@@ -397,6 +401,8 @@ class LangChainTokenCounter:
         :return: A new dictionary containing the merged result.
         """
         result: Dict[str, Any] = dict(dict_1)  # start with dict_1
+        key: str = None
+        value: Any = None
         for key, value in dict_2.items():
             if key in result:
                 if isinstance(result[key], dict) and isinstance(value, dict):

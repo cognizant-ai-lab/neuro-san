@@ -129,7 +129,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if policy_class is not None:
 
             # Use the LlmPolicy type we found in the lookup table to create an call a new instance.
-            llm_policy_instance = policy_class()
+            llm_policy_instance: LlmPolicy = policy_class()
             llm, llm_policy = llm_policy_instance.create_llm_resources_components(config)
 
         elif chat_class is None:
