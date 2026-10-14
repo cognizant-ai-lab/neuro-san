@@ -79,8 +79,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         "neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon"
     """
 
-    # Tools that used to ship in the default toolbox info file but were removed
-    # because they were built on the deprecated langchain-community package.
+    # Tools that the default toolbox info file does not define, because they
+    # are built on the deprecated langchain-community package.
     # A stale reference to one of these gets a targeted migration message
     # instead of the generic "not defined" error.
     REMOVED_TOOLS: FrozenSet[str] = frozenset({

@@ -258,10 +258,9 @@ context with which it will proces input, essentially telling it what to do.
 
         finally:
             # Clean up after this CallableActivation. Runs on both the
-            # success path and any exception path from build() -- previously
-            # the close was only called after success, so a failed sub-agent
-            # invocation orphaned its LangChainLlmResources (LLM client and
-            # its httpx connection pool).
+            # success path and any exception path from build(), so a failed
+            # sub-agent invocation does not orphan its LangChainLlmResources
+            # (LLM client and its httpx connection pool).
             #
             # Note that the run_context passed here is used as a comparison to be sure
             # that the CallableActivation's cleanup does not accidentally clean up

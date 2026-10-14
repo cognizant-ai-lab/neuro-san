@@ -77,7 +77,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         #       For well-formed arguments the two behave identically: a
         #       dictionary sent by the LLM reaches the tool as the same
         #       plain dict.  Non-dict values (e.g. a JSON-encoded string),
-        #       which Any silently passed through with the wrong type, now
+        #       which Any would pass through with the wrong type,
         #       fail pydantic validation and are reported back to the LLM
         #       as a correctable tool error instead.
         "object": Dict[str, Any]
@@ -187,11 +187,10 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # for something that is required, which leaves the pydantic definition
             # of "Undefined" in place which to agent infra implies a required arg.
             #
-            # Note: pydantic v2 enforces required-ness for every type.  Under
-            # the pydantic v1 models this converter used to build, fields with
-            # an Any annotation (bare "object" parameters) were implicitly
-            # optional even when listed in "required", so tool calls omitting
-            # them slipped through.  Such calls now fail validation, which
+            # Note: pydantic v2 enforces required-ness for every type, including
+            # fields with an Any annotation (bare "object" parameters), which
+            # pydantic v1 treats as optional even when listed in "required".
+            # A tool call that omits such a field fails validation, which
             # langchain reports back to the LLM as a correctable tool error.
             if field_name not in required:
                 field_kwargs["default"] = None
@@ -218,11 +217,11 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         # Create the pydantic BaseModel for the type dynamically.
         #
         # Note: pydantic v2 models validate LLM-supplied arguments more
-        # strictly than the v1 models this converter used to build.
+        # strictly than pydantic v1 models.
         # Sensible coercions still happen ("5" -> 5 for an int field), but
-        # the lossy ones v1 performed silently are now rejected: an int for
-        # a "string" field is no longer stringified, and a fractional float
-        # for an "int" field is no longer truncated.  Rejections do not
+        # the lossy ones v1 performs silently are rejected: an int for
+        # a "string" field is not stringified, and a fractional float
+        # for an "int" field is not truncated.  Rejections do not
         # crash the run - langchain surfaces them to the calling LLM as a
         # correctable tool-error message, at the cost of a retry round-trip.
         model: BaseModel = None
@@ -259,10 +258,9 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         Deliberately NOT rejected here: names that shadow BaseModel
         attributes outside the protected namespaces, such as "schema",
         "json", "dict" or "copy".  Pydantic v2 creates those fields and only
-        emits a shadowing UserWarning, so they work.  This is itself a
-        behavior change from the v1-based converter: v1's create_model
-        raised NameError for them, which made network validation reject
-        such specs - they now pass.
+        emits a shadowing UserWarning, so they work and network validation
+        accepts such specs (pydantic v1's create_model raises NameError for
+        these names).
         """
         message: str = None
         if field_name.startswith("_"):
@@ -327,7 +325,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # Get the type of the list components/items
             items: Dict[str, Any] = one_property.get("items")
 
-            # A missing "items" key used to crash the recursion below with an
+            # A missing "items" key would crash the recursion below with an
             # opaque AttributeError (None.get).  A non-dict value can also
             # arrive at runtime: the registry filter chain resolves string
             # commondef references like "items": "cao_item" at load, but the
