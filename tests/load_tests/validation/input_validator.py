@@ -332,7 +332,6 @@ Then use:
             estimated_total_cost_dollars: float = probe_cost_dollars * capped_requests
             estimated_total_tokens: int = probe_tokens * capped_requests
             if estimated_total_cost_dollars > 1.0:
-                # The backslash at a line end joins the next line onto it, so both print as one line.
                 warnings.append(
                     f"""Estimated cost exceeds $1:
      Probe used ~{probe_tokens:,} tokens (${probe_cost_dollars:.2f}) x {capped_requests} requests = \
@@ -348,7 +347,6 @@ Then use:
         if (estimated_stage_duration_seconds is not None
                 and estimated_stage_duration_seconds > self._args.stage_timeout):
             stage_timeout_seconds: int = self._args.stage_timeout
-            # The backslash at a line end joins the next line onto it, so both print as one line.
             warnings.append(
                 f"""Estimated stage duration ~{int(estimated_stage_duration_seconds)}s exceeds --stage-timeout \
 ({stage_timeout_seconds}s).
@@ -386,7 +384,6 @@ Then use:
         if not args.include_tokens:
             return []
         if args.client_only or args.no_server_log:
-            # The backslash at a line end joins the next line onto it, so both print as one line.
             no_token_usage_warning: str = """--minimal drops the token-accounting message, and this run has no \
 server log to fall back on:
      no LLM or token usage will be reported.
