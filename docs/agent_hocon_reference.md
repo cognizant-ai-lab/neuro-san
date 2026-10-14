@@ -332,11 +332,12 @@ As long as a parameter is a scalar listed in the args section for your LLM's cla
 file (or the list-valued `provider_tools` key, below), you can set that parameter in any llm_config within its
 own technical limits however you like.
 
-A few of those parameters decide which endpoint a request goes to, or are rejected by some models.
-They are described per provider in the
+A few of those parameters decide which endpoint a request goes to, how function tools are bound, or are
+rejected by some models. They are described per provider in the
 [Provider-Specific Arguments](./llm_info_hocon_reference.md#provider-specific-arguments) section of the
 llm_info reference: which OpenAI endpoint is used and why the Responses API is now the default, how to switch
-back to Chat Completions (also behind gateways such as LiteLLM), Anthropic thinking and effort, and Gemini thinking.
+back to Chat Completions (also behind gateways such as LiteLLM), how OpenAI binds function tools (`tool_strict`),
+Anthropic thinking and effort, and Gemini thinking.
 
 Note: _We strongly recommend to **not** set secrets as values within any source file, including hocon files._
 These files tend to creep into source control repos, and it is **very** bad practice
