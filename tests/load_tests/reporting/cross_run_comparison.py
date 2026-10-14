@@ -28,6 +28,7 @@ from typing import Set
 from typing import Tuple
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
@@ -135,19 +136,22 @@ class CrossRunComparison:
     @staticmethod
     def _extract_metrics(json_path: str, folder_name: str) -> Optional[Dict[str, Any]]:
         """
-        Parse a raw_results.json and return key metrics.
+        Read a run's raw_results.json and return key metrics.
 
         :param json_path: Path to the run's raw_results.json
         :param folder_name: Name of the run folder, stored as the run's folder
-        :return: The run's metrics, or None when the file cannot be read or parsed; the
-            path and reason are logged in that case
+        :return: The run's metrics, or None when the file is missing, cannot be read, is not valid JSON or is not a
+            JSON object; the path and reason are logged in that case
         """
-        raw_results: Dict[str, Any] = {}
+        raw_results: Optional[Dict[str, Any]] = None
         try:
-            with open(json_path, "r", encoding="utf-8") as file_handle:
-                raw_results = json.load(file_handle)
+            raw_results = EasyJsonPersistence(full_ref=json_path, must_exist=True).restore()
         except (json.JSONDecodeError, OSError) as error:
             SensitiveLogger(logger).error("Could not read %s: %s", json_path, error)
+            return None
+        if raw_results is None:
+            # EasyJsonPersistence returns None when the JSON is a list or a single value.
+            SensitiveLogger(logger).error("Could not read %s: %s", json_path, "the file is not a JSON object ({...})")
             return None
 
         aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
@@ -155,11 +159,13 @@ class CrossRunComparison:
         # Gather every stage's results, and each stage's peak server RSS.
         all_results: List[Dict[str, Any]] = []
         peak_rss_values_megabytes: List[float] = []
+        stage: Dict[str, Any]
         for stage in stages:
             all_results.extend(stage.get("results", []))
             peak_rss_values_megabytes.append(stage.get("peak_server_rss", 0))
         created_results: List[Dict[str, Any]] = []
         result: Dict[str, Any]
+        # Keep only the results of successful requests.
         for result in all_results:
             if result.get("status") == STATUS_CREATED:
                 created_results.append(result)
