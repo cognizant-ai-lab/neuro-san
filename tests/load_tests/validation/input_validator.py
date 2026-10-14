@@ -14,16 +14,8 @@
 #
 # END COPYRIGHT
 
-"""Validates and resolves user input for load test configuration.
-
-Handles stage resolution, max-request capping, and the interactive
-cost-confirmation flow that fires a single probe request to measure
-actual token usage before committing to a full run.
-"""
-
 import logging
 import os
-import sys
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -40,12 +32,18 @@ from tests.load_tests.confirm import Confirm
 from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class InputValidator:
-    """Validates and resolves user input for load test configuration.
+    """
+    Validates and resolves user input for load test configuration.
+
+    Handles stage resolution, max-request capping, and the interactive
+    cost-confirmation flow that fires a single probe request to measure
+    actual token usage before committing to a full run.
 
     Holds the parsed CLI args so that callers do not need to pass
     them to every method.
@@ -60,7 +58,8 @@ class InputValidator:
         self._args: Namespace = args
 
     def validate_agent_name(self) -> None:
-        """Reject --agent values that look like filesystem paths.
+        """
+        Reject --agent values that look like filesystem paths.
 
         The server resolves agents by registry-relative name
         (e.g. 'basic/hello_world'), not by absolute path.
@@ -77,13 +76,14 @@ class InputValidator:
                 "  --agent basic/hello_world",
                 agent,
             )
-            sys.exit(1)
+            raise LoadTestAbortError(1)
 
     def validate_fixtures_hocon_dir(self) -> List[str]:
-        """Resolve --fixtures-hocon-dir into a sorted list of *.hocon files.
+        """
+        Resolve --fixtures-hocon-dir into a sorted list of *.hocon files.
 
         Returns an empty list when the flag was not given, meaning
-        prompts come from the JSON profile as before. When given, the
+        prompts come from the JSON profile. When given, the
         hocon files take precedence over the profile's prompts; the
         profile is still used for the remaining settings.
 
@@ -112,7 +112,7 @@ class InputValidator:
                 "  Check --fixtures-hocon-dir / --project-root.",
                 self._args.agent, hocon_dir,
             )
-            sys.exit(1)
+            raise LoadTestAbortError(1)
 
         hocon_files: List[str] = sorted(
             os.path.join(hocon_dir, file_name)
@@ -122,12 +122,13 @@ class InputValidator:
         )
         if not hocon_files:
             logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
-            sys.exit(1)
+            raise LoadTestAbortError(1)
 
         return hocon_files
 
     def resolve_stages(self) -> List[int]:
-        """Return the list of concurrency stages to run.
+        """
+        Return the list of concurrency stages to run.
 
         If --ramp is set and --stages provided, parse the CSV.
         If --ramp is set without --stages, use DEFAULT_STAGES.
@@ -144,20 +145,20 @@ class InputValidator:
                         for stage_text in self._args.stages.split(",")
                         if stage_text.strip()
                     ]
-                except ValueError:
+                except ValueError as value_error:
                     logger.error(
                         "--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
                         self._args.stages,
                     )
-                    sys.exit(1)
+                    raise LoadTestAbortError(1) from value_error
                 if not stages or any(stage <= 0 for stage in stages):
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
-                    sys.exit(1)
+                    raise LoadTestAbortError(1)
                 return stages
             return list(DEFAULT_STAGES)
         if self._args.num_requests <= 0:
             logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
-            sys.exit(1)
+            raise LoadTestAbortError(1)
         return [self._args.num_requests]
 
     def resolve_max_requests(self, stages: List[int]) -> int:
@@ -169,18 +170,19 @@ class InputValidator:
         """
         if self._args.num_rounds <= 0:
             logger.error("--num-rounds must be a positive integer. Got: %s", self._args.num_rounds)
-            sys.exit(1)
+            raise LoadTestAbortError(1)
         if self._args.max_requests is not None:
             if self._args.max_requests <= 0:
                 logger.error("--max-requests must be a positive integer. Got: %s", self._args.max_requests)
-                sys.exit(1)
+                raise LoadTestAbortError(1)
             return self._args.max_requests
         return sum(stages) * self._args.num_rounds
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def confirm_cost(self, stages: List[int], total_cap_requests: int, runner: TrafficRunner,
                      output_dir: Optional[str] = None, stale_log_age: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
+        """
+        Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
         The dry-run probe + cost confirmation runs by default at min
         and norm levels; --no-dry-run bypasses it. At adv level it does
@@ -190,8 +192,6 @@ class InputValidator:
         Otherwise fires one probe request with --tokens to measure
         actual token usage, collects warnings, and asks the user to
         confirm.
-
-        Returns the probe result dict if a probe was run, else None.
 
         :param stages: Requests per stage
         :param total_cap_requests: Most requests to send, from resolve_max_requests
@@ -248,7 +248,7 @@ class InputValidator:
 
         if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
             logger.info("Aborted by user.")
-            sys.exit(0)
+            raise LoadTestAbortError(0)
 
         return probe_result
 
@@ -295,7 +295,8 @@ class InputValidator:
 
     @staticmethod
     def _estimate_stage_duration(probe_elapsed_seconds: float, remaining_requests: int) -> float:
-        """Estimate stage wall time from probe duration.
+        """
+        Estimate stage wall time from probe duration.
 
         LLM is the bottleneck, so concurrent requests do not
         scale linearly.  Estimate as probe_time x remaining
@@ -366,7 +367,8 @@ class InputValidator:
         return warnings
 
     def _token_reporting_warnings(self) -> List[str]:
-        """Warn when the chat filter will suppress token reporting.
+        """
+        Warn when the chat filter will suppress token reporting.
 
         Client-side LLM/token numbers arrive as a token-accounting
         message in the chat stream, which the server's MINIMAL filter
@@ -394,7 +396,8 @@ class InputValidator:
 
     @staticmethod
     def _check_memory_headroom(num_requests: int) -> Optional[str]:
-        """Warn if available memory looks insufficient.
+        """
+        Warn if available memory looks insufficient.
 
         Uses a conservative per-request estimate based on
         typical server thread overhead.
@@ -428,20 +431,24 @@ class InputValidator:
             return
 
         logger.warning("\n  WARNINGS (%s found):", len(warnings))
+        warning_number: int
+        warning: str
+        # Log each warning, numbered from 1, with its extra lines below it.
         for warning_number, warning in enumerate(warnings, 1):
             lines: List[str] = warning.split("\n")
             logger.warning("  %s. %s", warning_number, lines[0])
+            line: str
+            # Log the rest of the warning's lines.
             for line in lines[1:]:
                 logger.warning("  %s", line)
 
     def _run_cost_probe(self, runner: TrafficRunner,
                         output_dir: Optional[str]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Fire one probe request and return results.
+        """
+        Fire one probe request and return results.
 
         Fires a single request (tokens are enabled by default)
         and logs the outcome.
-
-        Returns (probe_result, probe_data_dict).
 
         :param runner: Traffic runner used to fire the probe request
         :param output_dir: Directory for the probe's output files, or None

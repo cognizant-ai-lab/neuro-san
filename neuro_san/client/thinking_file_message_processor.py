@@ -45,8 +45,8 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         Constructor
 
         :param thinking_file: A string representing the path to a single file where
-                              all agent output is combined.  We no longer recommmend this
-                              now that we have ...
+                              all agent output is combined.  We recommend thinking_dir
+                              instead.
         :param thinking_dir: A string representing the path to a single directory where
                              each agent in the network gets its own history file according
                              to its agent network origin name.  This is much easier to
@@ -137,8 +137,8 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         use_origin: str = self._determine_origin_reporting(response, origin_str)
 
         # Determine the filename to use given the origin_str.
-        # Previously we might have used a uuid as a filename, but by default
-        # we want the filenames to match the full origin_str.
+        # By default we want the filenames to match the full origin_str,
+        # not a uuid.
         origin_filename: str = self.origins.get(origin_str, origin_str)
 
         try:

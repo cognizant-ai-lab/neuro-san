@@ -17,6 +17,7 @@
 import time
 from typing import Any
 from typing import Dict
+from typing import override
 
 import datetime
 from logging import getLogger
@@ -72,6 +73,7 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
             return 1
         return int(round(update_period_seconds / 4))
 
+    @override
     def start(self):
         """
         Perform start up.
@@ -79,6 +81,13 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
         self.logger.info("Starting RegistryStorageUpdater for %s with %d seconds period",
                          self.manifest_path, self.update_period_in_seconds)
         self.observer.start()
+
+    @override
+    def stop(self):
+        """
+        Perform steps to stop/shut-down
+        By default this does nothing
+        """
 
     def log_next_update_time(self):
         """

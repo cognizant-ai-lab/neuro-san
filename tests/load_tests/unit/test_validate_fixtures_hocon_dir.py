@@ -24,6 +24,7 @@ from unittest import TestCase
 from neuro_san import TOP_LEVEL_DIR
 from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.validation.input_validator import InputValidator
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 # Real fixtures, not mocks: tests/fixtures/load_tests/hello_world/*.hocon
 PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
@@ -93,17 +94,17 @@ class TestValidateFixturesHoconDir(TestCase):
 
     def test_missing_agent_dir_exits(self) -> None:
         """No <DIR>/<agent>/ folder -> exit 1."""
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             self._validator(
                 agent="no_such_agent",
                 fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
             ).validate_fixtures_hocon_dir()
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_empty_agent_dir_exits(self) -> None:
         """Folder exists but holds no *.hocon -> exit 1."""
         with tempfile.TemporaryDirectory() as parent:
             os.mkdir(os.path.join(parent, "hello_world"))
-            with self.assertRaises(SystemExit) as caught:
+            with self.assertRaises(LoadTestAbortError) as caught:
                 self._validator(fixtures_hocon_dir=parent).validate_fixtures_hocon_dir()
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)

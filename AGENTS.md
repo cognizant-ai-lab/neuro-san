@@ -32,6 +32,7 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
 
 - **One module, one class.** Each `.py` file defines exactly one class (a handful of pre-existing exceptions are
   not precedent). Split helper logic into a separate module rather than adding a second class to an existing file.
+  This should also mean that there should be no module comments - they should be really be the class's docstring.
 - **No module-level functions, no nested functions, no lambdas.** Every function is a method (or `@staticmethod`)
   on the module's class. If a method needs a helper, make it another method on the same class; bind arguments with
   `functools.partial` on a method or `@staticmethod` where a lambda would otherwise have been used.
@@ -69,6 +70,9 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
   `None`. Add `:raises <ExceptionType>: <description>` after `:return:` if the method can raise something worth
   documenting. Write docstrings and comments in present tense: what the code or test does today, not
   its history (no "used to ...", "Previously ...").
+- Keep all code comments brief, written in Standard Technical English.
+- Add code comments for every for loop.
+- Add type hints for every looping variable.
 - Mark overridden methods with `@override` (`from typing_extensions import override`). Comment the non-obvious:
   threading/lifecycle behavior and the reason behind a design decision — not what a line already says.
 

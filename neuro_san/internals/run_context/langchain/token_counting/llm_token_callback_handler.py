@@ -270,7 +270,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         usage_metadata, response_model_name, is_empty_response = self._extract_usage(response)
         # A policy may have said which llm_info entry prices this run (see PRICE_MODEL_METADATA_KEY);
         # otherwise the model the response names is priced.
-        model_name: str = self.price_model_names.pop(kwargs.get("run_id"), None) or response_model_name
+        run_id: Optional[UUID] = kwargs.get("run_id")
+        model_name: str = self.price_model_names.pop(run_id, None) or response_model_name
 
         if usage_metadata:
             total_tokens: int = usage_metadata.get("total_tokens", 0)
