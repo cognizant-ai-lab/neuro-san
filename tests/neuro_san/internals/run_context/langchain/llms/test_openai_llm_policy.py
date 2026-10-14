@@ -29,10 +29,13 @@ from unittest.mock import patch
 from typing_extensions import override
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableBinding
+from langchain_core.tools import StructuredTool
 from langchain_openai.chat_models.base import ChatOpenAI
 from openai.resources.responses import AsyncResponses
 
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
+from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 
 
 class TestOpenAILlmPolicy(TestCase):
@@ -52,6 +55,17 @@ class TestOpenAILlmPolicy(TestCase):
         "max_retries": 0,
         "request_timeout": 5,
         "streaming": False,
+    }
+
+    # The argument schema of a tool with one required and one optional argument, the shape an MCP
+    # server's tool arrives in (a StructuredTool whose args_schema is the server's inputSchema dict).
+    SEARCH_SCHEMA: Dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "What to search for."},
+            "extraction": {"type": "string", "description": "How much of each page to extract."},
+        },
+        "required": ["query"],
     }
 
     @override
@@ -104,6 +118,33 @@ class TestOpenAILlmPolicy(TestCase):
         :return: The keyword arguments that would be passed to the OpenAI SDK create() call
         """
         payload: Dict[str, Any] = llm._get_request_payload([HumanMessage("hi")])
+        return payload
+
+    @staticmethod
+    def _run_search(**kwargs: Any) -> str:
+        """
+        Stands in for the search tool's implementation; the tests never call it.
+
+        :param kwargs: The tool arguments
+        :return: A fixed answer
+        """
+        _ = kwargs
+        return "no results"
+
+    def _request_payload_with_search_tool(self, llm: ChatOpenAI) -> Dict[str, Any]:
+        """
+        Computes the request body for a single user message with a search tool bound the way create_agent()
+        binds coded tools and MCP tools: as a StructuredTool, without a strict value.
+
+        :param llm: The ChatOpenAI instance to inspect
+        :return: The keyword arguments that would be passed to the OpenAI SDK create() call
+        """
+        search_tool: StructuredTool = StructuredTool.from_function(func=self._run_search,
+                                                                   name="you_search",
+                                                                   description="Searches the web.",
+                                                                   args_schema=self.SEARCH_SCHEMA)
+        bound: RunnableBinding = llm.bind_tools([search_tool])
+        payload: Dict[str, Any] = llm._get_request_payload([HumanMessage("hi")], **bound.kwargs)
         return payload
 
     @staticmethod
@@ -300,4 +341,63 @@ class TestOpenAILlmPolicy(TestCase):
         self.assertIsNone(llm.include)
         self.assertNotIn("store", payload)
         self.assertNotIn("include", payload)
+        self._assert_binds_to_responses_create(payload)
+
+    def test_chat_model_is_the_tool_strict_subclass(self) -> None:
+        """
+        The policy builds ToolStrictChatOpenAI, which is still a ChatOpenAI for everything else.
+        """
+        llm: ChatOpenAI = self._build_llm({})
+
+        self.assertIsInstance(llm, ToolStrictChatOpenAI)
+        self.assertIsInstance(llm, ChatOpenAI)
+
+    def test_tool_strict_absent_falls_back_to_false(self) -> None:
+        """
+        With tool_strict absent from llm_config the policy falls back to False, the same value the hocon
+        class default gives once DefaultLlmFactory has filled in the config, so every tool carries
+        "strict": false.
+        """
+        llm: ChatOpenAI = self._build_llm({"use_responses_api": True})
+        payload: Dict[str, Any] = self._request_payload_with_search_tool(llm)
+
+        self.assertIs(llm.tool_strict, False)
+        self.assertIs(payload.get("tools")[0].get("strict"), False)
+        self._assert_binds_to_responses_create(payload)
+
+    def test_tool_strict_null_leaves_strict_out_of_every_tool(self) -> None:
+        """
+        An explicit "tool_strict": null reaches the chat model as None, not as the False fallback, and the
+        tools then carry no strict value, exactly as a stock ChatOpenAI sends them.
+        """
+        llm: ChatOpenAI = self._build_llm({"use_responses_api": True, "tool_strict": None})
+        payload: Dict[str, Any] = self._request_payload_with_search_tool(llm)
+
+        self.assertIsNone(llm.tool_strict)
+        self.assertNotIn("strict", payload.get("tools")[0])
+        self._assert_binds_to_responses_create(payload)
+
+    def test_tool_strict_false_puts_strict_false_on_every_tool(self) -> None:
+        """
+        An explicit "tool_strict": false reaches the chat model as False and lands on each tool of a
+        Responses API request, which still binds against the real create() signature.
+        """
+        llm: ChatOpenAI = self._build_llm({"use_responses_api": True, "tool_strict": False})
+        payload: Dict[str, Any] = self._request_payload_with_search_tool(llm)
+
+        self.assertIs(llm.tool_strict, False)
+        self.assertIs(payload.get("tools")[0].get("strict"), False)
+        # The schema itself is left alone: the optional argument stays optional.
+        self.assertEqual(payload.get("tools")[0].get("parameters").get("required"), ["query"])
+        self._assert_binds_to_responses_create(payload)
+
+    def test_tool_strict_true_is_forwarded(self) -> None:
+        """
+        An explicit "tool_strict": true turns strict mode on for every tool.
+        """
+        llm: ChatOpenAI = self._build_llm({"use_responses_api": True, "tool_strict": True})
+        payload: Dict[str, Any] = self._request_payload_with_search_tool(llm)
+
+        self.assertIs(llm.tool_strict, True)
+        self.assertIs(payload.get("tools")[0].get("strict"), True)
         self._assert_binds_to_responses_create(payload)
