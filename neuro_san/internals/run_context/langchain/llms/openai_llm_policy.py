@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 from httpx import AsyncClient
@@ -73,9 +74,10 @@ class OpenAILlmPolicy(LlmPolicy):
         # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
 
         # pylint: disable=invalid-name
-        AsyncOpenAI = self.resolver.resolve_class_in_module("AsyncOpenAI",
-                                                            module_name="openai",
-                                                            install_if_missing="langchain-openai")
+        AsyncOpenAI: Type[Any] = self.resolver.resolve_class_in_module(
+            "AsyncOpenAI",
+            module_name="openai",
+            install_if_missing="langchain-openai")
 
         self.create_http_client(config)
 
@@ -119,12 +121,13 @@ class OpenAILlmPolicy(LlmPolicy):
         # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
 
         # pylint: disable=invalid-name
-        ChatOpenAI = self.resolver.resolve_class_in_module("ChatOpenAI",
-                                                           module_name="langchain_openai.chat_models.base",
-                                                           install_if_missing="langchain-openai")
+        ChatOpenAI: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatOpenAI",
+            module_name="langchain_openai.chat_models.base",
+            install_if_missing="langchain-openai")
 
         # Now construct LLM chat model we will be using:
-        llm = ChatOpenAI(
+        llm: BaseLanguageModel = ChatOpenAI(
             async_client=client,
             root_async_client=self.async_openai_client,
             model_name=model_name,

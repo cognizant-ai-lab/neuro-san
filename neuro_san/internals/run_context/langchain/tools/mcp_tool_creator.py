@@ -131,6 +131,7 @@ class McpToolCreator(ToolCreator):
         :return: The tools whose names are not yet exposed, in the same order.
         """
         kept_tools: List[BaseTool] = []
+        tool: BaseTool = None
         for tool in mcp_tools:
             if self.exposed_tool_names.is_taken(tool.name):
                 message: str = (f"{self.agent_location}: MCP tool '{tool.name}' from {server_url} has the same name as "

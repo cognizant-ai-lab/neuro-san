@@ -182,6 +182,7 @@ class LangChainMcpAdapter:
         mcp_tools = self._filter_allowed_tools(server_url, mcp_tools, client_allowed_tools, allow_list_source)
         mcp_tools = self._rename_tools_for_providers(server_url, mcp_tools, allow_list_source)
 
+        tool: BaseTool = None
         for tool in mcp_tools:
             # Add "langchain_tool" tags so journal callback can idenitify it.
             # These MCP tools are treated as Langchain tools and can be reported in the thinking file.
@@ -239,6 +240,7 @@ class LangChainMcpAdapter:
         # raising inside the matching.
         usable_entries: List[str] = []
         invalid_entries: List[Any] = []
+        entry: Any = None
         for entry in client_allowed_tools:
             if isinstance(entry, str) and entry:
                 usable_entries.append(entry)
@@ -251,6 +253,7 @@ class LangChainMcpAdapter:
                 self.agent_location_prefix, server_url, invalid_entries, allow_list_source)
 
         original_names: List[str] = []
+        tool: BaseTool = None
         for tool in mcp_tools:
             original_names.append(tool.name)
 
@@ -273,6 +276,7 @@ class LangChainMcpAdapter:
         selected: List[str] = self.tool_name_policy.select_allowed(usable_entries, original_names)
 
         filtered_tools: List[BaseTool] = []
+        tool: BaseTool = None
         for tool in mcp_tools:
             if tool.name in selected:
                 filtered_tools.append(tool)
@@ -288,6 +292,7 @@ class LangChainMcpAdapter:
         :return: The set of tool names that McpToolNamePolicy.filter() leaves unchanged.
         """
         safe_names: Set[str] = set()
+        tool: BaseTool = None
         for tool in mcp_tools:
             # A missing name is skipped later, so it must not reserve anything.
             if tool.name and self.tool_name_policy.filter(tool.name) == tool.name:
@@ -325,6 +330,7 @@ class LangChainMcpAdapter:
         kept_names: Set[str] = set()
 
         kept_tools: List[BaseTool] = []
+        tool: BaseTool = None
         for tool in mcp_tools:
             if not tool.name:
                 # No LLM can call a nameless tool, and filter() would pass the
