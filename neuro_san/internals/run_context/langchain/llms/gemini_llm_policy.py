@@ -164,10 +164,8 @@ class GeminiLlmPolicy(LlmPolicy):
             return
 
         # Do the necessary reach-ins to successfully shut down the web client
-        # This used to be a v1betaGenerativeServiceAsyncClient, aka
-        # google.ai.generativelanguage_v1beta.GenerativeServiceAsyncClient.
-        # however, langchain-google-genai==4.0.0 migrated to google-genai,
-        # and now When ChatGoogleGenerativeAI is instantiated, it creates google.genai.Client
+        # langchain-google-genai is built on google-genai:
+        # when ChatGoogleGenerativeAI is instantiated, it creates google.genai.Client
         # via the validate_environment method
         # (https://github.com/langchain-ai/langchain-google/blob/main/libs/genai/langchain_google_genai/
         # chat_models.py#L2306).
