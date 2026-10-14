@@ -230,7 +230,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         is_empty_response: bool = False
         if isinstance(generation, ChatGeneration):
             try:
-                message = generation.message
+                message: BaseMessage = generation.message
                 if isinstance(message, AIMessage):
                     # Token info is in an attribute of AIMessage called "usage_metadata".
                     usage_metadata = message.usage_metadata

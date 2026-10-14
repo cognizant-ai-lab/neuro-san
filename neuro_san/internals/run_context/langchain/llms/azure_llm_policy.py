@@ -21,6 +21,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Type
 
 from logging import Logger
 from logging import getLogger
@@ -115,9 +116,10 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         # OpenAI SDK client is all it needs. Same lazy-loading resolver rigamarole as the other policies.
 
         # pylint: disable=invalid-name
-        AsyncOpenAI = self.resolver.resolve_class_in_module("AsyncOpenAI",
-                                                            module_name="openai",
-                                                            install_if_missing="langchain-openai")
+        AsyncOpenAI: Type[Any] = self.resolver.resolve_class_in_module(
+            "AsyncOpenAI",
+            module_name="openai",
+            install_if_missing="langchain-openai")
 
         # Resolve the configuration before opening anything: the factory drops a policy whose
         # create_client() raised without calling delete_resources(), so an httpx client opened
@@ -390,9 +392,10 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :return: The exception to raise
         """
         # pylint: disable=invalid-name
-        OpenAIError = self.resolver.resolve_class_in_module("OpenAIError",
-                                                            module_name="openai",
-                                                            install_if_missing="langchain-openai")
+        OpenAIError: Type[Exception] = self.resolver.resolve_class_in_module(
+            "OpenAIError",
+            module_name="openai",
+            install_if_missing="langchain-openai")
         return OpenAIError(message)
 
     def build_default_headers(self, config: Dict[str, Any]) -> Dict[str, str]:
@@ -422,6 +425,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :param config: The fully specified llm config
         """
         legacy_present: List[str] = []
+        key: str = None
         for key in self.LEGACY_KEYS:
             # null and "" are the neutral values the class defaults carry; only a real value counts.
             if config.get(key):

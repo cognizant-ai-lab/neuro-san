@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 
@@ -45,11 +46,12 @@ class OllamaLlmPolicy(LlmPolicy):
         """
         # Use lazy loading to prevent installing the world
         # pylint: disable=invalid-name
-        ChatOllama = self.resolver.resolve_class_in_module("ChatOllama",
-                                                           module_name="langchain_ollama",
-                                                           install_if_missing="langchain-ollama")
+        ChatOllama: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatOllama",
+            module_name="langchain_ollama",
+            install_if_missing="langchain-ollama")
         # Higher temperature is more random
-        llm = ChatOllama(
+        llm: BaseLanguageModel = ChatOllama(
             model=model_name,
             mirostat=config.get("mirostat"),
             mirostat_eta=config.get("mirostat_eta"),

@@ -68,6 +68,6 @@ class MasterTracingContextFactory:
         context_type: str = use_config.get("context_type")
         if context_type is None:
             context_type = "langchain"
-        lower_context_type = context_type.lower()
+        lower_context_type: str = context_type.lower()
 
         return lower_context_type

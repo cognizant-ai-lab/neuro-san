@@ -17,9 +17,10 @@
 
 class LoadTestAbortError(Exception):
     """
-    Raised by a load-test check to stop the run before it starts.
+    Raised by a load-test check to stop the run.
 
-    The validators log the reason and raise this instead of exiting.
+    The validators, AgentProfileFactory and AgentProfile log the reason
+    and raise this instead of exiting.
     Only the __main__ entry point, LoadTestOrchestrator.main(), turns it
     into a process exit with get_exit_code().
     """
