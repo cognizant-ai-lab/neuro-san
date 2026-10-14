@@ -19,14 +19,19 @@ from typing import Any
 from typing import Dict
 from typing import Generator
 
+from abc import abstractmethod
+
+from leaf_common.utils.interface import interface
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
 
 
+@interface
 class AsyncAgentSession(AgentSessionConstants):
     """
     Asynchronous interface for the initiation and continuity of a single Agent session.
     """
 
+    @abstractmethod
     async def function(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
         :param request_dict: A dictionary version of the FunctionRequest
@@ -38,6 +43,7 @@ class AsyncAgentSession(AgentSessionConstants):
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def connectivity(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
         :param request_dict: A dictionary version of the ConnectivityRequest
@@ -51,6 +57,7 @@ class AsyncAgentSession(AgentSessionConstants):
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def streaming_chat(self, request_dict: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         """
         :param request_dict: A dictionary version of the ChatRequest
@@ -68,6 +75,7 @@ class AsyncAgentSession(AgentSessionConstants):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def close(self):
         """
         Close the session, releasing any underlying client connection.
@@ -96,8 +104,9 @@ class AsyncAgentSession(AgentSessionConstants):
         connection (e.g. in-process direct sessions) have nothing to close and
         are never considered closed.
         """
-        return
+        raise NotImplementedError
 
+    @abstractmethod
     def is_closed(self) -> bool:
         """
         :return: True if close() has been called on this session, in which case
@@ -105,4 +114,4 @@ class AsyncAgentSession(AgentSessionConstants):
                  AgentSessionClosedError. The default is False for sessions that
                  hold no external connection and therefore cannot be closed.
         """
-        return False
+        raise NotImplementedError
