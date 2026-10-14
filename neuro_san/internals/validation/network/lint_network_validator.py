@@ -25,46 +25,6 @@ import re
 
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
-# Matches commondefs-style replacement tokens: "{word}" where word starts
-# with a letter or underscore. Excludes regex quantifiers like "{3}" or "{3,5}".
-_REPLACEMENT_TOKEN_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-
-# Only these top-level agent-spec fields are scanned for leftover placeholders.
-# Other fields (args, url templates, etc.) legitimately contain {word} tokens.
-_PLACEHOLDER_FIELDS = ("instructions", "description")
-
-
-# -----------------------------------------------------------------
-# Helpers — pure functions, no class state needed
-# -----------------------------------------------------------------
-
-def _iter_strings(value: Any) -> Iterator[str]:
-    """Yield every string leaf found anywhere within a nested dict/list/scalar."""
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for sub in value.values():
-            yield from _iter_strings(sub)
-    elif isinstance(value, list):
-        for sub in value:
-            yield from _iter_strings(sub)
-
-
-def _iter_scalars(value: Any) -> Iterator[Any]:
-    """Yield every non-dict, non-list leaf found anywhere within a nested structure."""
-    if isinstance(value, dict):
-        for sub in value.values():
-            yield from _iter_scalars(sub)
-    elif isinstance(value, list):
-        for sub in value:
-            yield from _iter_scalars(sub)
-    else:
-        yield value
-
-
-# -----------------------------------------------------------------
-# Validator
-# -----------------------------------------------------------------
 
 class LintNetworkValidator(AbstractNetworkValidator):
     """
@@ -81,6 +41,13 @@ class LintNetworkValidator(AbstractNetworkValidator):
     * find_unresolved_placeholders() — operates on the resolved config
     """
 
+    # Matches commondefs-style replacement tokens: "{word}" where word starts with a letter or
+    # underscore. Excludes regex quantifiers like "{3}" or "{3,5}".
+    _REPLACEMENT_TOKEN_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+    # Only these top-level agent-spec fields are scanned for leftover placeholders.
+    _PLACEHOLDER_FIELDS = ("instructions", "description")
+
     def __init__(self, raw_config: Dict[str, Any] = None):
         """
         :param raw_config: The pre-commondefs-substitution config dictionary.
@@ -89,6 +56,46 @@ class LintNetworkValidator(AbstractNetworkValidator):
                 is silently skipped.
         """
         self.raw_config: Dict[str, Any] = raw_config
+
+    # --- Static helpers ---
+
+    @staticmethod
+    def _iter_strings(value: Any) -> Iterator[str]:
+        """
+        Yield every string leaf found anywhere within a nested dict/list/scalar.
+
+        :param value: Any nested combination of dict/list/scalar
+        :return: An iterator over every string leaf
+        """
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            # Recurse into each dict value
+            for sub in value.values():
+                yield from LintNetworkValidator._iter_strings(sub)
+        elif isinstance(value, list):
+            # Recurse into each list element
+            for sub in value:
+                yield from LintNetworkValidator._iter_strings(sub)
+
+    @staticmethod
+    def _iter_scalars(value: Any) -> Iterator[Any]:
+        """
+        Yield every non-dict, non-list leaf found anywhere within a nested structure.
+
+        :param value: Any nested combination of dict/list/scalar
+        :return: An iterator over every scalar leaf
+        """
+        if isinstance(value, dict):
+            # Recurse into each dict value
+            for sub in value.values():
+                yield from LintNetworkValidator._iter_scalars(sub)
+        elif isinstance(value, list):
+            # Recurse into each list element
+            for sub in value:
+                yield from LintNetworkValidator._iter_scalars(sub)
+        else:
+            yield value
 
     # --- AbstractNetworkValidator interface ---
 
@@ -133,8 +140,7 @@ class LintNetworkValidator(AbstractNetworkValidator):
         if not isinstance(commondefs, dict) or not commondefs:
             return warnings
 
-        # Commondefs substitution only applies within commondefs (cross-refs)
-        # and the tools subtree. See NetworkConfigFilterChain.
+        # Commondefs substitution only applies within commondefs (cross-refs) and the tools subtree.
         scan_root: Dict[str, Any] = {
             "tools": raw_config.get("tools", []),
             "commondefs": commondefs,
@@ -143,20 +149,21 @@ class LintNetworkValidator(AbstractNetworkValidator):
         # Check replacement_strings: look for {key} tokens in all text
         replacement_strings: Any = commondefs.get("replacement_strings")
         if isinstance(replacement_strings, dict) and replacement_strings:
-            haystack: str = "\n".join(_iter_strings(scan_root))
+            haystack: str = "\n".join(self._iter_strings(scan_root))
+            # Scan for each defined key as a {key} token
             for key in replacement_strings:
                 token: str = "{" + str(key) + "}"
                 if token not in haystack:
                     warnings.append(
-                        f"commondefs.replacement_strings.{key} is defined "
-                        f"but '{token}' never appears anywhere else in the "
-                        "network."
+                        f"""commondefs.replacement_strings.{key} is defined but '{token}' """
+                        """never appears anywhere else in the network."""
                     )
 
         # Check replacement_values: look for bare string matches
         replacement_values: Any = commondefs.get("replacement_values")
         if isinstance(replacement_values, dict) and replacement_values:
-            all_scalars: List[Any] = list(_iter_scalars(scan_root))
+            all_scalars: List[Any] = list(self._iter_scalars(scan_root))
+            # Scan for each defined key as a bare string value
             for key in replacement_values:
                 used: bool = any(
                     scalar == key
@@ -165,9 +172,8 @@ class LintNetworkValidator(AbstractNetworkValidator):
                 )
                 if not used:
                     warnings.append(
-                        f"commondefs.replacement_values.{key} is defined "
-                        f'but the bare string value "{key}" never appears '
-                        "anywhere else in the network."
+                        f"""commondefs.replacement_values.{key} is defined but the bare string value """
+                        f""""{key}" never appears anywhere else in the network."""
                     )
 
         return warnings
@@ -194,18 +200,20 @@ class LintNetworkValidator(AbstractNetworkValidator):
             return warnings
 
         seen_tokens: Set[str] = set()
+        # Scan each tool's instructions and description fields
         for tool in tools:
             if not isinstance(tool, dict):
                 continue
-            for field in _PLACEHOLDER_FIELDS:
+            # Only scan the fields that should have commondefs substitutions applied
+            for field in LintNetworkValidator._PLACEHOLDER_FIELDS:
                 text: Any = tool.get(field)
                 if not isinstance(text, str):
                     continue
-                for match in _REPLACEMENT_TOKEN_RE.finditer(text):
+                # Find all {word}-shaped tokens in this field
+                for match in LintNetworkValidator._REPLACEMENT_TOKEN_RE.finditer(text):
                     start: int = match.start()
                     end: int = match.end()
-                    # Skip {{word}} — double braces are intentional
-                    # (LangChain prompt templates, Jinja, etc.)
+                    # Skip {{word}} — double braces are intentional (LangChain prompt templates, Jinja, etc.)
                     if start > 0 and text[start - 1] == "{":
                         continue
                     if end < len(text) and text[end] == "}":
@@ -215,11 +223,9 @@ class LintNetworkValidator(AbstractNetworkValidator):
                         continue
                     seen_tokens.add(token)
                     warnings.append(
-                        f"Found unresolved placeholder '{token}' in the "
-                        "agent network. Add a "
-                        f"commondefs.replacement_strings.{match.group(1)} "
-                        "entry, or remove the placeholder if it was not "
-                        "meant to be a commondef reference."
+                        f"""Found unresolved placeholder '{token}' in the agent network. """
+                        f"""Add a commondefs.replacement_strings.{match.group(1)} entry, """
+                        """or remove the placeholder if it was not meant to be a commondef reference."""
                     )
 
         return warnings
