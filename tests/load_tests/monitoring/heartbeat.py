@@ -530,15 +530,16 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
     def _open_progress_file(self) -> Optional[TextIO]:
         """
-        Open progress.log for writing if output_dir is set.
+        Open progress.log for appending if output_dir is set.
+
+        Append mode keeps the request lines TrafficRunner writes to the same file. progress_heartbeat() closes the file.
 
         :return: The open progress.log, or None when there is no output_dir
         """
         if not self._output_dir:
             return None
         path: str = os.path.join(self._output_dir, "progress.log")
-        # pylint: disable=consider-using-with
-        return open(path, "w", encoding="utf-8")
+        return open(path, "a", encoding="utf-8")
 
     @staticmethod
     def _write_to_file(progress_file: Optional[TextIO], line: str) -> None:
