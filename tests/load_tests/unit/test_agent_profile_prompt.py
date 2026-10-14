@@ -17,6 +17,7 @@
 from unittest import TestCase
 
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 
 class TestAgentProfilePrompt(TestCase):
@@ -48,5 +49,6 @@ class TestAgentProfilePrompt(TestCase):
     def test_empty_prompt_pool_aborts(self) -> None:
         """A profile with no prompts is a hard error."""
         empty: AgentProfile = AgentProfile("music_nerd", {"prompts": []})
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(LoadTestAbortError) as caught:
             empty.get_prompt(0)
+        self.assertEqual(caught.exception.get_exit_code(), 1)

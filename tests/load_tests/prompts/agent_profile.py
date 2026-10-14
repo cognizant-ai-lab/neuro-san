@@ -26,6 +26,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -139,6 +141,7 @@ class AgentProfile:
         :param same_prompt: When True every request uses the first prompt
         :param allow_caching: When True the unique request_id suffix is not added
         :return: The prompt text to send
+        :raises LoadTestAbortError: With exit code 1 when the profile has no prompts
         """
         prompts: List[str] = self.get_prompts()
         if not prompts:
@@ -148,7 +151,7 @@ class AgentProfile:
                 "  Aborting.",
                 self.agent_name,
             )
-            raise SystemExit(1)
+            raise LoadTestAbortError(1)
         base_prompt: str = prompts[self._pool_index(request_id, same_prompt, len(prompts))]
         if allow_caching:
             return base_prompt
