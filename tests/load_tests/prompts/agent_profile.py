@@ -146,9 +146,9 @@ class AgentProfile:
         prompts: List[str] = self.get_prompts()
         if not prompts:
             logger.error(
-                "Agent profile '%s' has an empty prompts list.\n"
-                "  Add at least one prompt to the profile JSON.\n"
-                "  Aborting.",
+                """Agent profile '%s' has an empty prompts list.
+  Add at least one prompt to the profile JSON.
+  Aborting.""",
                 self.agent_name,
             )
             raise LoadTestAbortError(1)
