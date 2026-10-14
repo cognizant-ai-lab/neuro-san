@@ -35,6 +35,7 @@ from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSess
 from neuro_san.internals.chat.queue_filter import QueueFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
+from neuro_san.internals.journals.message_journal import MessageJournal
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -197,7 +198,8 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         # Task for late-stage conversions for any and all messages
         queue_filter = QueueFilter(chat_filter, self.agent_network)
-        queue_filter.apply_to_journal(self.invocation_context.get_journal())
+        message_journal: MessageJournal = self.invocation_context.get_journal()
+        queue_filter.apply_to_journal(message_journal)
 
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some
