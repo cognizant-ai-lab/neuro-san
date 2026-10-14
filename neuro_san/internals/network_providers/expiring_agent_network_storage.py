@@ -290,6 +290,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         :param agent_name: name of an agent
         """
         # Agents and their Reservations are always present or absent together.
+        agent_network: AgentNetwork = None
         reservation: Reservation = self.reservations_table.get(agent_name, None)
         if reservation is not None:
             # We have a reservation for this agent, but we need to check is it still valid:
@@ -311,7 +312,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 return None
 
             # Reservation is still valid, so we can return the AgentNetworkProvider for this agent.
-            agent_network: AgentNetwork = self.agents_table.get(agent_name, None)
+            agent_network = self.agents_table.get(agent_name, None)
             if agent_network is not None:
                 with self.lock:
                     self.access_times[agent_name] = time.time()
