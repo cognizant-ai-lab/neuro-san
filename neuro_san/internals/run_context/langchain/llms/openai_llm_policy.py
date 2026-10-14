@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 from httpx import AsyncClient
@@ -77,9 +78,10 @@ class OpenAILlmPolicy(LlmPolicy):
         # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
 
         # pylint: disable=invalid-name
-        AsyncOpenAI = self.resolver.resolve_class_in_module("AsyncOpenAI",
-                                                            module_name="openai",
-                                                            install_if_missing="langchain-openai")
+        AsyncOpenAI: Type[Any] = self.resolver.resolve_class_in_module(
+            "AsyncOpenAI",
+            module_name="openai",
+            install_if_missing="langchain-openai")
 
         self.create_http_client(config)
 

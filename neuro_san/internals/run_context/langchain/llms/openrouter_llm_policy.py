@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 
@@ -52,11 +53,12 @@ class OpenRouterLlmPolicy(LlmPolicy):
         """
         # Use lazy loading to prevent installing the world
         # pylint: disable=invalid-name
-        ChatOpenRouter = self.resolver.resolve_class_in_module("ChatOpenRouter",
-                                                               module_name="langchain_openrouter.chat_models",
-                                                               install_if_missing="langchain-openrouter")
+        ChatOpenRouter: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatOpenRouter",
+            module_name="langchain_openrouter.chat_models",
+            install_if_missing="langchain-openrouter")
 
-        llm = ChatOpenRouter(
+        llm: BaseLanguageModel = ChatOpenRouter(
             model=model_name,
             api_key=self.get_value_or_env(config, "openrouter_api_key",
                                           "OPENROUTER_API_KEY"),
@@ -115,12 +117,13 @@ class OpenRouterLlmPolicy(LlmPolicy):
         # is not part of LangChain's public contract.
         sdk_client: Any = getattr(self.llm, "client", None)
         if sdk_client is not None:
+            attr: str = None
             for attr in ("aclose", "close"):
-                method = getattr(sdk_client, attr, None)
+                method: Any = getattr(sdk_client, attr, None)
                 if method is None:
                     continue
                 with suppress(Exception):
-                    result = method()
+                    result: Any = method()
                     if hasattr(result, "__await__"):
                         await result
                 break

@@ -20,10 +20,11 @@ from typing import Any
 from typing import Dict
 from typing import Tuple
 
+from leaf_common.utils.startable import Startable
 from neuro_san.interfaces.reservation import Reservation
 
 
-class ReservationsStorage:
+class ReservationsStorage(Startable):
     """
     An interface for implementations of basic Reservations storage,
     supporting addition Reservations in bulk and retrieval of individual Reservations,

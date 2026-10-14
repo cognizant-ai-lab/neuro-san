@@ -198,6 +198,7 @@ class LangfuseTracingContext(LangChainTracingContext):
         except ImportError:
             return None
 
+        hook: Any = None
         for hook in _configure_hooks:
             hook_var: ContextVar = hook[0]
             if getattr(hook_var, "name", None) == LANGFUSE_HANDLER_VAR_NAME:
@@ -257,7 +258,8 @@ class LangfuseTracingContext(LangChainTracingContext):
 
         :return: A clone of the tracing context.
         """
-        clone = LangfuseTracingContext(run_target=self.run_target, config=self.config, parent_context=self)
+        clone: TracingContext = LangfuseTracingContext(run_target=self.run_target, config=self.config,
+                                                       parent_context=self)
         return clone
 
     async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
@@ -313,7 +315,7 @@ class LangfuseTracingContext(LangChainTracingContext):
         empty: Dict[str, Any] = {}
         request_metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
         user_id: str = request_metadata.get("user_id", "<Unknown>")
-        run_name = runnable_config.get("run_name")
+        run_name: str = runnable_config.get("run_name")
 
         # Find the right session_id to use for the session components
         self.session_id: str = self.get_parent_session_id()
@@ -326,7 +328,7 @@ class LangfuseTracingContext(LangChainTracingContext):
             hostname: str = gethostname()
 
             # We use the time to distiguish sessions on a restarted server on the same host.
-            now_time = datetime.now()
+            now_time: datetime = datetime.now()
             now_str: str = now_time.strftime('%Y-%m-%d-%H:%M:%S.%f')
 
             # Create a session_id for the trace.
@@ -343,7 +345,7 @@ class LangfuseTracingContext(LangChainTracingContext):
 
         return runnable_config
 
-    def get_parent_session_id(self):
+    def get_parent_session_id(self) -> str:
         """
         Get the parent session id.
         We want the to be consistent for any depth of trace in the request.

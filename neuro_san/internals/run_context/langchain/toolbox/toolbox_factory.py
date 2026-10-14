@@ -218,6 +218,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # If the instantiated class has "get_tools()", assume it's a toolkit and return a list of tools
         if hasattr(instance, "get_tools") and callable(instance.get_tools):
             toolkit: List[BaseTool] = instance.get_tools()
+            tool: BaseTool = None
             for tool in toolkit:
                 if agent_name:
                     # Prefix the name of the agent to each tool
@@ -304,6 +305,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         empty: Dict[str, Any] = {}
 
         resolved_args: Dict[str, Any] = {}
+        key: str = None
+        value: Any = None
         for key, value in args.items():
             if isinstance(value, dict) and "class" in value:
                 # If the argument is a class definition, resolve and instantiate it
@@ -351,6 +354,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         :param tool_class: BaseTool or BaseToolkit class to check for the method.
         :return: The method if found, None otherwise.
         """
+        attr_name: str = None
         for attr_name in dir(tool_class):
             if attr_name.startswith("from") and attr_name.endswith("api_wrapper"):
                 attr: Callable[..., Any] = getattr(tool_class, attr_name)

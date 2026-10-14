@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -47,11 +48,12 @@ class NvidiaLlmPolicy(LlmPolicy):
 
         # Use lazy loading to prevent installing the world
         # pylint: disable=invalid-name
-        ChatNVIDIA = self.resolver.resolve_class_in_module("ChatNVIDIA",
-                                                           module_name="langchain_nvidia_ai_endpoints",
-                                                           install_if_missing="langchain-nvidia-ai-endpoints")
+        ChatNVIDIA: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatNVIDIA",
+            module_name="langchain_nvidia_ai_endpoints",
+            install_if_missing="langchain-nvidia-ai-endpoints")
         # Higher temperature is more random
-        llm = ChatNVIDIA(
+        llm: BaseLanguageModel = ChatNVIDIA(
             base_url=config.get("base_url"),
             model=model_name,
             temperature=config.get("temperature"),

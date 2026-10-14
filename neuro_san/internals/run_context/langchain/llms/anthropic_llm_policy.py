@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 
@@ -48,11 +49,12 @@ class AnthropicLlmPolicy(LlmPolicy):
         """
         # Use lazy loading to prevent installing the world
         # pylint: disable=invalid-name
-        ChatAnthropic = self.resolver.resolve_class_in_module("ChatAnthropic",
-                                                              module_name="langchain_anthropic.chat_models",
-                                                              install_if_missing="langchain-anthropic")
+        ChatAnthropic: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatAnthropic",
+            module_name="langchain_anthropic.chat_models",
+            install_if_missing="langchain-anthropic")
 
-        llm = ChatAnthropic(
+        llm: BaseLanguageModel = ChatAnthropic(
             model_name=model_name,
             max_tokens=config.get("max_tokens"),  # This is always for output
             temperature=config.get("temperature"),
