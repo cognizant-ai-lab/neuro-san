@@ -28,6 +28,7 @@ from unittest.mock import patch
 
 from typing_extensions import override
 
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 
 # pylint: disable=protected-access
@@ -108,7 +109,7 @@ class TestCrossRunComparison(TestCase):
         :param contents: Raw file contents
         :return: Path of the created file
         """
-        path: str = os.path.join(self._dir, "raw_results.json")
+        path: str = os.path.join(self._dir, RAW_RESULTS_FILE_NAME)
         with open(path, "w", encoding="utf-8") as file_handle:
             file_handle.write(contents)
         return path

@@ -39,6 +39,7 @@ from typing import Tuple
 import psutil
 
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
+from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
@@ -538,7 +539,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         if not self._output_dir:
             return None
-        path: str = os.path.join(self._output_dir, "progress.log")
+        path: str = os.path.join(self._output_dir, PROGRESS_LOG_FILE_NAME)
         return open(path, "a", encoding="utf-8")
 
     @staticmethod

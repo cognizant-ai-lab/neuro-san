@@ -28,7 +28,9 @@ from typing import Tuple
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
@@ -105,7 +107,7 @@ class CrossRunComparison:
             if (self._run_filter
                     and entry not in self._run_filter):
                 continue
-            json_path: str = os.path.join(self._base_dir, entry, "raw_results.json")
+            json_path: str = os.path.join(self._base_dir, entry, RAW_RESULTS_FILE_NAME)
             if not os.path.isfile(json_path):
                 continue
             metrics: Optional[Dict[str, Any]] = self._extract_metrics(json_path, entry)
@@ -317,7 +319,7 @@ class CrossRunComparison:
         """
         for run in runs:
             folder: str = run.get("folder", "")
-            log_path: str = os.path.join(self._base_dir, folder, "server_tokens.log")
+            log_path: str = os.path.join(self._base_dir, folder, SERVER_TOKENS_LOG_FILE_NAME)
             loops: List[Dict[str, Any]] = self._parse_validation_loops(log_path)
             if not loops:
                 continue

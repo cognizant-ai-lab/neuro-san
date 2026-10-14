@@ -22,6 +22,7 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
+from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
@@ -61,7 +62,7 @@ class TestScanRequests(TestCase):
 
         :param text: Log text to write
         """
-        path: str = os.path.join(self._dir, "load_test.log")
+        path: str = os.path.join(self._dir, LEGACY_RUN_LOG_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
 

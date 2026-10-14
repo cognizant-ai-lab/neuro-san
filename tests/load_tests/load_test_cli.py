@@ -49,12 +49,14 @@ import psutil
 from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import LEVEL_MIN
 from tests.load_tests.config import LOCAL_HOSTS
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
 from tests.load_tests.config import STALE_LOG_THRESHOLD_SECONDS
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.config import STDOUT_LOG_FILE_NAME
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import HISTORY_FILE_NAME
 from tests.load_tests.config import HISTORY_UNKNOWN_FILE_NAME
@@ -185,7 +187,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self.resource_reporter = ResourceReporter()
         self.probe_result = None
         self._output_dir = None
-        self._test_log_path = None
+        self._test_log_path: Optional[str] = None
         self._test_log_handler = None
         self._aborted = False
         self._interrupted = False
@@ -928,7 +930,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             base, self.args.level, folder_name,
         )
         os.makedirs(self._output_dir, exist_ok=True)
-        self._test_log_path = os.path.join(self._output_dir, "stdout.log")
+        self._test_log_path = os.path.join(self._output_dir, STDOUT_LOG_FILE_NAME)
         self._test_log_handler = logging.FileHandler(
             self._test_log_path, encoding="utf-8",
         )
@@ -1021,9 +1023,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("  %s", label)
         logger.info("=" * 60)
         logger.info("  Directory:   %s", self._output_dir)
-        json_path = os.path.join(
-            self._output_dir, "raw_results.json",
-        )
+        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
         requests_dir = os.path.join(self._output_dir, "requests")
@@ -1414,7 +1414,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """
         round_dir = self._setup_round_output_dir(expected)
         log_pos = self.log_monitor.read_position()
-        round_log_path = os.path.join(round_dir, "stdout.log")
+        round_log_path: str = os.path.join(round_dir, STDOUT_LOG_FILE_NAME)
         round_handler = logging.FileHandler(
             round_log_path, encoding="utf-8",
         )
@@ -1608,9 +1608,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("  OUTPUT FILES")
         logger.info("=" * 60)
         logger.info("  Directory:   %s", round_dir)
-        json_path = os.path.join(
-            round_dir, "raw_results.json",
-        )
+        json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
             logger.info(
                 "  Raw results: %s", json_path,
@@ -1947,9 +1945,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             raw_data["kernel_memory_breakdown"] = (
                 kernel_breakdown
             )
-        json_path = os.path.join(
-            round_dir, "raw_results.json",
-        )
+        json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
         with open(
                 json_path, "w", encoding="utf-8",
         ) as fh:
@@ -2729,7 +2725,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ],
         }
         raw_data.update(JsonMetadata.build())
-        json_path = os.path.join(self._output_dir, "raw_results.json")
+        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(raw_data, fh, indent=2, default=str)
 

@@ -24,6 +24,7 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
 from tests.load_tests.prompts.agent_profile import AgentProfile
@@ -91,7 +92,7 @@ class TestExportRawJsonAggregates(TestCase):
 
         self._orchestrator()._export_raw_json(stage_summaries, exit_code=0)
 
-        path: str = os.path.join(self._dir, "raw_results.json")
+        path: str = os.path.join(self._dir, RAW_RESULTS_FILE_NAME)
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle).get("aggregates", {})
 
