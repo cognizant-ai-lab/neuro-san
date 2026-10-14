@@ -167,15 +167,15 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "--prompt",
             type=str,
             default=None,
-            help="Prompt text to send to the agent. "
-                 "Auto-filled from preset if agent is known.",
+            help="""Prompt text to send to the agent.
+Auto-filled from preset if agent is known.""",
         )
         parser.add_argument(
             "--sly-data",
             type=str,
             default=None,
-            help="JSON sly_data string. Auto-filled from preset if agent is known. "
-                 "Use --no-sly-data to omit.",
+            help="""JSON sly_data string. Auto-filled from preset if agent is known.
+Use --no-sly-data to omit.""",
         )
         parser.add_argument(
             "--no-sly-data",
@@ -260,12 +260,14 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         failed: int = 0
         start_seconds: float = time.perf_counter()
         with ThreadPoolExecutor(max_workers=self.args.max_workers) as pool:
-            # Submit every request first so the requests run at the same time, numbered from 1,
-            # then wait for each one in submit order.
             futures: List[Future] = []
+            request_id: int
+            # Submit every request first, numbered from 1, so the requests run at the same time.
             for request_id in range(1, self.args.num_requests + 1):
                 request_future: Future = pool.submit(self._run_one, request_id, self.agent_cli_command)
                 futures.append(request_future)
+            future: Future
+            # Wait for each request in submit order and count it as passed or failed.
             for future in futures:
                 result: Dict[str, Any] = future.result()
                 if result.get("ok"):
@@ -288,15 +290,17 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             if preset is None:
                 known_agents: str = ", ".join(sorted(self.AGENT_PRESETS.keys()))
                 logger.error(
-                    "No preset for agent '%s'. Please provide --prompt explicitly.\n"
-                    "Known presets: %s",
+                    """No preset for agent '%s'. Please provide --prompt explicitly.
+Known presets: %s""",
                     self.args.agent, known_agents,
                 )
                 sys.exit(1)
             self.args.prompt = preset.get("prompt")
 
-        if self.args.sly_data is None and not self.args.no_sly_data:
-            if preset is not None and preset.get("sly_data") is not None:
+        if (self.args.sly_data is None
+                and not self.args.no_sly_data):
+            if (preset is not None
+                    and preset.get("sly_data") is not None):
                 self.args.sly_data = preset.get("sly_data")
             else:
                 self.args.no_sly_data = True
@@ -312,8 +316,12 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         cmdline: List[str] = []
         try:
             cmdline = mock_process.cmdline()
+            index: int
+            arg: str
+            # Find "--port" and return the command line item after it.
             for index, arg in enumerate(cmdline):
-                if arg == "--port" and index + 1 < len(cmdline):
+                if (arg == "--port"
+                        and index + 1 < len(cmdline)):
                     return cmdline[index + 1]
         except (psutil.NoSuchProcess, psutil.AccessDenied) as error:
             logger.debug("Could not read mock process cmdline: %s", error)
@@ -341,11 +349,11 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         api_base: Optional[str] = server_env.get("OPENAI_API_BASE")
         if api_base is None:
             logger.error(
-                "neuro-san server does not have OPENAI_API_BASE set.\n"
-                "  Mock LLM server is running on port %s.\n"
-                "  Restart the server with:\n"
-                "    export OPENAI_API_BASE=%s\n"
-                "    python -m neuro_san.service.main_loop.server_main_loop",
+                """neuro-san server does not have OPENAI_API_BASE set.
+  Mock LLM server is running on port %s.
+  Restart the server with:
+    export OPENAI_API_BASE=%s
+    python -m neuro_san.service.main_loop.server_main_loop""",
                 mock_port, expected_url,
             )
             sys.exit(1)
@@ -360,24 +368,24 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         llm_info_file: Optional[str] = server_env.get("AGENT_LLM_INFO_FILE")
         if not llm_info_file:
             logger.warning(
-                "neuro-san server does not have AGENT_LLM_INFO_FILE set.\n"
-                "  The openai class defaults to the Responses API, which the mock LLM server does not\n"
-                "  serve, so model-name-only agent configs will get HTTP 404 from /v1/responses.\n"
-                "  Restart the server with:\n"
-                "    export AGENT_LLM_INFO_FILE=%s\n"
-                "    export OPENAI_API_BASE=%s\n"
-                "    python -m neuro_san.service.main_loop.server_main_loop",
+                """neuro-san server does not have AGENT_LLM_INFO_FILE set.
+  The openai class defaults to the Responses API, which the mock LLM server does not
+  serve, so model-name-only agent configs will get HTTP 404 from /v1/responses.
+  Restart the server with:
+    export AGENT_LLM_INFO_FILE=%s
+    export OPENAI_API_BASE=%s
+    python -m neuro_san.service.main_loop.server_main_loop""",
                 MockLlmLoadTest.CHAT_COMPLETIONS_LLM_INFO_PATH, expected_url,
             )
 
         if mock_port not in api_base:
             logger.error(
-                "OPENAI_API_BASE does not reference port %s.\n"
-                "  Mock LLM server is running on port %s,\n"
-                "  but OPENAI_API_BASE=%s\n"
-                "  Restart the server with:\n"
-                "    export OPENAI_API_BASE=%s\n"
-                "    python -m neuro_san.service.main_loop.server_main_loop",
+                """OPENAI_API_BASE does not reference port %s.
+  Mock LLM server is running on port %s,
+  but OPENAI_API_BASE=%s
+  Restart the server with:
+    export OPENAI_API_BASE=%s
+    python -m neuro_san.service.main_loop.server_main_loop""",
                 mock_port, mock_port, api_base, expected_url,
             )
             sys.exit(1)
@@ -394,22 +402,22 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         if self.server_process is None:
             logger.error(
-                "neuro-san server process not found.\n"
-                "Start it with OPENAI_API_BASE pointing to the mock LLM server:\n"
-                "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
-                "  python -m neuro_san.service.main_loop.server_main_loop"
+                """neuro-san server process not found.
+Start it with OPENAI_API_BASE pointing to the mock LLM server:
+  export OPENAI_API_BASE=http://localhost:8888/v1
+  python -m neuro_san.service.main_loop.server_main_loop"""
             )
             sys.exit(1)
         logger.info("Found neuro-san server (PID %s)", self.server_process.pid)
 
         if self.mock_process is None:
             logger.error(
-                "mock LLM server process not found.\n"
-                "Start the mock LLM server first, then the neuro-san server:\n"
-                "  python -m tests.mock_llm_server.mock_llm_server --port 8888\n"
-                "Then:\n"
-                "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
-                "  python -m neuro_san.service.main_loop.server_main_loop"
+                """mock LLM server process not found.
+Start the mock LLM server first, then the neuro-san server:
+  python -m tests.mock_llm_server.mock_llm_server --port 8888
+Then:
+  export OPENAI_API_BASE=http://localhost:8888/v1
+  python -m neuro_san.service.main_loop.server_main_loop"""
             )
             sys.exit(1)
         logger.info("Found mock LLM server (PID %s)", self.mock_process.pid)
@@ -548,6 +556,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         :param snapshot_rows: Rows from _build_snapshot_row(), one per round
         """
         table_rows: List[List[str]] = []
+        snapshot_row: Dict[str, Any]
+        # Format each round's row as table cells.
         for snapshot_row in snapshot_rows:
             cells: List[str] = MockLlmLoadTest._format_snapshot_row(snapshot_row)
             table_rows.append(cells)
@@ -568,6 +578,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         failed: int = 0
         elapsed_seconds: float = 0.0
 
+        round_num: int
+        # Run each round, numbered from 1, with resource snapshots before and after it.
         for round_num in range(1, self.args.num_rounds + 1):
             logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
             logger.info(
@@ -601,9 +613,11 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             if after_server:
                 ResourceMonitor.log_snapshot("Server AFTER", after_server)
 
-            if before_server and after_server:
+            if (before_server
+                    and after_server):
                 server_rows.append(self._build_snapshot_row(round_num, before_server, after_server))
-            if before_mock and after_mock:
+            if (before_mock
+                    and after_mock):
                 mock_rows.append(self._build_snapshot_row(round_num, before_mock, after_mock))
 
         return server_rows, mock_rows, totals
@@ -744,7 +758,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         try:
             server_rows, mock_rows, totals = self._run_rounds()
             self._log_results(totals, server_rows, mock_rows)
-            if is_local and not self.args.auto_start:
+            if (is_local
+                    and not self.args.auto_start):
                 logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
                 logger.info("  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE ON NEURO-SAN SERVER")
                 logger.info("  Key:   OPENAI_API_BASE")
