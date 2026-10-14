@@ -52,6 +52,8 @@ class OutputValidator:
         :return: Count per status; unknown statuses count as failed
         """
         counts: Dict[str, Any] = {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0}
+        result: Dict[str, Any]
+        # Count each result under its status.
         for result in results:
             status: str = result.get("status", STATUS_FAILED)
             if status not in counts:
@@ -106,6 +108,8 @@ class OutputValidator:
         :param actual_requests: Requests sent in the stage, used for the amplification
         """
         logger.info("\n  Retry activity (from server log):")
+        error_type: str
+        # Log the retry count for each error type.
         for error_type in RETRY_ERROR_TYPES:
             count: int = retries.get(error_type, 0)
             label: str = RETRY_LABELS.get(error_type, f"{error_type} retries")
@@ -167,6 +171,8 @@ class OutputValidator:
         if not disconnections:
             return
         logger.warning("\n  Client disconnections detected: %s", len(disconnections))
+        disconnection: Dict[str, str]
+        # Log one line for each disconnected request.
         for disconnection in disconnections:
             agent: str = disconnection.get("agent", "unknown")
             request_id: str = disconnection.get("request_id", "unknown")
@@ -187,6 +193,8 @@ class OutputValidator:
         if not server_errors:
             return
         logger.warning("\n  Server errors detected: %s", len(server_errors))
+        server_error: Dict[str, str]
+        # Log each server error with its request id.
         for server_error in server_errors:
             request_id: str = server_error.get("request_id", "unknown")
             message: str = server_error.get("message", "")
@@ -206,6 +214,8 @@ class OutputValidator:
         if not tool_warnings:
             return
         logger.warning("\n  Tool-creation warnings: %s", len(tool_warnings))
+        tool_warning: Dict[str, str]
+        # Log each tool-creation warning with its request id.
         for tool_warning in tool_warnings:
             request_id: str = tool_warning.get("request_id", "unknown")
             message: str = tool_warning.get("message", "")

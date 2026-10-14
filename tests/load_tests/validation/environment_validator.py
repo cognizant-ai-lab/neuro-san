@@ -83,6 +83,8 @@ class EnvironmentValidator:
             raise LoadTestAbortError(1)
 
         server_process: Optional[psutil.Process] = None
+        keyword: str
+        # Try each server process name until one is found.
         for keyword in ["neuro_san_studio", "server_main_loop"]:
             server_process = ResourceMonitor.find_process(keyword)
             if server_process is not None:
@@ -116,6 +118,8 @@ class EnvironmentValidator:
         if not EnvironmentValidator.is_port_open(args.host, args.port):
             return None
         server_process: Optional[psutil.Process] = None
+        keyword: str
+        # Try each server process name until one is found.
         for keyword in ["neuro_san_studio", "server_main_loop"]:
             server_process = ResourceMonitor.find_process(keyword)
             if server_process is not None:

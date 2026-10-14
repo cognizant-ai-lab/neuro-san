@@ -431,9 +431,14 @@ class InputValidator:
             return
 
         logger.warning("\n  WARNINGS (%s found):", len(warnings))
+        warning_number: int
+        warning: str
+        # Log each warning, numbered from 1, with its extra lines below it.
         for warning_number, warning in enumerate(warnings, 1):
             lines: List[str] = warning.split("\n")
             logger.warning("  %s. %s", warning_number, lines[0])
+            line: str
+            # Log the rest of the warning's lines.
             for line in lines[1:]:
                 logger.warning("  %s", line)
 
