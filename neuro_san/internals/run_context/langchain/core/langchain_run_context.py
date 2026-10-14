@@ -48,6 +48,7 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.origination import Origination
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
@@ -143,7 +144,7 @@ class LangChainRunContext(RunContext):
         if self.tool_caller is not None:
             agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
             # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
-            factory = self.tool_caller.get_inspector()
+            factory: AgentNetworkInspector = self.tool_caller.get_inspector()
             self.capsule = ActivationCapsule(self, agent_spec, factory)
         else:
             # DEF: It's likely that this current arrangement might impede middleware on the front-man
@@ -189,6 +190,7 @@ class LangChainRunContext(RunContext):
         empty: List[Any] = []
         chat_histories: List[Dict[str, Any]] = self.chat_context.get("chat_histories", empty)
         our_origin_str: str = Origination.get_full_name_from_origin(self.origin)
+        one_chat_history: Dict[str, Any] = None
         for one_chat_history in chat_histories:
 
             # See if the origin matches our own
@@ -204,6 +206,7 @@ class LangChainRunContext(RunContext):
 
             converter = BaseMessageDictionaryConverter()
             self.chat_history = []
+            chat_message: Dict[str, Any] = None
             for chat_message in one_messages:
                 base_message: BaseMessage = converter.from_dict(chat_message)
                 if base_message is not None:
@@ -249,6 +252,7 @@ class LangChainRunContext(RunContext):
 
         if tool_names is not None:
             factory = BaseToolFactory(self.tool_caller, self.invocation_context, self.journal)
+            tool_name: str = None
             for tool_name in tool_names:
                 tool: Union[BaseTool | List[BaseTool]] = await factory.create_base_tool(tool_name)
                 if tool is not None:
@@ -300,6 +304,7 @@ class LangChainRunContext(RunContext):
                 error += "\nThe following errors occurred while looking for LLM API keys:\n"
                 error += "\n    ".join(api_key_errors)
 
+                api_key_error: str = None
                 for api_key_error in api_key_errors:
                     # Note: We are assuming the errors have already been filtered for
                     # not dispensing secrets with ApiKeyErrorCheck.get_safe_log_message()
@@ -355,11 +360,11 @@ class LangChainRunContext(RunContext):
             self.recent_human_message = HumanMessage(user_message)
         except ValidationError as exception:
             full_name: str = Origination.get_full_name_from_origin(self.origin)
-            message = f"ValidationError in {full_name} with message: {user_message}"
+            message: str = f"ValidationError in {full_name} with message: {user_message}"
             raise ValueError(message) from exception
 
         # Create a run to return
-        run = LangChainRun(self.run_id_base, self.chat_history)
+        run: Run = LangChainRun(self.run_id_base, self.chat_history)
         return run
 
     async def wait_on_run(self, run: Run, journal: Journal = None) -> Run:
@@ -378,7 +383,7 @@ class LangChainRunContext(RunContext):
         # some tokens, make a shallow copy of it here as we send it to the LLM
         previous_chat_history: List[BaseMessage] = copy(self.chat_history)
 
-        inputs = {
+        inputs: Dict[str, Any] = {
             # All agents have a "messages" field, which is a list of messages.
             # To invoke the agent, pass a new list containing the previous chat history
             # along with the new user message.
@@ -434,6 +439,7 @@ class LangChainRunContext(RunContext):
         _ = run
         tool_message: BaseMessage = None
         if tool_outputs is not None and len(tool_outputs) > 0:
+            tool_output: Dict[str, Any] = None
             for tool_output in tool_outputs:
                 tool_message = self.parse_tool_output(tool_output)
                 if tool_message is not None:
@@ -443,7 +449,7 @@ class LangChainRunContext(RunContext):
                     await self.journal.write_message(tool_message)
 
         # Create a run to return
-        use_run = LangChainRun(self.run_id_base, self.chat_history, tool_message=tool_message)
+        use_run: Run = LangChainRun(self.run_id_base, self.chat_history, tool_message=tool_message)
         return use_run
 
     def parse_tool_output(self, tool_output: Dict[str, Any]) -> BaseMessage:
@@ -454,7 +460,7 @@ class LangChainRunContext(RunContext):
 
         # Get a Message for each output and add to the chat history.
         # Assuming dictionary
-        tool_chat_list_string = tool_output.get("output", None)
+        tool_chat_list_string: Any = tool_output.get("output", None)
         if tool_chat_list_string is None:
             # Dunno what to do with None tool output
             return None
@@ -508,12 +514,12 @@ class LangChainRunContext(RunContext):
             tool_chat_list_string = tool_chat_list_string[1:-1]
 
         # Remove escaping
-        intermediate_tool_chat_list_string = tool_chat_list_string.replace('\\"', '"')
+        intermediate_tool_chat_list_string: str = tool_chat_list_string.replace('\\"', '"')
         # Put back some escaping of double quotes in messages that are not json.
         # We have to do this because gpt-4o seems to not like json braces in its
         # input, but now we have to deal with the consequences in the output.
         # See ArgumentAssigner.get_args_value_as_string().
-        use_tool_chat_list_string = intermediate_tool_chat_list_string.replace('\\"', '\\\\\"')
+        use_tool_chat_list_string: str = intermediate_tool_chat_list_string.replace('\\"', '\\\\\"')
 
         # Decode the JSON in that string now.
         tool_chat_list: List[Dict[str, Any]] = None
@@ -526,15 +532,15 @@ class LangChainRunContext(RunContext):
 
         # The tool_output seems to contain the entire chat history of
         # the call to the tool. For now just take the last one as the answer.
-        tool_result_dict = tool_chat_list[-1]
+        tool_result_dict: Dict[str, Any] = tool_chat_list[-1]
 
         # Turn that guy into a BaseMessage
         # You might expect that this should be a ToolMessage, but making that
         # kind of conversion at this point runs into problems with OpenAI models
         # that process them.  So, to make things continue to work, report the
         # content as an AI message - as if the bot came up with the answer itself.
-        tool_message = AgentToolResultMessage(content=tool_result_dict.get("content"),
-                                              tool_result_origin=origin)
+        tool_message: BaseMessage = AgentToolResultMessage(content=tool_result_dict.get("content"),
+                                                           tool_result_origin=origin)
 
         return tool_message
 
@@ -624,6 +630,7 @@ class LangChainRunContext(RunContext):
         # The SystemMessage has already been written to the journal
         # need to transfer it over when this shift happens.
         if old_interceptor is not None:
+            message: BaseMessage = None
             for message in old_interceptor.get_messages():
                 self.interceptor.write_unwrapped_message(message, self.origin)
         self.journal = OriginatingJournal(self.interceptor, self.origin, self.chat_history)

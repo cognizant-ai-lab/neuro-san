@@ -86,6 +86,8 @@ class MiddlewareFactory:
             return all_middleware, checkpointer
 
         # Loop through the config entries.
+        middleware_index: int = None
+        one_config: Dict[str, Any] = None
         for middleware_index, one_config in enumerate(config):
 
             middleware: AgentMiddleware = None
@@ -121,7 +123,7 @@ class MiddlewareFactory:
         middleware: AgentMiddleware = self.create_class("AgentMiddleware", AgentMiddleware, config, sly_data, index)
 
         # If needed, we could do some kind of kwargs dict here instead of a specific checkpointer arg for create_agent()
-        checkpointer_config = config.get("checkpointer")
+        checkpointer_config: Dict[str, Any] = config.get("checkpointer")
         if checkpointer_config is not None:
             checkpointer = self.create_class("Checkpointer", Checkpointer, checkpointer_config, sly_data, index)
 
@@ -182,7 +184,7 @@ class MiddlewareFactory:
         try:
             return ResolverUtil.create_class(class_name, error_context, create_type)
         except ValueError as exception:
-            message = f"""
+            message: str = f"""
 Problems loading class {class_name}: {str(exception)}
 
 Check these things:
@@ -230,6 +232,8 @@ Check these things:
             "chat_history": self.chat_history,
             "activation_capsule": self.activation_capsule,
         }
+        key: str = None
+        value: Any = None
         for key, value in special_args.items():
             if key in args:
                 args[key] = value
@@ -250,7 +254,7 @@ Check these things:
         try:
             return created_class(**args)
         except TypeError as exception:
-            message = f"""
+            message: str = f"""
 Problems creating {what_we_are_creating} instance of {class_name}: {str(exception)}
 
 Check these things:

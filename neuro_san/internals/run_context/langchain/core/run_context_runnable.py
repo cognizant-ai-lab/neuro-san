@@ -268,10 +268,10 @@ class RunContextRunnable(NeuroSanRunnable):
                 backtrace = traceback.format_exc()
             except ValueError as value_error:
                 response = str(value_error)
-                find_string = "An output parsing error occurred. " + \
-                              "In order to pass this error back to the agent and have it try again, " + \
-                              "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
-                              "This is the error: Could not parse LLM output: `"
+                find_string: str = "An output parsing error occurred. " + \
+                                   "In order to pass this error back to the agent and have it try again, " + \
+                                   "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
+                                   "This is the error: Could not parse LLM output: `"
                 if response.startswith(find_string):
                     # Agent is returning good stuff, but langchain is erroring out over it.
                     # From: https://github.com/langchain-ai/langchain/issues/1358#issuecomment-1486132587
@@ -356,6 +356,7 @@ class RunContextRunnable(NeuroSanRunnable):
             # The dict in question usually has chat history in a messages field.
             # We want the last AIMessage from that chat history.
             messages: List[BaseMessage] = use_result.get("messages", [])
+            message: BaseMessage = None
             for message in reversed(messages):
                 if isinstance(message, AIMessage):
                     return message
