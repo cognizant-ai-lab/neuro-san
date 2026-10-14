@@ -14,13 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Post-run result counting and server-side request verification.
-
-Counts results by status (CREATED, FAILED, TIMEOUT, KILLED), logs
-per-stage summaries, retry activity from the server log, server-side
-request validation (sent vs received), and client disconnections.
-"""
-
 import logging
 
 from typing import Any
@@ -40,7 +33,15 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class OutputValidator:
-    """Counts results and logs server-side request verification."""
+    """
+    Counts post-run results, logs per-stage reports and decides when to abort.
+
+    Counts results by status (CREATED, FAILED, TIMEOUT, KILLED), logs
+    per-stage summaries, retry activity from the server log, server-side
+    request validation (sent vs received), client disconnections, server
+    errors and tool-creation warnings, and checks whether the test
+    should abort (all requests failed on permissions, or any timed out or was killed).
+    """
 
     @staticmethod
     def count_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -51,6 +52,8 @@ class OutputValidator:
         :return: Count per status; unknown statuses count as failed
         """
         counts: Dict[str, Any] = {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0}
+        result: Dict[str, Any]
+        # Count each result under its status.
         for result in results:
             status: str = result.get("status", STATUS_FAILED)
             if status not in counts:
@@ -62,7 +65,8 @@ class OutputValidator:
     @staticmethod
     def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed_seconds: float, timeout: float,
                           idle_timeout: float, show_counts: bool = True) -> None:
-        """Log per-stage summary of request results.
+        """
+        Log per-stage summary of request results.
 
         When ``show_counts`` is False (single-stage runs, where the
         counts are repeated verbatim in OVERALL RESULTS), only the
@@ -104,6 +108,8 @@ class OutputValidator:
         :param actual_requests: Requests sent in the stage, used for the amplification
         """
         logger.info("\n  Retry activity (from server log):")
+        error_type: str
+        # Log the retry count for each error type.
         for error_type in RETRY_ERROR_TYPES:
             count: int = retries.get(error_type, 0)
             label: str = RETRY_LABELS.get(error_type, f"{error_type} retries")
@@ -119,7 +125,8 @@ class OutputValidator:
 
     @staticmethod
     def log_server_validation(server_counts: Dict[str, Any], actual_requests: int, agent_name: str) -> None:
-        """Log server-side request validation from log counts.
+        """
+        Log server-side request validation from log counts.
 
         Compares the number of requests the server received (from the
         server log) against the number the client sent, flagging only
@@ -164,6 +171,8 @@ class OutputValidator:
         if not disconnections:
             return
         logger.warning("\n  Client disconnections detected: %s", len(disconnections))
+        disconnection: Dict[str, str]
+        # Log one line for each disconnected request.
         for disconnection in disconnections:
             agent: str = disconnection.get("agent", "unknown")
             request_id: str = disconnection.get("request_id", "unknown")
@@ -184,6 +193,8 @@ class OutputValidator:
         if not server_errors:
             return
         logger.warning("\n  Server errors detected: %s", len(server_errors))
+        server_error: Dict[str, str]
+        # Log each server error with its request id.
         for server_error in server_errors:
             request_id: str = server_error.get("request_id", "unknown")
             message: str = server_error.get("message", "")
@@ -191,7 +202,8 @@ class OutputValidator:
 
     @staticmethod
     def log_tool_warnings(tool_warnings: List[Dict[str, str]]) -> None:
-        """Log server-side tool-creation warnings for the stage.
+        """
+        Log server-side tool-creation warnings for the stage.
 
         These mean a requested tool was unavailable to an agent; they
         don't affect the created network, but a high count under load
@@ -202,6 +214,8 @@ class OutputValidator:
         if not tool_warnings:
             return
         logger.warning("\n  Tool-creation warnings: %s", len(tool_warnings))
+        tool_warning: Dict[str, str]
+        # Log each tool-creation warning with its request id.
         for tool_warning in tool_warnings:
             request_id: str = tool_warning.get("request_id", "unknown")
             message: str = tool_warning.get("message", "")
@@ -209,7 +223,8 @@ class OutputValidator:
 
     @staticmethod
     def check_permission_failures(results: List[Dict[str, Any]], agent_name: str) -> bool:
-        """Check if all requests failed with a permissions error.
+        """
+        Check if all requests failed with a permissions error.
 
         When neuro-san-studio organizes agents under subdirectories
         (e.g. registries/basic/hello_world), the --agent value must
@@ -261,7 +276,8 @@ class OutputValidator:
 
     @staticmethod
     def check_timeout_abort(counts: Dict[str, Any]) -> bool:
-        """Check if any requests hit a timeout or were killed.
+        """
+        Check if any requests hit a timeout or were killed.
 
         Returns True if the test should abort because at least one
         request exceeded its idle-timeout, request-timeout, or was
