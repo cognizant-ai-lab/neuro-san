@@ -18,12 +18,15 @@
 
 import asyncio
 import os
+import subprocess
+import sys
 import tempfile
 
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Set
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -43,9 +46,26 @@ class TestDefaultLlmFactory(TestCase):
 
     Nothing here makes a network call. Most tests only inspect the fully specified config that
     create_full_llm_config() produces; the tool_strict tests also build the chat model to see the
-    class default land on it. Expected alias targets are read from the loaded llm_info rather than
-    hard-coded, so the tests keep passing when an alias is moved to a newer model version.
+    class default land on it. One test imports the factory module in a child interpreter with the
+    openai packages blocked, to check that the openai chat model class loads only when a model is
+    built. Expected alias targets are read from the loaded llm_info rather than hard-coded, so the
+    tests keep passing when an alias is moved to a newer model version.
     """
+
+    # Runs in a child interpreter. A None entry in sys.modules makes an import fail the way a missing
+    # package does, so this imports the factory module with the openai packages blocked. The check
+    # afterwards makes the script fail, rather than pass by accident, if either package got imported.
+    IMPORT_WITHOUT_OPENAI_SCRIPT: str = """
+import importlib
+import sys
+
+sys.modules["openai"] = None
+sys.modules["langchain_openai"] = None
+importlib.import_module("neuro_san.internals.run_context.langchain.llms.default_llm_factory")
+if sys.modules.get("openai") is not None or sys.modules.get("langchain_openai") is not None:
+    raise SystemExit("an openai package was imported")
+print("FACTORY_IMPORTED_WITHOUT_OPENAI")
+"""
 
     # A one-key alias whose target is a full entry without a "use_model_name" of its own.
     ANTHROPIC_ALIAS: str = "claude-fable"
@@ -313,6 +333,25 @@ class TestDefaultLlmFactory(TestCase):
 
         self.assertIn("tool_strict", full_config)
         self.assertIsNone(full_config.get("tool_strict"))
+
+    # ---- Importing the module: the openai packages stay optional ---------------------------------
+
+    def test_factory_module_imports_without_the_openai_packages(self) -> None:
+        """
+        The factory module imports even when the openai packages are not installed. The openai policies
+        resolve their chat model class by name when a model is built, so an install that only uses other
+        providers can leave those packages out. A child interpreter blocks them and imports the module.
+        """
+        repo_root: Path = Path(__file__).resolve().parents[6]
+        env: Dict[str, str] = dict(os.environ)
+        env["PYTHONPATH"] = str(repo_root) + os.pathsep + env.get("PYTHONPATH", "")
+
+        command: List[str] = [sys.executable, "-c", self.IMPORT_WITHOUT_OPENAI_SCRIPT]
+        result: subprocess.CompletedProcess = subprocess.run(
+            command, env=env, capture_output=True, text=True, check=False, timeout=120)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("FACTORY_IMPORTED_WITHOUT_OPENAI", result.stdout)
 
     # ---- "class" given: full langchain class path ----------------------------------------------
 

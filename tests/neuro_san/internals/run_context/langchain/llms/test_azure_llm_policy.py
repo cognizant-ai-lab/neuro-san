@@ -366,9 +366,6 @@ class TestAzureLlmPolicy(TestCase):
             policy, llm = self._build_policy({})
 
         self.assertEqual(policy.async_openai_client.api_key, self.API_KEY)
-        # When pylint resolves the chat model class, it reads openai_api_key as the pydantic field
-        # declaration (a FieldInfo) rather than the SecretStr value the instance holds.
-        # pylint: disable=no-member
         self.assertEqual(llm.openai_api_key.get_secret_value(), self.API_KEY)
 
     def test_azure_key_environment_variable_wins_over_openai_key(self) -> None:
