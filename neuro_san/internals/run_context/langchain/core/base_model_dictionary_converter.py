@@ -26,6 +26,7 @@ from typing import Union
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import create_model
+from pydantic.fields import FieldInfo
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
@@ -160,6 +161,8 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             raise ToolSpecError(f"'required' must contain only field-name strings, got {required!r}")
 
         fields: Dict[str, Any] = {}
+        field_name: str = None
+        one_property: Dict[str, Any] = None
         for field_name, one_property in properties.items():
 
             # Reject parameter names pydantic cannot make fields for
@@ -209,7 +212,9 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 # never enables strict mode itself; this only matters for
                 # schema-strict gateways or user code that opts into it.
                 field_type = Optional[field_type]
-            field = Field(**field_kwargs)
+            # Pydantic types Field() as returning Any so its result can be assigned
+            # to a field of any declared type, so Any is all that can be said here.
+            field: FieldInfo = Field(**field_kwargs)
 
             # Add the field to our dictionary with its name as key
             fields[field_name] = (field_type, field)

@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -96,7 +97,10 @@ class ApiKeyErrorCheck:
 
         # Collect all keys that have any associated string in the exception message
         # since there could be multiple keys with the exact same message.
+        api_key: str = None
+        string_list: List[str] = None
         for api_key, string_list in API_KEY_EXCEPTIONS.items():
+            find_string: str = None
             for find_string in string_list:
                 if find_string in exception_message:
                     matched_keys.append(api_key)
@@ -111,9 +115,10 @@ class ApiKeyErrorCheck:
 
         if matched_keys:
             key_names: List[str] = []
+            matched_key: str = None
             for matched_key in matched_keys:
                 key_names.append(API_KEY_ALTERNATIVES.get(matched_key, matched_key))
-            keys_str = ", ".join(key_names)
+            keys_str: str = ", ".join(key_names)
             return f"""
 A value for the {keys_str} environment variable must be correctly set in the neuro-san
 server or run-time environment in order to use this agent network.
@@ -167,6 +172,7 @@ Some things to try:
         values can't leak.
         """
         parts: List[str] = []
+        err: Dict[str, Any] = None
         for err in exception.errors():
             loc: str = ".".join(str(x) for x in err.get("loc", ()))
             msg: str = err.get("msg", "")
@@ -184,6 +190,7 @@ Some things to try:
         :return: True if exception seems to be caused by some internal problems,
                  False otherwise
         """
+        err_msg: str = None
         for err_msg in INTERNAL_ERRORS_LIST:
             if err_msg in exception_traceback:
                 return True

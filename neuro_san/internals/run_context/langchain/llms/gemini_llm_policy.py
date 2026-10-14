@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 
@@ -45,11 +46,12 @@ class GeminiLlmPolicy(LlmPolicy):
         """
         # Use lazy loading to prevent installing the world
         # pylint: disable=invalid-name
-        ChatGoogleGenerativeAI = self.resolver.resolve_class_in_module("ChatGoogleGenerativeAI",
-                                                                       module_name="langchain_google_genai.chat_models",
-                                                                       install_if_missing="langchain-google-genai")
+        ChatGoogleGenerativeAI: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatGoogleGenerativeAI",
+            module_name="langchain_google_genai.chat_models",
+            install_if_missing="langchain-google-genai")
 
-        llm = ChatGoogleGenerativeAI(
+        llm: BaseLanguageModel = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=self.get_value_or_env(config, "google_api_key",
                                                  "GOOGLE_API_KEY"),
@@ -139,7 +141,7 @@ class GeminiLlmPolicy(LlmPolicy):
         # google-genai comes with langchain-google-genai >= 4.0, so intentionally
         # no install_if_missing here: an older stack has no AFC to disable.
         # pylint: disable=invalid-name
-        AutomaticFunctionCallingConfig = self.resolver.resolve_class_in_module(
+        AutomaticFunctionCallingConfig: Type[Any] = self.resolver.resolve_class_in_module(
             "AutomaticFunctionCallingConfig",
             module_name="google.genai.types",
             raise_if_not_found=False)

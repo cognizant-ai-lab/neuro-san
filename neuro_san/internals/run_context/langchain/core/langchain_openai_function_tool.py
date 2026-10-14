@@ -159,7 +159,7 @@ It's function_json is described thusly:
         # These next post-assignments satisfy the requirements of
         # convert_pydantic_to_openai_function() in that it wants to call
         # our schema() method to find out the function_json.
-        use_function_json = function_json.get("parameters", function_json)
+        use_function_json: Dict[str, Any] = function_json.get("parameters", function_json)
         tool.function_json = use_function_json
 
         # Langchain tools really prefer statically defined functions.

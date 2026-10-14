@@ -86,6 +86,7 @@ class ExposedToolNames:
         elif created is not None:
             tools = [created]
 
+        tool: BaseTool = None
         for tool in tools:
             if self.is_taken(tool.name):
                 message: str = (f"{self.agent_location}: tool '{tool.name}' has the same name as another tool of "

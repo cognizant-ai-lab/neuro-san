@@ -27,13 +27,12 @@ from threading import Event
 from threading import Thread
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 
 
-class AbstractReservationsStorage(ReservationsStorage, Startable):
+class AbstractReservationsStorage(ReservationsStorage):
     """
     An abstract implementation of ExpiringReservationsStorage interface
     providing a background thread that periodically checks for expired reservations and removes them.

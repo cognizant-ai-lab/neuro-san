@@ -53,6 +53,8 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
         # at parse time (sanitize_keys=True), so only whitespace normalization
         # is left to do here.
         result_dict: Dict[str, Any] = {}
+        key: str = None
+        value: Any = None
         for key, value in use_basis_config.items():
             use_key: str = key.strip()
             result_dict[use_key] = value
