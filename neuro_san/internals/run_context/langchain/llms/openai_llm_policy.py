@@ -27,6 +27,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from leaf_common.config.config_util import ConfigUtil
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 
 
 class OpenAILlmPolicy(LlmPolicy):
@@ -37,6 +38,9 @@ class OpenAILlmPolicy(LlmPolicy):
     as an argument, so this implementation takes advantage of the create_client()
     method to do that. Worth noting that where many other implementations might care about
     the llm reference, because of our create_client() implementation, we do not.
+
+    The chat model built is ToolStrictChatOpenAI, a ChatOpenAI subclass that adds the
+    "tool_strict" default for function tools.
     """
 
     # None means no limit
@@ -117,17 +121,11 @@ class OpenAILlmPolicy(LlmPolicy):
         :return: A BaseLanguageModel (can be Chat or LLM)
         """
         # OpenAI is the one chat class that we do not require any extra installs.
-        # This is what we want to work out of the box.
-        # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
-
-        # pylint: disable=invalid-name
-        ChatOpenAI: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
-            "ChatOpenAI",
-            module_name="langchain_openai.chat_models.base",
-            install_if_missing="langchain-openai")
+        # This is what we want to work out of the box, so its chat model is imported directly
+        # instead of through the lazy-loading resolver the optional providers go through.
 
         # Now construct LLM chat model we will be using:
-        llm: BaseLanguageModel = ChatOpenAI(
+        llm: BaseLanguageModel = ToolStrictChatOpenAI(
             async_client=client,
             root_async_client=self.async_openai_client,
             model_name=model_name,
@@ -227,6 +225,14 @@ class OpenAILlmPolicy(LlmPolicy):
             # https://developers.openai.com/api/docs/guides/reasoning
             # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
             include=config.get("include"),
+
+            # tool_strict is the default strict value for function tools (bool or null). The class
+            # default in default_llm_info.hocon is false, and false is the fallback here too when the
+            # key is absent. It is not a ChatOpenAI constructor argument: ToolStrictChatOpenAI applies
+            # it in bind_tools(), which is where langchain writes strict into each tool and which
+            # create_agent() calls without a strict value. An explicit null still reaches the chat
+            # model as None (send no strict, the endpoint decides), unlike false (send "strict": false).
+            tool_strict=config.get("tool_strict", False),
 
             # If omitted, this defaults to the global verbose value,
             # accessible via langchain_core.globals.get_verbose():

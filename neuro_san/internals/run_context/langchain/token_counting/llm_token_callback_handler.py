@@ -62,6 +62,8 @@ CLASS_TABLE = {
     "ChatNVIDIA": "nvidia",
     "ChatOllama": "ollama",
     "ChatOpenAI": "openai",
+    # The ChatOpenAI subclass the "openai" policies build; langchain serializes it under its own name.
+    "ToolStrictChatOpenAI": "openai",
 }
 
 # Keys an LlmPolicy can put in a chat model's "metadata" to steer how that model's usage is booked.

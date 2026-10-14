@@ -29,12 +29,14 @@ from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersisten
 from neuro_san.test.util.tests_util import TestsUtil
 from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class AgentProfileFactory:
-    """Builds AgentProfile instances.
+    """
+    Builds AgentProfile instances.
 
     Policy lives here (where the profile comes from, how hocons map to
     profile settings, validation); AgentProfile itself only carries data.
@@ -43,7 +45,8 @@ class AgentProfileFactory:
     def create(self, agent_name: str, profile_path: Optional[str] = None,
                project_root: Optional[str] = None,
                hocon_files: Optional[List[str]] = None) -> AgentProfile:
-        """Create an AgentProfile.
+        """
+        Create an AgentProfile.
 
         When hocon_files is given, the whole profile is built from those
         test-case hocons and no JSON profile is read; see
@@ -56,6 +59,7 @@ class AgentProfileFactory:
         :param project_root: --project-root value, or None to use PYTHONPATH
         :param hocon_files: Test-case hocon files; when given, no JSON profile is read
         :return: The agent's profile
+        :raises LoadTestAbortError: With exit code 1 when the profile cannot be read or is not valid
         """
         if hocon_files:
             return AgentProfile(agent_name, self._profile_from_hocons(agent_name, hocon_files))
@@ -69,7 +73,7 @@ class AgentProfileFactory:
                 "  File: %s\nAborting.",
                 path,
             )
-            raise SystemExit(1)
+            raise LoadTestAbortError(1)
         data["responses"] = [self._response_from_success_fields(data.get("success_fields", []))]
         return AgentProfile(agent_name, data)
 
@@ -97,14 +101,15 @@ class AgentProfileFactory:
         return {"sly_data": sly_checks}
 
     def _find_json_profile(self, agent_name: str, profile_path: Optional[str], project_root: Optional[str]) -> str:
-        """Return the path of the JSON profile.
+        """
+        Return the path of the JSON profile.
 
         Search order:
         1. --profile-path directory: look for {base}.json there
         2. ./profiles/{agent_name}.json then ./profiles/{base}.json
         3. {project_root}/tests/load_tests/prompts/profiles/{name}.json
            where project_root comes from --project-root or PYTHONPATH
-        4. Not found → abort
+        4. Not found → LoadTestAbortError
 
         When agent_name includes a prefix (e.g. basic/hello_world),
         the base name (hello_world) is tried as a fallback so
@@ -114,6 +119,7 @@ class AgentProfileFactory:
         :param profile_path: --profile-path directory, or None
         :param project_root: --project-root value, or None to use PYTHONPATH
         :return: Path of the JSON profile file
+        :raises LoadTestAbortError: With exit code 1 when --profile-path is a file or no profile is found
         """
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
@@ -126,7 +132,7 @@ class AgentProfileFactory:
                     "  Try: --profile-path %s",
                     profile_path, os.path.dirname(profile_path),
                 )
-                raise SystemExit(1)
+                raise LoadTestAbortError(1)
             candidate = os.path.join(profile_path, f"{agent_base}.json")
             if not os.path.isfile(candidate):
                 logger.error(
@@ -136,13 +142,15 @@ class AgentProfileFactory:
                     "  Aborting.",
                     candidate, profile_path, agent_base,
                 )
-                raise SystemExit(1)
+                raise LoadTestAbortError(1)
             return candidate
 
         searched: List[str] = []
 
         # Search in the built-in profiles directory next to this module
         profiles_dir: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+        name: str
+        # Check the full agent name, then its base name
         for name in (agent_name, agent_base):
             candidate = os.path.join(profiles_dir, f"{name}.json")
             searched.append(candidate)
@@ -152,6 +160,7 @@ class AgentProfileFactory:
         # Resolve project root: --project-root flag → PYTHONPATH fallback
         resolved_root: Optional[str] = ProjectPaths.resolve_project_root(project_root)
         if resolved_root:
+            # Check the full agent name, then its base name, under the project root
             for name in (agent_name, agent_base):
                 candidate = os.path.normpath(os.path.join(
                     resolved_root, "tests", "load_tests",
@@ -169,10 +178,11 @@ class AgentProfileFactory:
             agent_name,
             "".join(f"  - {searched_path}\n" for searched_path in searched),
         )
-        raise SystemExit(1)
+        raise LoadTestAbortError(1)
 
     def _profile_from_hocons(self, agent_name: str, hocon_files: List[str]) -> Dict[str, Any]:
-        """Build the profile dict from test-case hocon files.
+        """
+        Build the profile dict from test-case hocon files.
 
         Per file (one prompt each, see _read_load_test_hocon):
           interactions[0].text     -> prompts
@@ -183,16 +193,17 @@ class AgentProfileFactory:
           failure_patterns             -> union, sorted
           estimated_tokens_per_request -> max
 
-        Aborts when no text is found in any file.
-
         :param agent_name: --agent value, checked against each hocon's agent
         :param hocon_files: Test-case hocon files, one prompt each
         :return: Profile data with prompts, responses, failure_patterns and, when set, estimated_tokens_per_request
+        :raises LoadTestAbortError: With exit code 1 when no file has interactions[0].text, or a file is not valid
         """
         prompts: List[str] = []
         responses: List[Dict[str, Any]] = []
         failure_patterns: Set[str] = set()
         estimated_tokens: Optional[int] = None
+        path: str
+        # Collect the prompt, response checks and failure patterns from each hocon file
         for path in hocon_files:
             test_case: Dict[str, Any] = self._read_load_test_hocon(agent_name, path)
             interaction: Dict[str, Any] = next(iter(test_case.get("interactions", [])), {})
@@ -212,8 +223,9 @@ class AgentProfileFactory:
                 "No interactions[0].text found in %d hocon file(s) for agent '%s'.\nAborting.",
                 len(hocon_files), agent_name,
             )
-            raise SystemExit(1)
+            raise LoadTestAbortError(1)
         checked: int = 0
+        # Count the prompts that have response checks
         for response in responses:
             if response:
                 checked += 1
@@ -232,7 +244,8 @@ class AgentProfileFactory:
         return data
 
     def _read_load_test_hocon(self, agent_name: str, path: str) -> Dict[str, Any]:
-        """Parse and validate one load-test hocon; return its test-case dict.
+        """
+        Parse and validate one load-test hocon; return its test-case dict.
 
         A load-test hocon must hold exactly one interaction: the load test
         fires each prompt as an independent single-turn request, so a
@@ -240,11 +253,11 @@ class AgentProfileFactory:
         Its "agent" must match agent_name (or its base name), and
         response and response.sly_data, if present, must be maps as in
         docs/test_case_hocon_reference.md (a bare list is a common mistake).
-        Aborts on any of these.
 
         :param agent_name: --agent value; the hocon's agent must match it or its base name
         :param path: Path to the hocon file
         :return: The parsed test case
+        :raises LoadTestAbortError: With exit code 1 when any of these checks fails
         """
         test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
         hocon_agent: str = test_case.get("agent", "")
@@ -256,7 +269,7 @@ class AgentProfileFactory:
                 "  --agent: %s\nAborting.",
                 path, hocon_agent, agent_name,
             )
-            raise SystemExit(1)
+            raise LoadTestAbortError(1)
         interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
         if len(interactions) > 1:
             logger.error(
@@ -265,7 +278,7 @@ class AgentProfileFactory:
                 "  Interactions: %d\nAborting.",
                 path, len(interactions),
             )
-            raise SystemExit(1)
+            raise LoadTestAbortError(1)
         interaction: Dict[str, Any] = interactions[0] if interactions else {}
         response: Any = interaction.get("response", {})
         sly_checks: Any = response.get("sly_data", {}) if isinstance(response, dict) else None
@@ -277,7 +290,7 @@ class AgentProfileFactory:
                 "  Got: %r\nAborting.",
                 path, sly_checks if isinstance(response, dict) else response,
             )
-            raise SystemExit(1)
+            raise LoadTestAbortError(1)
         return test_case
 
     def _warn_empty_checks(self, path: str, response: Dict[str, Any]) -> None:

@@ -47,6 +47,11 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
     # What langchain serializes for a stock ChatOpenAI; the last id element is the class name.
     SERIALIZED_CHAT_OPENAI: Dict[str, Any] = {"id": ["langchain", "chat_models", "openai", "ChatOpenAI"]}
 
+    # What langchain serializes for the ChatOpenAI subclass the "openai" policies build.
+    SERIALIZED_TOOL_STRICT_CHAT_OPENAI: Dict[str, Any] = {
+        "id": ["langchain", "chat_models", "openai", "ToolStrictChatOpenAI"]
+    }
+
     @override
     def setUp(self) -> None:
         """
@@ -226,6 +231,22 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
         entry: Dict[str, Any] = self.priced_handler.models_token_dict.get("openai", {}).get("my-deployment", {})
         self.assertEqual(entry.get("total_tokens"), 2000)
         self.assertEqual(entry.get("total_cost"), 0.0)
+
+    async def test_the_openai_policies_chat_model_is_booked_under_openai(self) -> None:
+        """
+        The ChatOpenAI subclass the "openai" policies build is serialized under its own class name, and
+        CLASS_TABLE still books its usage in the "openai" bucket rather than one named after the class.
+        """
+        run_id: UUID = uuid4()
+        with owning_agent_scope(self.priced_handler):
+            await self.priced_handler.on_chat_model_start(
+                self.SERIALIZED_TOOL_STRICT_CHAT_OPENAI, [], run_id=run_id, metadata={})
+            await self.priced_handler.on_llm_end(self._result_naming("gpt-4"), run_id=run_id)
+
+        self.assertNotIn("ToolStrictChatOpenAI", self.priced_handler.models_token_dict)
+        entry: Dict[str, Any] = self.priced_handler.models_token_dict.get("openai", {}).get("gpt-4", {})
+        self.assertEqual(entry.get("total_tokens"), 2000)
+        self.assertAlmostEqual(entry.get("total_cost"), 0.04)
 
     async def test_price_model_also_applies_to_a_downstream_agents_call(self) -> None:
         """
