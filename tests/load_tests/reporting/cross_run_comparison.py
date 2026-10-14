@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Cross-run comparison — scan output directories and compare metrics."""
-
 import json
 import logging
 import os
@@ -386,7 +384,7 @@ class CrossRunComparison:
                 "    %s: %s retries, %s tokens ($%.2f)",
                 loop_entry.get("request_id", ""),
                 loop_entry.get("retries", 0),
-                f"{loop_entry.get('total_tokens', 0):,}",
+                f"{loop_entry.get("total_tokens", 0):,}",
                 loop_entry.get("cost_usd", 0.0),
             )
 
@@ -497,4 +495,4 @@ class CrossRunComparison:
                 parts.append(f"{value} {label}")
         if not parts:
             return base
-        return f"{base}: {', '.join(parts)}"
+        return f"{base}: {", ".join(parts)}"
