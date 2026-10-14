@@ -27,6 +27,8 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
@@ -137,13 +139,15 @@ class CrossRunComparison:
 
         :param json_path: Path to the run's raw_results.json
         :param folder_name: Name of the run folder, stored as the run's folder
-        :return: The run's metrics, or None when the file cannot be read or parsed
+        :return: The run's metrics, or None when the file cannot be read or parsed; the
+            path and reason are logged in that case
         """
         raw_results: Dict[str, Any] = {}
         try:
             with open(json_path, "r", encoding="utf-8") as file_handle:
                 raw_results = json.load(file_handle)
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as error:
+            SensitiveLogger(logger).error("Could not read %s: %s", json_path, error)
             return None
 
         aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
