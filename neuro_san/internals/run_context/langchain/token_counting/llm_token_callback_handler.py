@@ -62,6 +62,8 @@ CLASS_TABLE = {
     "ChatNVIDIA": "nvidia",
     "ChatOllama": "ollama",
     "ChatOpenAI": "openai",
+    # The ChatOpenAI subclass the "openai" policies build; langchain serializes it under its own name.
+    "ToolStrictChatOpenAI": "openai",
 }
 
 # Keys an LlmPolicy can put in a chat model's "metadata" to steer how that model's usage is booked.
@@ -268,7 +270,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         usage_metadata, response_model_name, is_empty_response = self._extract_usage(response)
         # A policy may have said which llm_info entry prices this run (see PRICE_MODEL_METADATA_KEY);
         # otherwise the model the response names is priced.
-        run_id: str = kwargs.get("run_id")
+        run_id: Optional[UUID] = kwargs.get("run_id")
         model_name: str = self.price_model_names.pop(run_id, None) or response_model_name
 
         if usage_metadata:
