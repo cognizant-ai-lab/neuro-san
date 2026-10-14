@@ -256,20 +256,24 @@ class OutputValidator:
             return False
         if "/" in agent_name:
             logger.error(
-                "\n  ERROR: All requests failed with a permissions error for agent '%s'.\n"
-                "  Verify that the agent is registered in the server's AGENT_REGISTRY_PATH and that your user\n"
-                "  has the correct permissions for the network.\n\n"
-                "  Aborting test.",
+                """
+  ERROR: All requests failed with a permissions error for agent '%s'.
+  Verify that the agent is registered in the server's AGENT_REGISTRY_PATH and that your user
+  has the correct permissions for the network.
+
+  Aborting test.""",
                 agent_name,
             )
         else:
             logger.error(
-                "\n  ERROR: All requests failed with a permissions error.\n"
-                "  The --agent value '%s' may need a registry subdirectory prefix.\n"
-                "  For example, if the agent is registered under\n"
-                "  registries/basic/, use:\n"
-                "    --agent basic/%s\n\n"
-                "  Aborting test.",
+                """
+  ERROR: All requests failed with a permissions error.
+  The --agent value '%s' may need a registry subdirectory prefix.
+  For example, if the agent is registered under
+  registries/basic/, use:
+    --agent basic/%s
+
+  Aborting test.""",
                 agent_name, agent_name,
             )
         return True
@@ -297,8 +301,9 @@ class OutputValidator:
         if killed:
             abort_reasons.append(f"{killed} killed by stage-timeout")
         logger.warning(
-            "\n  ABORT: %s — %s.\n"
-            "  Stopping test and reporting available results.",
+            """
+  ABORT: %s — %s.
+  Stopping test and reporting available results.""",
             ", ".join(abort_reasons), f"{timed_out_or_killed} request(s) failed",
         )
         return True
