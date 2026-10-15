@@ -18,7 +18,12 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from abc import abstractmethod
 
+from leaf_common.utils.interface import interface
+
+
+@interface
 class ContentBlocksFormat:
     """
     An interface for one format of the blocks a ChatMessage carries in
@@ -31,6 +36,7 @@ class ContentBlocksFormat:
     not a change to the places that use blocks.
     """
 
+    @abstractmethod
     def get_name(self) -> str:
         """
         Give the name this format has on the wire.
@@ -39,6 +45,7 @@ class ContentBlocksFormat:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def is_block_list(self, value: Any) -> bool:
         """
         Determine whether a value is a non-empty list of blocks in this
@@ -49,6 +56,7 @@ class ContentBlocksFormat:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def restore_blocks(self, blocks: List[Any]) -> List[Dict[str, Any]]:
         """
         Keep the blocks of an inbound list that are well-formed and that a
