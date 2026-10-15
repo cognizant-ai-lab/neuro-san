@@ -931,9 +931,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         os.makedirs(self._output_dir, exist_ok=True)
         self._test_log_path = os.path.join(self._output_dir, STDOUT_LOG_FILE_NAME)
-        self._test_log_handler = logging.FileHandler(
-            self._test_log_path, encoding="utf-8",
-        )
+        self._test_log_handler = logging.FileHandler(self._test_log_path, encoding="utf-8")
         self._test_log_handler.setLevel(logging.INFO)
         self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
         logging.getLogger().addHandler(self._test_log_handler)
@@ -1415,9 +1413,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         round_dir = self._setup_round_output_dir(expected)
         log_pos = self.log_monitor.read_position()
         round_log_path: str = os.path.join(round_dir, STDOUT_LOG_FILE_NAME)
-        round_handler = logging.FileHandler(
-            round_log_path, encoding="utf-8",
-        )
+        round_handler = logging.FileHandler(round_log_path, encoding="utf-8")
         round_handler.setLevel(logging.INFO)
         round_handler.setFormatter(
             logging.Formatter("%(message)s"),
@@ -1610,9 +1606,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("  Directory:   %s", round_dir)
         json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
-            logger.info(
-                "  Raw results: %s", json_path,
-            )
+            logger.info("  Raw results: %s", json_path)
         gz_path = os.path.join(
             round_dir, "server.log.gz",
         )
@@ -1946,9 +1940,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 kernel_breakdown
             )
         json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
-        with open(
-                json_path, "w", encoding="utf-8",
-        ) as fh:
+        with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(raw_data, fh, indent=2)
 
     @staticmethod
