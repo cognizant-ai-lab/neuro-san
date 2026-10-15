@@ -89,11 +89,7 @@ class TestAgentProfileHoconPrompts(TestCase):
         :return: Path of the written file
         """
         path: str = os.path.join(folder, name)
-        test_case: Dict[str, Any] = {
-            "agent": agent,
-            "interactions": [{"text": text} for text in texts],
-            **extra,
-        }
+        test_case: Dict[str, Any] = {"agent": agent, "interactions": [{"text": text} for text in texts], **extra}
         with open(path, "w", encoding="utf-8") as file_handle:
             json.dump(test_case, file_handle)
         return path

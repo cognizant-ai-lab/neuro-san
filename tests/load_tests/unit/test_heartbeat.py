@@ -23,6 +23,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
@@ -60,7 +61,7 @@ class TestHeartbeat(TestCase):
             server_dead_event: threading.Event = self._set_event()
             heartbeat.progress_heartbeat([], 1, start_seconds, stop_event, ready_event, fires_done_event,
                                          server_dead_event)
-            with open(os.path.join(output_dir, "progress.log"), encoding="utf-8") as progress_log:
+            with open(os.path.join(output_dir, PROGRESS_LOG_FILE_NAME), encoding="utf-8") as progress_log:
                 progress_text: str = progress_log.read()
         self.assertIn("Request 1: CREATED", progress_text)
         self.assertIn("[progress] 0 of 1 completed", progress_text)

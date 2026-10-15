@@ -14,13 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Rebuild raw_results.json from individual request output files.
-
-Useful for runs that were interrupted (Ctrl+C) before the normal
-export ran.  Scans the requests/ subdirectory and log files to
-reconstruct per-request results.
-"""
-
 import json
 import logging
 import os
@@ -31,10 +24,14 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.config import STDOUT_LOG_FILE_NAME
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.traffic.output_parser import OutputParser
 
@@ -48,7 +45,16 @@ _CONFIG_NUM_REQ_RE: re.Pattern = re.compile(r"Requests:\s*(\d+)")
 
 
 class ResultsRebuilder:
-    """Reconstructs raw_results.json from per-request files."""
+    """
+    Reconstructs raw_results.json from per-request files.
+
+    Useful for runs that were interrupted (Ctrl+C) before the normal
+    export ran.  Scans the requests/ subdirectory and log files to
+    reconstruct per-request results.
+    """
+
+    # Legacy name first, so a current stdout.log line wins for the same request.
+    RUN_LOG_FILES: List[str] = [LEGACY_RUN_LOG_FILE_NAME, STDOUT_LOG_FILE_NAME]
 
     def __init__(self, output_dir: str, force: bool = False) -> None:
         """
@@ -61,7 +67,8 @@ class ResultsRebuilder:
         self._force: bool = force
 
     def run(self) -> None:
-        """Rebuild raw_results.json for one or many run directories.
+        """
+        Rebuild raw_results.json for one or many run directories.
 
         If the path contains a requests/ subdirectory, rebuild that
         single run.  Otherwise treat it as a parent directory and
@@ -69,7 +76,7 @@ class ResultsRebuilder:
         raw_results.json.
         """
         requests_dir: str = os.path.join(self._output_dir, "requests")
-        json_path: str = os.path.join(self._output_dir, "raw_results.json")
+        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isdir(requests_dir):
             if os.path.isfile(json_path) and self._force:
                 self._reclassify(json_path, requests_dir)
@@ -79,7 +86,9 @@ class ResultsRebuilder:
         self._rebuild_all()
 
     def _rebuild_all(self) -> None:
-        """Scan subdirectories and rebuild or reclassify."""
+        """
+        Scan subdirectories and rebuild or reclassify.
+        """
         rebuilt: int = 0
         reclassified: int = 0
         skipped: int = 0
@@ -88,7 +97,7 @@ class ResultsRebuilder:
             if not os.path.isdir(sub_dir):
                 continue
             requests_dir: str = os.path.join(sub_dir, "requests")
-            json_path: str = os.path.join(sub_dir, "raw_results.json")
+            json_path: str = os.path.join(sub_dir, RAW_RESULTS_FILE_NAME)
             if not os.path.isdir(requests_dir):
                 continue
             if os.path.isfile(json_path):
@@ -105,7 +114,9 @@ class ResultsRebuilder:
         logger.info("Done: %s rebuilt, %s reclassified, %s skipped", rebuilt, reclassified, skipped)
 
     def _rebuild_single(self) -> None:
-        """Rebuild raw_results.json for a single run directory."""
+        """
+        Rebuild raw_results.json for a single run directory.
+        """
         requests_dir: str = os.path.join(self._output_dir, "requests")
         if not os.path.isdir(requests_dir):
             logger.error("No requests/ directory in %s", self._output_dir)
@@ -121,25 +132,14 @@ class ResultsRebuilder:
             logger.error("No request files found to rebuild.")
             return
 
-        passed: int = sum(
-            1 for result in results
-            if result.get("status") == STATUS_CREATED
-        )
+        passed: int = sum(1 for result in results if result.get("status") == STATUS_CREATED)
         total: int = len(results)
         # The slowest request stands in for the run's wall-clock time,
         # which is not recoverable from per-request files alone.
-        total_elapsed_seconds: float = max(
-            result.get("elapsed", 0) for result in results
-        )
-        average_latency_seconds: float = sum(
-            result.get("elapsed", 0) for result in results
-        ) / total if total > 0 else 0
-        total_tokens: int = sum(
-            result.get("total_tokens", 0) for result in results
-        )
-        total_cost_dollars: float = sum(
-            result.get("cost_usd", 0.0) for result in results
-        )
+        total_elapsed_seconds: float = max(result.get("elapsed", 0) for result in results)
+        average_latency_seconds: float = sum(result.get("elapsed", 0) for result in results) / total if total > 0 else 0
+        total_tokens: int = sum(result.get("total_tokens", 0) for result in results)
+        total_cost_dollars: float = sum(result.get("cost_usd", 0.0) for result in results)
 
         rebuilt_results: Dict[str, Any] = {
             "test_metadata": {
@@ -170,7 +170,7 @@ class ResultsRebuilder:
         }
         rebuilt_results.update(JsonMetadata.build())
 
-        json_path: str = os.path.join(self._output_dir, "raw_results.json")
+        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as file_handle:
             json.dump(rebuilt_results, file_handle, indent=2, default=str)
 
@@ -181,14 +181,20 @@ class ResultsRebuilder:
         """
         Extract request timing from log files.
 
-        :return: Request id to its status and elapsed seconds, from load_test.log and progress.log
+        :return: Request id to its status and elapsed seconds, from the run log and progress.log
         """
         timing: Dict[int, Dict[str, Any]] = {}
-        for filename in ("load_test.log", "progress.log"):
+        log_files: List[str] = list(self.RUN_LOG_FILES)
+        log_files.append(PROGRESS_LOG_FILE_NAME)
+        filename: str
+        # Failed requests are in the run log, successful ones in progress.log.
+        for filename in log_files:
             path: str = os.path.join(self._output_dir, filename)
             if not os.path.isfile(path):
                 continue
             with open(path, "r", encoding="utf-8") as file_handle:
+                line: str
+                # Keep the last status line seen for each request.
                 for line in file_handle:
                     match: Optional[re.Match] = _TIMING_RE.search(line)
                     if match:
@@ -202,21 +208,26 @@ class ResultsRebuilder:
         """
         Extract agent name and request count from log.
 
-        :return: (agent, request_count); ("unknown", 0) when load_test.log is missing or has no config lines
+        :return: (agent, request_count); ("unknown", 0) when no run log is found or none has config lines
         """
         agent: str = "unknown"
         request_count: int = 0
-        log_path: str = os.path.join(self._output_dir, "load_test.log")
-        if not os.path.isfile(log_path):
-            return agent, request_count
-        with open(log_path, "r", encoding="utf-8") as file_handle:
-            for line in file_handle:
-                match: Optional[re.Match] = _CONFIG_AGENT_RE.search(line)
-                if match:
-                    agent = match.group(1).strip()
-                match = _CONFIG_NUM_REQ_RE.search(line)
-                if match:
-                    request_count = int(match.group(1))
+        filename: str
+        # Read each run log name that exists in the run directory.
+        for filename in self.RUN_LOG_FILES:
+            log_path: str = os.path.join(self._output_dir, filename)
+            if not os.path.isfile(log_path):
+                continue
+            with open(log_path, "r", encoding="utf-8") as file_handle:
+                line: str
+                # Keep the last agent and request count lines seen.
+                for line in file_handle:
+                    match: Optional[re.Match] = _CONFIG_AGENT_RE.search(line)
+                    if match:
+                        agent = match.group(1).strip()
+                    match = _CONFIG_NUM_REQ_RE.search(line)
+                    if match:
+                        request_count = int(match.group(1))
         return agent, request_count
 
     def _scan_requests(self, requests_dir: str, timing: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -387,7 +398,8 @@ class ResultsRebuilder:
 
     @staticmethod
     def _resolve_status(timing_info: Dict[str, Any]) -> str:
-        """Determine request status from the log line for the request.
+        """
+        Determine request status from the log line for the request.
 
         Every status the runner reports is preserved, including TIMEOUT
         and KILLED: a rebuild that collapsed those into CREATED or

@@ -82,13 +82,8 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        total_requests: int = sum(
-            len(stage_summary.get("results", []))
-            for stage_summary in self._summaries
-        )
-        total_elapsed_seconds: float = sum(
-            stage_summary.get("elapsed", 0) for stage_summary in self._summaries
-        )
+        total_requests: int = sum(len(stage_summary.get("results", [])) for stage_summary in self._summaries)
+        total_elapsed_seconds: float = sum(stage_summary.get("elapsed", 0) for stage_summary in self._summaries)
         agent: str = self._args.agent
         date_text: str = time.strftime("%Y-%m-%d %H:%M")
         request_count: int = self._args.num_requests
@@ -254,12 +249,8 @@ class SummaryFileWriter:
             all_events.extend(summary.get("validation_events", []))
         if not all_events:
             return
-        total_cycles: int = sum(
-            event.get("fix_cycles", 0) for event in all_events
-        )
-        total_requests: int = sum(
-            stage_summary.get("concurrent", 0) for stage_summary in self._summaries
-        )
+        total_cycles: int = sum(event.get("fix_cycles", 0) for event in all_events)
+        total_requests: int = sum(stage_summary.get("concurrent", 0) for stage_summary in self._summaries)
         affected: int = len(all_events)
         lines.append(
             f"  Validation: {affected} of {total_requests} requests needed fixes ({total_cycles} fix cycles total)"
@@ -271,9 +262,7 @@ class SummaryFileWriter:
         if all_errors:
             counts: Counter = Counter(all_errors)
             top: List[Tuple[str, int]] = counts.most_common(3)
-            parts: List[str] = [
-                f"{error} ({count}x)" for error, count in top
-            ]
+            parts: List[str] = [f"{error} ({count}x)" for error, count in top]
             lines.append(f"    {len(all_errors)} errors found: {', '.join(parts)}")
 
     def _write_validation_time_impact(self, lines: List[str], events: List[Dict[str, Any]]) -> None:
@@ -349,15 +338,10 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param all_results: Every request result
         """
-        passed: int = sum(
-            1 for result in all_results
-            if result.get("status") == STATUS_CREATED
-        )
+        passed: int = sum(1 for result in all_results if result.get("status") == STATUS_CREATED)
         total: int = len(all_results)
         failed: int = total - passed
-        latencies_seconds: List[float] = [
-            result.get("elapsed", 0) for result in all_results
-        ]
+        latencies_seconds: List[float] = [result.get("elapsed", 0) for result in all_results]
         lines.append("")
         lines.append(f"  Overall: {passed}/{total} CREATED, {failed} failed")
         if latencies_seconds:
@@ -445,9 +429,7 @@ class SummaryFileWriter:
 
         for server_request_id in sorted(by_server_id.keys()):
             entries: List[Dict[str, Any]] = by_server_id[server_request_id]
-            entries.sort(
-                key=lambda timing_entry: timing_entry.get("start_ts", 0),
-            )
+            entries.sort(key=lambda timing_entry: timing_entry.get("start_ts", 0))
             if not entries:
                 continue
             top_start_seconds: float = entries[0].get("start_ts", 0)
@@ -529,11 +511,7 @@ class SummaryFileWriter:
             if timing_entry.get("agent") != top_agent
         ]
         for index, sub_agent in enumerate(sub_agents):
-            prefix: str = (
-                "\u2514\u2500"
-                if index == len(sub_agents) - 1
-                else "\u251c\u2500"
-            )
+            prefix: str = "\u2514\u2500" if index == len(sub_agents) - 1 else "\u251c\u2500"
             name: str = sub_agent.get("agent", "?")
             duration_seconds: float = sub_agent.get("duration_seconds", 0)
             lines.append(f"      {prefix} {name:<23s} {duration_seconds:6.1f}s")

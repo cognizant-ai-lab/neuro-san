@@ -60,9 +60,7 @@ class TestReadRecords(TestCase):
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
-        self.assertEqual(
-            [record.get("agent", "") for record in records], ["one", "two"],
-        )
+        self.assertEqual([record.get("agent", "") for record in records], ["one", "two"])
 
     def test_truncated_final_line_does_not_lose_earlier_records(self) -> None:
         """An interrupted run leaves a partial line; the rest survives."""
