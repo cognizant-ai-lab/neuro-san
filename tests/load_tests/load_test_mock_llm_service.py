@@ -297,10 +297,8 @@ Known presets: %s""",
                 sys.exit(1)
             self.args.prompt = preset.get("prompt")
 
-        if (self.args.sly_data is None
-                and not self.args.no_sly_data):
-            if (preset is not None
-                    and preset.get("sly_data") is not None):
+        if self.args.sly_data is None and not self.args.no_sly_data:
+            if preset is not None and preset.get("sly_data") is not None:
                 self.args.sly_data = preset.get("sly_data")
             else:
                 self.args.no_sly_data = True
@@ -320,8 +318,7 @@ Known presets: %s""",
             arg: str
             # Find "--port" and return the command line item after it.
             for index, arg in enumerate(cmdline):
-                if (arg == "--port"
-                        and index + 1 < len(cmdline)):
+                if arg == "--port" and index + 1 < len(cmdline):
                     return cmdline[index + 1]
         except (psutil.NoSuchProcess, psutil.AccessDenied) as error:
             logger.debug("Could not read mock process cmdline: %s", error)
@@ -613,11 +610,9 @@ Then:
             if after_server:
                 ResourceMonitor.log_snapshot("Server AFTER", after_server)
 
-            if (before_server
-                    and after_server):
+            if before_server and after_server:
                 server_rows.append(self._build_snapshot_row(round_num, before_server, after_server))
-            if (before_mock
-                    and after_mock):
+            if before_mock and after_mock:
                 mock_rows.append(self._build_snapshot_row(round_num, before_mock, after_mock))
 
         return server_rows, mock_rows, totals
@@ -758,8 +753,7 @@ Then:
         try:
             server_rows, mock_rows, totals = self._run_rounds()
             self._log_results(totals, server_rows, mock_rows)
-            if (is_local
-                    and not self.args.auto_start):
+            if is_local and not self.args.auto_start:
                 logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
                 logger.info("  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE ON NEURO-SAN SERVER")
                 logger.info("  Key:   OPENAI_API_BASE")
