@@ -257,3 +257,33 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :return: The agent network inspector associated with the instance
         """
         return self.agent_network
+
+    def get_agent_tool_spec(self, name: str) -> Dict[str, Any]:
+        """
+        :param name: The name of the agent tool to get out of the registry
+        :return: The dictionary representing the spec registered agent
+        """
+        return self.agent_network.get_agent_tool_spec(name)
+
+    def get_network_name(self) -> str:
+        """
+        :return: The name of the agent network these specs belong to, as it is
+                 registered in the manifest (for example "deep/math_guy"), which
+                 is also how its hocon file is found. Messages use it to tell the
+                 reader where a problem has to be fixed.
+        """
+        return self.agent_network.get_network_name()
+
+    def find_front_man(self) -> str:
+        """
+        :return: A single tool name to use as the root of the chat agent.
+                 This guy will be user facing.  If there are none or > 1,
+                 an exception will be raised.
+        """
+        return self.agent_network.find_front_man()
+
+    def get_size_in_bytes(self) -> int:
+        """
+        :return: The size in bytes of this AgentNetwork
+        """
+        return self.agent_network.get_size_in_bytes()
