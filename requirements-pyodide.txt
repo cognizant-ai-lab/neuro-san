@@ -39,7 +39,7 @@
 #     pip install -r requirements-pyodide.txt    # will fail on this line
 #     pip install -e /path/to/leaf-common        # what the verification used
 # The verified run below used 1.4.5.dev25+g3393a42 from that branch.
-## ASD HACK! leaf-common>=1.5.0
+leaf-common>=1.4.6
 
 # -- Agent network and config parsing ---------------------------------------
 pyhocon>=0.3.60

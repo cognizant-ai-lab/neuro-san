@@ -29,7 +29,9 @@
         ]
     },
     "llm_config": {
-        "model_name": "gpt-5.2"
+        "model_name": "gpt-5.2",
+        "use_responses_api": false,
+        "class": "openai-wire"
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which
@@ -62,10 +64,7 @@
         },
         {
             "name": "current_date_time",
-            "function": {
-                "description": "Return current UTC date and time",
-            }
-            "class": "date_time.DateTime"
+            "url": "http://127.0.0.1:8090/mcp"
         }
     ]
 }
