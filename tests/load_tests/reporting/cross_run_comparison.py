@@ -104,8 +104,7 @@ class CrossRunComparison:
         """
         runs: List[Dict[str, Any]] = []
         for entry in os.listdir(self._base_dir):
-            if (self._run_filter
-                    and entry not in self._run_filter):
+            if self._run_filter and entry not in self._run_filter:
                 continue
             json_path: str = os.path.join(self._base_dir, entry, RAW_RESULTS_FILE_NAME)
             if not os.path.isfile(json_path):
@@ -127,9 +126,7 @@ class CrossRunComparison:
         for run in runs:
             count: int = run.get("num_requests", 0)
             existing: Optional[Dict[str, Any]] = by_count.get(count)
-            if (existing is None
-                    or run.get("folder", "")
-                    > existing.get("folder", "")):
+            if existing is None or run.get("folder", "") > existing.get("folder", ""):
                 by_count[count] = run
         return list(by_count.values())
 
@@ -244,8 +241,7 @@ class CrossRunComparison:
         groups: Dict[str, List[Dict[str, Any]]] = {}
         for run in runs:
             agent: str = run.get("agent", "unknown")
-            if (self._agent_filter
-                    and agent not in self._agent_filter):
+            if self._agent_filter and agent not in self._agent_filter:
                 continue
             groups.setdefault(agent, []).append(run)
         return groups

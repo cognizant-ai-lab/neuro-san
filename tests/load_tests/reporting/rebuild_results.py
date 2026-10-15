@@ -132,25 +132,14 @@ class ResultsRebuilder:
             logger.error("No request files found to rebuild.")
             return
 
-        passed: int = sum(
-            1 for result in results
-            if result.get("status") == STATUS_CREATED
-        )
+        passed: int = sum(1 for result in results if result.get("status") == STATUS_CREATED)
         total: int = len(results)
         # The slowest request stands in for the run's wall-clock time,
         # which is not recoverable from per-request files alone.
-        total_elapsed_seconds: float = max(
-            result.get("elapsed", 0) for result in results
-        )
-        average_latency_seconds: float = sum(
-            result.get("elapsed", 0) for result in results
-        ) / total if total > 0 else 0
-        total_tokens: int = sum(
-            result.get("total_tokens", 0) for result in results
-        )
-        total_cost_dollars: float = sum(
-            result.get("cost_usd", 0.0) for result in results
-        )
+        total_elapsed_seconds: float = max(result.get("elapsed", 0) for result in results)
+        average_latency_seconds: float = sum(result.get("elapsed", 0) for result in results) / total if total > 0 else 0
+        total_tokens: int = sum(result.get("total_tokens", 0) for result in results)
+        total_cost_dollars: float = sum(result.get("cost_usd", 0.0) for result in results)
 
         rebuilt_results: Dict[str, Any] = {
             "test_metadata": {

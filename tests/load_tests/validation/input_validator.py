@@ -287,10 +287,7 @@ Then use:
             args.stage_timeout, args.stage_timeout // 60,
         )
         if args.total_timeout > 0:
-            logger.info(
-                "            --total-timeout %ss (%sm)",
-                args.total_timeout, args.total_timeout // 60,
-            )
+            logger.info("            --total-timeout %ss (%sm)", args.total_timeout, args.total_timeout // 60)
         else:
             logger.info("            --total-timeout disabled")
         SystemResources.log_prerun()
@@ -344,8 +341,7 @@ Then use:
         if not self._args.ramp and max_workers < num_requests:
             warnings.append(f"--max-workers ({max_workers}) < --num-requests ({num_requests}): requests run in batches")
 
-        if (estimated_stage_duration_seconds is not None
-                and estimated_stage_duration_seconds > self._args.stage_timeout):
+        if estimated_stage_duration_seconds is not None and estimated_stage_duration_seconds > self._args.stage_timeout:
             stage_timeout_seconds: int = self._args.stage_timeout
             warnings.append(
                 f"""Estimated stage duration ~{int(estimated_stage_duration_seconds)}s exceeds --stage-timeout \
