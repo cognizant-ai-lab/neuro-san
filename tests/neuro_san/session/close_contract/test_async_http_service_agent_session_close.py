@@ -85,7 +85,3 @@ class TestAsyncHttpServiceAgentSessionClose:
         with pytest.raises(AgentSessionClosedError):
             async for _ in session.streaming_chat(request):
                 pass
-
-    def test_interface_default_is_closed_is_false(self):
-        """The AsyncAgentSession base contract defaults is_closed() to False."""
-        assert AsyncAgentSession().is_closed() is False

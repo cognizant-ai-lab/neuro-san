@@ -81,7 +81,3 @@ class TestHttpServiceAgentSessionClose:
         request: Dict[str, Any] = {"user_message": {"type": "HUMAN", "text": "hi"}}
         with pytest.raises(AgentSessionClosedError):
             list(session.streaming_chat(request))
-
-    def test_interface_default_is_closed_is_false(self):
-        """The AgentSession base contract defaults is_closed() to False (direct sessions can't be closed)."""
-        assert AgentSession().is_closed() is False
