@@ -18,8 +18,10 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Tuple
 
 import argparse
+import copy
 import json
 import os
 import shutil
@@ -30,7 +32,9 @@ from pyparsing.exceptions import ParseSyntaxException
 
 from leaf_common.validation.dictionary_validator import DictionaryValidator
 
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
+from neuro_san.internals.validation.network.lint_network_validator import LintNetworkValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -65,7 +69,7 @@ class HoconValidatorCli:
         self.parse_args()
 
         try:
-            config: Dict[str, Any] = self.load_hocon_file(self.args.hocon_file)
+            resolved_config, raw_config = self.load_hocon_file(self.args.hocon_file)
         except FileNotFoundError as exception:
             print(f"Error: File not found - {exception}", file=sys.stderr)
             return 2
@@ -76,19 +80,48 @@ class HoconValidatorCli:
             print(f"Error: {exception}", file=sys.stderr)
             return 2
 
+        # Run hard validation (missing nodes, cycles, etc.)
         validator: DictionaryValidator = self.create_validator()
-        errors: List[str] = validator.validate(config)
+        errors: List[str] = validator.validate(resolved_config)
 
-        if errors:
-            print(f"Validation failed with {len(errors)} error(s):\n")
-            for i, error in enumerate(errors, 1):
+        # Run lint checks: unused commondefs can be promoted to errors
+        # by --strict; unresolved placeholders are always advisory.
+        lint = LintNetworkValidator(raw_config=raw_config)
+        unused_warnings: List[str] = lint.find_unused_commondefs()
+        placeholder_warnings: List[str] = lint.find_unresolved_placeholders(resolved_config)
+
+        # Build the list of things that cause exit 1
+        exit_errors: List[str] = list(errors)
+        if self.args.strict:
+            exit_errors.extend(unused_warnings)
+
+        if exit_errors:
+            print(f"Validation failed with {len(exit_errors)} error(s):\n")
+            for i, error in enumerate(exit_errors, 1):
                 print(f"  {i}. {error}")
+            # Show remaining warnings that weren't promoted to errors
+            remaining: List[str] = list(placeholder_warnings)
+            if not self.args.strict:
+                remaining = unused_warnings + remaining
+            if remaining:
+                self._print_lint_warnings(remaining)
             return 1
 
+        # Validation passed
         print("Validation passed: No errors found.")
+        all_warnings: List[str] = unused_warnings + placeholder_warnings
+        if all_warnings:
+            self._print_lint_warnings(all_warnings)
         if self.args.verbose:
-            self.print_network_summary(config)
+            self._print_network_summary(resolved_config)
         return 0
+
+    @staticmethod
+    def _print_lint_warnings(lint_warnings: List[str]):
+        """Print lint warnings to stdout."""
+        print(f"\n{len(lint_warnings)} lint warning(s) (use --strict to treat these as errors):\n")
+        for i, warning in enumerate(lint_warnings, 1):
+            print(f"  {i}. {warning}")
 
     def parse_args(self):
         """
@@ -134,6 +167,13 @@ Examples:
         )
 
         arg_parser.add_argument(
+            "--strict",
+            default=False,
+            action="store_true",
+            help="Treat unused-commondefs lint warnings as validation errors."
+        )
+
+        arg_parser.add_argument(
             "--json-output",
             default=False,
             action="store_true",
@@ -162,15 +202,17 @@ Examples:
 
         self.args = arg_parser.parse_args()
 
-    def load_hocon_file(self, file_path: str) -> Dict[str, Any]:
+    def load_hocon_file(self, file_path: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
-        Load and parse a HOCON file.
+        Load and parse a HOCON file, returning both the resolved and raw configs.
 
-        If registry_dir is specified, the file is temporarily copied to that directory
-        so that HOCON includes (like 'include "registries/..."') can be resolved correctly.
+        The file is parsed once. A deep copy is kept as the raw config (needed
+        by the unused-commondefs check, which must see definitions before they
+        are substituted away), and the standard filter chain is applied to the
+        original to produce the resolved config.
 
         :param file_path: Path to the HOCON file
-        :return: Parsed configuration dictionary
+        :return: (resolved_config, raw_config)
         """
         abs_file_path: str = os.path.abspath(file_path)
 
@@ -178,18 +220,49 @@ Examples:
             return self._load_with_registry_dir(abs_file_path, self.args.registry_dir)
 
         restorer = AgentNetworkRestorer(registry_dir=None)
-        agent_network = restorer.restore(file_reference=abs_file_path)
-        return agent_network.get_config()
+        return self._parse_and_resolve(abs_file_path, restorer)
 
-    def _load_with_registry_dir(self, file_path: str, registry_dir: str) -> Dict[str, Any]:
+    @staticmethod
+    def _parse_and_resolve(
+        file_path: str, restorer: AgentNetworkRestorer
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
-        Load a HOCON file by temporarily copying it to the registry directory.
+        Parse a HOCON file once, then produce both raw and resolved configs.
 
-        This allows HOCON includes to be resolved relative to the registry directory.
+        Uses the restorer's deserialize_file_contents() directly (rather than
+        its full restore() path) because restore() applies the filter chain
+        *and* wraps the result in an AgentNetwork. We need the parsed dict
+        before filtering so we can deep-copy it as the raw config.
+
+        :param file_path: Absolute path to the HOCON file
+        :param restorer: An AgentNetworkRestorer (used only for its HOCON parser)
+        :return: (resolved_config, raw_config)
+        """
+        with open(file_path, "rb") as file_obj:
+            file_contents: bytes = file_obj.read()
+
+        parsed: Dict[str, Any] = restorer.deserialize_file_contents(
+            file_path, file_contents
+        )
+
+        if parsed is None:
+            raise FileNotFoundError(f"Could not parse file: {file_path}")
+
+        # Keep a deep copy as the raw config before filtering mutates it
+        raw_config: Dict[str, Any] = copy.deepcopy(parsed)
+        resolved_config: Dict[str, Any] = NetworkConfigFilterChain().filter_config(parsed)
+        return resolved_config, raw_config
+
+    def _load_with_registry_dir(
+        self, file_path: str, registry_dir: str
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """
+        Load a HOCON file by temporarily copying it to the registry directory
+        so that HOCON 'include' statements resolve correctly.
 
         :param file_path: Absolute path to the HOCON file
         :param registry_dir: Directory containing the registries folder
-        :return: Parsed configuration dictionary
+        :return: (resolved_config, raw_config)
         """
         abs_registry_dir: str = os.path.abspath(registry_dir)
 
@@ -200,12 +273,10 @@ Examples:
         try:
             base_name: str = os.path.basename(file_path)
             temp_file = os.path.join(abs_registry_dir, f"_temp_validate_{base_name}")
-
             shutil.copy(file_path, temp_file)
 
             restorer = AgentNetworkRestorer(registry_dir=None)
-            agent_network = restorer.restore(file_reference=temp_file)
-            return agent_network.get_config()
+            return self._parse_and_resolve(temp_file, restorer)
         finally:
             if temp_file and os.path.exists(temp_file):
                 os.remove(temp_file)
@@ -228,7 +299,8 @@ Examples:
         return ManifestNetworkValidator(external_agents, mcp_servers,
                                         network_name=network_name)
 
-    def print_network_summary(self, config: Dict[str, Any]):
+    @staticmethod
+    def _print_network_summary(config: Dict[str, Any]):
         """
         Print a summary of the agent network.
 

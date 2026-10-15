@@ -1,0 +1,36 @@
+
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+"""
+Scoped conftest for the client tests.
+
+The project-wide tests/conftest.py declares an autouse fixture
+``configure_llm_provider_keys`` that skips any test missing an
+OPENAI_API_KEY.  CLI validator tests exercise local HOCON parsing and
+do not call any LLM provider, so the project-wide skip condition does
+not apply.  This conftest overrides that fixture with a no-op.
+"""
+import pytest
+
+
+# pylint: disable=unused-argument
+@pytest.fixture(autouse=True)
+def configure_llm_provider_keys(request, monkeypatch):
+    """
+    Override of the project-wide configure_llm_provider_keys fixture.
+    CLI validator tests never call an LLM.
+    """
+    return None
