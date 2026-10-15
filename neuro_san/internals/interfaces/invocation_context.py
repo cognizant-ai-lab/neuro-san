@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
 
 from typing import Any
 from typing import Dict
@@ -161,5 +162,18 @@ class InvocationContext(LingeringResource):
     def add_resource(self, resource: LingeringResource):
         """
         :param resource: The resource to add
+        """
+        raise NotImplementedError
+
+    def safe_shallow_copy(self, invocation: str = None) -> InvocationContext:
+        """
+        Makes a safe shallow copy of the invocation context.
+        Generally used with direct sessions.
+
+        :param invocation: String describing how the agent wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
+        :return: A copy of the invocation context
         """
         raise NotImplementedError
