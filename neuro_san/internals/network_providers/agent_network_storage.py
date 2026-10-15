@@ -64,8 +64,8 @@ class AgentNetworkStorage(AgentStorageSource):
         """
         is_new: bool = False
         with self.lock:
-            agent_network: AgentNetwork = self.agents_table.get(agent_name)
-            is_new = agent_network is None
+            test_agent_network = self.agents_table.get(agent_name)
+            is_new = test_agent_network is None
             self.agents_table[agent_name] = agent_network
 
         agent_size_in_bytes: int = agent_network.get_size_in_bytes()
