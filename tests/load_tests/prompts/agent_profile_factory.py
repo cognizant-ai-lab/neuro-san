@@ -69,8 +69,9 @@ class AgentProfileFactory:
         if data is None:
             # EasyJsonPersistence returns None when the JSON is a list or a single value.
             logger.error(
-                "Agent profile must be a JSON object ({...}), not a list or a single value.\n"
-                "  File: %s\nAborting.",
+                """Agent profile must be a JSON object ({...}), not a list or a single value.
+  File: %s
+Aborting.""",
                 path,
             )
             raise LoadTestAbortError(1)
@@ -94,6 +95,8 @@ class AgentProfileFactory:
                  or {} when there are no fields
         """
         sly_checks: Dict[str, Any] = {}
+        field: str
+        # Add a not_value check for each required sly_data field
         for field in success_fields:
             sly_checks[field] = {"not_value": ""}
         if not sly_checks:
@@ -127,19 +130,19 @@ class AgentProfileFactory:
         if profile_path:
             if os.path.isfile(profile_path):
                 logger.error(
-                    "--profile-path should be a directory, not a file.\n"
-                    "  Got: %s\n"
-                    "  Try: --profile-path %s",
+                    """--profile-path should be a directory, not a file.
+  Got: %s
+  Try: --profile-path %s""",
                     profile_path, os.path.dirname(profile_path),
                 )
                 raise LoadTestAbortError(1)
             candidate = os.path.join(profile_path, f"{agent_base}.json")
             if not os.path.isfile(candidate):
                 logger.error(
-                    "Profile not found: %s\n"
-                    "  --profile-path directory: %s\n"
-                    "  Expected file: %s.json\n"
-                    "  Aborting.",
+                    """Profile not found: %s
+  --profile-path directory: %s
+  Expected file: %s.json
+  Aborting.""",
                     candidate, profile_path, agent_base,
                 )
                 raise LoadTestAbortError(1)
@@ -171,10 +174,11 @@ class AgentProfileFactory:
                     return candidate
 
         logger.error(
-            "No profile found for agent '%s'.\n"
-            "Searched:\n%s\n"
-            "Create a profile JSON or use --profile-path to specify one.\n"
-            "Aborting.",
+            """No profile found for agent '%s'.
+Searched:
+%s
+Create a profile JSON or use --profile-path to specify one.
+Aborting.""",
             agent_name,
             "".join(f"  - {searched_path}\n" for searched_path in searched),
         )
@@ -263,19 +267,21 @@ class AgentProfileFactory:
         hocon_agent: str = test_case.get("agent", "")
         if hocon_agent not in (agent_name, ProjectPaths.agent_base_name(agent_name)):
             logger.error(
-                "Hocon agent does not match --agent.\n"
-                "  File: %s\n"
-                "  Hocon agent: %s\n"
-                "  --agent: %s\nAborting.",
+                """Hocon agent does not match --agent.
+  File: %s
+  Hocon agent: %s
+  --agent: %s
+Aborting.""",
                 path, hocon_agent, agent_name,
             )
             raise LoadTestAbortError(1)
         interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
         if len(interactions) > 1:
             logger.error(
-                "Load-test hocon must have exactly one interaction.\n"
-                "  File: %s\n"
-                "  Interactions: %d\nAborting.",
+                """Load-test hocon must have exactly one interaction.
+  File: %s
+  Interactions: %d
+Aborting.""",
                 path, len(interactions),
             )
             raise LoadTestAbortError(1)
@@ -284,10 +290,11 @@ class AgentProfileFactory:
         sly_checks: Any = response.get("sly_data", {}) if isinstance(response, dict) else None
         if not isinstance(sly_checks, dict):
             logger.error(
-                "response and response.sly_data must be maps of field -> check "
-                "(see docs/test_case_hocon_reference.md).\n"
-                "  File: %s\n"
-                "  Got: %r\nAborting.",
+                """response and response.sly_data must be maps of field -> check \
+(see docs/test_case_hocon_reference.md).
+  File: %s
+  Got: %r
+Aborting.""",
                 path, sly_checks if isinstance(response, dict) else response,
             )
             raise LoadTestAbortError(1)
@@ -304,6 +311,9 @@ class AgentProfileFactory:
         :param path: The hocon file the response block came from, for the message
         :param response: The interaction's response block
         """
+        key: str
+        check: Any
+        # Find the sly_data keys whose check body is empty
         for key, check in response.get("sly_data", {}).items():
             if check == {}:
                 logger.warning(
