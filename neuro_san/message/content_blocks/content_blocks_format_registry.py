@@ -48,7 +48,7 @@ class ContentBlocksFormatRegistry:
         return ContentBlocksFormatRegistry.DEFAULT_FORMAT
 
     @staticmethod
-    def get(format_name: Any) -> Optional[ContentBlocksFormat]:
+    def get_format(format_name: Any) -> Optional[ContentBlocksFormat]:
         """
         Find the format a wrapper's "format" value names.
 

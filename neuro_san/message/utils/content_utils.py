@@ -334,7 +334,7 @@ class ContentUtils:
         if not isinstance(wrapper, dict):
             return None
         wrapper_dict: Dict[str, Any] = wrapper
-        return ContentBlocksFormatRegistry.get(wrapper_dict.get("format"))
+        return ContentBlocksFormatRegistry.get_format(wrapper_dict.get("format"))
 
     @staticmethod
     def normalize_content(message: BaseMessage) -> Union[str, List[Dict[str, Any]]]:

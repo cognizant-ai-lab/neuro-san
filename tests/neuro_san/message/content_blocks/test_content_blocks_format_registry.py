@@ -35,14 +35,14 @@ class TestContentBlocksFormatRegistry(TestCase):
         default_format: ContentBlocksFormat = ContentBlocksFormatRegistry.get_default()
         self.assertEqual(default_format.get_name(), "langchain_v1")
 
-    def test_get_known_format(self) -> None:
+    def test_get_format_known_name(self) -> None:
         """
         A known name finds the one shared format instance.
         """
-        found: ContentBlocksFormat = ContentBlocksFormatRegistry.get("langchain_v1")
+        found: ContentBlocksFormat = ContentBlocksFormatRegistry.get_format("langchain_v1")
         self.assertIs(found, ContentBlocksFormatRegistry.get_default())
 
-    def test_get_unknown_or_non_string_is_none(self) -> None:
+    def test_get_format_unknown_or_non_string_is_none(self) -> None:
         """
         Unknown names and anything that is not a string name no format.
         A client can send any JSON value as the format, so non-hashable
@@ -53,4 +53,4 @@ class TestContentBlocksFormatRegistry(TestCase):
         value: Any = None
         for value in unknown:
             with self.subTest(value=str(value)):
-                self.assertIsNone(ContentBlocksFormatRegistry.get(value))
+                self.assertIsNone(ContentBlocksFormatRegistry.get_format(value))
