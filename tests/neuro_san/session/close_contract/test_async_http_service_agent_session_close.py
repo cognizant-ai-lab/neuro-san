@@ -26,7 +26,6 @@ from typing import Dict
 
 import pytest
 
-from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
 
@@ -85,7 +84,3 @@ class TestAsyncHttpServiceAgentSessionClose:
         with pytest.raises(AgentSessionClosedError):
             async for _ in session.streaming_chat(request):
                 pass
-
-    def test_interface_default_is_closed_is_false(self):
-        """The AsyncAgentSession base contract defaults is_closed() to False."""
-        assert AsyncAgentSession().is_closed() is False

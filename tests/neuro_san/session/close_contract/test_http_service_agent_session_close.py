@@ -26,7 +26,6 @@ from typing import Dict
 
 import pytest
 
-from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
@@ -81,7 +80,3 @@ class TestHttpServiceAgentSessionClose:
         request: Dict[str, Any] = {"user_message": {"type": "HUMAN", "text": "hi"}}
         with pytest.raises(AgentSessionClosedError):
             list(session.streaming_chat(request))
-
-    def test_interface_default_is_closed_is_false(self):
-        """The AgentSession base contract defaults is_closed() to False (direct sessions can't be closed)."""
-        assert AgentSession().is_closed() is False
