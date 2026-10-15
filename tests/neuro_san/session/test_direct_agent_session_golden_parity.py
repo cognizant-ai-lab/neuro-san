@@ -248,10 +248,11 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         where present, is the langchain_v1 wrapper whose blocks flatten to that
         text. Text presence is not required here on purpose: the converter
         omits text for empty-list content, and the golden comparison locks
-        exactly which messages carry which keys. Today the history copies
-        inside chat_context are text-only (OriginatingJournal appends a text
+        exactly which messages carry which keys. The history copies inside
+        chat_context are text-only (OriginatingJournal appends a text
         projection of block-content AI messages), so they carry no
-        content_blocks; restoring blocks from chat_context will revisit this.
+        content_blocks. A client that sends blocks back inside chat_context
+        has them restored on the way in; these conversations never do.
 
         :param stream: The normalized response dicts.
         """
