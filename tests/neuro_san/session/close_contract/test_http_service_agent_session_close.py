@@ -26,7 +26,6 @@ from typing import Dict
 
 import pytest
 
-from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
