@@ -428,9 +428,8 @@ Then:
         api_base: str = f"http://localhost:{mock_port}/v1"
 
         logger.info("Auto-starting mock LLM server (log: %s)", self.MOCK_LOG_PATH)
-        self._mock_log_file_handle = open(  # pylint: disable=consider-using-with
-            self.MOCK_LOG_PATH, "w", encoding="utf-8",
-        )
+        # pylint: disable-next=consider-using-with
+        self._mock_log_file_handle = open(self.MOCK_LOG_PATH, "w", encoding="utf-8")
         self._auto_mock_popen = Popen(  # pylint: disable=consider-using-with
             ["python", "-m", "tests.mock_llm_server.mock_llm_server",
              "--port", mock_port],
@@ -442,9 +441,8 @@ Then:
         server_env: Dict[str, str] = {**os.environ, "OPENAI_API_BASE": api_base,
                                       "AGENT_LLM_INFO_FILE": self.CHAT_COMPLETIONS_LLM_INFO_PATH}
         logger.info("Auto-starting neuro-san server (log: %s)", self.SERVER_LOG_PATH)
-        self._server_log_file_handle = open(  # pylint: disable=consider-using-with
-            self.SERVER_LOG_PATH, "w", encoding="utf-8",
-        )
+        # pylint: disable-next=consider-using-with
+        self._server_log_file_handle = open(self.SERVER_LOG_PATH, "w", encoding="utf-8")
         self._auto_server_popen = Popen(  # pylint: disable=consider-using-with
             ["python", "-m", "neuro_san.service.main_loop.server_main_loop"],
             stdout=self._server_log_file_handle,

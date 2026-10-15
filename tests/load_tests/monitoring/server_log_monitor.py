@@ -189,10 +189,7 @@ class ServerLogMonitor:
             if not message.startswith("Failed to create Agent/tool"):
                 continue
             warning_message: str = " ".join(message.split())
-            warning: Dict[str, str] = {
-                "request_id": entry.get("request_id", "unknown"),
-                "message": warning_message,
-            }
+            warning: Dict[str, str] = {"request_id": entry.get("request_id", "unknown"), "message": warning_message}
             warnings.append(warning)
         return warnings
 

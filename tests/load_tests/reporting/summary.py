@@ -70,10 +70,7 @@ class SummaryReporter:
         logger.info("  %s", title)
         logger.info("=" * SEPARATOR_WIDTH)
 
-        has_server_counts: bool = any(
-            summary.get("primary_started") is not None
-            for summary in self._summaries
-        )
+        has_server_counts: bool = any(summary.get("primary_started") is not None for summary in self._summaries)
         first_col: str = "Stage" if is_ramp else "Round"
         header: List[str] = [
             first_col, "Concurrent", "Created", "Failed",
@@ -153,14 +150,8 @@ class SummaryReporter:
         self._log_performance_stats()
 
         if total_retries > 0:
-            total_requests: int = sum(
-                stage_summary.get("concurrent", 0)
-                for stage_summary in self._summaries
-            )
-            amplification: float = (
-                (total_requests + total_retries) / total_requests
-                if total_requests > 0 else 1.0
-            )
+            total_requests: int = sum(stage_summary.get("concurrent", 0) for stage_summary in self._summaries)
+            amplification: float = (total_requests + total_retries) / total_requests if total_requests > 0 else 1.0
             logger.info("\n  Overall retry totals:")
             logger.info("    Total retries:   %s", total_retries)
             logger.info("    Amplification:   %.2fx", amplification)
@@ -419,8 +410,7 @@ class SummaryReporter:
             if cpu_percentage is not None and (peak_cpu_percentage is None or cpu_percentage > peak_cpu_percentage):
                 peak_cpu_percentage = cpu_percentage
             threads: Optional[int] = summary.get("peak_sys_threads")
-            if (threads is not None
-                    and (peak_threads is None or threads > peak_threads)):
+            if threads is not None and (peak_threads is None or threads > peak_threads):
                 peak_threads = threads
         if peak_memory_percentage is None and peak_cpu_percentage is None and peak_threads is None:
             return None
@@ -513,12 +503,8 @@ class SummaryReporter:
         all_events: List[Dict[str, Any]] = self._collect_validation_events()
         if not all_events:
             return
-        total_cycles: int = sum(
-            event.get("fix_cycles", 0) for event in all_events
-        )
-        total_requests: int = sum(
-            stage_summary.get("concurrent", 0) for stage_summary in self._summaries
-        )
+        total_cycles: int = sum(event.get("fix_cycles", 0) for event in all_events)
+        total_requests: int = sum(stage_summary.get("concurrent", 0) for stage_summary in self._summaries)
         affected: int = len(all_events)
         all_errors: List[str] = []
         for event in all_events:
@@ -568,9 +554,7 @@ class SummaryReporter:
         """
         counts: Counter = Counter(all_errors)
         top: List[Tuple[str, int]] = counts.most_common(3)
-        parts: List[str] = [
-            f"{error} ({count}x)" for error, count in top
-        ]
+        parts: List[str] = [f"{error} ({count}x)" for error, count in top]
         logger.info("    %s errors found: %s", len(all_errors), ", ".join(parts))
 
     def _collect_validation_events(self) -> List[Dict[str, Any]]:

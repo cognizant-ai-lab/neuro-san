@@ -293,8 +293,7 @@ class LatencyAnalyzer:
         for index in range(bucket_count):
             bucket_end_seconds: float = (index + 1) * bucket_size_seconds
             bucket_peaks[index] = current_in_flight_count
-            while (event_index < len(timeline)
-                   and timeline[event_index][0] < bucket_end_seconds):
+            while event_index < len(timeline) and timeline[event_index][0] < bucket_end_seconds:
                 current_in_flight_count = timeline[event_index][1]
                 bucket_peaks[index] = max(bucket_peaks[index], current_in_flight_count)
                 event_index += 1
