@@ -330,3 +330,12 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         with suppress(Exception):
             if not session.closed:
                 await session.close()
+
+    def is_closed(self) -> bool:
+        """
+        :return: True if close() has been called on this session, in which case
+                 further streaming_chat()/function()/connectivity() calls raise
+                 AgentSessionClosedError. The default is False for sessions that
+                 hold no external connection and therefore cannot be closed.
+        """
+        return self._closed
