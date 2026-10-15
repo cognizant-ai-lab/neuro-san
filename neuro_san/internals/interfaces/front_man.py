@@ -18,23 +18,30 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from abc import abstractmethod
+
 from langchain_core.messages.base import BaseMessage
+
+from leaf_common.utils.interface import interface
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 
 
+@interface
 class FrontMan(LingeringResource):
     """
     Interface that describes how a chat interface can interact with a FrontMan
     """
 
+    @abstractmethod
     async def create_any_resources(self):
         """
         Creates resources that will be used throughout the lifetime of the component.
         """
         raise NotImplementedError
 
+    @abstractmethod
     def update_invocation_context(self, invocation_context: InvocationContext):
         """
         Update internal state based on the InvocationContext instance passed in.
@@ -42,6 +49,7 @@ class FrontMan(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_origin(self) -> List[Dict[str, Any]]:
         """
         :return: A List of origin dictionaries indicating the origin of the run.
@@ -53,12 +61,14 @@ class FrontMan(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_agent_tool_spec(self) -> Dict[str, Any]:
         """
         :return: the dictionary describing the data-driven agent
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def submit_message(self, user_input: str) -> List[BaseMessage]:
         """
         Entry-point method for callers of the root of the Activation tree.
@@ -68,6 +78,7 @@ class FrontMan(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
@@ -77,6 +88,7 @@ class FrontMan(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
