@@ -553,7 +553,8 @@ class TestContentUtils(TestCase):
         """
         None means "keep the text as content": no wrapper, an unknown format,
         a bare list, an empty wrapper, nothing left after the restore, blocks
-        that only repeat the text, and blocks that lost the text.
+        that only repeat the text, and blocks whose text is not the message's
+        text, whether lost, shortened or changed.
         """
         text_block = {"type": "text", "text": "the answer"}
         tool_call = {"type": "tool_call", "name": "lookup", "args": {}, "id": "call_1"}
@@ -573,6 +574,12 @@ class TestContentUtils(TestCase):
             "blocks lost the text": {"type": "AI", "text": "the answer",
                                      "content_blocks": ContentUtils.wrap_content_blocks(
                                          [{"type": "reasoning", "reasoning": "deep"}])},
+            "blocks shortened the text": {"type": "AI", "text": "hello world",
+                                          "content_blocks": ContentUtils.wrap_content_blocks(
+                                              [{"type": "text", "text": "hello", "phase": "final_answer"}])},
+            "blocks changed the text": {"type": "AI", "text": "the answer",
+                                        "content_blocks": ContentUtils.wrap_content_blocks(
+                                            [{"type": "text", "text": "another answer", "phase": "final_answer"}])},
             "none": None,
         }
         # Each case falls back to the text.

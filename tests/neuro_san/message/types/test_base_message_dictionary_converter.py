@@ -532,6 +532,26 @@ class TestBaseMessageDictionaryConverter(TestCase):
                 restored: AIMessage = BaseMessageDictionaryConverter().from_dict(wire)
                 self.assertEqual(restored, AIMessage(content="a"))
 
+    def test_from_dict_keeps_text_when_blocks_shorten_it(self) -> None:
+        """
+        Blocks whose text is only part of the message's text are not used as
+        the content, even outside chat history, so a restore never shortens
+        what the message says.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {"type": "reasoning", "reasoning": "deep"},
+            {"type": "text", "text": "hello"},
+        ]
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "hello world",
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        converter = BaseMessageDictionaryConverter(langchain_only=False)
+        restored: AIMessage = converter.from_dict(wire)
+        self.assertEqual(restored, AIMessage(content="hello world"))
+        self.assertNotIn("output_version", restored.response_metadata)
+
     def test_from_dict_uses_empty_content_when_text_is_missing(self) -> None:
         """
         A message with no text whose blocks are all dropped still restores,

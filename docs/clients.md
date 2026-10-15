@@ -105,8 +105,8 @@ type; the server ignores one it receives, because a tool call is not message con
 because they pair with provider state that a replay cannot reproduce. `non_standard` blocks are dropped, because they
 are one provider's own shape. Attachments are dropped, because a model is not given attachments yet. Reasoning blocks
 are held back until the wire says which provider produced them, because a provider replays only its own reasoning.
-When nothing useful is left, or the blocks would lose the message's text, the content is `text`. A format the server
-does not know falls back to `text`. A message whose content is a plain string, the shape every existing client
+When nothing useful is left, or the blocks do not add up to the message's text, the content is `text`. A format the
+server does not know falls back to `text`. A message whose content is a plain string, the shape every existing client
 receives today, has no `content_blocks` key, so existing clients see no change.
 
 ### Content block shapes

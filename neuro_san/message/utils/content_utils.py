@@ -590,9 +590,10 @@ class ContentUtils:
         The wrapper's format (see content_blocks_format) keeps the blocks a
         model can be given again and drops the rest, attachments included.
         A message bound for a model's chat history also loses its reasoning
-        blocks (see without_reasoning). What remains is used only if it did
-        not lose the message's text and says something beyond it: a lone
-        text block that only repeats the text adds nothing (see is_trivial).
+        blocks (see without_reasoning). What remains is used only if its
+        text is the message's text, when the message has one, and it says
+        something beyond that text: a lone text block that only repeats the
+        text adds nothing (see is_trivial).
 
         :param chat_message: A ChatMessage dictionary
         :param for_chat_history: True when the message will be replayed to a
@@ -600,7 +601,8 @@ class ContentUtils:
         :return: The blocks to use as the message content, or None when the
                  message should keep its text as content: no wrapper, a format
                  this server does not know, nothing left after the format's
-                 restore, blocks equivalent to the text, or blocks that lost it.
+                 restore, blocks equivalent to the text, or blocks whose text
+                 is not the message's text.
                  The returned blocks are the caller's own dictionaries.
         """
         wrapper: Any = None
@@ -626,8 +628,9 @@ class ContentUtils:
         if isinstance(text, str):
             message_text = text
         blocks_text: str = ContentUtils.flatten_to_text(kept)
-        if len(message_text) > 0 and len(blocks_text) == 0:
-            # The blocks lost the text the message has. Fail safe to the text.
+        if len(message_text) > 0 and blocks_text != message_text:
+            # The blocks do not add up to the text the message has, so using
+            # them would change or lose it. Fail safe to the text.
             return None
         if ContentUtils.is_trivial(kept) and blocks_text == message_text:
             return None
