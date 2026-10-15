@@ -926,9 +926,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         folder_name = self._run_folder_name(
             timestamp, self.args.num_requests,
         )
-        self._output_dir = os.path.join(
-            base, self.args.level, folder_name,
-        )
+        self._output_dir = os.path.join(base, self.args.level, folder_name)
         os.makedirs(self._output_dir, exist_ok=True)
         self._test_log_path = os.path.join(self._output_dir, STDOUT_LOG_FILE_NAME)
         self._test_log_handler = logging.FileHandler(self._test_log_path, encoding="utf-8")
@@ -1027,9 +1025,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         requests_dir = os.path.join(self._output_dir, "requests")
         if os.path.isdir(requests_dir):
             logger.info("  Requests:    %s", requests_dir)
-        gz_path = os.path.join(
-            self._output_dir, "server.log.gz",
-        )
+        gz_path = os.path.join(self._output_dir, "server.log.gz")
         if os.path.isfile(gz_path):
             size_mb = os.path.getsize(gz_path) / (1024 * 1024)
             logger.info(
@@ -1415,9 +1411,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         round_log_path: str = os.path.join(round_dir, STDOUT_LOG_FILE_NAME)
         round_handler = logging.FileHandler(round_log_path, encoding="utf-8")
         round_handler.setLevel(logging.INFO)
-        round_handler.setFormatter(
-            logging.Formatter("%(message)s"),
-        )
+        round_handler.setFormatter(logging.Formatter("%(message)s"))
         root_logger = logging.getLogger()
         root_logger.addHandler(round_handler)
         try:
@@ -1607,9 +1601,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
-        gz_path = os.path.join(
-            round_dir, "server.log.gz",
-        )
+        gz_path = os.path.join(round_dir, "server.log.gz")
         if os.path.isfile(gz_path):
             size_mb = (
                 os.path.getsize(gz_path) / (1024 * 1024)
@@ -1936,9 +1928,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         raw_data["server_errors"] = server_errors or []
         raw_data["tool_warnings"] = tool_warnings or []
         if kernel_breakdown:
-            raw_data["kernel_memory_breakdown"] = (
-                kernel_breakdown
-            )
+            raw_data["kernel_memory_breakdown"] = kernel_breakdown
         json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(raw_data, fh, indent=2)
