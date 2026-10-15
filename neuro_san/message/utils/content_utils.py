@@ -95,7 +95,10 @@ class ContentUtils:
                 (a string, or a list of strings and/or block dictionaries)
         :return: The concatenated text. Never None; empty content yields "".
         """
-        content: Any = source.content if isinstance(source, BaseMessage) else source
+        content: Any = source
+        if isinstance(source, BaseMessage):
+            source_message: BaseMessage = source
+            content = source_message.content
         if content is None:
             return ""
         if isinstance(content, str):
@@ -141,7 +144,8 @@ class ContentUtils:
         """
         content: Any = source
         if isinstance(source, BaseMessage):
-            content = source.content
+            source_message: BaseMessage = source
+            content = source_message.content
 
         if content is None:
             return True
@@ -527,12 +531,16 @@ class ContentUtils:
         """
         content: Any = source
         if isinstance(source, BaseMessage):
-            content = source.content
+            source_message: BaseMessage = source
+            content = source_message.content
 
         if content is None or isinstance(content, str):
-            return content or ""
+            content_string: str = content
+            return content_string or ""
+
         if not isinstance(content, list):
             return str(content)
+
         content_list: List[Any] = content
 
         parts: List[str] = []

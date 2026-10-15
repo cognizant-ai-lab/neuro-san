@@ -16,7 +16,12 @@
 # END COPYRIGHT
 from __future__ import annotations
 
+from abc import abstractmethod
 
+from leaf_common.utils.interface import interface
+
+
+@interface
 class LingeringResource:
     """
     Interface for encapsulating specific policy for different points of
@@ -30,6 +35,7 @@ class LingeringResource:
     we are getting.
     """
 
+    @abstractmethod
     async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
@@ -39,6 +45,7 @@ class LingeringResource:
         """
         # Do nothing by default for easier implementation inheritance
 
+    @abstractmethod
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.

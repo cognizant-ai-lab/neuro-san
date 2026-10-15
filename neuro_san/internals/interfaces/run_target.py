@@ -16,12 +16,18 @@
 # END COPYRIGHT
 from typing import Any
 
+from abc import abstractmethod
 
+from leaf_common.utils.interface import interface
+
+
+@interface
 class RunTarget:
     """
     Interface for something that can be run as part of the course of a streaming_chat.
     """
 
+    @abstractmethod
     async def run_it(self, inputs: Any) -> Any:
         """
         Entry point method for the run.

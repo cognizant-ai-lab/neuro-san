@@ -18,18 +18,24 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from abc import abstractmethod
+
 from langchain_core.messages.base import BaseMessage
+
+from leaf_common.utils.interface import interface
 
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
+@interface
 class CallableActivation(LingeringResource):
     """
     Interface describing what a CallingActivation can access
     when invoking LLM function calls.
     """
 
+    @abstractmethod
     async def build(self) -> BaseMessage:
         """
         Main entry point to the class.
@@ -38,6 +44,7 @@ class CallableActivation(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_origin(self) -> List[Dict[str, Any]]:
         """
         :return: A List of origin dictionaries indicating the origin of the tool.
@@ -49,6 +56,7 @@ class CallableActivation(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def close_of_request(self, parent_resource: RunContext = None):
         """
         Release resources owned by this context when the request is complete.
@@ -58,6 +66,7 @@ class CallableActivation(LingeringResource):
         """
         # Do nothing by default for easier implementation inheritance
 
+    @abstractmethod
     async def close_of_work(self, parent_resource: RunContext = None):
         """
         Release resources owned by this context when the work is all done.

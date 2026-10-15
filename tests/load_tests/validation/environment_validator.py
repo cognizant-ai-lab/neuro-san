@@ -158,14 +158,14 @@ class EnvironmentValidator:
                 logger.info("  Auto-detected server log: %s", server_log_path)
                 return server_log_path
             logger.error(
-                "Server log not found at %s\n"
-                "  Provide the path explicitly: --server-log /path/to/server.log",
+                """Server log not found at %s
+  Provide the path explicitly: --server-log /path/to/server.log""",
                 server_log_path,
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             logger.error(
-                "Could not determine server working directory.\n"
-                "  Provide the path explicitly: --server-log /path/to/server.log",
+                """Could not determine server working directory.
+  Provide the path explicitly: --server-log /path/to/server.log""",
             )
         raise LoadTestAbortError(1)
 

@@ -33,7 +33,6 @@ from langchain_core.language_models.base import BaseLanguageModel
 from leaf_common.config.config_util import ConfigUtil
 
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
-from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
 
@@ -72,7 +71,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     and warned about once.
 
     This class is a child of OpenAILlmPolicy, and inherits its implementation of
-    create_http_client() and delete_resources().
+    create_http_client(), resolve_chat_model_class() and delete_resources().
     """
 
     # Path Azure's v1 API lives under, relative to the resource endpoint.
@@ -173,8 +172,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         deployment_name: str = self.resolve_deployment_name(config, model_name)
 
         # The chat model of the "openai" class is all Azure's v1 API needs once the client points at it and
-        # the model is the deployment.
-        llm: BaseLanguageModel = ToolStrictChatOpenAI(
+        # the model is the deployment. Same lazy-loading resolver as OpenAILlmPolicy.
+        chat_model_class: Type[BaseLanguageModel] = self.resolve_chat_model_class()
+        llm: BaseLanguageModel = chat_model_class(
             async_client=client,
             root_async_client=self.async_openai_client,
             # Azure routes by deployment: this is what goes in the "model" field on both

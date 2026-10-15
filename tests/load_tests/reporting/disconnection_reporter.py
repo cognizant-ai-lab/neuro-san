@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Aggregates and logs client disconnection analysis."""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -27,7 +25,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class DisconnectionReporter:
-    """Aggregates and logs client disconnection analysis.
+    """
+    Aggregates and logs client disconnection analysis.
 
     Holds the collected stage summaries for analysis.
     """
@@ -41,7 +40,9 @@ class DisconnectionReporter:
         self._summaries: List[Dict[str, Any]] = stage_summaries
 
     def log_disconnection_summary(self) -> None:
-        """Log aggregate client disconnection report."""
+        """
+        Log aggregate client disconnection report.
+        """
         all_disconnections: List[Dict[str, Any]] = []
         for index, stage in enumerate(self._summaries):
             for disconnection in stage.get("disconnections") or []:
@@ -61,8 +62,9 @@ class DisconnectionReporter:
                 disconnection.get("agent", "unknown"),
             )
         logger.info(
-            "\n  These requests had their client disconnect"
-            "\n  before the server finished. The server detected the"
-            "\n  disconnection and cancelled in-flight tasks."
-            "\n  If unexpected, consider increasing --idle-timeout.",
+            """
+  These requests had their client disconnect
+  before the server finished. The server detected the
+  disconnection and cancelled in-flight tasks.
+  If unexpected, consider increasing --idle-timeout.""",
         )
