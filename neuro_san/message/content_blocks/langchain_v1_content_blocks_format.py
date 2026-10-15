@@ -88,6 +88,7 @@ class LangchainV1ContentBlocksFormat(ContentBlocksFormat):
         """
         Determine whether one list element is a standard block that counts
         as message content. Does not qualify:
+        - a block whose "type" is not a string,
         - a provider-native shape (e.g. Anthropic {"type": "thinking"}),
         - a v0-era block (marked by a "source_type" key),
         - a tool-call block (see TOOL_CALL_BLOCK_TYPES).
@@ -100,6 +101,9 @@ class LangchainV1ContentBlocksFormat(ContentBlocksFormat):
         item_dict: Dict[str, Any] = item
 
         item_type: Any = item_dict.get("type")
+        # Only a string can be looked up in the set of known types.
+        if not isinstance(item_type, str):
+            return False
         if item_type not in KNOWN_BLOCK_TYPES:
             return False
         if item_type in self.TOOL_CALL_BLOCK_TYPES:

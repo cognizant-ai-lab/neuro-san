@@ -63,13 +63,16 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
 
     def test_is_block_list_rejects_other_shapes(self) -> None:
         """
-        Empty lists, non-lists, bare strings, provider-native shapes, v0-era
-        blocks and tool-call blocks do not qualify.
+        Empty lists, non-lists, bare strings, blocks whose type is not a
+        string, provider-native shapes, v0-era blocks and tool-call blocks
+        do not qualify.
         """
         rejected: Dict[str, Any] = {
             "empty": [],
             "string": "text",
             "list of str": ["text"],
+            "type is a list": [{"type": [], "text": "hi"}],
+            "type is a dict": [{"type": {}, "text": "hi"}],
             "native thinking": [{"type": "thinking", "thinking": "deep"}],
             "v0 block": [{"type": "image", "source_type": "base64", "data": "AAAA"}],
             "tool call": [{"type": "tool_call", "name": "lookup", "args": {}, "id": "call_1"}],
@@ -107,7 +110,8 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
         """
         Tool-call blocks, server-tool records, non_standard blocks, data
         blocks with or without a payload, provider-native shapes, v0-era
-        blocks, non-dicts and malformed blocks are all dropped.
+        blocks, non-dicts, non-string types and malformed blocks are all
+        dropped.
         """
         dropped: Dict[str, Any] = {
             "tool_call": {"type": "tool_call", "name": "lookup", "args": {}, "id": "call_1"},
@@ -119,6 +123,8 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
             "native thinking": {"type": "thinking", "thinking": "deep", "signature": "sig"},
             "v0 block": {"type": "image", "source_type": "base64", "data": "AAAA"},
             "non-dict": "just a string",
+            "type is a list": {"type": [], "text": "hi"},
+            "type is a dict": {"type": {}, "text": "hi"},
             "text without text": {"type": "text"},
             "text with non-str text": {"type": "text", "text": 42},
             "empty reasoning": {"type": "reasoning"},
