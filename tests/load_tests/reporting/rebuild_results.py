@@ -195,7 +195,8 @@ class ResultsRebuilder:
         :return: Request id to its status and elapsed seconds, from the run log and progress.log
         """
         timing: Dict[int, Dict[str, Any]] = {}
-        log_files: Tuple[str, str, str] = self.RUN_LOG_FILES + (PROGRESS_LOG_FILE_NAME,)
+        log_files: List[str] = list(self.RUN_LOG_FILES)
+        log_files.append(PROGRESS_LOG_FILE_NAME)
         filename: str
         # Failed requests are in the run log, successful ones in progress.log.
         for filename in log_files:
