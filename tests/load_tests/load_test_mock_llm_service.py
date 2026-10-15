@@ -167,15 +167,13 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "--prompt",
             type=str,
             default=None,
-            help="""Prompt text to send to the agent.
-Auto-filled from preset if agent is known.""",
+            help="Prompt text to send to the agent. Auto-filled from preset if agent is known.",
         )
         parser.add_argument(
             "--sly-data",
             type=str,
             default=None,
-            help="""JSON sly_data string. Auto-filled from preset if agent is known.
-Use --no-sly-data to omit.""",
+            help="JSON sly_data string. Auto-filled from preset if agent is known. Use --no-sly-data to omit.",
         )
         parser.add_argument(
             "--no-sly-data",
