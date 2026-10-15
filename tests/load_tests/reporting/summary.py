@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Summary reporting — ramp-up and overall results."""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -41,7 +39,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class SummaryReporter:
-    """Logs ramp-up and overall results across all stages.
+    """
+    Logs ramp-up and overall results across all stages.
 
     Holds the collected stage summaries so that multiple
     reporting methods can access them without re-passing.
@@ -95,8 +94,8 @@ class SummaryReporter:
                 str(counts.get(STATUS_TIMEOUT, 0)),
                 str(counts.get(STATUS_KILLED, 0)),
                 str(summary.get("total_retries", 0)),
-                f"{summary.get('amplification', 1.0):.2f}x",
-                f"{summary.get('elapsed', 0):.1f}s",
+                f"{summary.get("amplification", 1.0):.2f}x",
+                f"{summary.get("elapsed", 0):.1f}s",
             )
             if has_server_counts:
                 primary_started: Optional[int] = summary.get("primary_started")
@@ -119,7 +118,9 @@ class SummaryReporter:
         TableFormatter.log_table(header, rows)
 
     def log_overall_results(self) -> None:
-        """Log overall results across all stages."""
+        """
+        Log overall results across all stages.
+        """
         total_created: int = 0
         total_failed: int = 0
         total_timeout: int = 0
@@ -167,53 +168,11 @@ class SummaryReporter:
         self._log_llm_token_usage()
         self._log_system_resources()
 
-    def _log_performance_stats(self) -> None:
-        """Log time-to-first-response and request-duration stats."""
-        first_response_stats: Optional[Dict[str, float]] = self._time_to_first_response_stats()
-        if first_response_stats is not None:
-            logger.info(
-                "  Time to first response: %s min / %s avg / %s max",
-                Formatters.fmt_duration(first_response_stats.get("min", 0)),
-                Formatters.fmt_duration(first_response_stats.get("avg", 0)),
-                Formatters.fmt_duration(first_response_stats.get("max", 0)),
-            )
-
-        request_duration_stats: Optional[Dict[str, float]] = self._request_duration_stats()
-        if request_duration_stats is not None:
-            logger.info(
-                "  Request duration: %s min / %s avg / %s max",
-                Formatters.fmt_duration(request_duration_stats.get("min", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("avg", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("max", 0)),
-            )
-
-        self._log_validation_summary()
-
-    def _log_llm_token_usage(self) -> None:
-        """Log the LLM & TOKEN USAGE section (client vs server log).
-
-        A uniform block for all modes: the client side comes from
-        HTTP token accounting, the server side from
-        server.log.  Whichever side is unavailable prints "not
-        available".  When both are present (all-in-one) a Match line
-        reports whether they agree.
-        """
-        client: Optional[Dict[str, int]] = None
-        server: Optional[Dict[str, int]] = None
-        if self._has_client_token_copy():
-            client = self._token_stats("client_")
-            server = self._token_stats("")
-        else:
-            client = self._token_stats("")
-            server = None
-        printed: bool = SummaryReporter.render_token_usage(client, server, client_source=self._client_token_source)
-        if printed:
-            self._log_model_distribution()
-
     @staticmethod
     def render_token_usage(client: Optional[Dict[str, int]], server: Optional[Dict[str, int]],
                            client_source: str) -> bool:
-        """Render the LLM & TOKEN USAGE block; return True if printed.
+        """
+        Render the LLM & TOKEN USAGE block; return True if printed.
 
         ``client`` and ``server`` are token-stat dicts (from
         ``aggregate_token_entries``) or None when that side is
@@ -236,51 +195,9 @@ class SummaryReporter:
         return True
 
     @staticmethod
-    def _log_token_source(label: str, stats: Optional[Dict[str, int]]) -> None:
-        """
-        Log one source's LLM/token lines, or 'not available'.
-
-        :param label: Source name shown before its lines
-        :param stats: Token stats from aggregate_token_entries, or None
-        """
-        if stats is None:
-            logger.info("  %s: not available", label)
-            return
-        logger.info("  %s:", label)
-        logger.info(
-            "    LLM calls: %s total  (%s / %s / %s min/avg/max)",
-            stats.get("calls_total", 0), stats.get("calls_min", 0),
-            stats.get("calls_avg", 0), stats.get("calls_max", 0),
-        )
-        logger.info(
-            "    Tokens:    %s total  (%s / %s / %s min/avg/max),  %s prompt + %s completion",
-            f"{stats.get('tok_total', 0):,}", f"{stats.get('tok_min', 0):,}",
-            f"{stats.get('tok_avg', 0):,}", f"{stats.get('tok_max', 0):,}",
-            f"{stats.get('prompt_total', 0):,}", f"{stats.get('comp_total', 0):,}",
-        )
-
-    @staticmethod
-    def _log_token_match(client: Dict[str, int], server: Dict[str, int]) -> None:
-        """
-        Log whether client and server-log totals agree.
-
-        :param client: Client token stats
-        :param server: Server log token stats
-        """
-        calls_match: bool = client.get("calls_total", 0) == server.get("calls_total", 0)
-        tokens_match: bool = client.get("tok_total", 0) == server.get("tok_total", 0)
-        if calls_match and tokens_match:
-            logger.info("  Match: OK")
-            return
-        logger.info(
-            "  Match: MISMATCH — LLM calls %s vs %s, tokens %s vs %s",
-            client.get("calls_total", 0), server.get("calls_total", 0),
-            f"{client.get('tok_total', 0):,}", f"{server.get('tok_total', 0):,}",
-        )
-
-    @staticmethod
     def aggregate_token_entries(entries: Iterable[Dict[str, Any]]) -> Optional[Dict[str, int]]:
-        """Aggregate token dicts into a stats dict, or None if empty.
+        """
+        Aggregate token dicts into a stats dict, or None if empty.
 
         Each entry needs total_tokens, prompt_tokens,
         completion_tokens, and llm_calls.  Entries with zero total
@@ -316,6 +233,95 @@ class SummaryReporter:
             "prompt_total": prompt_total,
             "comp_total": completion_total,
         }
+
+    def _log_performance_stats(self) -> None:
+        """
+        Log time-to-first-response and request-duration stats.
+        """
+        first_response_stats: Optional[Dict[str, float]] = self._time_to_first_response_stats()
+        if first_response_stats is not None:
+            logger.info(
+                "  Time to first response: %s min / %s avg / %s max",
+                Formatters.fmt_duration(first_response_stats.get("min", 0)),
+                Formatters.fmt_duration(first_response_stats.get("avg", 0)),
+                Formatters.fmt_duration(first_response_stats.get("max", 0)),
+            )
+
+        request_duration_stats: Optional[Dict[str, float]] = self._request_duration_stats()
+        if request_duration_stats is not None:
+            logger.info(
+                "  Request duration: %s min / %s avg / %s max",
+                Formatters.fmt_duration(request_duration_stats.get("min", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("avg", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("max", 0)),
+            )
+
+        self._log_validation_summary()
+
+    def _log_llm_token_usage(self) -> None:
+        """
+        Log the LLM & TOKEN USAGE section (client vs server log).
+
+        A uniform block for all modes: the client side comes from
+        HTTP token accounting, the server side from
+        server.log.  Whichever side is unavailable prints "not
+        available".  When both are present (all-in-one) a Match line
+        reports whether they agree.
+        """
+        client: Optional[Dict[str, int]] = None
+        server: Optional[Dict[str, int]] = None
+        if self._has_client_token_copy():
+            client = self._token_stats("client_")
+            server = self._token_stats("")
+        else:
+            client = self._token_stats("")
+            server = None
+        printed: bool = SummaryReporter.render_token_usage(client, server, client_source=self._client_token_source)
+        if printed:
+            self._log_model_distribution()
+
+    @staticmethod
+    def _log_token_source(label: str, stats: Optional[Dict[str, int]]) -> None:
+        """
+        Log one source's LLM/token lines, or 'not available'.
+
+        :param label: Source name shown before its lines
+        :param stats: Token stats from aggregate_token_entries, or None
+        """
+        if stats is None:
+            logger.info("  %s: not available", label)
+            return
+        logger.info("  %s:", label)
+        logger.info(
+            "    LLM calls: %s total  (%s / %s / %s min/avg/max)",
+            stats.get("calls_total", 0), stats.get("calls_min", 0),
+            stats.get("calls_avg", 0), stats.get("calls_max", 0),
+        )
+        logger.info(
+            "    Tokens:    %s total  (%s / %s / %s min/avg/max),  %s prompt + %s completion",
+            f"{stats.get("tok_total", 0):,}", f"{stats.get("tok_min", 0):,}",
+            f"{stats.get("tok_avg", 0):,}", f"{stats.get("tok_max", 0):,}",
+            f"{stats.get("prompt_total", 0):,}", f"{stats.get("comp_total", 0):,}",
+        )
+
+    @staticmethod
+    def _log_token_match(client: Dict[str, int], server: Dict[str, int]) -> None:
+        """
+        Log whether client and server-log totals agree.
+
+        :param client: Client token stats
+        :param server: Server log token stats
+        """
+        calls_match: bool = client.get("calls_total", 0) == server.get("calls_total", 0)
+        tokens_match: bool = client.get("tok_total", 0) == server.get("tok_total", 0)
+        if calls_match and tokens_match:
+            logger.info("  Match: OK")
+            return
+        logger.info(
+            "  Match: MISMATCH — LLM calls %s vs %s, tokens %s vs %s",
+            client.get("calls_total", 0), server.get("calls_total", 0),
+            f"{client.get("tok_total", 0):,}", f"{server.get("tok_total", 0):,}",
+        )
 
     def _has_client_token_copy(self) -> bool:
         """
@@ -356,7 +362,9 @@ class SummaryReporter:
         return SummaryReporter.aggregate_token_entries(entries)
 
     def _log_system_resources(self) -> None:
-        """Log the aligned SYSTEM RESOURCES before/peak/after section."""
+        """
+        Log the aligned SYSTEM RESOURCES before/peak/after section.
+        """
         SystemResources.log_section(
             self._sys_edge_snapshot("before"),
             self._sys_peak_snapshot(),
@@ -364,7 +372,8 @@ class SummaryReporter:
         )
 
     def _sys_edge_snapshot(self, edge: str) -> Optional[SysSnapshot]:
-        """Build the before/after whole-system snapshot across stages.
+        """
+        Build the before/after whole-system snapshot across stages.
 
         ``before`` takes the first stage's start values; ``after``
         takes the last stage's end values.  Returns None when no
@@ -441,7 +450,8 @@ class SummaryReporter:
         }
 
     def _log_model_distribution(self) -> None:
-        """Log LLM model usage and flag fallback models.
+        """
+        Log LLM model usage and flag fallback models.
 
         Collects model names from all results and reports
         how many requests used each model.  When multiple
@@ -497,7 +507,9 @@ class SummaryReporter:
         }
 
     def _log_validation_summary(self) -> None:
-        """Log aggregate validation retry info if any."""
+        """
+        Log aggregate validation retry info if any.
+        """
         all_events: List[Dict[str, Any]] = self._collect_validation_events()
         if not all_events:
             return

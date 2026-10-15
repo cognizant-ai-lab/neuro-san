@@ -67,13 +67,14 @@ class InputValidator:
         agent: str = self._args.agent
         if os.path.isabs(agent):
             logger.error(
-                "ERROR: --agent appears to be a filesystem path:\n"
-                "  %s\n\n"
-                "Use the registry-relative name instead.\n"
-                "For example, if the agent HOCON is at:\n"
-                "  registries/basic/hello_world.hocon\n"
-                "Then use:\n"
-                "  --agent basic/hello_world",
+                """ERROR: --agent appears to be a filesystem path:
+  %s
+
+Use the registry-relative name instead.
+For example, if the agent HOCON is at:
+  registries/basic/hello_world.hocon
+Then use:
+  --agent basic/hello_world""",
                 agent,
             )
             raise LoadTestAbortError(1)
@@ -107,9 +108,9 @@ class InputValidator:
 
         if not os.path.isdir(hocon_dir):
             logger.error(
-                "ERROR: no hocon fixtures directory for agent '%s':\n"
-                "  Expected: %s\n"
-                "  Check --fixtures-hocon-dir / --project-root.",
+                """ERROR: no hocon fixtures directory for agent '%s':
+  Expected: %s
+  Check --fixtures-hocon-dir / --project-root.""",
                 self._args.agent, hocon_dir,
             )
             raise LoadTestAbortError(1)
@@ -240,8 +241,9 @@ class InputValidator:
         self._print_warnings(warnings)
 
         logger.info(
-            "\n  Tip: use --no-dry-run to skip this confirmation.\n"
-            "       --no-dry-run does not auto-adjust timeouts.",
+            """
+  Tip: use --no-dry-run to skip this confirmation.
+       --no-dry-run does not auto-adjust timeouts.""",
         )
 
         logger.info("=" * SEPARATOR_WIDTH)
@@ -331,11 +333,10 @@ class InputValidator:
             estimated_total_tokens: int = probe_tokens * capped_requests
             if estimated_total_cost_dollars > 1.0:
                 warnings.append(
-                    f"Estimated cost exceeds $1:\n"
-                    f"     Probe used ~{probe_tokens:,} tokens (${probe_cost_dollars:.2f}) "
-                    f"x {capped_requests} requests = "
-                    f"~{estimated_total_tokens:,} tokens (~${estimated_total_cost_dollars:.2f})\n"
-                    f"     Model: {probe_model}"
+                    f"""Estimated cost exceeds $1:
+     Probe used ~{probe_tokens:,} tokens (${probe_cost_dollars:.2f}) x {capped_requests} requests = \
+~{estimated_total_tokens:,} tokens (~${estimated_total_cost_dollars:.2f})
+     Model: {probe_model}"""
                 )
 
         max_workers: int = self._args.max_workers
@@ -347,9 +348,9 @@ class InputValidator:
                 and estimated_stage_duration_seconds > self._args.stage_timeout):
             stage_timeout_seconds: int = self._args.stage_timeout
             warnings.append(
-                f"Estimated stage duration ~{int(estimated_stage_duration_seconds)}s exceeds "
-                f"--stage-timeout ({stage_timeout_seconds}s).\n"
-                f"     Requests may be killed before completing."
+                f"""Estimated stage duration ~{int(estimated_stage_duration_seconds)}s exceeds --stage-timeout \
+({stage_timeout_seconds}s).
+     Requests may be killed before completing."""
             )
 
         if capped_requests < total_planned_requests:
@@ -383,16 +384,15 @@ class InputValidator:
         if not args.include_tokens:
             return []
         if args.client_only or args.no_server_log:
-            return [
-                "--minimal drops the token-accounting message, and this run has no server log to fall back on:\n"
-                "     no LLM or token usage will be reported.\n"
-                "     Omit --minimal to report them."
-            ]
-        return [
-            "--minimal drops the token-accounting message:\n"
-            "     client-side LLM/token numbers will be unavailable (server-log values still apply).\n"
-            "     Omit --minimal to report both."
-        ]
+            no_token_usage_warning: str = """--minimal drops the token-accounting message, and this run has no \
+server log to fall back on:
+     no LLM or token usage will be reported.
+     Omit --minimal to report them."""
+            return [no_token_usage_warning]
+        no_client_token_warning: str = """--minimal drops the token-accounting message:
+     client-side LLM/token numbers will be unavailable (server-log values still apply).
+     Omit --minimal to report both."""
+        return [no_client_token_warning]
 
     @staticmethod
     def _check_memory_headroom(num_requests: int) -> Optional[str]:
@@ -410,13 +410,11 @@ class InputValidator:
         per_request_megabytes: int = 2
         needed_gigabytes: float = (num_requests * per_request_megabytes) / 1024
         if needed_gigabytes > available_gigabytes * 0.8:
-            return (
-                f"Memory may be insufficient for {num_requests} concurrent requests:\n"
-                f"     Estimated need: ~{needed_gigabytes:.1f}G "
-                f"({num_requests} x ~{per_request_megabytes}MB per request)\n"
-                f"     Available: {available_gigabytes:.1f}G / {virtual_memory_stats.total / (1024 ** 3):.1f}G total\n"
-                f"     Consider fewer concurrent workers or a larger instance"
-            )
+            memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:
+     Estimated need: ~{needed_gigabytes:.1f}G ({num_requests} x ~{per_request_megabytes}MB per request)
+     Available: {available_gigabytes:.1f}G / {virtual_memory_stats.total / (1024 ** 3):.1f}G total
+     Consider fewer concurrent workers or a larger instance"""
+            return memory_warning
         return None
 
     @staticmethod

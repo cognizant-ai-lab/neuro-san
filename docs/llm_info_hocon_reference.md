@@ -219,9 +219,9 @@ This key is optional. It is informational only and is not consumed by neuro-san 
 A string in `YYYY-MM-DD` format indicating the date the model is scheduled to be retired
 (shut down) on its provider's API, or `null` if no retirement date has been announced.
 
-For active models, some providers (notably Anthropic and Google) publish "earliest
-possible" or "not sooner than" retirement dates that may be pushed out — the value here
-reflects the provider's published date at the time the entry was authored.
+For active Anthropic models, Anthropic gives only a "not sooner than" date, so the value is `null`
+until a retirement date is announced. Google lists its shutdown dates as the earliest possible
+dates, so a Gemini date here is the published date and may be pushed out.
 
 This key is optional. It is informational only and is not consumed by neuro-san at runtime,
 but is useful for tracking which models in your configuration are approaching end-of-life.

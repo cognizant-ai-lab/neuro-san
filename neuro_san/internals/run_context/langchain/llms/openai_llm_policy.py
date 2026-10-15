@@ -27,7 +27,6 @@ from langchain_core.language_models.base import BaseLanguageModel
 from leaf_common.config.config_util import ConfigUtil
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
-from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 
 
 class OpenAILlmPolicy(LlmPolicy):
@@ -40,7 +39,7 @@ class OpenAILlmPolicy(LlmPolicy):
     the llm reference, because of our create_client() implementation, we do not.
 
     The chat model built is ToolStrictChatOpenAI, a ChatOpenAI subclass that adds the
-    "tool_strict" default for function tools.
+    "tool_strict" default for function tools; see resolve_chat_model_class().
     """
 
     # None means no limit
@@ -121,11 +120,13 @@ class OpenAILlmPolicy(LlmPolicy):
         :return: A BaseLanguageModel (can be Chat or LLM)
         """
         # OpenAI is the one chat class that we do not require any extra installs.
-        # This is what we want to work out of the box, so its chat model is imported directly
-        # instead of through the lazy-loading resolver the optional providers go through.
+        # This is what we want to work out of the box.
+        # Even so, the chat model class is loaded through the same lazy resolver as the other providers,
+        # so that the openai packages stay optional for installs that only use other providers.
+        chat_model_class: Type[BaseLanguageModel] = self.resolve_chat_model_class()
 
         # Now construct LLM chat model we will be using:
-        llm: BaseLanguageModel = ToolStrictChatOpenAI(
+        llm: BaseLanguageModel = chat_model_class(
             async_client=client,
             root_async_client=self.async_openai_client,
             model_name=model_name,
@@ -254,6 +255,28 @@ class OpenAILlmPolicy(LlmPolicy):
         )
 
         return llm
+
+    def resolve_chat_model_class(self) -> Type[BaseLanguageModel]:
+        """
+        Resolves the chat model class this policy and its subclasses construct.
+
+        That is ToolStrictChatOpenAI, the ChatOpenAI subclass with the "tool_strict" default for
+        function tools. It is resolved by name at call time rather than imported at module level,
+        so that importing this policy does not import langchain-openai and the openai packages stay
+        optional for installs that only use other providers.
+
+        :return: The ToolStrictChatOpenAI class
+        """
+        # Resolving ChatOpenAI first keeps the helpful error: when langchain-openai is missing, the
+        # Resolver then names the package to pip install instead of blaming the subclass module.
+        self.resolver.resolve_class_in_module("ChatOpenAI",
+                                              module_name="langchain_openai.chat_models.base",
+                                              install_if_missing="langchain-openai")
+
+        chat_model_class: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ToolStrictChatOpenAI",
+            module_name="neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai")
+        return chat_model_class
 
     async def delete_resources(self):
         """
