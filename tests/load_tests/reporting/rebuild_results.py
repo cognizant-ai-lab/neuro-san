@@ -54,7 +54,7 @@ class ResultsRebuilder:
     """
 
     # Legacy name first, so a current stdout.log line wins for the same request.
-    RUN_LOG_FILES: Tuple[str, str] = (LEGACY_RUN_LOG_FILE_NAME, STDOUT_LOG_FILE_NAME)
+    RUN_LOG_FILES: List[str] = [LEGACY_RUN_LOG_FILE_NAME, STDOUT_LOG_FILE_NAME]
 
     def __init__(self, output_dir: str, force: bool = False) -> None:
         """
