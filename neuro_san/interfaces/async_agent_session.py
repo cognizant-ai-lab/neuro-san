@@ -99,10 +99,6 @@ class AsyncAgentSession(AgentSessionConstants):
         A remote session is single-use with respect to close(): once closed it
         cannot be reused -- subsequent streaming_chat(), function() and
         connectivity() calls raise AgentSessionClosedError (see is_closed()).
-
-        The default implementation is a no-op: sessions that hold no external
-        connection (e.g. in-process direct sessions) have nothing to close and
-        are never considered closed.
         """
         raise NotImplementedError
 
@@ -111,7 +107,6 @@ class AsyncAgentSession(AgentSessionConstants):
         """
         :return: True if close() has been called on this session, in which case
                  further streaming_chat()/function()/connectivity() calls raise
-                 AgentSessionClosedError. The default is False for sessions that
-                 hold no external connection and therefore cannot be closed.
+                 AgentSessionClosedError.
         """
         raise NotImplementedError
