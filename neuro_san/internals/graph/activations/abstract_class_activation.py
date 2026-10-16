@@ -43,6 +43,7 @@ from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.graph.activations.abstract_callable_activation import AbstractCallableActivation
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.origination import Origination
@@ -183,7 +184,7 @@ class AbstractClassActivation(AbstractCallableActivation):
         stop: float = perf_counter()
         duration: float = stop - start
 
-        threshold_str: str = environ.get("AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS", "0")
+        threshold_str: str = Env.getenv("AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS", "0")
         threshold: float = 0.0
         try:
             threshold = float(threshold_str)
