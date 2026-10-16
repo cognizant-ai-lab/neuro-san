@@ -46,14 +46,15 @@ class TestCostEstimator(TestCase):
         """
         restorer = LlmInfoRestorer()
         llm_infos: Dict[str, Any] = restorer.restore()
-        self.dated_entry: Dict[str, Any] = llm_infos.get(self.DATED_MODEL, {})
+        self.dated_entry: Dict[str, Any] = llm_infos.get(TestCostEstimator.DATED_MODEL, {})
 
     def test_prompt_tokens_use_the_input_price(self) -> None:
         """
         1k prompt tokens cost the model's price_per_1k_input_tokens.
         """
         input_dollars_per_1k_tokens: float = self.dated_entry.get("price_per_1k_input_tokens", 0.0)
-        prompt_cost_dollars: float = CostEstimator.estimate(self.TOKENS_PER_THOUSAND, 0, self.DATED_MODEL)
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
+        prompt_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.DATED_MODEL)
 
         self.assertGreater(input_dollars_per_1k_tokens, 0.0)
         self.assertAlmostEqual(prompt_cost_dollars, input_dollars_per_1k_tokens)
@@ -63,7 +64,8 @@ class TestCostEstimator(TestCase):
         1k completion tokens cost the model's price_per_1k_output_tokens.
         """
         output_dollars_per_1k_tokens: float = self.dated_entry.get("price_per_1k_output_tokens", 0.0)
-        completion_cost_dollars: float = CostEstimator.estimate(0, self.TOKENS_PER_THOUSAND, self.DATED_MODEL)
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
+        completion_cost_dollars: float = CostEstimator.estimate(0, token_count, TestCostEstimator.DATED_MODEL)
 
         self.assertGreater(output_dollars_per_1k_tokens, 0.0)
         self.assertAlmostEqual(completion_cost_dollars, output_dollars_per_1k_tokens)
@@ -72,8 +74,9 @@ class TestCostEstimator(TestCase):
         """
         An alias entry has no price of its own and uses its use_model_name entry's price.
         """
-        dated_cost_dollars: float = CostEstimator.estimate(self.TOKENS_PER_THOUSAND, 0, self.DATED_MODEL)
-        alias_cost_dollars: float = CostEstimator.estimate(self.TOKENS_PER_THOUSAND, 0, self.ALIAS_MODEL)
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
+        dated_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.DATED_MODEL)
+        alias_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.ALIAS_MODEL)
 
         self.assertGreater(dated_cost_dollars, 0.0)
         self.assertAlmostEqual(alias_cost_dollars, dated_cost_dollars)
@@ -82,15 +85,16 @@ class TestCostEstimator(TestCase):
         """
         A model missing from llm_info costs 0.0, and a WARNING names the model.
         """
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
         with self.assertLogs(level="WARNING") as captured_logs:
-            unknown_cost_dollars: float = CostEstimator.estimate(self.TOKENS_PER_THOUSAND, 0, self.UNKNOWN_MODEL)
+            unknown_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.UNKNOWN_MODEL)
         logged_text: str = "\n".join(captured_logs.output)
 
         self.assertEqual(unknown_cost_dollars, 0.0)
-        self.assertIn(self.UNKNOWN_MODEL, logged_text)
+        self.assertIn(TestCostEstimator.UNKNOWN_MODEL, logged_text)
 
     def test_zero_tokens_cost_nothing(self) -> None:
         """
         A request with no token data contributes no cost.
         """
-        self.assertEqual(CostEstimator.estimate(0, 0, self.DATED_MODEL), 0.0)
+        self.assertEqual(CostEstimator.estimate(0, 0, TestCostEstimator.DATED_MODEL), 0.0)
