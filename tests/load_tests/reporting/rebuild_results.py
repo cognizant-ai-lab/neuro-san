@@ -132,14 +132,49 @@ class ResultsRebuilder:
             logger.error("No request files found to rebuild.")
             return
 
-        passed: int = sum(1 for result in results if result.get("status") == STATUS_CREATED)
+        rebuilt_results: Dict[str, Any] = self._build_rebuilt_results(agent, request_count, results)
+        rebuilt_results.update(JsonMetadata.build())
+
+        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
+        with open(json_path, "w", encoding="utf-8") as file_handle:
+            json.dump(rebuilt_results, file_handle, indent=2, default=str)
+
+        aggregates: Dict[str, Any] = rebuilt_results.get("aggregates", {})
+        logger.info(
+            "Rebuilt raw_results.json: %s requests (%s passed, %s failed)",
+            aggregates.get("total_requests"), aggregates.get("passed"), aggregates.get("failed"),
+        )
+        logger.info("  Saved to: %s", json_path)
+
+    @staticmethod
+    def _build_rebuilt_results(agent: str, request_count: int, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build the raw_results.json content from the rebuilt request results.
+
+        :param agent: Agent name from the run config, or empty
+        :param request_count: Requested number of requests from the run config, or 0
+        :param results: Rebuilt request results, at least one
+        :return: The raw_results.json content, without the JSON metadata
+        """
+        passed: int = 0
+        total_tokens: int = 0
+        # Floats are collected for sum(), which rounds better than a += loop, so the totals match the old code.
+        durations_seconds: List[float] = []
+        costs_dollars: List[float] = []
+        result: Dict[str, Any]
+        # Count the passed requests, add up the tokens and collect the duration and cost of every request.
+        for result in results:
+            if result.get("status") == STATUS_CREATED:
+                passed += 1
+            total_tokens += result.get("total_tokens", 0)
+            durations_seconds.append(result.get("elapsed", 0))
+            costs_dollars.append(result.get("cost_usd", 0.0))
         total: int = len(results)
         # The slowest request stands in for the run's wall-clock time,
         # which is not recoverable from per-request files alone.
-        total_elapsed_seconds: float = max(result.get("elapsed", 0) for result in results)
-        average_latency_seconds: float = sum(result.get("elapsed", 0) for result in results) / total if total > 0 else 0
-        total_tokens: int = sum(result.get("total_tokens", 0) for result in results)
-        total_cost_dollars: float = sum(result.get("cost_usd", 0.0) for result in results)
+        total_elapsed_seconds: float = max(durations_seconds)
+        average_latency_seconds: float = sum(durations_seconds) / total if total > 0 else 0
+        total_cost_dollars: float = sum(costs_dollars)
 
         rebuilt_results: Dict[str, Any] = {
             "test_metadata": {
@@ -155,9 +190,7 @@ class ResultsRebuilder:
                 "total_requests": total,
                 "passed": passed,
                 "failed": total - passed,
-                "total_elapsed_seconds": round(
-                    total_elapsed_seconds, 2,
-                ),
+                "total_elapsed_seconds": round(total_elapsed_seconds, 2),
                 "avg_latency_seconds": round(average_latency_seconds, 2),
                 "total_tokens": total_tokens,
                 "total_cost_usd": round(total_cost_dollars, 6),
@@ -168,14 +201,7 @@ class ResultsRebuilder:
                 "elapsed": total_elapsed_seconds,
             }],
         }
-        rebuilt_results.update(JsonMetadata.build())
-
-        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
-        with open(json_path, "w", encoding="utf-8") as file_handle:
-            json.dump(rebuilt_results, file_handle, indent=2, default=str)
-
-        logger.info("Rebuilt raw_results.json: %s requests (%s passed, %s failed)", total, passed, total - passed)
-        logger.info("  Saved to: %s", json_path)
+        return rebuilt_results
 
     def _parse_timing(self) -> Dict[int, Dict[str, Any]]:
         """
