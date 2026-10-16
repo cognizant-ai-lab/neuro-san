@@ -159,8 +159,9 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                  or could not be standardized without losing text
         """
         logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+        normalized: Union[str, List[Dict[str, Any]]] = None
         try:
-            normalized: Union[str, List[Dict[str, Any]]] = ContentUtils.normalize_content(message)
+            normalized = ContentUtils.normalize_content(message)
         except (KeyError, ValueError, TypeError, AttributeError) as exception:
             logger.warning("Could not standardize the block content of a %s; sending its text only: %s",
                            message.__class__.__name__, exception)
@@ -169,7 +170,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if not isinstance(normalized, list):
             return None
 
-        blocks_text: str = ContentUtils.flatten_to_text(normalized)
+        use_normalized: List[Dict[str, Any]] = normalized
+        blocks_text: str = ContentUtils.flatten_to_text(use_normalized)
         message_text: str = ContentUtils.flatten_to_text(message)
         if blocks_text != message_text:
             logger.warning("Standardizing the block content of a %s lost text; sending its text only",
@@ -207,7 +209,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         elif chat_message_type == ChatMessageType.AI:
             base_message = AIMessage(content=content)
         elif chat_message_type == ChatMessageType.AGENT_TOOL_RESULT:
-            tool_result_origin: Dict[str, Any] = chat_message.get("tool_result_origin")
+            tool_result_origin: List[Dict[str, Any]] = chat_message.get("tool_result_origin")
             base_message = AgentToolResultMessage(content=content, tool_result_origin=tool_result_origin)
 
         if self.langchain_only:

@@ -125,7 +125,7 @@ class LangChainTokenCounter:
 
         retval: Any = None
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
-        llm_infos: Dict[str, Any] = llm_factory.llm_infos
+        llm_infos: Dict[str, Any] = llm_factory.get_llm_infos()
         # Take a time stamp so we measure another thing people care about - latency.
         start_time: float = time()
 

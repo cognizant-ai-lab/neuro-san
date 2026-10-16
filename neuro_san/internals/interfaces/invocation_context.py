@@ -199,3 +199,10 @@ class InvocationContext(LingeringResource):
         :return: A copy of the invocation context
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def get_agent_name(self) -> str:
+        """
+        :return: The agent name for the session
+        """
+        raise NotImplementedError
