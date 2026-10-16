@@ -569,6 +569,27 @@ class TestProviderToolsFitChecker(TestCase):
 
             self.assertEqual([], errors, str(entry))
 
+    def test_malformed_class_table_does_not_raise(self) -> None:
+        """
+        A marked class whose "extends" chain holds a scalar "args" is checked without raising.
+        Its Responses API default is unknown, so nothing is reported about it.
+        """
+        extra_hocon: str = f"""
+        {{
+            "classes": {{
+                "broken-parent": {{ "extends": "openai", "args": "not-a-dict" }},
+                "{self.USER_CLASS}": {{ "extends": "broken-parent", "args": {{ "provider_tools": null }} }}
+            }},
+            "{self.USER_MODEL}": {{ "class": "{self.USER_CLASS}" }}
+        }}
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        errors: List[str] = self._check({"model_name": self.USER_MODEL, "provider_tools": [self.WEB_SEARCH]},
+                                        factory=factory)
+
+        self.assertEqual([], errors)
+
     def test_user_class_extending_gemini_gets_gemini_rules(self) -> None:
         """
         A user class extending gemini with the marker is a Gemini model, so mixing its built-in

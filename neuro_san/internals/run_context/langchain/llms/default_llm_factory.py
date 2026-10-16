@@ -317,12 +317,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         create_full_llm_config() nothing is raised for a model llm_info does not know.
 
         :param config: The llm_config from the user
-        :return: The value of a string "class" key as given (a short llm_info class such as
-                "openai", or the dotted path of a user chat model class). Otherwise the "class"
-                of the llm_info entry that model_name resolves to after any alias hop, where a
-                missing model_name falls back to default_config's model_name the same way
-                create_full_llm_config() does. None when that entry is unknown, is not a
-                dictionary, or has no "class".
+        :return: A string "class" key as given (a short llm_info class such as "openai", or the
+                dotted path of a user chat model class); otherwise the "class" of the llm_info
+                entry that model_name resolves to after any alias hop, with a missing model_name
+                falling back to default_config's model_name as create_full_llm_config() does.
+                None when that entry is unknown, is not a dictionary, or has no "class".
         """
         class_from_llm_config: Any = config.get("class")
         if isinstance(class_from_llm_config, str) and len(class_from_llm_config) > 0:
@@ -346,9 +345,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         use_model_name: Any = entry.get("use_model_name")
         if use_model_name is not None and not isinstance(use_model_name, str):
-            # _find_llm_entry() looks the alias target up as a dictionary key, so a list or
-            # dictionary there would raise. Such an entry cannot name a class anyway.
-            # None is fine: _find_llm_entry() treats it as "not an alias".
+            # _find_llm_entry() looks a non-None alias target up as a dictionary key, so a list
+            # or dictionary there would raise; such an entry cannot name a class anyway.
             return None
 
         found: Tuple[Optional[Dict[str, Any]], str] = self._find_llm_entry(model_name)
@@ -362,10 +360,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         Tells which root llm_info class a class descends from through "extends".
 
-        The lookup is lowercased because the runtime lowercases "class" before its policy
-        lookup (StandardLangChainLlmFactory.create_llm_resources), so "Gemini" builds a
-        Gemini model just the same. Nothing is raised for a malformed table: a cycle or a
-        dangling "extends" ends the walk at the last class that is in the table.
+        The lookup is lowercased because the runtime lowercases "class" before its policy lookup
+        (StandardLangChainLlmFactory.create_llm_resources), so "Gemini" builds a Gemini model
+        too. A cycle or a dangling "extends" ends the walk at the last class in the table.
 
         :param chat_class_name: A "class" value from an llm_config or an llm_info entry, or None
         :return: The lowercased name of the class at the top of the "extends" chain, for
@@ -403,11 +400,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         Tells whether an llm_info class supports provider_tools.
 
-        A class opts in by declaring the "provider_tools" key in its own "args"; the stock
-        file does this for openai, azure-openai, anthropic and gemini. The class's own args
-        are read here instead of get_chat_class_args(), because that merges the parent's args
-        in through "extends": support is the class's own choice, and anthropic-bedrock, which
-        extends anthropic without the key, must not look supported.
+        A class opts in by declaring the "provider_tools" key in its own "args"; the stock file
+        does this for openai, azure-openai, anthropic and gemini. The class's own args are read
+        here instead of get_chat_class_args(), which merges the parent's args in through
+        "extends": anthropic-bedrock extends anthropic without the key and must not look supported.
 
         :param chat_class_name: A "class" value from an llm_config or an llm_info entry, or None
         :return: True when the class is in the llm_info "classes" table (lowercased lookup)
@@ -433,7 +429,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         This mirrors create_full_llm_config(): when the llm_config names a "class", only that
         class's args (merged through "extends") supply defaults; otherwise the class is the
         one model_name resolves to, and llm_info's default_config is overlaid on its args.
-        Nothing is raised for an unknown class or model; the result is then None.
+        Nothing is raised for an unknown class or model or a malformed table; the result is None.
 
         :param config: The llm_config from the user, or one fallbacks entry
         :param key: The llm_config key to look up
@@ -456,13 +452,22 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         :param chat_class_name: The class name as the runtime would look it up, or None
         :return: The merged args, or an empty dictionary when the class is not in the table
+                or the table is malformed somewhere up its "extends" chain
         """
         chat_classes: Any = self.llm_infos.get("classes")
         if not isinstance(chat_class_name, str) or not isinstance(chat_classes, dict):
             return {}
         if chat_class_name not in chat_classes:
             return {}
-        args: Any = self.get_chat_class_args(chat_class_name)
+        try:
+            args: Any = self.get_chat_class_args(chat_class_name)
+        except (AttributeError, TypeError, ValueError) as exception:
+            # get_chat_class_args() is the runtime's accessor and raises on a scalar class entry
+            # or a scalar "args" up the "extends" chain. Load-time callers report rather than
+            # crash, so a malformed table supplies no default; the runtime raises when it builds.
+            self.logger.warning("Malformed llm_info classes entry reached through %s, no defaults read: %s",
+                                chat_class_name, exception)
+            return {}
         if not isinstance(args, dict):
             return {}
         return args

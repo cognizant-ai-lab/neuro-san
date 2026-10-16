@@ -738,6 +738,27 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
         self.assertIsNone(self.factory.get_default_arg_value({"class": "my.pkg.MyChat"}, "use_responses_api"))
         self.assertIsNone(self.factory.get_default_arg_value({"model_name": "gpt-4.1"}, "no_such_key"))
 
+    def test_get_default_arg_value_malformed_class_table_is_none(self) -> None:
+        """
+        A scalar class entry or a scalar "args" up the "extends" chain yields None and a warning, not an exception.
+        """
+        extra_hocon: str = """
+        {
+            "classes": {
+                "broken-parent": { "extends": "openai", "args": "not-a-dict" },
+                "my-openai": { "extends": "broken-parent", "args": { "provider_tools": null } },
+                "scalar-parent": "not-a-dict",
+                "my-other-openai": { "extends": "scalar-parent", "args": { "provider_tools": null } }
+            }
+        }
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        with self.assertLogs("DefaultLlmFactory", level="WARNING") as logs:
+            self.assertIsNone(factory.get_default_arg_value({"class": "my-openai"}, "use_responses_api"))
+            self.assertIsNone(factory.get_default_arg_value({"class": "my-other-openai"}, "use_responses_api"))
+        self.assertEqual(2, len(logs.output), str(logs.output))
+
     def test_declares_provider_tools_unknown_is_false(self) -> None:
         """
         A class that is not in the table, or no class at all, declares nothing.
