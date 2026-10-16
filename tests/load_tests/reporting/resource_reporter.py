@@ -123,9 +123,8 @@ class ResourceReporter:
         self._client_rows.append(row)
         return row
 
-    # Placeholder row (Component + 11 metric columns) shown when a
-    # component produced no data at all.
-    _NA_METRICS: List[str] = ["na", "na", "na", "na", "na", "na", "na", "na", "na", "na", "na"]
+    # Metric columns after "Component" in the combined table.
+    METRIC_COLUMN_COUNT: int = 11
 
     def log_combined_analysis(self, total_client_requests: int, total_server_calls: int) -> None:
         """Log one combined server-app + client-app resource table.
@@ -166,7 +165,7 @@ class ResourceReporter:
         :return: One row per stage, or one row of na when there is no server data
         """
         if not self._resource_rows:
-            return [["Server app"] + ResourceReporter._NA_METRICS]
+            return [ResourceReporter._na_row("Server app")]
         rows: List[List[str]] = []
         display: Tuple[str, ...]
         unused_before_snapshot: Dict[str, Any]
@@ -189,7 +188,7 @@ class ResourceReporter:
         :return: One row per stage, or one row of na when there is no client data
         """
         if not self._client_rows:
-            return [["Client app"] + ResourceReporter._NA_METRICS]
+            return [ResourceReporter._na_row("Client app")]
         rows: List[List[str]] = []
         row: ClientResourceRow
         # One table row per client stage.
@@ -203,6 +202,21 @@ class ResourceReporter:
                 display[7], "na", "na", "na",
             ])
         return rows
+
+    @staticmethod
+    def _na_row(component: str) -> List[str]:
+        """
+        Build a combined-table row for a component with no data.
+
+        :param component: Component name for the first column
+        :return: The component name, then "na" for each metric column
+        """
+        row: List[str] = [component]
+        unused_index: int
+        # One "na" cell per metric column.
+        for unused_index in range(ResourceReporter.METRIC_COLUMN_COUNT):
+            row.append("na")
+        return row
 
     def _log_resource_deltas(self) -> None:
         """Log overall resource deltas if enough data points."""
