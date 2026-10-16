@@ -30,6 +30,7 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
+from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -153,8 +154,9 @@ flag to your invocation.
                 f"{required}\n"
             )
 
-        self.lingerers.append(llm_resources)
+        typed_llm_resources: LlmResources = llm_resources
+        self.lingerers.append(typed_llm_resources)
 
-        model: Any = llm_resources.get_model()
+        model: Any = typed_llm_resources.get_model()
 
         return model

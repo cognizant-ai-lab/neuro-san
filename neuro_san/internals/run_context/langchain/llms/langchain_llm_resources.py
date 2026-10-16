@@ -22,12 +22,13 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.runnables.base import RunnableSerializable
 
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
+from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
-class LangChainLlmResources(LingeringResource):
+class LangChainLlmResources(LlmResources):
     """
-    LingeringResource implemenation representing a LangChain model paired
+    LlmResources implemenation representing a LangChain model paired
     together with run-time policy necessary for model usage by the service.
     """
 
