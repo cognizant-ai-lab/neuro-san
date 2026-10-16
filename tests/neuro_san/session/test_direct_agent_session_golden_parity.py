@@ -38,6 +38,7 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
+from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.message.types.chat_message_type import ChatMessageType
 from neuro_san.message.utils.content_utils import ContentUtils
@@ -325,7 +326,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         :param message: A ChatMessage dict that carries content_blocks.
         """
         wrapper: Dict[str, Any] = message.get("content_blocks")
-        self.assertEqual(wrapper.get("format"), ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1)
+        self.assertEqual(wrapper.get("format"), LangchainV1ContentBlocksFormat.NAME)
         self.assertIsInstance(wrapper.get("blocks"), list)
         self.assertGreater(len(wrapper.get("blocks")), 0)
         self.assertEqual(ContentUtils.flatten_to_text(wrapper.get("blocks")), message.get("text"))

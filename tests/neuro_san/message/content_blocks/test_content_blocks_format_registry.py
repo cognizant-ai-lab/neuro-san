@@ -15,9 +15,16 @@
 #
 # END COPYRIGHT
 from typing import Any
+from typing import Dict
 from typing import List
 
+from functools import partial
 from unittest import TestCase
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
+from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.base import BaseMessage
 
 from neuro_san.message.content_blocks.content_blocks_format import ContentBlocksFormat
 from neuro_san.message.content_blocks.content_blocks_format_registry import ContentBlocksFormatRegistry
@@ -25,7 +32,8 @@ from neuro_san.message.content_blocks.content_blocks_format_registry import Cont
 
 class TestContentBlocksFormatRegistry(TestCase):
     """
-    Tests for the lookup of a content_blocks format by its wire name.
+    Tests for the lookup of a content_blocks format by its wire name or by
+    the mark a message carries.
     """
 
     def test_default_is_langchain_v1(self) -> None:
@@ -54,3 +62,36 @@ class TestContentBlocksFormatRegistry(TestCase):
         for value in unknown:
             with self.subTest(value=str(value)):
                 self.assertIsNone(ContentBlocksFormatRegistry.get_format(value))
+
+    def test_format_for_message_follows_the_mark(self) -> None:
+        """
+        A message marked by a format is handled by that format. A message
+        with no mark, or with a mark no format knows, falls to the default.
+        A second format is registered for the test, so that following the
+        mark and falling to the default give different answers.
+        """
+        default_format: ContentBlocksFormat = ContentBlocksFormatRegistry.get_default()
+        other_format: MagicMock = MagicMock(spec=ContentBlocksFormat)
+        other_format.is_format_of.side_effect = partial(self.is_marked_with, "v9")
+
+        marked_default: AIMessage = AIMessage(content="a", response_metadata={"output_version": "v1"})
+        marked_other: AIMessage = AIMessage(content="a", response_metadata={"output_version": "v9"})
+        unmarked: AIMessage = AIMessage(content="a", response_metadata={"model_provider": "openai"})
+        unknown_mark: AIMessage = AIMessage(content="a", response_metadata={"output_version": "v99"})
+        with patch.dict(ContentBlocksFormatRegistry.FORMATS, {"other_v9": other_format}):
+            self.assertIs(ContentBlocksFormatRegistry.format_for_message(marked_default), default_format)
+            self.assertIs(ContentBlocksFormatRegistry.format_for_message(marked_other), other_format)
+            self.assertIs(ContentBlocksFormatRegistry.format_for_message(unmarked), default_format)
+            self.assertIs(ContentBlocksFormatRegistry.format_for_message(unknown_mark), default_format)
+
+    @staticmethod
+    def is_marked_with(version: str, message: BaseMessage) -> bool:
+        """
+        Stand-in for a format's is_format_of.
+
+        :param version: The output_version value the stand-in format claims as its mark
+        :param message: The BaseMessage to inspect
+        :return: True if the message carries that output_version
+        """
+        response_metadata: Dict[str, Any] = message.response_metadata
+        return response_metadata.get("output_version") == version
