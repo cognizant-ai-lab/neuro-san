@@ -250,7 +250,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         """
         tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
         if tool_info is None:
-            if tool_name in self.REMOVED_TOOLS:
+            if tool_name in ToolboxFactory.REMOVED_TOOLS:
                 raise self._removed_tool_error(tool_name)
             sources: str = "the default toolbox info file"
             if self.toolbox_info_file:

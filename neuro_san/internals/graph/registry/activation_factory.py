@@ -138,7 +138,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
         :return: A list of ActivationPrepper instances
         """
-        preppers: List[ActivationPrepper] = shallow_copy(self.BASE_PREPPERS)
+        preppers: List[ActivationPrepper] = shallow_copy(ActivationFactory.BASE_PREPPERS)
 
         # Then read the agent network's prepper list
         external_preppers: List[ActivationPrepper] = []

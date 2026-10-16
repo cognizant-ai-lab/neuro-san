@@ -405,8 +405,7 @@ Some hints:
 
         return coded_tool
 
-    async def attempt_invoke(self, coded_tool: CodedTool, args: Dict[str, Any], sly_data: Dict[str, Any]) \
-            -> Any:
+    async def attempt_invoke(self, coded_tool: CodedTool, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:
         """
         Attempt to invoke the coded tool.
 

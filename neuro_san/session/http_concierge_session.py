@@ -49,7 +49,7 @@ class HttpConciergeSession(AbstractHttpServiceAgentSession, ConciergeSession):
             result_dict = loads(response.text)
 
             # Potentially limit the number of agents to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER env var,
-            empty_list: List[str] = []
+            empty_list: List[Dict[str, Any]] = []
             agent_infos: List[Dict[str, Any]] = result_dict.get("agents", empty_list)
             agent_infos = SessionUtil.limit_agents_list(agent_infos)
 

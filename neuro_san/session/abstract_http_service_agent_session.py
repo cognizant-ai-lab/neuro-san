@@ -69,7 +69,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         if host is not None:
             self.use_host = host
 
-        self.use_port: str = str(self.DEFAULT_HTTP_PORT)
+        self.use_port: str = str(AbstractHttpServiceAgentSession.DEFAULT_HTTP_PORT)
         if port is not None:
             self.use_port = port
 
