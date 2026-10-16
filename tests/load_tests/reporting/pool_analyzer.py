@@ -68,7 +68,7 @@ class PoolAnalyzer:
             "Peak Threads", "Reused", "Reuse%",
             "Pool Avail", "Exec/Req",
         ]
-        rows: List[tuple] = []
+        rows: List[List[str]] = []
         total_new_threads: int = 0
         reuse_percentages: List[float] = []
 
@@ -93,7 +93,7 @@ class PoolAnalyzer:
             peak_threads: Optional[int] = stage.get("peak_threads")
             peak_threads_text: str = str(peak_threads) if peak_threads is not None else "-"
 
-            rows.append((
+            rows.append([
                 str(batch_number),
                 str(server_calls),
                 f"+{new_threads}",
@@ -102,7 +102,7 @@ class PoolAnalyzer:
                 f"{reuse_percentage:.1f}%",
                 str(pool_available_threads),
                 f"{executors_per_request:.1f}",
-            ))
+            ])
 
         TableFormatter.log_table(header, rows)
 

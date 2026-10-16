@@ -207,11 +207,11 @@ class ResourceReporter:
         self._log_snapshot_deltas(
             "Server", first_before_snapshot, last_after_snapshot,
             fields=[
-                ("RSS", "rss", "%.1f MB"),
-                ("FDs", "fds", "%s"),
-                ("Threads", "threads", "%s"),
-                ("Connections", "connections", "%s"),
-                ("Children", "children", "%s"),
+                ["RSS", "rss", "%.1f MB"],
+                ["FDs", "fds", "%s"],
+                ["Threads", "threads", "%s"],
+                ["Connections", "connections", "%s"],
+                ["Children", "children", "%s"],
             ],
         )
 
@@ -224,22 +224,22 @@ class ResourceReporter:
         self._log_snapshot_deltas(
             "Client", first_before_snapshot, last_settled_snapshot,
             fields=[
-                ("RSS", "rss", "%.1f MB"),
-                ("FDs", "fds", "%s"),
-                ("Threads", "threads", "%s"),
+                ["RSS", "rss", "%.1f MB"],
+                ["FDs", "fds", "%s"],
+                ["Threads", "threads", "%s"],
             ],
         )
 
     @staticmethod
     def _log_snapshot_deltas(label: str, before_snapshot: Dict[str, Any], after_snapshot: Dict[str, Any],
-                             fields: List[Tuple[str, str, str]]) -> None:
+                             fields: List[List[str]]) -> None:
         """
         Log deltas between two ResourceSnapshots.
 
         :param label: Component name shown in the heading
         :param before_snapshot: Snapshot from the first stage
         :param after_snapshot: Snapshot from the last stage
-        :param fields: (display name, snapshot key, % format) of each field to log
+        :param fields: [display name, snapshot key, % format] of each field to log
         """
         maximum_name_length: int = 0
         name: str

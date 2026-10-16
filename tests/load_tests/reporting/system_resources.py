@@ -135,14 +135,16 @@ class SystemResources:
         :param peak_snapshot: Peak values during the run, or None
         :param after_snapshot: Snapshot taken after the run, or None
         """
-        rows: Tuple[Tuple[str, Optional[SysSnapshot]], ...] = (
-            ("before", before_snapshot), ("peak", peak_snapshot), ("after", after_snapshot),
-        )
+        snapshots_by_tag: Dict[str, Optional[SysSnapshot]] = {
+            "before": before_snapshot,
+            "peak": peak_snapshot,
+            "after": after_snapshot,
+        }
         has_snapshot: bool = False
         tag: str
         snapshot: Optional[SysSnapshot]
         # Look for at least one snapshot that is set.
-        for tag, snapshot in rows:
+        for tag, snapshot in snapshots_by_tag.items():
             if snapshot is not None:
                 has_snapshot = True
                 break
@@ -157,15 +159,15 @@ class SystemResources:
         system_maximum: str = ""
         user_limit, system_maximum = cls.thread_limits()
         # One memory row per snapshot that has it.
-        for tag, snapshot in rows:
+        for tag, snapshot in snapshots_by_tag.items():
             if snapshot is not None and snapshot.get("mem_pct") is not None:
                 cls._log_row("System memory", tag, cls._fmt_mem(snapshot, total_gigabytes))
         # One CPU row per snapshot that has it.
-        for tag, snapshot in rows:
+        for tag, snapshot in snapshots_by_tag.items():
             if snapshot is not None and snapshot.get("cpu_pct") is not None:
                 cls._log_row("System CPU", tag, cls._fmt_cpu(snapshot, core_count))
         # One threads row per snapshot that has it.
-        for tag, snapshot in rows:
+        for tag, snapshot in snapshots_by_tag.items():
             if snapshot is not None and snapshot.get("threads") is not None:
                 cls._log_row("System threads", tag, cls._fmt_threads(snapshot, tag, user_limit, system_maximum))
 
