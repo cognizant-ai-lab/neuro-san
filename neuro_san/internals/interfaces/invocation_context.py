@@ -19,9 +19,11 @@ from __future__ import annotations
 from typing import Any
 from typing import Dict
 
+from abc import abstractmethod
 from threading import Event
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.utils.interface import interface
 
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
@@ -33,6 +35,7 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.origination import Origination
 
 
+@interface
 class InvocationContext(LingeringResource):
     """
     Top-level interface for encapsulating specific policy classes that pertain to
@@ -44,6 +47,7 @@ class InvocationContext(LingeringResource):
     configured.
     """
 
+    @abstractmethod
     def start(self):
         """
         Starts the active components of this invocation context.
@@ -51,24 +55,28 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_effective_invocation(self) -> str:
         """
         :return: The effective invocation of the session
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_async_session_factory(self) -> AsyncAgentSessionFactory:
         """
         :return: The AsyncAgentSessionFactory associated with the invocation
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_asyncio_executor(self) -> AsyncioExecutor:
         """
         :return: The AsyncioExecutor associated with the invocation
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_origination(self) -> Origination:
         """
         :return: The Origination instance carrying state about tool instantation
@@ -76,6 +84,7 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_journal(self) -> Journal:
         """
         :return: The Journal instance that allows message reporting
@@ -83,6 +92,7 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_queue(self) -> AsyncCollatingQueue:
         """
         :return: The AsyncCollatingQueue instance via which messages are streamed to the
@@ -90,12 +100,14 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_metadata(self) -> Dict[str, str]:
         """
         :return: The metadata to pass along with any request
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
@@ -105,6 +117,7 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
@@ -114,12 +127,14 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_request_reporting(self) -> Dict[str, Any]:
         """
         :return: The request reporting dictionary
         """
         raise NotImplementedError
 
+    @abstractmethod
     def is_cloned(self) -> bool:
         """
         :return: True if this instance is a clone of a request's original
@@ -129,42 +144,49 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_llm_factory(self) -> ContextTypeLlmFactory:
         """
         :return: The ContextTypeLlmFactory instance for the session
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_toolbox_factory(self) -> ContextTypeToolboxFactory:
         """
         :return: The ContextTypeToolboxFactory instance for the session
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_reservationist(self) -> Reservationist:
         """
         :return: The Reservationist instance for the session
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_port(self) -> int:
         """
         :return: The port on which the server was started
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_work_done_event(self) -> Event:
         """
         :return: The Event (synchronous) that will be set when work is done for this event
         """
         raise NotImplementedError
 
+    @abstractmethod
     def add_resource(self, resource: LingeringResource):
         """
         :param resource: The resource to add
         """
         raise NotImplementedError
 
+    @abstractmethod
     def safe_shallow_copy(self, invocation: str = None) -> InvocationContext:
         """
         Makes a safe shallow copy of the invocation context.
