@@ -365,8 +365,8 @@ class TrafficRunner:
             ),
         })
 
-    def run_stage(self, plan: StagePlan, server_proc: Optional[psutil.Process] = None,
-                  client_proc: Optional[psutil.Process] = None, log_monitor: Optional[ServerLogMonitor] = None
+    def run_stage(self, plan: StagePlan, server_process: Optional[psutil.Process] = None,
+                  client_process: Optional[psutil.Process] = None, log_monitor: Optional[ServerLogMonitor] = None
                   ) -> Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]:
         """
@@ -376,8 +376,8 @@ class TrafficRunner:
         with whatever completed so far, marking the remainder KILLED.
 
         :param plan: Request count, pool size, request numbering and output directory of the stage
-        :param server_proc: Server process for the heartbeat's resource readings, or None
-        :param client_proc: Client process for the heartbeat's resource readings, or None
+        :param server_process: Server process for the heartbeat's resource readings, or None
+        :param client_process: Client process for the heartbeat's resource readings, or None
         :param log_monitor: Server log reader for server-side request timing, or None
         :return: (total_time_seconds, results, peak_server_threads, peak_client_rss_megabytes,
                  peak_server_rss_megabytes, peak_system_memory, peak_system_cpu_percent,
@@ -395,9 +395,9 @@ class TrafficRunner:
         pool: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=plan.get_max_workers())
         try:
             futures_ref: List[Future] = []
-            heartbeat = self._create_heartbeat(server_proc, client_proc, plan.get_output_dir(), log_monitor)
+            heartbeat = self._create_heartbeat(server_process, client_process, plan.get_output_dir(), log_monitor)
             heartbeat_thread = threading.Thread(target=heartbeat.progress_heartbeat,
-                                                args=(futures_ref, plan.get_num_requests(), start_seconds),
+                                                args=[futures_ref, plan.get_num_requests(), start_seconds],
                                                 kwargs=heartbeat_kwargs, daemon=True)
             heartbeat_thread.start()
             heartbeat_kwargs.get("ready_event").wait()
@@ -465,13 +465,13 @@ class TrafficRunner:
             heartbeat_kwargs[event_name] = threading.Event()
         return heartbeat_kwargs
 
-    def _create_heartbeat(self, server_proc: Optional[psutil.Process], client_proc: Optional[psutil.Process],
+    def _create_heartbeat(self, server_process: Optional[psutil.Process], client_process: Optional[psutil.Process],
                           output_dir: Optional[str], log_monitor: Optional[ServerLogMonitor]) -> Heartbeat:
         """
         Create the stage's Heartbeat, reading the server log from its current end.
 
-        :param server_proc: Server process for resource readings, or None
-        :param client_proc: Client process for resource readings, or None
+        :param server_process: Server process for resource readings, or None
+        :param client_process: Client process for resource readings, or None
         :param output_dir: Directory for progress.log, or None
         :param log_monitor: Server log reader for server-side request timing, or None
         :return: The Heartbeat
@@ -479,8 +479,8 @@ class TrafficRunner:
         log_start_position: Optional[int] = None
         if log_monitor is not None:
             log_start_position = log_monitor.read_position()
-        return Heartbeat(server_proc, client_proc, output_dir, log_monitor=log_monitor,
-                         log_start_pos=log_start_position,
+        return Heartbeat(server_process, client_process, output_dir, log_monitor=log_monitor,
+                         log_start_position=log_start_position,
                          primary_start_pattern=self._profile.get_primary_start_pattern())
 
     def _submit_requests(self, pool: ThreadPoolExecutor, plan: StagePlan, futures: List[Future],
