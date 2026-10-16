@@ -24,6 +24,7 @@ from unittest import TestCase
 from neuro_san import TOP_LEVEL_DIR
 from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.validation.input_validator import InputValidator
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 # Real fixtures, not mocks: tests/fixtures/load_tests/hello_world/*.hocon
 PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
@@ -53,11 +54,7 @@ class TestValidateFixturesHoconDir(TestCase):
         :param project_root: --project-root value
         :return: Validator over those args
         """
-        return InputValidator(Namespace(
-            agent=agent,
-            fixtures_hocon_dir=fixtures_hocon_dir,
-            project_root=project_root,
-        ))
+        return InputValidator(Namespace(agent=agent, fixtures_hocon_dir=fixtures_hocon_dir, project_root=project_root))
 
     def test_flag_absent_returns_empty_list(self) -> None:
         """No flag means prompts come from the JSON profile."""
@@ -66,9 +63,7 @@ class TestValidateFixturesHoconDir(TestCase):
 
     def test_default_dir_resolves_hello_world_fixtures(self) -> None:
         """DIR default + agent name -> tests/fixtures/load_tests/hello_world."""
-        files: List[str] = self._validator(
-            fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
-        ).validate_fixtures_hocon_dir()
+        files: List[str] = self._validator(fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR).validate_fixtures_hocon_dir()
 
         expected: List[str] = sorted(
             os.path.join(HELLO_WORLD_FIXTURES, name)
@@ -85,9 +80,7 @@ class TestValidateFixturesHoconDir(TestCase):
             fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
         ).validate_fixtures_hocon_dir()
         self.assertEqual(len(files), 5)
-        self.assertTrue(
-            all(f.startswith(HELLO_WORLD_FIXTURES) for f in files),
-        )
+        self.assertTrue(all(file_path.startswith(HELLO_WORLD_FIXTURES) for file_path in files))
 
     def test_absolute_dir_is_used_as_is(self) -> None:
         """An absolute DIR ignores --project-root."""
@@ -99,19 +92,17 @@ class TestValidateFixturesHoconDir(TestCase):
 
     def test_missing_agent_dir_exits(self) -> None:
         """No <DIR>/<agent>/ folder -> exit 1."""
-        with self.assertRaises(SystemExit) as ctx:
+        with self.assertRaises(LoadTestAbortError) as caught:
             self._validator(
                 agent="no_such_agent",
                 fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
             ).validate_fixtures_hocon_dir()
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_empty_agent_dir_exits(self) -> None:
         """Folder exists but holds no *.hocon -> exit 1."""
         with tempfile.TemporaryDirectory() as parent:
             os.mkdir(os.path.join(parent, "hello_world"))
-            with self.assertRaises(SystemExit) as ctx:
-                self._validator(
-                    fixtures_hocon_dir=parent,
-                ).validate_fixtures_hocon_dir()
-        self.assertEqual(ctx.exception.code, 1)
+            with self.assertRaises(LoadTestAbortError) as caught:
+                self._validator(fixtures_hocon_dir=parent).validate_fixtures_hocon_dir()
+        self.assertEqual(caught.exception.get_exit_code(), 1)

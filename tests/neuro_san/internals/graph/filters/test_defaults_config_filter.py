@@ -289,3 +289,54 @@ class TestDefaultsConfigFilter(TestCase):
         self.assertIsNotNone(value)
         self.assertIsInstance(value, list)
         self.assertEqual(len(value), 1)
+
+    def test_global_max_attempts_reaches_every_agent(self) -> None:
+        """
+        A top-level max_attempts is copied to every agent that does not set its own,
+        not only to the front man.
+        """
+        my_filter: ConfigFilter = self.get_filter()
+
+        dict_in: Dict[str, Any] = {
+            "max_attempts": 5,
+            "tools": [
+                {
+                    "name": "front_man",
+                },
+                {
+                    "name": "helper",
+                }
+            ]
+        }
+
+        dict_out: Dict[str, Any] = my_filter.filter_config(dict_in)
+
+        tools: List[Dict[str, Any]] = dict_out.get("tools")
+        self.assertEqual(tools[0].get("max_attempts"), 5)
+        self.assertEqual(tools[1].get("max_attempts"), 5)
+
+    def test_agent_max_attempts_overrides_global(self) -> None:
+        """
+        An agent's own max_attempts wins over the top-level value;
+        an agent without one still gets the top-level value.
+        """
+        my_filter: ConfigFilter = self.get_filter()
+
+        dict_in: Dict[str, Any] = {
+            "max_attempts": 5,
+            "tools": [
+                {
+                    "name": "front_man",
+                    "max_attempts": 2,
+                },
+                {
+                    "name": "helper",
+                }
+            ]
+        }
+
+        dict_out: Dict[str, Any] = my_filter.filter_config(dict_in)
+
+        tools: List[Dict[str, Any]] = dict_out.get("tools")
+        self.assertEqual(tools[0].get("max_attempts"), 2)
+        self.assertEqual(tools[1].get("max_attempts"), 5)

@@ -41,4 +41,5 @@ class SingleAgentNetworkProvider(AgentNetworkProvider):
         :return: Current AgentNetwork instance for specific agent name.
                 None if this does not exist for the instance's agent_name.
         """
-        return self.agents_table.get(self.agent_name)
+        agent_network: AgentNetwork = self.agents_table.get(self.agent_name)
+        return agent_network

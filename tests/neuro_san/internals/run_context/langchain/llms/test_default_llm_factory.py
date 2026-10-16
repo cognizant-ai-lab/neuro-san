@@ -13,19 +13,28 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+# One test class per source class is the repo convention, so the test count grows with the class.
+# pylint: disable=too-many-public-methods
 
+import asyncio
 import os
+import subprocess
+import sys
 import tempfile
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Set
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
 from typing_extensions import override
 
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 
 
 # The class-and-alias matrix plus get_chat_class_name() legitimately need more than 20 cases.
@@ -38,11 +47,28 @@ class TestDefaultLlmFactory(TestCase):
     The focus is how "use_model_name" aliases in llm_info are followed, with and without a
     "class" key in the llm_config. See https://github.com/cognizant-ai-lab/neuro-san/issues/1298.
 
-    Nothing here builds a chat model or makes a network call: only the fully specified config
-    that create_full_llm_config() produces is inspected. Expected alias targets are read from
-    the loaded llm_info rather than hard-coded, so the tests keep passing when an alias is
-    moved to a newer model version.
+    Nothing here makes a network call. Most tests only inspect the fully specified config that
+    create_full_llm_config() produces; the tool_strict tests also build the chat model to see the
+    class default land on it. One test imports the factory module in a child interpreter with the
+    openai packages blocked, to check that the openai chat model class loads only when a model is
+    built. Expected alias targets are read from the loaded llm_info rather than hard-coded, so the
+    tests keep passing when an alias is moved to a newer model version.
     """
+
+    # Runs in a child interpreter. A None entry in sys.modules makes an import fail the way a missing
+    # package does, so this imports the factory module with the openai packages blocked. The check
+    # afterwards makes the script fail, rather than pass by accident, if either package got imported.
+    IMPORT_WITHOUT_OPENAI_SCRIPT: str = """
+import importlib
+import sys
+
+sys.modules["openai"] = None
+sys.modules["langchain_openai"] = None
+importlib.import_module("neuro_san.internals.run_context.langchain.llms.default_llm_factory")
+if sys.modules.get("openai") is not None or sys.modules.get("langchain_openai") is not None:
+    raise SystemExit("an openai package was imported")
+print("FACTORY_IMPORTED_WITHOUT_OPENAI")
+"""
 
     # A one-key alias whose target is a full entry without a "use_model_name" of its own.
     ANTHROPIC_ALIAS: str = "claude-fable"
@@ -232,6 +258,103 @@ class TestDefaultLlmFactory(TestCase):
         full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
 
         self.assertEqual(self.DANGLING_TARGET, full_config["model_name"])
+
+    # ---- "class" given: the strict default for OpenAI function tools --------------------------
+
+    @staticmethod
+    def _close_llm_resources(llm_resources: LangChainLlmResources) -> None:
+        """
+        Releases the web client a chat model built by the factory holds.
+
+        :param llm_resources: The resources create_llm() returned
+        """
+        asyncio.run(llm_resources.close_of_work())
+
+    def test_openai_classes_build_the_chat_model_with_tool_strict_false(self) -> None:
+        """
+        The hocon default reaches the chat model itself: a model built through the factory for the
+        "openai" class, for "azure-openai" and for a bare OpenAI model name carries tool_strict False.
+        """
+        configs: List[Dict[str, Any]] = [
+            {"class": "openai", "model_name": self.OPENAI_ALIAS},
+            # The credential falls back to the pinned OPENAI_API_KEY; the endpoint never gets called.
+            {"class": "azure-openai", "deployment_name": "my-deployment",
+             "azure_endpoint": "https://unit-test.openai.azure.com"},
+            {"model_name": self.OPENAI_ALIAS},
+        ]
+        for config in configs:
+            # The label is a string so that the subtest stays picklable under xdist.
+            with self.subTest(config=str(config)):
+                llm_resources: LangChainLlmResources = self.factory.create_llm(config, None)
+                self.addCleanup(self._close_llm_resources, llm_resources)
+
+                llm: Any = llm_resources.get_model()
+                self.assertIsInstance(llm, ToolStrictChatOpenAI)
+                self.assertIs(llm.tool_strict, False)
+
+    def test_openai_classes_default_tool_strict_to_false(self) -> None:
+        """
+        The "openai" class defaults tool_strict to false, and "azure-openai" inherits that default.
+        """
+        openai_config: Dict[str, Any] = {"class": "openai", "model_name": self.OPENAI_ALIAS}
+        azure_config: Dict[str, Any] = {"class": "azure-openai", "deployment_name": "my-deployment"}
+
+        openai_full_config: Dict[str, Any] = self.factory.create_full_llm_config(openai_config, None)
+        azure_full_config: Dict[str, Any] = self.factory.create_full_llm_config(azure_config, None)
+
+        self.assertIs(openai_full_config.get("tool_strict"), False)
+        self.assertIs(azure_full_config.get("tool_strict"), False)
+
+    def test_tool_strict_null_in_llm_config_survives_the_overlay(self) -> None:
+        """
+        An agent that sets "tool_strict": null gets None in its full config, not the class default of
+        false, so the chat model sends no strict value at all for it.
+        """
+        config: Dict[str, Any] = {"class": "openai", "model_name": self.OPENAI_ALIAS}
+        null_config: Dict[str, Any] = dict(config)
+        null_config["tool_strict"] = None
+
+        # The baseline shows there is a non-null default for the null to override.
+        self.assertIs(self.factory.create_full_llm_config(config, None).get("tool_strict"), False)
+        full_config: Dict[str, Any] = self.factory.create_full_llm_config(null_config, None)
+
+        self.assertIn("tool_strict", full_config)
+        self.assertIsNone(full_config.get("tool_strict"))
+
+    def test_tool_strict_null_in_a_sparse_llm_info_file_overrides_the_default(self) -> None:
+        """
+        A sparse llm info file that deep-merges over the default can set the class default to null, the
+        server-wide override the reference documents for the "openai" class arguments.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            '{ "classes": { "openai": { "args": { "tool_strict": null } } } }')
+        config: Dict[str, Any] = {"class": "openai", "model_name": self.OPENAI_ALIAS}
+
+        # The stock factory gives the default, so the None below really comes from the sparse file.
+        self.assertIs(self.factory.create_full_llm_config(config, None).get("tool_strict"), False)
+        full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
+
+        self.assertIn("tool_strict", full_config)
+        self.assertIsNone(full_config.get("tool_strict"))
+
+    # ---- Importing the module: the openai packages stay optional ---------------------------------
+
+    def test_factory_module_imports_without_the_openai_packages(self) -> None:
+        """
+        The factory module imports even when the openai packages are not installed. The openai policies
+        resolve their chat model class by name when a model is built, so an install that only uses other
+        providers can leave those packages out. A child interpreter blocks them and imports the module.
+        """
+        repo_root: Path = Path(__file__).resolve().parents[6]
+        env: Dict[str, str] = dict(os.environ)
+        env["PYTHONPATH"] = str(repo_root) + os.pathsep + env.get("PYTHONPATH", "")
+
+        command: List[str] = [sys.executable, "-c", self.IMPORT_WITHOUT_OPENAI_SCRIPT]
+        result: subprocess.CompletedProcess = subprocess.run(
+            command, env=env, capture_output=True, text=True, check=False, timeout=120)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("FACTORY_IMPORTED_WITHOUT_OPENAI", result.stdout)
 
     # ---- "class" given: full langchain class path ----------------------------------------------
 

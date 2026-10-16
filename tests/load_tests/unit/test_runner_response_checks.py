@@ -34,8 +34,8 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.shared_ref import SharedRef
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
@@ -67,9 +67,7 @@ class TestRunnerResponseChecks(TestCase):
         processor: BasicMessageProcessor = BasicMessageProcessor()
         processor.process_message({"type": "AI", "text": answer})
         if sly_data is not None:
-            processor.process_message({
-                "type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data,
-            })
+            processor.process_message({"type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data})
         return processor
 
     @staticmethod
@@ -96,15 +94,13 @@ class TestRunnerResponseChecks(TestCase):
         """
         checks: Dict[str, Any] = {"sly_data": {"agent_reservations": {"not_value": ""}}}
         runner: TrafficRunner = self._runner()
-        self.assertIsNone(runner.check_response(
-            self._processor("ok", {"agent_reservations": [{"reservation_id": "r-1"}]}), checks,
-        ))
-        self.assertIn("agent_reservations", runner.check_response(
-            self._processor("ok", {"agent_network_name": "n"}), checks,
-        ))
-        self.assertIn("agent_reservations", runner.check_response(
-            self._processor("ok", {"agent_reservations": ""}), checks,
-        ))
+        reservations: List[Dict[str, Any]] = [{"reservation_id": "r-1"}]
+        with_reservations: BasicMessageProcessor = self._processor("ok", {"agent_reservations": reservations})
+        without_reservations: BasicMessageProcessor = self._processor("ok", {"agent_network_name": "n"})
+        empty_reservations: BasicMessageProcessor = self._processor("ok", {"agent_reservations": ""})
+        self.assertIsNone(runner.check_response(with_reservations, checks))
+        self.assertIn("agent_reservations", runner.check_response(without_reservations, checks))
+        self.assertIn("agent_reservations", runner.check_response(empty_reservations, checks))
 
     def test_keywords_check_on_answer_text(self) -> None:
         """
@@ -134,18 +130,18 @@ class TestRunnerResponseChecks(TestCase):
         self.assertIn("sly_data.b", reason)
 
     @staticmethod
-    def _stage_runner(stage_timeout: Optional[float] = None) -> TrafficRunner:
+    def _stage_runner(stage_timeout_seconds: Optional[float] = None) -> TrafficRunner:
         """
         Return a runner over a one-prompt profile with every argument run_one_http() and run_stage() read.
 
-        :param stage_timeout: Seconds after which run_stage() kills unfinished requests, or None
+        :param stage_timeout_seconds: Seconds after which run_stage() kills unfinished requests, or None
         :return: The runner
         """
         profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
         args: Namespace = Namespace(
             same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
             chat_filter="maximal",
-            request_timeout=5.0, idle_timeout=5.0, include_tokens=False, stage_timeout=stage_timeout,
+            request_timeout=5.0, idle_timeout=5.0, include_tokens=False, stage_timeout=stage_timeout_seconds,
         )
         return TrafficRunner(args, profile, threading.Event())
 
@@ -160,36 +156,37 @@ class TestRunnerResponseChecks(TestCase):
             return self._stage_runner().run_one_http(1, 0)
 
     @staticmethod
-    def _fake_request(delay: float, request_id: int, global_request_id: int,
+    def _fake_request(delay_seconds: float, request_id: int, global_request_id: int,
                       output_dir: Optional[str]) -> Dict[str, Any]:
         """
         Stand in for run_one_http(), echoing its request numbers after a delay.
 
-        :param delay: Seconds to sleep before returning
+        :param delay_seconds: Seconds to sleep before returning
         :param request_id: Request number within the current stage
         :param global_request_id: Request number across the whole run
         :param output_dir: Directory for per-request output files, or None
         :return: A CREATED request result
         """
-        time.sleep(delay)
-        return {
+        time.sleep(delay_seconds)
+        fake_result: Dict[str, Any] = {
             "request_id": f"request-{request_id}", "status": STATUS_CREATED,
             "global_request_id": global_request_id, "output_dir": output_dir,
         }
+        return fake_result
 
     def test_created_request_keeps_timing_and_timestamps(self) -> None:
         """
         A CREATED request with passing checks has no failure, a duration and wall-clock start/end times.
         """
-        before: float = time.time()
-        result: Dict[str, Any] = self._run_one_http(
-            AgentRequestResult(STATUS_CREATED, self._processor("hi"), "hi", 0.1, {}),
-        )
+        start_wall_clock_seconds: float = time.time()
+        answer_processor: BasicMessageProcessor = self._processor("hi")
+        request_result: AgentRequestResult = AgentRequestResult(STATUS_CREATED, answer_processor, "hi", 0.1, {})
+        result: Dict[str, Any] = self._run_one_http(request_result)
         self.assertEqual(STATUS_CREATED, result.get("status"))
         self.assertIsNone(result.get("failure_reason"))
         self.assertIsNone(result.get("error"))
         self.assertGreaterEqual(result.get("elapsed"), 0.0)
-        self.assertGreaterEqual(result.get("start_time"), before)
+        self.assertGreaterEqual(result.get("start_time"), start_wall_clock_seconds)
         self.assertAlmostEqual(result.get("start_time") + result.get("elapsed"), result.get("end_time"))
 
     def test_failed_request_with_traceback_reports_its_last_line(self) -> None:
@@ -221,8 +218,8 @@ class TestRunnerResponseChecks(TestCase):
         """
         run_stage() returns one result per request, numbered from the plan's global offset.
         """
-        stage: Tuple[float, List[Dict[str, Any]], SharedRef, SharedRef, SharedRef, SharedRef, SharedRef, SharedRef,
-                     bool, bool]
+        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
+                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
             stage = self._stage_runner().run_stage(StagePlan(3, 2, 10, None))
         global_ids: List[int] = []
@@ -236,12 +233,58 @@ class TestRunnerResponseChecks(TestCase):
         """
         Requests still running at --stage-timeout come back KILLED with the reason as stderr.
         """
-        stage: Tuple[float, List[Dict[str, Any]], SharedRef, SharedRef, SharedRef, SharedRef, SharedRef, SharedRef,
-                     bool, bool]
+        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
+                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.5)):
-            stage = self._stage_runner(stage_timeout=0.1).run_stage(StagePlan(2, 2, 0, None))
+            stage = self._stage_runner(stage_timeout_seconds=0.1).run_stage(StagePlan(2, 2, 0, None))
         self.assertEqual(2, len(stage[1]))
         for result in stage[1]:
             self.assertEqual(STATUS_KILLED, result.get("status"))
             self.assertEqual("Killed by --stage-timeout", result.get("stderr"))
         self.assertEqual((False, False), stage[8:])
+
+    def test_run_stage_returns_heartbeat_peaks(self) -> None:
+        """
+        run_stage() returns the heartbeat's system peaks read after join(), and None for unmonitored processes.
+        """
+        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
+                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
+        with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
+            stage = self._stage_runner().run_stage(StagePlan(1, 1, 0, None))
+        self.assertIsNone(stage[2])
+        self.assertIsNone(stage[3])
+        self.assertIsNone(stage[4])
+        self.assertEqual(["available_gigabytes", "memory_percent"], sorted(stage[5].keys()))
+        self.assertGreater(stage[5].get("memory_percent"), 0.0)
+        self.assertGreaterEqual(stage[6], 0.0)
+        self.assertGreater(stage[7], 0)
+
+    def test_run_stage_counts_failed_requests_on_the_heartbeat(self) -> None:
+        """
+        Every request that does not end CREATED is counted once on the heartbeat.
+        """
+        statuses: List[Dict[str, Any]] = [{"status": STATUS_CREATED}, {"status": STATUS_FAILED},
+                                          {"status": STATUS_FAILED}]
+        with patch.object(TrafficRunner, "run_one_http", side_effect=statuses), \
+                patch.object(Heartbeat, "count_failed_request") as count_failed_request:
+            self._stage_runner().run_stage(StagePlan(3, 1, 0, None))
+        self.assertEqual(2, count_failed_request.call_count)
+
+    def test_heartbeat_failed_request_count(self) -> None:
+        """
+        The heartbeat's failed count starts at 0 and goes up by one per failed request.
+        """
+        heartbeat: Heartbeat = Heartbeat(None)
+        self.assertEqual(0, heartbeat.get_failed_request_count())
+        heartbeat.count_failed_request()
+        heartbeat.count_failed_request()
+        self.assertEqual(2, heartbeat.get_failed_request_count())
+
+    def test_peaks_ignore_zero_and_lower_readings(self) -> None:
+        """
+        A peak is only kept for a reading above zero and above the peak so far, the rule used before.
+        """
+        self.assertFalse(Heartbeat.is_new_peak(0, None))
+        self.assertTrue(Heartbeat.is_new_peak(5, None))
+        self.assertFalse(Heartbeat.is_new_peak(5, 5))
+        self.assertTrue(Heartbeat.is_new_peak(6.5, 5))

@@ -219,9 +219,9 @@ This key is optional. It is informational only and is not consumed by neuro-san 
 A string in `YYYY-MM-DD` format indicating the date the model is scheduled to be retired
 (shut down) on its provider's API, or `null` if no retirement date has been announced.
 
-For active models, some providers (notably Anthropic and Google) publish "earliest
-possible" or "not sooner than" retirement dates that may be pushed out — the value here
-reflects the provider's published date at the time the entry was authored.
+For active Anthropic models, Anthropic gives only a "not sooner than" date, so the value is `null`
+until a retirement date is announced. Google lists its shutdown dates as the earliest possible
+dates, so a Gemini date here is the published date and may be pushed out.
 
 This key is optional. It is informational only and is not consumed by neuro-san at runtime,
 but is useful for tracking which models in your configuration are approaching end-of-life.
@@ -354,7 +354,7 @@ can be specified here.
 
 Most entries in a stock class's [`args`](#args) map one-to-one onto constructor arguments of the langchain chat
 model and need no explanation beyond their name. The ones below do: they decide which endpoint a request goes
-to, or some models reject them. The values quoted here are the class defaults in
+to, how function tools are bound, or some models reject them. The values quoted here are the class defaults in
 [default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon). Any of them
 can be overridden for one agent in its [`llm_config`](./agent_hocon_reference.md#llm_config), or for a whole
 server by pointing the [`AGENT_LLM_INFO_FILE`](#agent_llm_info_file-environment-variable) environment variable
@@ -364,11 +364,11 @@ that file instead.
 
 ### OpenAI Reasoning and Responses API Parameters
 
-The `openai` class accepts a few parameters that only matter for OpenAI reasoning models and for choosing which
-OpenAI endpoint (Chat Completions or the Responses API) requests are sent to. The Responses API is the default
-endpoint, because OpenAI's newest models only support tool calling combined with reasoning there (see
-"Models that need the Responses API for tool calling" below). Responses are not stored server-side by default,
-and the reasoning parameters default to `null`.
+The `openai` class accepts a few parameters that only matter for OpenAI reasoning models, for choosing which
+OpenAI endpoint (Chat Completions or the Responses API) requests are sent to, and for how function tools are
+bound. The Responses API is the default endpoint, because OpenAI's newest models only support tool calling
+combined with reasoning there (see "Models that need the Responses API for tool calling" below). Responses are
+not stored server-side by default, tools are bound non-strict, and the reasoning parameters default to `null`.
 
 - `reasoning`: a dictionary passed through as the Responses API `reasoning` object, for example
   `{"effort": "low", "summary": "auto"}`. Setting it makes langchain route requests to the Responses API even
@@ -422,6 +422,23 @@ and the reasoning parameters default to `null`.
   included by default. Any non-null `include` makes langchain route to the Responses API when `use_responses_api`
   is `null`, while an explicit `"use_responses_api": false` still wins and then Chat Completions rejects the
   parameter outright, so leave it `null` unless the request is certain to go to the Responses API.
+- `tool_strict`: the default `strict` value for function tools (`false` by default). In strict mode, described
+  in OpenAI's [function calling guide](https://developers.openai.com/api/docs/guides/function-calling), the
+  model's arguments are guaranteed to match the tool's schema, which in turn has to mark every property as
+  required and forbid additional ones. Chat Completions binds a tool without a `strict` value non-strict, but the
+  Responses API tries strict mode for it, so the model fills in every property of the schema, optional ones
+  included. Tools whose optional arguments depend on each other, as the tools of many MCP servers do, then get
+  calls the server rejects, and neuro-san cannot change a third-party schema. `false` sends `"strict": false` on
+  every tool and keeps the behavior tools had on Chat Completions. `true` turns strict mode on for every tool;
+  langchain then rewrites each schema to mark every property required and to forbid additional properties, so use
+  it only for tools whose schemas work with every argument always present. `null` sends no `strict` value and
+  lets each endpoint apply its own default. The value is written into every function tool: the coded tools and
+  MCP tools langchain converts, and function definitions given in OpenAI's own tool format, unless such a
+  definition names its own `strict`, which it keeps. The built-in tools of [provider_tools](./provider_tools.md)
+  pass through unchanged. One exception: when a structured-output `response_format` is bound on Chat
+  Completions, OpenAI requires strict function tools next to it, and langchain sets `"strict": true` on every
+  tool whatever `tool_strict` says; only a definition in OpenAI's format that names its own `strict` keeps that
+  value. neuro-san's agents bind no such format, so this only affects code that calls the chat model directly.
 
 **Models that need the Responses API for tool calling.** OpenAI's newest models no longer accept function (tool)
 calls together with reasoning on Chat Completions, and every agent that lists `tools` is a tool-calling agent.
@@ -484,8 +501,8 @@ gateway:
   parameters (`drop_params: true` in LiteLLM). Set `"store": null` so that the field is omitted entirely.
 
 Either override can be made per agent in its `llm_config` or server-wide with a sparse llm info file, exactly as
-shown for `use_responses_api` above. Pinning Chat Completions and omitting `store` together restores the
-requests neuro-san sent before the Responses API became the default:
+shown for `use_responses_api` above. Pinning Chat Completions and omitting both `store` and the tools' `strict`
+value together restore the requests neuro-san sent before the Responses API became the default:
 
 ```hocon
 {
@@ -493,7 +510,8 @@ requests neuro-san sent before the Responses API became the default:
         "openai": {
             "args": {
                 "use_responses_api": false,
-                "store": null
+                "store": null,
+                "tool_strict": null
             }
         }
     }
@@ -510,6 +528,11 @@ things for llm_configs that never set `use_responses_api`:
   relied on retrieving responses from OpenAI afterwards.
 - `stop` sequences are ignored: the Responses API has no `stop` parameter and langchain-openai drops it from the
   request. They still apply with `"use_responses_api": false`.
+- Function tools carry `"strict": false`, because `tool_strict` defaults to `false`. Without it the Responses API
+  tries to bind tools in strict mode and the model then fills in every optional argument. This applies on Chat
+  Completions too, where OpenAI treats the value the same as a missing one, so a recorded request body that
+  includes tools changes. Set `"tool_strict": null` to get each endpoint's own default back, or `true` for strict
+  mode on every tool.
 - neuro-san now requires langchain-openai 1.4 or later (and langchain-core 1.5 or later, which it depends on).
   Earlier langchain-openai releases sent `stop` to the Responses API and lacked the stateless reasoning replay
   that `store: false` relies on.
@@ -519,7 +542,7 @@ things for llm_configs that never set `use_responses_api`:
 ### Azure OpenAI
 
 The `azure-openai` class extends `openai` and shares its defaults, including `use_responses_api: true`,
-`store: false` and `include: null`. It sends requests to the resource's v1 API
+`store: false`, `include: null` and `tool_strict: false`. It sends requests to the resource's v1 API
 (`https://<resource>.openai.azure.com/openai/v1/`), which serves both Chat Completions and the Responses API in
 the OpenAI format without an api-version, through the same client as the `openai` class, with the deployment as
 the model. The endpoint comes from `azure_endpoint` in the llm_config, else from `openai_api_base` in the

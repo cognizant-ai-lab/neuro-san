@@ -195,11 +195,11 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                         self._active_response = response
 
                     # Iterate over the content stream as it comes in.
-                    # Note: We used to iterate over lines with the simpler:
+                    # Note: We read fixed-size chunks instead of the simpler:
                     #           async for line in response.content:
                     #               ... blah blah ...
-                    #       but that could fail with ValueError("Chunk too big")
-                    #       if a single line was too long.
+                    #       because that line loop can fail with ValueError("Chunk too big")
+                    #       if a single line is too long.
                     async for data in response.content.iter_chunked(max_chunk_size):
 
                         # Concatenate data as it comes in

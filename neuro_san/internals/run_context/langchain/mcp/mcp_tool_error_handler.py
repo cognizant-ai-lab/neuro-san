@@ -92,7 +92,7 @@ class McpToolErrorHandler:
         # LEAF_LOG_SENSITIVE env var setting.
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(getLogger(self.__class__.__name__))
 
-    async def async_invoke(self, *args, **kwargs) -> Any:
+    async def async_invoke(self, *args: Any, **kwargs: Any) -> Any:
         """
         Invoke the original tool coroutine, converting any exception into
         a concise "Error: ..." tool output.

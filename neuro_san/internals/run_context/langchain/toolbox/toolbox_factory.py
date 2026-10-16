@@ -79,8 +79,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         "neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon"
     """
 
-    # Tools that used to ship in the default toolbox info file but were removed
-    # because they were built on the deprecated langchain-community package.
+    # Tools that the default toolbox info file does not define, because they
+    # are built on the deprecated langchain-community package.
     # A stale reference to one of these gets a targeted migration message
     # instead of the generic "not defined" error.
     REMOVED_TOOLS: FrozenSet[str] = frozenset({
@@ -218,6 +218,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # If the instantiated class has "get_tools()", assume it's a toolkit and return a list of tools
         if hasattr(instance, "get_tools") and callable(instance.get_tools):
             toolkit: List[BaseTool] = instance.get_tools()
+            tool: BaseTool = None
             for tool in toolkit:
                 if agent_name:
                     # Prefix the name of the agent to each tool
@@ -262,7 +263,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if "class" not in tool_info:
             if tool_name in self.REMOVED_TOOLS:
                 # A user toolbox file that overrides only part of a removed
-                # entry used to inherit "class" from the bundled default.
+                # entry has no "class", because the bundled default does not
+                # define removed tools.
                 raise self._removed_tool_error(tool_name)
             raise ValueError(
                 f"Tool '{tool_name}' is missing required key: 'class'.\n"
@@ -303,6 +305,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         empty: Dict[str, Any] = {}
 
         resolved_args: Dict[str, Any] = {}
+        key: str = None
+        value: Any = None
         for key, value in args.items():
             if isinstance(value, dict) and "class" in value:
                 # If the argument is a class definition, resolve and instantiate it
@@ -350,6 +354,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         :param tool_class: BaseTool or BaseToolkit class to check for the method.
         :return: The method if found, None otherwise.
         """
+        attr_name: str = None
         for attr_name in dir(tool_class):
             if attr_name.startswith("from") and attr_name.endswith("api_wrapper"):
                 attr: Callable[..., Any] = getattr(tool_class, attr_name)

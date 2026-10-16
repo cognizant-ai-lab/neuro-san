@@ -20,6 +20,7 @@ from unittest import TestCase
 
 from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.validation.input_validator import InputValidator
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 
 class TestResolveStages(TestCase):
@@ -40,11 +41,7 @@ class TestResolveStages(TestCase):
         :param num_requests: --num-requests value
         :return: Validator over those args
         """
-        return InputValidator(Namespace(
-            ramp=ramp,
-            stages=stages,
-            num_requests=num_requests,
-        ))
+        return InputValidator(Namespace(ramp=ramp, stages=stages, num_requests=num_requests))
 
     def test_flat_mode_is_a_single_stage(self) -> None:
         """Without --ramp the run is one stage of --num-requests."""
@@ -68,25 +65,25 @@ class TestResolveStages(TestCase):
         """Garbage in --stages exits instead of raising ValueError."""
         validator: InputValidator = self._validator(ramp=True, stages="2,abc")
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             validator.resolve_stages()
 
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_non_positive_stages_exit(self) -> None:
         """A zero stage would run an empty stage, so it is rejected."""
         validator: InputValidator = self._validator(ramp=True, stages="2,0,8")
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             validator.resolve_stages()
 
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_zero_num_requests_exits(self) -> None:
         """--num-requests 0 is rejected in flat mode."""
         validator: InputValidator = self._validator(num_requests=0)
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             validator.resolve_stages()
 
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)

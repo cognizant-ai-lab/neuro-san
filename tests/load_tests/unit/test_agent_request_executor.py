@@ -34,16 +34,16 @@ from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 class FakeSession:
     """Stand-in for HttpServiceAgentSession that streams on a timer."""
 
-    def __init__(self, message_count: int, message_interval: float, **_kwargs: Any) -> None:
+    def __init__(self, message_count: int, message_interval_seconds: float, **_kwargs: Any) -> None:
         """
         Constructor.
 
         :param message_count: How many messages to stream
-        :param message_interval: Seconds between messages
+        :param message_interval_seconds: Seconds between messages
         :param _kwargs: The real session's constructor arguments, ignored
         """
         self._message_count: int = message_count
-        self._message_interval: float = message_interval
+        self._message_interval_seconds: float = message_interval_seconds
         self.sent: int = 0
 
     def streaming_chat(self, _request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
@@ -54,14 +54,9 @@ class FakeSession:
         :return: One AI chat message per interval
         """
         for _ in range(self._message_count):
-            time.sleep(self._message_interval)
+            time.sleep(self._message_interval_seconds)
             self.sent += 1
-            yield {
-                "response": {
-                    "type": "AI",
-                    "text": "answer",
-                },
-            }
+            yield {"response": {"type": "AI", "text": "answer"}}
 
 
 class FakeProcessor:
@@ -111,43 +106,37 @@ class TestAgentRequestExecutor(TestCase):
     """
 
     def _execute(
-            self, timeout: float, message_count: int, message_interval: float,
+            self, timeout_seconds: float, message_count: int, message_interval_seconds: float,
     ) -> Tuple[AgentRequestResult, FakeSession]:
         """
         Run one request against a stream with the given timing.
 
-        :param timeout: The --request-timeout cap in seconds
+        :param timeout_seconds: The --request-timeout cap in seconds
         :param message_count: How many messages the fake stream sends
-        :param message_interval: Seconds between fake messages
+        :param message_interval_seconds: Seconds between fake messages
         :return: The AgentRequestResult and the FakeSession that produced it
         """
-        session: FakeSession = FakeSession(
-            message_count=message_count,
-            message_interval=message_interval,
-        )
+        session: FakeSession = FakeSession(message_count=message_count,
+                                           message_interval_seconds=message_interval_seconds)
         result: Optional[AgentRequestResult] = None
         with patch(
-            "tests.load_tests.traffic.agent_request_executor."
-            "HttpServiceAgentSession",
+            "tests.load_tests.traffic.agent_request_executor.HttpServiceAgentSession",
             return_value=session,
         ), patch(
-            "tests.load_tests.traffic.agent_request_executor."
-            "StreamingInputProcessor",
+            "tests.load_tests.traffic.agent_request_executor.StreamingInputProcessor",
             FakeProcessor,
         ):
             result = AgentRequestExecutor.execute_request(
                 "localhost", 30011, "music_nerd", "prompt",
-                timeout=timeout, idle_timeout=60,
+                timeout_seconds=timeout_seconds, idle_timeout_seconds=60,
             )
         return result, session
 
     def test_streaming_past_the_cap_is_a_timeout(self) -> None:
         """A stream that outruns the cap reports TIMEOUT."""
-        result: Optional[AgentRequestResult] = None
-        _session: Optional[FakeSession] = None
-        result, _session = self._execute(
-            timeout=0.3, message_count=20, message_interval=0.05,
-        )
+        execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
+                                                                          message_interval_seconds=0.05)
+        result: AgentRequestResult = execution[0]
 
         self.assertEqual(result.get_status(), STATUS_TIMEOUT)
 
@@ -158,27 +147,23 @@ class TestAgentRequestExecutor(TestCase):
         label the request correctly while the worker stayed occupied,
         which is the behaviour being fixed.
         """
-        start: float = time.perf_counter()
-        _result: Optional[AgentRequestResult] = None
-        session: Optional[FakeSession] = None
-        _result, session = self._execute(
-            timeout=0.3, message_count=20, message_interval=0.05,
-        )
-        elapsed: float = time.perf_counter() - start
+        start_seconds: float = time.perf_counter()
+        execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
+                                                                          message_interval_seconds=0.05)
+        session: FakeSession = execution[1]
+        elapsed_seconds: float = time.perf_counter() - start_seconds
 
         self.assertLess(session.sent, 20)
-        self.assertLess(elapsed, 20 * 0.05)
+        self.assertLess(elapsed_seconds, 20 * 0.05)
 
     def test_request_within_the_cap_succeeds(self) -> None:
         """A request that finishes in time is unaffected."""
         result: Optional[AgentRequestResult] = None
         session: Optional[FakeSession] = None
-        result, session = self._execute(
-            timeout=30, message_count=3, message_interval=0.01,
-        )
+        result, session = self._execute(timeout_seconds=30, message_count=3, message_interval_seconds=0.01)
 
         self.assertEqual(result.get_status(), STATUS_CREATED)
         self.assertEqual(result.get_response_text(), "answer")
         self.assertEqual(result.get_processor().get_sly_data().get("reservation_id"), "abc-1")
         self.assertEqual(session.sent, 3)
-        self.assertGreater(result.get_time_to_first_response(), 0.0)
+        self.assertGreater(result.get_time_to_first_response_seconds(), 0.0)

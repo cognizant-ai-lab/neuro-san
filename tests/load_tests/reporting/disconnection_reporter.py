@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Aggregates and logs client disconnection analysis."""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -27,7 +25,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class DisconnectionReporter:
-    """Aggregates and logs client disconnection analysis.
+    """
+    Aggregates and logs client disconnection analysis.
 
     Holds the collected stage summaries for analysis.
     """
@@ -41,31 +40,31 @@ class DisconnectionReporter:
         self._summaries: List[Dict[str, Any]] = stage_summaries
 
     def log_disconnection_summary(self) -> None:
-        """Log aggregate client disconnection report."""
+        """
+        Log aggregate client disconnection report.
+        """
         all_disconnections: List[Dict[str, Any]] = []
-        for idx, stage in enumerate(self._summaries):
-            for disc in stage.get("disconnections") or []:
-                disc_copy: Dict[str, Any] = dict(disc)
-                disc_copy.update({"batch": idx + 1})
-                all_disconnections.append(disc_copy)
+        for index, stage in enumerate(self._summaries):
+            for disconnection in stage.get("disconnections") or []:
+                disconnection_copy: Dict[str, Any] = dict(disconnection)
+                disconnection_copy.update({"batch": index + 1})
+                all_disconnections.append(disconnection_copy)
         if not all_disconnections:
             return
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        logger.info(
-            "  CLIENT DISCONNECTIONS (%s detected in server log)",
-            len(all_disconnections),
-        )
+        logger.info("  CLIENT DISCONNECTIONS (%s detected in server log)", len(all_disconnections))
         logger.info("=" * SEPARATOR_WIDTH)
-        for disc in all_disconnections:
+        for disconnection in all_disconnections:
             logger.info(
                 "  Batch %s: %s — %s still processing at disconnect",
-                disc.get("batch", "?"),
-                disc.get("request_id", "unknown"),
-                disc.get("agent", "unknown"),
+                disconnection.get("batch", "?"),
+                disconnection.get("request_id", "unknown"),
+                disconnection.get("agent", "unknown"),
             )
         logger.info(
-            "\n  These requests had their client disconnect"
-            "\n  before the server finished. The server detected the"
-            "\n  disconnection and cancelled in-flight tasks."
-            "\n  If unexpected, consider increasing --idle-timeout.",
+            """
+  These requests had their client disconnect
+  before the server finished. The server detected the
+  disconnection and cancelled in-flight tasks.
+  If unexpected, consider increasing --idle-timeout.""",
         )

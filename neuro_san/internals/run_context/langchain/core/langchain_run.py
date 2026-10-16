@@ -61,7 +61,7 @@ class LangChainRun(Run):
         :return: A run id string based on the uuid in run_id_base and
                  the length of the chat history so far.
         """
-        chat_length = len(chat_history)
+        chat_length: int = len(chat_history)
 
         # Zero pad the chat_length out to 4 digits.
         run_id: str = f"run_{run_id_base}_{chat_length:04}"

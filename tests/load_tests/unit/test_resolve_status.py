@@ -36,14 +36,9 @@ class TestResolveStatus(TestCase):
 
     def test_each_reported_status_is_preserved(self) -> None:
         """CREATED, FAILED, TIMEOUT and KILLED all survive a rebuild."""
-        for status in (
-            STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED,
-        ):
+        for status in (STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
             with self.subTest(status=status):
-                self.assertEqual(
-                    ResultsRebuilder._resolve_status({"status": status}),
-                    status,
-                )
+                self.assertEqual(ResultsRebuilder._resolve_status({"status": status}), status)
 
     def test_missing_log_line_counts_as_failed(self) -> None:
         """A request never seen to finish is a failure, not a success.
@@ -51,13 +46,8 @@ class TestResolveStatus(TestCase):
         Failures past FAILURE_LOG_LIMIT are never printed, so an absent
         log line is the normal case for a heavily failing run.
         """
-        self.assertEqual(
-            ResultsRebuilder._resolve_status({}), STATUS_FAILED,
-        )
+        self.assertEqual(ResultsRebuilder._resolve_status({}), STATUS_FAILED)
 
     def test_unrecognized_status_counts_as_failed(self) -> None:
         """An unknown status word is never promoted to success."""
-        self.assertEqual(
-            ResultsRebuilder._resolve_status({"status": "WEIRD"}),
-            STATUS_FAILED,
-        )
+        self.assertEqual(ResultsRebuilder._resolve_status({"status": "WEIRD"}), STATUS_FAILED)

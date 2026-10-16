@@ -89,17 +89,25 @@ A neuro-san server uses HTTP under the hood. You can check out the protobufs def
 API under neuro_san/api/grpc.  The place to start is agent.proto for the service definitions.
 The next most important file there is chat.proto for the chat message definitions.
 
-A chat message carries its visible text in `text`. When a message's content carries information beyond that
-text (model reasoning or thinking summaries, images, files, several text blocks, provider extras such as
-signatures or a text block's phase), the message also carries `content_blocks`: a `format` string and a
-`blocks` list. The first format is `langchain_v1`, LangChain's standard content blocks. Whenever
-`content_blocks` is present, `text` holds the flattened text of the blocks, so a client that does not
-recognize the format can ignore the blocks. Today this applies to the AI message of the agent whose model
-returned the blocks, and to the AGENT_TOOL_RESULT message of a tool that returned content blocks; clients
-receive both under the MAXIMAL chat filter. The final AGENT_FRAMEWORK answer that MINIMAL clients receive
-stays text-only for now, and sending attachments from a client is not supported yet: the server reads only the
-`text` of the message a client sends. A message whose content is a plain string, the shape every existing
-client receives today, has no `content_blocks` key, so existing clients see no change.
+A chat message carries its visible text in `text`. When a message's content carries information beyond that text
+(model reasoning or thinking summaries, images, files, several text blocks, provider extras such as signatures or a
+text block's phase), the message also carries `content_blocks`: a `format` string and a `blocks` list. The first
+format is `langchain_v1`, LangChain's standard content blocks. Whenever `content_blocks` is present, `text` holds the
+flattened text of the blocks, so a client that does not recognize the format can ignore the blocks. Today this applies
+to the AI message of the agent whose model returned the blocks, and to the AGENT_TOOL_RESULT message of a tool that
+returned content blocks; clients receive both under the MAXIMAL chat filter. The final AGENT_FRAMEWORK answer that
+MINIMAL clients receive stays text-only for now, and sending attachments from a client is not supported yet: the
+server reads only the `text` of the message a client sends. When a client sends `chat_context` back, the server does
+read the `content_blocks` of its history messages. The `chat_context` the server returns is text-only today, so blocks
+reach the server only from a client that builds its own history from the messages it received. Blocks in a format the
+server knows become that message's content again, with exceptions. LangChain's schema also has a `tool_call` block
+type; the server ignores one it receives, because a tool call is not message content. Server-tool records are dropped,
+because they pair with provider state that a replay cannot reproduce. `non_standard` blocks are dropped, because they
+are one provider's own shape. Attachments are dropped, because a model is not given attachments yet. Reasoning blocks
+are held back until the wire says which provider produced them, because a provider replays only its own reasoning.
+When nothing useful is left, or the blocks do not add up to the message's text, the content is `text`. A format the
+server does not know falls back to `text`. A message whose content is a plain string, the shape every existing client
+receives today, has no `content_blocks` key, so existing clients see no change.
 
 ### Content block shapes
 

@@ -50,12 +50,6 @@ class CostEstimator:
             if key in model:
                 pricing = MODEL_PRICING[key]
                 break
-        prompt_cost: float = (
-            (prompt_tokens / TOKENS_PER_MILLION)
-            * pricing.get("prompt", 0)
-        )
-        completion_cost: float = (
-            (completion_tokens / TOKENS_PER_MILLION)
-            * pricing.get("completion", 0)
-        )
+        prompt_cost: float = (prompt_tokens / TOKENS_PER_MILLION) * pricing.get("prompt", 0)
+        completion_cost: float = (completion_tokens / TOKENS_PER_MILLION) * pricing.get("completion", 0)
         return prompt_cost + completion_cost

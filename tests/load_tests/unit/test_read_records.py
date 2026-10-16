@@ -39,10 +39,10 @@ class TestReadRecords(TestCase):
 
     def setUp(self) -> None:
         """Create a scratch history file removed again after each test."""
-        handle: int = 0
+        file_descriptor: int = 0
         self._path: str = ""
-        handle, self._path = tempfile.mkstemp(suffix=".jsonl")
-        os.close(handle)
+        file_descriptor, self._path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(file_descriptor)
         self.addCleanup(os.unlink, self._path)
 
     def _write(self, text: str) -> None:
@@ -51,32 +51,29 @@ class TestReadRecords(TestCase):
 
         :param text: History file contents
         """
-        with open(self._path, "w", encoding="utf-8") as handle:
-            handle.write(text)
+        with open(self._path, "w", encoding="utf-8") as file_handle:
+            file_handle.write(text)
 
     def test_records_are_read_in_file_order(self) -> None:
         """Every well-formed line becomes one record."""
-        self._write(
-            json.dumps({"agent": "one"}) + "\n"
-            + json.dumps({"agent": "two"}) + "\n"
-        )
+        self._write(json.dumps({"agent": "one"}) + "\n" + json.dumps({"agent": "two"}) + "\n")
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
-        self.assertEqual(
-            [record["agent"] for record in records], ["one", "two"],
-        )
+        agents: List[str] = []
+        record: Dict[str, Any]
+        # Collect the agent of each record, in file order.
+        for record in records:
+            agents.append(record.get("agent", ""))
+        self.assertEqual(agents, ["one", "two"])
 
     def test_truncated_final_line_does_not_lose_earlier_records(self) -> None:
         """An interrupted run leaves a partial line; the rest survives."""
-        self._write(
-            json.dumps({"agent": "one"}) + "\n"
-            + '{"agent": "two", "requ'
-        )
+        self._write(json.dumps({"agent": "one"}) + "\n" + '{"agent": "two", "requ')
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
-        self.assertEqual([record["agent"] for record in records], ["one"])
+        self.assertEqual([record.get("agent", "") for record in records], ["one"])
 
     def test_blank_lines_are_skipped(self) -> None:
         """Blank lines are not counted as records."""
@@ -90,10 +87,8 @@ class TestReadRecords(TestCase):
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._path)
 
-        self.assertEqual([record["agent"] for record in records], ["one"])
+        self.assertEqual([record.get("agent", "") for record in records], ["one"])
 
     def test_unreadable_file_yields_nothing(self) -> None:
         """A missing file warns and returns empty rather than raising."""
-        self.assertEqual(
-            TrendHistory._read_records("/nonexistent/history.jsonl"), [],
-        )
+        self.assertEqual(TrendHistory._read_records("/nonexistent/history.jsonl"), [])

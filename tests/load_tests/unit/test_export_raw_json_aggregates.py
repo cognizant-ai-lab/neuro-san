@@ -19,15 +19,16 @@ import os
 import shutil
 import tempfile
 from argparse import Namespace
-from types import SimpleNamespace
 from typing import Any
 from typing import Dict
 from typing import List
 from unittest import TestCase
 
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.reporting.resource_reporter import ResourceReporter
 
 
 # These tests call a deliberately-internal helper directly; suppress
@@ -58,12 +59,8 @@ class TestExportRawJsonAggregates(TestCase):
         orchestrator._server_ns_version = "0.6.92"
         orchestrator.server_log = None
         orchestrator.hocon_files = []
-        orchestrator.profile = AgentProfile(
-            "hello_world", {"estimated_tokens_per_request": 1000},
-        )
-        orchestrator.resource_reporter = SimpleNamespace(
-            resource_rows=[], client_rows=[],
-        )
+        orchestrator.profile = AgentProfile("hello_world", {"estimated_tokens_per_request": 1000})
+        orchestrator.resource_reporter = ResourceReporter()
         orchestrator.args = Namespace(
             agent="music_nerd", profile_path=None, level="norm",
             ramp=False, host="localhost", port=30011,
@@ -75,35 +72,29 @@ class TestExportRawJsonAggregates(TestCase):
         )
         return orchestrator
 
-    def _export(self, elapsed_values: List[float]) -> Dict[str, Any]:
+    def _export(self, elapsed_values_seconds: List[float]) -> Dict[str, Any]:
         """
         Export one stage of successful requests and read it back.
 
-        :param elapsed_values: Elapsed seconds, one per request
+        :param elapsed_values_seconds: Elapsed seconds, one per request
         :return: Aggregates read back from raw_results.json
         """
         results: List[Dict[str, Any]] = []
-        for index, elapsed in enumerate(elapsed_values, start=1):
-            results.append({
-                "request_id": f"request-{index}",
-                "status": STATUS_CREATED,
-                "elapsed": elapsed,
-            })
+        for index, elapsed_seconds in enumerate(elapsed_values_seconds, start=1):
+            results.append({"request_id": f"request-{index}", "status": STATUS_CREATED, "elapsed": elapsed_seconds})
         # One stage whose wall-clock time is the slowest request,
         # because the requests ran concurrently.
         stage_summaries: List[Dict[str, Any]] = [{
             "concurrent": len(results),
             "results": results,
-            "elapsed": max(elapsed_values),
+            "elapsed": max(elapsed_values_seconds),
         }]
 
-        self._orchestrator()._export_raw_json(
-            stage_summaries, exit_code=0,
-        )
+        self._orchestrator()._export_raw_json(stage_summaries, exit_code=0)
 
-        path: str = os.path.join(self._dir, "raw_results.json")
+        path: str = os.path.join(self._dir, RAW_RESULTS_FILE_NAME)
         with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle)["aggregates"]
+            return json.load(handle).get("aggregates", {})
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
         """Concurrency must not divide the reported latency.
@@ -114,17 +105,17 @@ class TestExportRawJsonAggregates(TestCase):
         """
         aggregates: Dict[str, Any] = self._export([30.0] * 10)
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
 
     def test_wall_clock_total_is_reported_separately(self) -> None:
         """Throughput is still derivable from the elapsed total."""
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
-        self.assertEqual(aggregates["total_elapsed_seconds"], 6.0)
-        self.assertEqual(aggregates["total_requests"], 3)
+        self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)
+        self.assertEqual(aggregates.get("total_requests", 0), 3)

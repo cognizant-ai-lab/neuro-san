@@ -85,6 +85,10 @@ other is dropped with a warning. Across servers, and against the network's other
 tool in the agent's `tools` list to use a name keeps it; a later MCP tool with the same name is
 skipped with a warning.
 - Thinking output and journal entries show the renamed name, since that is the name the LLM uses.
+- Tool arguments are sent as the server's schema declares them. OpenAI's Responses API would otherwise
+try strict mode and make the model fill in every optional argument, so the `openai` class sends
+`strict: false` on every tool by default; see
+[`tool_strict`](./llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters).
 
 ## Authentication
 

@@ -48,6 +48,8 @@ class PydanticArgumentDictionaryConverter(DictionaryConverter):
         # Loop through all the keys, recursively converting any sub-objects
         # (dicts, pydantic objects, and list elements thereof) to dictionaries.
         new_dict: Dict[str, Any] = {}
+        key: str = None
+        value: Any = None
         for key, value in base_dict.items():
             new_dict[key] = self._convert_value(value)
 
@@ -62,6 +64,7 @@ class PydanticArgumentDictionaryConverter(DictionaryConverter):
             return self.to_dict(value)
         if isinstance(value, list):
             converted_list: List[Any] = []
+            item: Any = None
             for item in value:
                 converted_list.append(self._convert_value(item))
             return converted_list

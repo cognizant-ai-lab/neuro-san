@@ -26,6 +26,7 @@ from unittest import TestCase
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 
+from neuro_san.message.content_blocks.content_blocks_format_registry import ContentBlocksFormatRegistry
 from neuro_san.message.utils.content_utils import ContentUtils
 
 from tests.neuro_san.message.content_fixtures import ContentFixtures
@@ -505,3 +506,160 @@ class TestContentUtils(TestCase):
         self.assertEqual(safe[2], "plain")
         json.dumps(safe)
         self.assertEqual(blocks[1]["base64"], b"raw")
+
+    # --- restorable_blocks
+
+    def test_content_blocks_format(self) -> None:
+        """
+        A wrapper names its format; anything else, an unknown name included,
+        names none.
+        """
+        wrapper = {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": []}
+        self.assertIs(ContentUtils.content_blocks_format(wrapper), ContentBlocksFormatRegistry.get_default())
+        self.assertIsNone(ContentUtils.content_blocks_format({"format": "somebody_elses_v2", "blocks": []}))
+        self.assertIsNone(ContentUtils.content_blocks_format({"blocks": []}))
+        self.assertIsNone(ContentUtils.content_blocks_format([{"type": "text", "text": "hi"}]))
+        self.assertIsNone(ContentUtils.content_blocks_format(None))
+
+    def test_restorable_blocks_restores_reasoning_and_text(self) -> None:
+        """
+        A langchain_v1 wrapper whose blocks say more than the text restores
+        to those same block dictionaries, an OpenAI "phase" included.
+        """
+        blocks = [
+            {"type": "reasoning", "reasoning": "deep", "extras": {"signature": "sig"}},
+            {"type": "text", "text": "the answer", "phase": "final_answer"},
+        ]
+        chat_message = {
+            "type": "AI",
+            "text": "the answer",
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        restored: List[Dict[str, Any]] = ContentUtils.restorable_blocks(chat_message)
+        self.assertEqual(restored, blocks)
+        self.assertIs(restored[0], blocks[0])
+        self.assertIs(restored[1], blocks[1])
+        self.assertEqual(restored[1].get("phase"), "final_answer")
+
+    def test_restorable_blocks_keeps_reasoning_only_content(self) -> None:
+        """
+        A reasoning-only message has no text to lose, so its block stays.
+        """
+        blocks = [{"type": "reasoning", "reasoning": "deep"}]
+        chat_message = {"type": "AI", "text": "", "content_blocks": ContentUtils.wrap_content_blocks(blocks)}
+        self.assertEqual(ContentUtils.restorable_blocks(chat_message), blocks)
+
+    def test_restorable_blocks_falls_back_to_text(self) -> None:
+        """
+        None means "keep the text as content": no wrapper, an unknown format,
+        a bare list, an empty wrapper, nothing left after the restore, blocks
+        that only repeat the text, and blocks whose text is not the message's
+        text, whether lost, shortened or changed.
+        """
+        text_block = {"type": "text", "text": "the answer"}
+        tool_call = {"type": "tool_call", "name": "lookup", "args": {}, "id": "call_1"}
+        cases: Dict[str, Dict[str, Any]] = {
+            "no wrapper": {"type": "AI", "text": "the answer"},
+            "unknown format": {"type": "AI", "text": "the answer",
+                               "content_blocks": {"format": "somebody_elses_v2", "blocks": [text_block]}},
+            "bare list": {"type": "AI", "text": "the answer", "content_blocks": [text_block]},
+            "empty wrapper": {"type": "AI", "text": "the answer",
+                              "content_blocks": ContentUtils.wrap_content_blocks([])},
+            "only dropped blocks": {"type": "AI", "text": "the answer",
+                                    "content_blocks": ContentUtils.wrap_content_blocks([tool_call])},
+            "lone text block": {"type": "AI", "text": "the answer",
+                                "content_blocks": ContentUtils.wrap_content_blocks([text_block])},
+            "tool call plus text": {"type": "AI", "text": "the answer",
+                                    "content_blocks": ContentUtils.wrap_content_blocks([tool_call, text_block])},
+            "blocks lost the text": {"type": "AI", "text": "the answer",
+                                     "content_blocks": ContentUtils.wrap_content_blocks(
+                                         [{"type": "reasoning", "reasoning": "deep"}])},
+            "blocks shortened the text": {"type": "AI", "text": "hello world",
+                                          "content_blocks": ContentUtils.wrap_content_blocks(
+                                              [{"type": "text", "text": "hello", "phase": "final_answer"}])},
+            "blocks changed the text": {"type": "AI", "text": "the answer",
+                                        "content_blocks": ContentUtils.wrap_content_blocks(
+                                            [{"type": "text", "text": "another answer", "phase": "final_answer"}])},
+            "none": None,
+        }
+        # Each case falls back to the text.
+        label: str = None
+        chat_message: Dict[str, Any] = None
+        for label, chat_message in cases.items():
+            with self.subTest(case=label):
+                self.assertIsNone(ContentUtils.restorable_blocks(chat_message))
+
+    def test_restorable_blocks_holds_reasoning_back_for_chat_history(self) -> None:
+        """
+        A message bound for chat history loses its reasoning blocks. What is
+        left follows the usual rules: a text block with a phase is kept, a
+        plain text block that repeats the text is not, and nothing at all
+        means the text stays.
+        """
+        reasoning = {"type": "reasoning", "reasoning": "deep", "extras": {"signature": "sig"}}
+        phased = {"type": "text", "text": "the answer", "phase": "final_answer"}
+        plain = {"type": "text", "text": "the answer"}
+
+        with_phase = {"type": "AI", "text": "the answer",
+                      "content_blocks": ContentUtils.wrap_content_blocks([reasoning, phased])}
+        self.assertEqual(ContentUtils.restorable_blocks(with_phase, for_chat_history=True), [phased])
+        self.assertEqual(ContentUtils.restorable_blocks(with_phase), [reasoning, phased])
+
+        with_plain = {"type": "AI", "text": "the answer",
+                      "content_blocks": ContentUtils.wrap_content_blocks([reasoning, plain])}
+        self.assertIsNone(ContentUtils.restorable_blocks(with_plain, for_chat_history=True))
+
+        reasoning_only = {"type": "AI", "text": "",
+                          "content_blocks": ContentUtils.wrap_content_blocks([reasoning])}
+        self.assertIsNone(ContentUtils.restorable_blocks(reasoning_only, for_chat_history=True))
+
+    def test_without_reasoning(self) -> None:
+        """
+        Reasoning blocks are left out; everything else keeps its order and identity.
+        """
+        text = {"type": "text", "text": "a"}
+        blocks = [{"type": "reasoning", "reasoning": "deep"}, text, {"type": "reasoning", "id": "rs_1"}]
+        remaining: List[Dict[str, Any]] = ContentUtils.without_reasoning(blocks)
+        self.assertEqual(len(remaining), 1)
+        self.assertIs(remaining[0], text)
+        self.assertEqual(ContentUtils.without_reasoning([]), [])
+
+    def test_restorable_blocks_drops_attachments(self) -> None:
+        """
+        Data blocks are not sent back to a model yet, so they are dropped.
+        A text block plus an attachment leaves only the text, which the
+        message already has, and an attachment-only message keeps its text.
+        """
+        with_text = [
+            {"type": "text", "text": "see"},
+            {"type": "image", "base64": "aW1hZ2UtYnl0ZXM=", "mime_type": "image/png"},
+        ]
+        chat_message = {"type": "HUMAN", "text": "see",
+                        "content_blocks": ContentUtils.wrap_content_blocks(with_text)}
+        self.assertIsNone(ContentUtils.restorable_blocks(chat_message))
+
+        attachment_only = [{"type": "image", "base64": "aW1hZ2UtYnl0ZXM=", "mime_type": "image/png"}]
+        chat_message = {"type": "HUMAN", "text": "",
+                        "content_blocks": ContentUtils.wrap_content_blocks(attachment_only)}
+        self.assertIsNone(ContentUtils.restorable_blocks(chat_message))
+
+        with_reasoning = [
+            {"type": "reasoning", "reasoning": "deep"},
+            {"type": "text", "text": "see"},
+            {"type": "image", "base64": "aW1hZ2UtYnl0ZXM=", "mime_type": "image/png"},
+        ]
+        chat_message = {"type": "AI", "text": "see",
+                        "content_blocks": ContentUtils.wrap_content_blocks(with_reasoning)}
+        restored: List[Dict[str, Any]] = ContentUtils.restorable_blocks(chat_message)
+        self.assertEqual(restored, with_reasoning[:2])
+        self.assertNotIn("aW1hZ2UtYnl0ZXM=", json.dumps(restored))
+
+    def test_v1_response_metadata(self) -> None:
+        """
+        The message's own metadata is copied and stamped; the original is untouched.
+        """
+        message = AIMessage(content="a", response_metadata={"model_provider": "openai"})
+        stamped: Dict[str, Any] = ContentUtils.v1_response_metadata(message)
+        self.assertEqual(stamped, {"model_provider": "openai", "output_version": "v1"})
+        self.assertEqual(message.response_metadata, {"model_provider": "openai"})
+        self.assertEqual(ContentUtils.v1_response_metadata(AIMessage(content="a")), {"output_version": "v1"})

@@ -23,10 +23,11 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
+from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 
 
-# pylint: disable=protected-access
 class TestRebuiltAggregates(TestCase):
     """
     Unit tests for the aggregates a rebuild writes.
@@ -41,33 +42,28 @@ class TestRebuiltAggregates(TestCase):
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
 
-    def _build_run(self, elapsed_by_id: Dict[int, float]) -> Dict[str, Any]:
+    def _build_run(self, elapsed_seconds_by_id: Dict[int, float]) -> Dict[str, Any]:
         """
         Rebuild a run of successful requests with the given timings.
 
-        :param elapsed_by_id: Elapsed seconds per request id
+        :param elapsed_seconds_by_id: Elapsed seconds per request id
         :return: Aggregates read back from raw_results.json
         """
         lines: List[str] = []
-        for req_id, elapsed in elapsed_by_id.items():
-            path: str = os.path.join(
-                self._dir, "requests", f"request_{req_id}_stdout.txt",
-            )
+        for request_id, elapsed_seconds in elapsed_seconds_by_id.items():
+            path: str = os.path.join(self._dir, "requests", f"request_{request_id}_stdout.txt")
             with open(path, "w", encoding="utf-8") as handle:
-                handle.write(
-                    '{"reservation_id": "abc-%s",'
-                    ' "agent_network_name": "music_nerd"}\n' % req_id
-                )
-            lines.append(f"Request {req_id}: CREATED ({elapsed:.2f}s)\n")
-        log_path: str = os.path.join(self._dir, "load_test.log")
+                handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % request_id)
+            lines.append(f"Request {request_id}: CREATED ({elapsed_seconds:.2f}s)\n")
+        log_path: str = os.path.join(self._dir, LEGACY_RUN_LOG_FILE_NAME)
         with open(log_path, "w", encoding="utf-8") as handle:
             handle.writelines(lines)
 
         ResultsRebuilder(self._dir).run()
 
-        json_path: str = os.path.join(self._dir, "raw_results.json")
+        json_path: str = os.path.join(self._dir, RAW_RESULTS_FILE_NAME)
         with open(json_path, "r", encoding="utf-8") as handle:
-            return json.load(handle)["aggregates"]
+            return json.load(handle).get("aggregates", {})
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
         """Latency averages the requests, not the run.
@@ -78,16 +74,16 @@ class TestRebuiltAggregates(TestCase):
         """
         aggregates: Dict[str, Any] = self._build_run({1: 30.0, 2: 30.0, 3: 30.0})
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
         aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
-        self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
 
     def test_total_elapsed_is_the_slowest_request(self) -> None:
         """Total elapsed still stands in for the run's wall clock."""
         aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
-        self.assertEqual(aggregates["total_elapsed_seconds"], 6.0)
+        self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)

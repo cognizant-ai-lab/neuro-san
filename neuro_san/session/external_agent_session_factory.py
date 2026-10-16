@@ -28,6 +28,7 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
+from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
 class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
@@ -146,7 +147,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             if agent_network_provider is not None:
                 agent_network: AgentNetwork = agent_network_provider.get_agent_network()
                 if agent_network is not None:
-                    safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy(invocation)
+                    safe_invocation_context: SessionInvocationContext = invocation_context.safe_shallow_copy(invocation)
                     session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
 
         if session is None:

@@ -49,39 +49,37 @@ class TestParseTokenAccountingSince(TestCase):
 
     def setUp(self) -> None:
         """Create a scratch log file removed again after each test."""
-        handle: int = 0
+        file_descriptor: int = 0
         self._log_path: str = ""
-        handle, self._log_path = tempfile.mkstemp(suffix=".log")
-        os.close(handle)
+        file_descriptor, self._log_path = tempfile.mkstemp(suffix=".log")
+        os.close(file_descriptor)
         self.addCleanup(os.unlink, self._log_path)
 
     @staticmethod
-    def _reporting_record(request_id: str, total: int = 1500, model: str = "gpt-4o") -> str:
+    def _reporting_record(request_id: str, total_tokens: int = 1500, model: str = "gpt-4o") -> str:
         """
         Render one 'Request reporting' record as the server writes it.
 
-        Prompt and completion tokens are split 4:1 out of ``total`` so
+        Prompt and completion tokens are split 4:1 out of ``total_tokens`` so
         the three counts stay consistent with one another.
 
         :param request_id: Request id in the log record
-        :param total: Total tokens
+        :param total_tokens: Total tokens
         :param model: caller_model value
         :return: One formatted log record
         """
-        prompt: int = total * 4 // 5
+        prompt: int = total_tokens * 4 // 5
         payload: Dict[str, Any] = {
             "total_cost": 0.0075,
-            "total_tokens": total,
+            "total_tokens": total_tokens,
             "prompt_tokens": prompt,
-            "completion_tokens": total - prompt,
+            "completion_tokens": total_tokens - prompt,
             "successful_requests": 2,
             "time_taken_in_seconds": 12.5,
             "caller_model": model,
         }
         message: str = "Request reporting: " + json.dumps(payload, indent=4)
-        return LOG_RECORD_FORMAT.format(
-            message=message, request_id=request_id,
-        )
+        return LOG_RECORD_FORMAT.format(message=message, request_id=request_id)
 
     def _write(self, text: str) -> None:
         """
@@ -89,8 +87,8 @@ class TestParseTokenAccountingSince(TestCase):
 
         :param text: Log text to write
         """
-        with open(self._log_path, "w", encoding="utf-8") as handle:
-            handle.write(text)
+        with open(self._log_path, "w", encoding="utf-8") as file_handle:
+            file_handle.write(text)
 
     def test_fields_are_extracted_from_a_multiline_record(self) -> None:
         """One record yields its token counts, call count, and model."""
@@ -100,24 +98,25 @@ class TestParseTokenAccountingSince(TestCase):
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
         self.assertEqual(list(entries), ["req-1"])
-        self.assertEqual(entries["req-1"]["total_tokens"], 1500)
-        self.assertEqual(entries["req-1"]["prompt_tokens"], 1200)
-        self.assertEqual(entries["req-1"]["completion_tokens"], 300)
-        self.assertEqual(entries["req-1"]["llm_calls"], 2)
-        self.assertEqual(entries["req-1"]["model"], "gpt-4o")
+        entry: Dict[str, Any] = entries.get("req-1", {})
+        self.assertEqual(entry.get("total_tokens", 0), 1500)
+        self.assertEqual(entry.get("prompt_tokens", 0), 1200)
+        self.assertEqual(entry.get("completion_tokens", 0), 300)
+        self.assertEqual(entry.get("llm_calls", 0), 2)
+        self.assertEqual(entry.get("model", ""), "gpt-4o")
 
     def test_each_request_is_keyed_separately(self) -> None:
         """Concurrent requests must not overwrite one another."""
-        self._write(
-            self._reporting_record("req-1", total=1500)
-            + self._reporting_record("req-2", total=2500)
-        )
+        self._write(self._reporting_record("req-1", total_tokens=1500)
+                    + self._reporting_record("req-2", total_tokens=2500))
         monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
-        self.assertEqual(entries["req-1"]["total_tokens"], 1500)
-        self.assertEqual(entries["req-2"]["total_tokens"], 2500)
+        first_entry: Dict[str, Any] = entries.get("req-1", {})
+        second_entry: Dict[str, Any] = entries.get("req-2", {})
+        self.assertEqual(first_entry.get("total_tokens", 0), 1500)
+        self.assertEqual(second_entry.get("total_tokens", 0), 2500)
 
     def test_reporting_agent_comes_from_the_following_done_line(self) -> None:
         """The network name is taken from the Done-with line after it."""
@@ -132,9 +131,8 @@ class TestParseTokenAccountingSince(TestCase):
 
         entries: Dict[str, Dict[str, Any]] = monitor.parse_token_accounting_since(0)
 
-        self.assertEqual(
-            entries["req-1"]["reporting_agent"], "music_nerd_pro",
-        )
+        entry: Dict[str, Any] = entries.get("req-1", {})
+        self.assertEqual(entry.get("reporting_agent", ""), "music_nerd_pro")
 
     def test_only_records_after_the_position_are_parsed(self) -> None:
         """Reading from a saved offset ignores earlier runs' records."""
@@ -148,11 +146,7 @@ class TestParseTokenAccountingSince(TestCase):
 
     def test_unrelated_log_traffic_is_ignored(self) -> None:
         """Ordinary log lines produce no entries."""
-        self._write(
-            LOG_RECORD_FORMAT.format(
-                message="Starting agent server", request_id="None",
-            )
-        )
+        self._write(LOG_RECORD_FORMAT.format(message="Starting agent server", request_id="None"))
         monitor: ServerLogMonitor = ServerLogMonitor(self._log_path)
 
         self.assertEqual(monitor.parse_token_accounting_since(0), {})

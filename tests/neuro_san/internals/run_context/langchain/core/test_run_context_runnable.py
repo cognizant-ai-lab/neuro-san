@@ -18,6 +18,7 @@
 from functools import partial
 
 from typing import Any
+from typing import Awaitable
 from typing import Dict
 from typing import List
 from typing import Tuple
@@ -25,6 +26,7 @@ from typing import Tuple
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import httpx
 
@@ -42,6 +44,7 @@ from neuro_san.internals.run_context.langchain.journaling.journaling_callback_ha
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.utils.content_utils import ContentUtils
+from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
@@ -597,3 +600,117 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         self.assertIs(type(final), AIMessage)
         self.assertEqual(self._block_types(final), ["reasoning", "text"])
         self.assertEqual(ContentUtils.flatten_to_text(final), "the answer")
+
+    async def test_run_it_defaults_max_attempts_to_three(self) -> None:
+        """
+        Without max_attempts in the agent spec, a retryable error is tried 3 times in total.
+        """
+        attempts: int = await self._count_run_it_attempts({})
+        self.assertEqual(attempts, 3)
+
+    async def test_run_it_clamps_max_attempts_to_one(self) -> None:
+        """
+        A max_attempts of 0 or less still makes 1 attempt, with no retries.
+        """
+        max_attempts: int = 0
+        agent_spec: Dict[str, Any] = {}
+        attempts: int = 0
+        for max_attempts in [0, -2]:
+            with self.subTest(max_attempts=max_attempts):
+                agent_spec = {"max_attempts": max_attempts}
+                attempts = await self._count_run_it_attempts(agent_spec)
+                self.assertEqual(attempts, 1)
+
+    async def test_run_it_uses_configured_max_attempts(self) -> None:
+        """
+        A configured max_attempts is the total number of attempts:
+        1 first attempt plus max_attempts - 1 retries.
+        """
+        max_attempts: int = 0
+        agent_spec: Dict[str, Any] = {}
+        attempts: int = 0
+        for max_attempts in [1, 2, 5]:
+            with self.subTest(max_attempts=max_attempts):
+                agent_spec = {"max_attempts": max_attempts}
+                attempts = await self._count_run_it_attempts(agent_spec)
+                self.assertEqual(attempts, max_attempts)
+
+    async def test_invoke_agent_chain_stops_retrying_after_success(self) -> None:
+        """
+        A success before the attempt limit ends the retries: the remaining attempts are not used.
+        """
+        runnable_and_written: Tuple[RunContextRunnable, List[BaseMessage]] = self._make_invoking_runnable(None)
+        runnable: RunContextRunnable = runnable_and_written[0]
+        written: List[BaseMessage] = runnable_and_written[1]
+
+        # Attempt 1 is rate limited, attempt 2 succeeds.
+        chain_results: List[Any] = [self._rate_limit_error(), {"output": "the answer"}]
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.ainvoke = AsyncMock(side_effect=chain_results)
+        copy_update: Dict[str, Any] = {"agent_chain": agent_chain}
+        retrying_runnable: RunContextRunnable = runnable.model_copy(update=copy_update)
+        await retrying_runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
+
+        self.assertEqual(agent_chain.ainvoke.await_count, 2)
+        final: BaseMessage = written[-1]
+        self.assertIsInstance(final, AIMessage)
+        self.assertEqual(final.content, "the answer")
+
+    async def _count_run_it_attempts(self, agent_spec: Dict[str, Any]) -> int:
+        """
+        Runs run_it() with the given agent spec against an agent chain that is always rate limited.
+
+        :param agent_spec: The agent spec that the tool caller gives to run_it()
+        :return: How many times the agent chain was invoked
+        """
+        runnable_and_written: Tuple[RunContextRunnable, List[BaseMessage]] = self._make_invoking_runnable(None)
+        runnable: RunContextRunnable = runnable_and_written[0]
+
+        rate_limit_error: RateLimitError = self._rate_limit_error()
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.ainvoke = AsyncMock(side_effect=rate_limit_error)
+        tool_caller: MagicMock = MagicMock()
+        tool_caller.get_agent_tool_spec = MagicMock(return_value=agent_spec)
+        invocation_context: MagicMock = MagicMock()
+        invocation_context.get_metadata = MagicMock(return_value={})
+        primary_llm: MagicMock = MagicMock()
+        # run_it() also reads the tool caller, invocation context, LLM and origin.
+        copy_update: Dict[str, Any] = {
+            "agent_chain": agent_chain,
+            "tool_caller": tool_caller,
+            "invocation_context": invocation_context,
+            "primary_llm": primary_llm,
+            "origin": [],
+        }
+        run_it_runnable: RunContextRunnable = runnable.model_copy(update=copy_update)
+
+        # Real token counting needs an LLM factory and an executor,
+        # so for this test count_tokens() only awaits the agent chain.
+        count_tokens: AsyncMock = AsyncMock(side_effect=TestRunContextRunnable._await_awaitable)
+        with patch.object(LangChainTokenCounter, "count_tokens", new=count_tokens):
+            await run_it_runnable.run_it({})
+
+        return agent_chain.ainvoke.await_count
+
+    @staticmethod
+    async def _await_awaitable(awaitable: Awaitable, max_execution_seconds: float = None) -> Any:
+        """
+        Stand-in for LangChainTokenCounter.count_tokens() that runs the agent chain without token counting.
+
+        :param awaitable: The agent chain invocation to run
+        :param max_execution_seconds: Not used; there is no time limit in these tests
+        :return: Whatever the awaitable returns
+        """
+        _ = max_execution_seconds
+        return await awaitable
+
+    @staticmethod
+    def _rate_limit_error() -> RateLimitError:
+        """
+        Builds the retryable error that the max_attempts tests raise from the agent chain.
+
+        :return: An OpenAI rate-limit error, which invoke_agent_chain() retries
+        """
+        # The SDK error only reads request, status_code and headers from its response.
+        response: MagicMock = MagicMock(status_code=429)
+        return RateLimitError("rate limited", response=response, body=None)

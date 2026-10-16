@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Cross-run comparison — scan output directories and compare metrics."""
-
 import json
 import logging
 import os
@@ -27,7 +25,12 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
+
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
@@ -46,8 +49,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class CrossRunComparison:
-    """Scans a base directory for raw_results.json files and logs
-    a comparison table across runs."""
+    """
+    Scans a base directory for raw_results.json files and logs a comparison table across runs.
+    """
 
     def __init__(self, base_dir: str, agent_filter: Optional[List[str]] = None, baseline_requests: int = 0,
                  run_filter: Optional[List[str]] = None) -> None:
@@ -60,22 +64,17 @@ class CrossRunComparison:
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
         self._base_dir: str = base_dir
-        self._agent_filter: Set[str] = (
-            set(agent_filter) if agent_filter else set()
-        )
+        self._agent_filter: Set[str] = set(agent_filter) if agent_filter else set()
         self._baseline_requests: int = baseline_requests
-        self._run_filter: Set[str] = (
-            set(run_filter) if run_filter else set()
-        )
+        self._run_filter: Set[str] = set(run_filter) if run_filter else set()
 
     def run(self) -> None:
-        """Scan for runs and log comparison tables by agent."""
+        """
+        Scan for runs and log comparison tables by agent.
+        """
         all_runs: List[Dict[str, Any]] = self._collect_runs()
         if not all_runs:
-            logger.info(
-                "No raw_results.json files found in %s",
-                self._base_dir,
-            )
+            logger.info("No raw_results.json files found in %s", self._base_dir)
             return
         groups: Dict[str, List[Dict[str, Any]]] = self._group_by_agent(all_runs)
         for agent_name in sorted(groups):
@@ -85,14 +84,13 @@ class CrossRunComparison:
                 else self._deduplicate(groups[agent_name])
             )
             if self._baseline_requests > 0:
-                runs = [
-                    r for r in runs
-                    if r.get("num_requests", 0)
-                    >= self._baseline_requests
-                ]
-            runs.sort(
-                key=lambda r: r.get("num_requests", 0),
-            )
+                # Keep only the runs with at least the baseline number of requests.
+                baseline_runs: List[Dict[str, Any]] = []
+                for run_metrics in runs:
+                    if run_metrics.get("num_requests", 0) >= self._baseline_requests:
+                        baseline_runs.append(run_metrics)
+                runs = baseline_runs
+            runs.sort(key=lambda run_metrics: run_metrics.get("num_requests", 0))
             if not runs:
                 continue
             self._log_table(runs, agent_name)
@@ -106,12 +104,9 @@ class CrossRunComparison:
         """
         runs: List[Dict[str, Any]] = []
         for entry in os.listdir(self._base_dir):
-            if (self._run_filter
-                    and entry not in self._run_filter):
+            if self._run_filter and entry not in self._run_filter:
                 continue
-            json_path: str = os.path.join(
-                self._base_dir, entry, "raw_results.json",
-            )
+            json_path: str = os.path.join(self._base_dir, entry, RAW_RESULTS_FILE_NAME)
             if not os.path.isfile(json_path):
                 continue
             metrics: Optional[Dict[str, Any]] = self._extract_metrics(json_path, entry)
@@ -131,68 +126,64 @@ class CrossRunComparison:
         for run in runs:
             count: int = run.get("num_requests", 0)
             existing: Optional[Dict[str, Any]] = by_count.get(count)
-            if (existing is None
-                    or run.get("folder", "")
-                    > existing.get("folder", "")):
+            if existing is None or run.get("folder", "") > existing.get("folder", ""):
                 by_count[count] = run
         return list(by_count.values())
 
     @staticmethod
     def _extract_metrics(json_path: str, folder_name: str) -> Optional[Dict[str, Any]]:
         """
-        Parse a raw_results.json and return key metrics.
+        Read a run's raw_results.json and return key metrics.
 
         :param json_path: Path to the run's raw_results.json
         :param folder_name: Name of the run folder, stored as the run's folder
-        :return: The run's metrics, or None when the file cannot be read or parsed
+        :return: The run's metrics, or None when the file is missing, cannot be read, is not valid JSON or is not a
+            JSON object; the path and reason are logged in that case
         """
-        data: Dict[str, Any] = {}
+        raw_results: Optional[Dict[str, Any]] = None
         try:
-            with open(json_path, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-        except (json.JSONDecodeError, OSError):
+            raw_results = EasyJsonPersistence(full_ref=json_path, must_exist=True).restore()
+        except (json.JSONDecodeError, OSError) as error:
+            SensitiveLogger(logger).error("Could not read %s: %s", json_path, error)
+            return None
+        if raw_results is None:
+            # EasyJsonPersistence returns None when the JSON is a list or a single value.
+            SensitiveLogger(logger).error("Could not read %s: %s", json_path, "the file is not a JSON object ({...})")
             return None
 
-        aggregates: Dict[str, Any] = data.get("aggregates", {})
-        stages: List[Dict[str, Any]] = data.get("stage_summaries", [])
+        aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
+        stages: List[Dict[str, Any]] = raw_results.get("stage_summaries", [])
+        # Gather every stage's results, and each stage's peak server RSS.
         all_results: List[Dict[str, Any]] = []
+        peak_rss_values_megabytes: List[float] = []
+        stage: Dict[str, Any]
         for stage in stages:
             all_results.extend(stage.get("results", []))
+            peak_rss_values_megabytes.append(stage.get("peak_server_rss", 0))
         created_results: List[Dict[str, Any]] = []
         result: Dict[str, Any]
+        # Keep only the results of successful requests.
         for result in all_results:
             if result.get("status") == STATUS_CREATED:
                 created_results.append(result)
 
-        agent: str = data.get("config", {}).get(
-            "agent", "unknown",
-        )
+        agent: str = raw_results.get("config", {}).get("agent", "unknown")
 
-        return {
+        # The run's peak RSS is the largest stage peak, or 0 with no stages.
+        peak_rss_megabytes: float = max(peak_rss_values_megabytes, default=0)
+        run_metrics: Dict[str, Any] = {
             "agent": agent,
             "folder": folder_name,
-            "num_requests": data.get("config", {}).get(
-                "num_requests",
-                aggregates.get("total_requests", 0),
-            ),
-            "wall_time": aggregates.get(
-                "total_elapsed_seconds", 0,
-            ),
+            "num_requests": raw_results.get("config", {}).get("num_requests", aggregates.get("total_requests", 0)),
+            "wall_time": aggregates.get("total_elapsed_seconds", 0),
             "avg_success": CrossRunComparison._avg(created_results, "elapsed"),
-            "time_to_first_response_avg": CrossRunComparison._avg(
-                created_results, "time_to_first_response",
-            ),
-            "peak_rss": max(
-                (s.get("peak_server_rss", 0) or 0
-                 for s in stages),
-                default=0,
-            ),
+            "time_to_first_response_avg": CrossRunComparison._avg(created_results, "time_to_first_response"),
+            "peak_rss": peak_rss_megabytes,
             "succeeded": aggregates.get("passed", 0),
             "failed": aggregates.get("failed", 0),
-            "fail_breakdown": CrossRunComparison._classify_failures(
-                all_results,
-            ),
+            "fail_breakdown": CrossRunComparison._classify_failures(all_results),
         }
+        return run_metrics
 
     @staticmethod
     def _classify_failures(all_results: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -202,12 +193,7 @@ class CrossRunComparison:
         :param all_results: Every request result in the run
         :return: Failure category to count; "other" is added only when a reason matches no category
         """
-        counts: Dict[str, int] = {
-            "empty_llm": 0,
-            "validation": 0,
-            "incomplete": 0,
-            "no_token_data": 0,
-        }
+        counts: Dict[str, int] = {"empty_llm": 0, "validation": 0, "incomplete": 0, "no_token_data": 0}
         for result in all_results:
             if result.get("status") == STATUS_CREATED:
                 continue
@@ -234,13 +220,16 @@ class CrossRunComparison:
         :param key: Result field to average
         :return: Average of the values above 0, or 0 when there are none
         """
-        values: List[float] = [
-            r.get(key, 0) for r in results
-            if r.get(key, 0) > 0
-        ]
+        # Keep only the values above 0.
+        values: List[float] = []
+        for result in results:
+            field_value: float = result.get(key, 0)
+            if field_value > 0:
+                values.append(field_value)
         if not values:
             return 0
-        return sum(values) / len(values)
+        average_value: float = sum(values) / len(values)
+        return average_value
 
     def _group_by_agent(self, runs: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -252,8 +241,7 @@ class CrossRunComparison:
         groups: Dict[str, List[Dict[str, Any]]] = {}
         for run in runs:
             agent: str = run.get("agent", "unknown")
-            if (self._agent_filter
-                    and agent not in self._agent_filter):
+            if self._agent_filter and agent not in self._agent_filter:
                 continue
             groups.setdefault(agent, []).append(run)
         return groups
@@ -286,10 +274,8 @@ class CrossRunComparison:
         ]
         baseline: Optional[Dict[str, Any]] = runs[0] if runs else None
         for run in runs:
-            ref: Optional[Dict[str, Any]] = baseline if run is not baseline else None
-            deltas: Dict[str, float] = CrossRunComparison._compute_deltas(
-                ref, run, metric_keys,
-            )
+            baseline_metrics: Optional[Dict[str, Any]] = baseline if run is not baseline else None
+            deltas: Dict[str, float] = CrossRunComparison._compute_deltas(baseline_metrics, run, metric_keys)
             rows.append((
                 run.get("folder", ""),
                 CrossRunComparison._val_with_delta(
@@ -329,9 +315,7 @@ class CrossRunComparison:
         """
         for run in runs:
             folder: str = run.get("folder", "")
-            log_path: str = os.path.join(
-                self._base_dir, folder, "server_tokens.log",
-            )
+            log_path: str = os.path.join(self._base_dir, folder, SERVER_TOKENS_LOG_FILE_NAME)
             loops: List[Dict[str, Any]] = self._parse_validation_loops(log_path)
             if not loops:
                 continue
@@ -348,35 +332,30 @@ class CrossRunComparison:
         if not os.path.isfile(log_path):
             return []
         loops: List[Dict[str, Any]] = []
-        with open(log_path, "r", encoding="utf-8") as fh:
-            for line in fh:
+        with open(log_path, "r", encoding="utf-8") as file_handle:
+            for line in file_handle:
                 match: Optional[re.Match] = _SERVER_TOKEN_RE.search(line)
                 if not match:
                     continue
                 llm_calls: int = int(match.group(5))
                 if llm_calls < _LOOP_THRESHOLD:
                     continue
-                prompt: int = int(
-                    match.group(3).replace(",", ""),
-                )
-                completion: int = int(
-                    match.group(4).replace(",", ""),
-                )
+                prompt_tokens: int = int(match.group(3).replace(",", ""))
+                completion_tokens: int = int(match.group(4).replace(",", ""))
                 model: str = match.group(6)
                 retries: int = llm_calls - _NORMAL_LLM_CALLS
-                cost: float = CostEstimator.estimate(
-                    prompt, completion, model,
-                )
-                loops.append({
+                cost_dollars: float = CostEstimator.estimate(prompt_tokens, completion_tokens, model)
+                loop_entry: Dict[str, Any] = {
                     "request_id": match.group(1),
                     "llm_calls": llm_calls,
                     "retries": retries,
-                    "prompt_tokens": prompt,
-                    "completion_tokens": completion,
-                    "total_tokens": prompt + completion,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
                     "model": model,
-                    "cost_usd": cost,
-                })
+                    "cost_usd": cost_dollars,
+                }
+                loops.append(loop_entry)
         return loops
 
     @staticmethod
@@ -387,121 +366,99 @@ class CrossRunComparison:
         :param folder: Run folder name shown in the summary
         :param loops: Validation loop entries from _parse_validation_loops
         """
-        total_retries: int = sum(
-            lp.get("retries", 0) for lp in loops
-        )
-        total_tokens: int = sum(
-            lp.get("total_tokens", 0) for lp in loops
-        )
-        total_cost: float = sum(
-            lp.get("cost_usd", 0.0) for lp in loops
-        )
+        # Add up retries, tokens and cost over all validation-loop requests in one pass.
+        total_retries: int = 0
+        total_tokens: int = 0
+        total_cost_dollars: float = 0.0
+        for loop_entry in loops:
+            total_retries += loop_entry.get("retries", 0)
+            total_tokens += loop_entry.get("total_tokens", 0)
+            total_cost_dollars += loop_entry.get("cost_usd", 0.0)
         logger.info("")
-        logger.info(
-            "  Validation loops in %s "
-            "(%s request(s)):",
-            folder, len(loops),
-        )
-        logger.info(
-            "    Total: %s retries, %s tokens, "
-            "$%.2f",
-            total_retries,
-            f"{total_tokens:,}",
-            total_cost,
-        )
-        for lp in sorted(
-            loops, key=lambda x: x.get("retries", 0),
-            reverse=True,
-        ):
+        logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
+        logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
+        for loop_entry in sorted(loops, key=lambda x: x.get("retries", 0), reverse=True):
             logger.info(
-                "    %s: %s retries, %s tokens "
-                "($%.2f)",
-                lp.get("request_id", ""),
-                lp.get("retries", 0),
-                f"{lp.get('total_tokens', 0):,}",
-                lp.get("cost_usd", 0.0),
+                "    %s: %s retries, %s tokens ($%.2f)",
+                loop_entry.get("request_id", ""),
+                loop_entry.get("retries", 0),
+                f"{loop_entry.get("total_tokens", 0):,}",
+                loop_entry.get("cost_usd", 0.0),
             )
 
     @staticmethod
-    def _compute_deltas(prev: Optional[Dict[str, Any]], current: Dict[str, Any], keys: List[str]) -> Dict[str, float]:
+    def _compute_deltas(previous_metrics: Optional[Dict[str, Any]], current_metrics: Dict[str, Any],
+                        keys: List[str]) -> Dict[str, float]:
         """
-        Compute percentage change from prev to current for each key.
+        Compute percentage change from the previous to the current metrics for each key.
 
-        :param prev: Baseline run metrics, or None for the baseline itself
-        :param current: Metrics of the run being compared
+        :param previous_metrics: Baseline run metrics, or None for the baseline itself
+        :param current_metrics: Metrics of the run being compared
         :param keys: Metric names to compare
         :return: Metric name to percent change; keys with a baseline of 0 are left out
         """
-        if prev is None:
+        if previous_metrics is None:
             return {}
         deltas: Dict[str, float] = {}
         for key in keys:
-            prev_val: float = prev.get(key, 0)
-            curr_val: float = current.get(key, 0)
-            if prev_val > 0:
-                deltas[key] = (
-                    (curr_val - prev_val) / prev_val * 100
-                )
+            previous_value: float = previous_metrics.get(key, 0)
+            current_value: float = current_metrics.get(key, 0)
+            if previous_value > 0:
+                deltas[key] = (current_value - previous_value) / previous_value * 100
         return deltas
 
     @staticmethod
-    def _val_with_delta(formatted_val: str, delta_pct: Optional[float]) -> str:
+    def _val_with_delta(formatted_value: str, delta_percentage: Optional[float]) -> str:
         """
         Append percentage change suffix if available.
 
-        :param formatted_val: Value already formatted for display
-        :param delta_pct: Percent change against the baseline run, or None
-        :return: e.g. '120 (+20%)', or formatted_val unchanged when delta_pct is None
+        :param formatted_value: Value already formatted for display
+        :param delta_percentage: Percent change against the baseline run, or None
+        :return: e.g. '120 (+20%)', or formatted_value unchanged when delta_percentage is None
         """
-        if delta_pct is None:
-            return formatted_val
-        sign: str = "+" if delta_pct >= 0 else ""
-        return f"{formatted_val} ({sign}{delta_pct:.0f}%)"
+        if delta_percentage is None:
+            return formatted_value
+        sign: str = "+" if delta_percentage >= 0 else ""
+        return f"{formatted_value} ({sign}{delta_percentage:.0f}%)"
 
     @staticmethod
-    def _fmt_optional(value: float, delta_pct: Optional[float]) -> str:
+    def _fmt_optional(duration_seconds: float, delta_percentage: Optional[float]) -> str:
         """
         Format a duration, showing a dash when data is missing.
 
-        :param value: Duration in seconds; 0 when unknown
-        :param delta_pct: Percent change against the baseline run, or None
+        :param duration_seconds: Duration in seconds; 0 when unknown
+        :param delta_percentage: Percent change against the baseline run, or None
         :return: The formatted duration, or a dash when value is 0
         """
-        if value <= 0:
+        if duration_seconds <= 0:
             return "\u2014"
-        return CrossRunComparison._val_with_delta(
-            Formatters.fmt_duration(value), delta_pct,
-        )
+        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
 
     @staticmethod
-    def _fmt_time_to_first_response(value: float, delta_pct: Optional[float]) -> str:
+    def _fmt_time_to_first_response(duration_seconds: float, delta_percentage: Optional[float]) -> str:
         """
         Format time to first response, showing a dash when data is missing.
 
-        :param value: Average time to first response in seconds; 0 when unknown
-        :param delta_pct: Percent change against the baseline run, or None
+        :param duration_seconds: Average time to first response in seconds; 0 when unknown
+        :param delta_percentage: Percent change against the baseline run, or None
         :return: The formatted value, or a dash when value is 0
         """
-        if value <= 0:
+        if duration_seconds <= 0:
             return "\u2014"
-        return CrossRunComparison._val_with_delta(
-            Formatters.fmt_duration(value), delta_pct,
-        )
+        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
 
     @staticmethod
-    def _fmt_rss(value: float, delta_pct: Optional[float]) -> str:
+    def _fmt_rss(rss_megabytes: float, delta_percentage: Optional[float]) -> str:
         """
         Format peak RSS, showing a dash when data is missing.
 
-        :param value: Peak RSS in megabytes; 0 when unknown
-        :param delta_pct: Percent change against the baseline run, or None
+        :param rss_megabytes: Peak RSS in megabytes; 0 when unknown
+        :param delta_percentage: Percent change against the baseline run, or None
         :return: The formatted RSS, or a dash when value is 0
         """
-        if value <= 0:
+        if rss_megabytes <= 0:
             return "\u2014"
-        return CrossRunComparison._val_with_delta(
-            Formatters.format_rss(value), delta_pct,
-        )
+        return CrossRunComparison._val_with_delta(Formatters.format_rss(rss_megabytes), delta_percentage)
 
     @staticmethod
     def _fmt_failed(count: int, total: int, breakdown: Dict[str, int]) -> str:
@@ -515,8 +472,11 @@ class CrossRunComparison:
         """
         if count == 0:
             return "0"
-        pct: int = (count * 100 // total) if total else 0
-        base: str = f"{count} ({pct}%)"
+        percentage: int = 0
+        if total:
+            # Whole-number percentage: int() drops the fraction, so 2 of 3 is 66%.
+            percentage = int(count * 100 / total)
+        base: str = f"{count} ({percentage}%)"
         if not breakdown:
             return base
         labels: Tuple[Tuple[str, str], ...] = (
@@ -528,9 +488,9 @@ class CrossRunComparison:
         )
         parts: List[str] = []
         for key, label in labels:
-            val: int = breakdown.get(key, 0)
-            if val:
-                parts.append(f"{val} {label}")
+            value: int = breakdown.get(key, 0)
+            if value:
+                parts.append(f"{value} {label}")
         if not parts:
             return base
-        return f"{base}: {', '.join(parts)}"
+        return f"{base}: {", ".join(parts)}"

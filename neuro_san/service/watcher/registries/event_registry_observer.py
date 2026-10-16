@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Tuple
+from typing import override
 
 import logging
 
@@ -41,6 +42,7 @@ class EventRegistryObserver(RegistryObserver):
         self.observer: Observer = Observer()
         self.event_handler: RegistryChangeHandler = RegistryChangeHandler()
 
+    @override
     def start(self):
         """
         Start running observer
@@ -49,6 +51,13 @@ class EventRegistryObserver(RegistryObserver):
         self.observer.start()
         self.logger.info("Registry watchdog started on: %s for manifest %s",
                          self.registry_path, self.manifest_path)
+
+    @override
+    def stop(self):
+        """
+        Perform steps to stop/shut-down
+        By default this does nothing
+        """
 
     def reset_event_counters(self) -> Tuple[int, int, int]:
         """

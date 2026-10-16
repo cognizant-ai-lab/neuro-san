@@ -182,6 +182,7 @@ class LangChainMcpAdapter:
         mcp_tools = self._filter_allowed_tools(server_url, mcp_tools, client_allowed_tools, allow_list_source)
         mcp_tools = self._rename_tools_for_providers(server_url, mcp_tools, allow_list_source)
 
+        tool: BaseTool = None
         for tool in mcp_tools:
             # Add "langchain_tool" tags so journal callback can idenitify it.
             # These MCP tools are treated as Langchain tools and can be reported in the thinking file.
@@ -229,17 +230,17 @@ class LangChainMcpAdapter:
                  provider-safe equivalent otherwise, in server order; mcp_tools itself
                  when there is no allow list.
         """
-        # An empty or absent allow list has always meant "take everything".
+        # An empty or absent allow list means "take everything".
         self.unmatched_allowed_tools = []
         if not client_allowed_tools:
             return mcp_tools
 
         # The policy mangles each entry with a string filter, so anything that
         # is not a non-empty string is set aside with a warning rather than
-        # raising inside the matching. Before renaming existed such an entry was
-        # simply never equal to a tool name.
+        # raising inside the matching.
         usable_entries: List[str] = []
         invalid_entries: List[Any] = []
+        entry: Any = None
         for entry in client_allowed_tools:
             if isinstance(entry, str) and entry:
                 usable_entries.append(entry)
@@ -252,12 +253,13 @@ class LangChainMcpAdapter:
                 self.agent_location_prefix, server_url, invalid_entries, allow_list_source)
 
         original_names: List[str] = []
+        tool: BaseTool = None
         for tool in mcp_tools:
             original_names.append(tool.name)
 
-        # Entries that match nothing used to be dropped silently, leaving the
-        # hocon author guessing why a tool never appeared. Log what the server
-        # actually offers so a typo or an upstream rename is visible.
+        # Log entries that match nothing, with what the server actually offers,
+        # so a typo or an upstream rename is visible and the hocon author is
+        # not left guessing why a tool never appeared.
         unmatched: List[str] = self.tool_name_policy.find_unmatched(usable_entries, original_names)
         self.unmatched_allowed_tools = unmatched
         if unmatched:
@@ -289,6 +291,7 @@ class LangChainMcpAdapter:
         :return: The set of tool names that McpToolNamePolicy.filter() leaves unchanged.
         """
         safe_names: Set[str] = set()
+        tool: BaseTool = None
         for tool in mcp_tools:
             # A missing name is skipped later, so it must not reserve anything.
             if tool.name and self.tool_name_policy.filter(tool.name) == tool.name:
@@ -326,6 +329,7 @@ class LangChainMcpAdapter:
         kept_names: Set[str] = set()
 
         kept_tools: List[BaseTool] = []
+        tool: BaseTool = None
         for tool in mcp_tools:
             if not tool.name:
                 # No LLM can call a nameless tool, and filter() would pass the

@@ -54,15 +54,7 @@ class TestCountResults(TestCase):
         """An aborted stage still reports every bucket, all zero."""
         counts: Dict[str, Any] = OutputValidator.count_results([])
 
-        self.assertEqual(
-            counts,
-            {
-                STATUS_CREATED: 0,
-                STATUS_FAILED: 0,
-                STATUS_TIMEOUT: 0,
-                STATUS_KILLED: 0,
-            },
-        )
+        self.assertEqual(counts, {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0})
 
     def test_unknown_status_counts_as_failed(self) -> None:
         """An unrecognized status is a failure, never a success.

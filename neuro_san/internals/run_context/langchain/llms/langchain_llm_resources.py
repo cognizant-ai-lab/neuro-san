@@ -73,9 +73,19 @@ class LangChainLlmResources(LingeringResource):
         # Add the fallback models
         if self.model:
             fallback_models: List[BaseLanguageModel] = []
+            one_resource: LangChainLlmResources = None
             for one_resource in llm_resources:
                 fallback_models.append(one_resource.get_model())
             self.model = self.model.with_fallbacks(fallback_models)
+
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        # Do nothing by default for easier implementation inheritance
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
@@ -91,5 +101,6 @@ class LangChainLlmResources(LingeringResource):
             await self.llm_policy.delete_resources()
 
         # Close any child resources
+        child_resource: LingeringResource = None
         for child_resource in self.child_resources:
             await child_resource.close_of_work(self)
