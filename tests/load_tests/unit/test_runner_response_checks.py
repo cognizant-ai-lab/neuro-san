@@ -25,7 +25,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -218,46 +217,50 @@ class TestRunnerResponseChecks(TestCase):
         """
         run_stage() returns one result per request, numbered from the plan's global offset.
         """
-        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
-                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
+        stage: Optional[Dict[str, Any]] = None
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
             stage = self._stage_runner().run_stage(StagePlan(3, 2, 10, None))
         global_ids: List[int] = []
-        for result in stage[1]:
+        result: Dict[str, Any]
+        # Collect the global request id of each result
+        for result in stage.get("results"):
             global_ids.append(result.get("global_request_id"))
         self.assertEqual([10, 11, 12], sorted(global_ids))
-        self.assertGreaterEqual(stage[0], 0.0)
-        self.assertEqual((False, False), stage[8:])
+        self.assertGreaterEqual(stage.get("total_time_seconds"), 0.0)
+        self.assertFalse(stage.get("server_died"))
+        self.assertFalse(stage.get("interrupted"))
 
     def test_run_stage_kills_requests_past_stage_timeout(self) -> None:
         """
         Requests still running at --stage-timeout come back KILLED with the reason as stderr.
         """
-        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
-                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
+        stage: Optional[Dict[str, Any]] = None
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.5)):
             stage = self._stage_runner(stage_timeout_seconds=0.1).run_stage(StagePlan(2, 2, 0, None))
-        self.assertEqual(2, len(stage[1]))
-        for result in stage[1]:
+        self.assertEqual(2, len(stage.get("results")))
+        result: Dict[str, Any]
+        # Every request comes back killed by the stage timeout
+        for result in stage.get("results"):
             self.assertEqual(STATUS_KILLED, result.get("status"))
             self.assertEqual("Killed by --stage-timeout", result.get("stderr"))
-        self.assertEqual((False, False), stage[8:])
+        self.assertFalse(stage.get("server_died"))
+        self.assertFalse(stage.get("interrupted"))
 
     def test_run_stage_returns_heartbeat_peaks(self) -> None:
         """
         run_stage() returns the heartbeat's system peaks read after join(), and None for unmonitored processes.
         """
-        stage: Optional[Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
-                              Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]] = None
+        stage: Optional[Dict[str, Any]] = None
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
             stage = self._stage_runner().run_stage(StagePlan(1, 1, 0, None))
-        self.assertIsNone(stage[2])
-        self.assertIsNone(stage[3])
-        self.assertIsNone(stage[4])
-        self.assertEqual(["available_gigabytes", "memory_percent"], sorted(stage[5].keys()))
-        self.assertGreater(stage[5].get("memory_percent"), 0.0)
-        self.assertGreaterEqual(stage[6], 0.0)
-        self.assertGreater(stage[7], 0)
+        self.assertIsNone(stage.get("peak_server_threads"))
+        self.assertIsNone(stage.get("peak_client_rss_megabytes"))
+        self.assertIsNone(stage.get("peak_server_rss_megabytes"))
+        peak_system_memory: Dict[str, float] = stage.get("peak_system_memory")
+        self.assertEqual(["available_gigabytes", "memory_percent"], sorted(peak_system_memory.keys()))
+        self.assertGreater(peak_system_memory.get("memory_percent"), 0.0)
+        self.assertGreaterEqual(stage.get("peak_system_cpu_percent"), 0.0)
+        self.assertGreater(stage.get("peak_system_threads"), 0)
 
     def test_run_stage_counts_failed_requests_on_the_heartbeat(self) -> None:
         """

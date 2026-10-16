@@ -556,41 +556,40 @@ class ServerLogMonitor:
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time_seconds: float,
-                          client_proc: Optional[psutil.Process], primary_start_pattern: str,
-                          output_dir: Optional[str] = None,
-                          ) -> Tuple[Optional[threading.Event], Optional[threading.Thread]]:
+                          stop_event: threading.Event, client_process: Optional[psutil.Process],
+                          primary_start_pattern: str, output_dir: Optional[str] = None) -> Optional[threading.Thread]:
         """
         Start a background thread to monitor server log for request arrivals.
 
         :param position: Server log offset to start reading from, or None
         :param expected_count: Number of arrivals to wait for
         :param fire_time_seconds: time.perf_counter() value taken when the stage fired
-        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param stop_event: Event that tells the monitor thread to stop
+        :param client_process: Client process for the snapshot once all requests arrive, or None
         :param primary_start_pattern: Regex for the log line of a primary agent request arriving
         :param output_dir: Directory for server_receipts.log, or None for console only
-        :return: (stop_event, thread), or (None, None) if monitoring is not available
+        :return: The started monitor thread, or None if monitoring is not available
         """
         if self._server_log is None or position is None:
-            return None, None
-        stop_event: threading.Event = threading.Event()
+            return None
         monitor: threading.Thread = threading.Thread(
             target=ServerLogMonitor._log_monitor_worker,
-            args=(self._server_log, position, expected_count, stop_event, fire_time_seconds),
+            args=[self._server_log, position, expected_count, stop_event, fire_time_seconds],
             kwargs={
-                "client_proc": client_proc,
+                "client_process": client_process,
                 "primary_start_pattern": primary_start_pattern,
                 "output_dir": output_dir,
             },
             daemon=True,
         )
         monitor.start()
-        return stop_event, monitor
+        return monitor
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     def _log_monitor_worker(server_log: str, position: int, expected_count: int, stop_event: threading.Event,
-                            fire_time_seconds: float, client_proc: Optional[psutil.Process], primary_start_pattern: str,
-                            output_dir: Optional[str] = None) -> None:
+                            fire_time_seconds: float, client_process: Optional[psutil.Process],
+                            primary_start_pattern: str, output_dir: Optional[str] = None) -> None:
         """
         Background worker that tails server log and reports arrivals.
 
@@ -599,7 +598,7 @@ class ServerLogMonitor:
         :param expected_count: Number of arrivals to wait for
         :param stop_event: Set to stop tailing
         :param fire_time_seconds: time.perf_counter() value taken when the stage fired
-        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param client_process: Client process for the snapshot once all requests arrive, or None
         :param primary_start_pattern: Regex for the log line of a primary agent request arriving
         :param output_dir: Directory for server_receipts.log, or None for console only
         """
@@ -614,7 +613,7 @@ class ServerLogMonitor:
                     server_log_file.seek(position)
                     ServerLogMonitor._tail_arrivals(server_log_file, stop_event, primary_start_re, expected_count,
                                                     fire_time_seconds, agent_label=agent_label,
-                                                    receipt_file=receipt_file, client_proc=client_proc)
+                                                    receipt_file=receipt_file, client_process=client_process)
         except OSError as exc:
             logger.debug("Log monitor stopped: %s", exc)
 
@@ -634,7 +633,7 @@ class ServerLogMonitor:
     @staticmethod
     def _tail_arrivals(server_log_file: TextIO, stop_event: threading.Event, primary_start_re: re.Pattern,
                        expected_count: int, fire_time_seconds: float, agent_label: str, receipt_file: Optional[TextIO],
-                       client_proc: Optional[psutil.Process]) -> None:
+                       client_process: Optional[psutil.Process]) -> None:
         """
         Tail log for arrivals, printing dots or full lines.
 
@@ -645,7 +644,7 @@ class ServerLogMonitor:
         :param fire_time_seconds: time.perf_counter() value taken when the stage fired
         :param agent_label: Agent name shown in the receipt lines
         :param receipt_file: Open server_receipts.log, or None to log each receipt to the console
-        :param client_proc: Client process for the snapshot once all requests arrive, or None
+        :param client_process: Client process for the snapshot once all requests arrive, or None
         """
         count: int = 0
         use_dots: bool = receipt_file is not None
@@ -669,11 +668,11 @@ class ServerLogMonitor:
             else:
                 logger.info("%s", detail)
             if count >= expected_count:
-                ServerLogMonitor._log_all_received(use_dots, count, expected_count, delta_seconds, client_proc)
+                ServerLogMonitor._log_all_received(use_dots, count, expected_count, delta_seconds, client_process)
 
     @staticmethod
     def _log_all_received(use_dots: bool, count: int, expected_count: int, elapsed_seconds: float,
-                          client_proc: Optional[psutil.Process]) -> None:
+                          client_process: Optional[psutil.Process]) -> None:
         """
         Log the final receipt summary and client snapshot.
 
@@ -681,17 +680,18 @@ class ServerLogMonitor:
         :param count: Number of arrivals seen
         :param expected_count: Number of arrivals waited for
         :param elapsed_seconds: Seconds from firing to the last arrival
-        :param client_proc: Client process for the snapshot, or None
+        :param client_process: Client process for the snapshot, or None
         """
         if use_dots:
             _progress_logger.info("\n")
             logger.info("  All %s/%s requests received by server (%.1fs)", count, expected_count, elapsed_seconds)
-        snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_proc)
+        snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_process)
         if snapshot:
             logger.info("  Client AFTER: RSS %.1fM, CPU %.1f%%", snapshot.get("rss"), snapshot.get("cpu"))
         virtual_memory_stats: Any = psutil.virtual_memory()
-        used_megabytes: float = (virtual_memory_stats.total - virtual_memory_stats.available) / (1024 ** 2)
-        available_gigabytes: float = virtual_memory_stats.available / (1024 ** 3)
-        total_gigabytes: float = virtual_memory_stats.total / (1024 ** 3)
+        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
+        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
+        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
         logger.info("  System RECEIVED: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
                     virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes)
