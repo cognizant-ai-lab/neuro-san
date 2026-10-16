@@ -299,9 +299,16 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param events: Validation events from every stage
         """
-        fix_request_ids: Set[str] = {event.get("request_id") for event in events}
+        fix_request_ids: Set[str] = set()
+        event: Dict[str, Any]
+        # Collect the request id of each validation event.
+        for event in events:
+            fix_request_ids.add(event.get("request_id"))
         durations_with_fixes_seconds: List[float] = []
         durations_without_fixes_seconds: List[float] = []
+        summary: Dict[str, Any]
+        result: Dict[str, Any]
+        # Split the request durations into requests with and without fixes.
         for summary in self._summaries:
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")
@@ -452,6 +459,8 @@ class SummaryFileWriter:
 
         client_results: List[Dict[str, Any]] = self._collect_client_times()
         by_server_id: Dict[str, list] = {}
+        entry: Dict[str, Any]
+        # Group the timing entries by server request id.
         for entry in self._server_timing:
             server_request_id: str = entry.get("request_id", "")
             by_server_id.setdefault(server_request_id, []).append(entry)
@@ -460,9 +469,11 @@ class SummaryFileWriter:
         lines.append("  SERVER TIMING BREAKDOWN")
         lines.append("=" * 60)
 
+        server_request_id: str
+        # One timing block per server request, in id order.
         for server_request_id in sorted(by_server_id.keys()):
-            entries: List[Dict[str, Any]] = by_server_id[server_request_id]
-            entries.sort(key=lambda timing_entry: timing_entry.get("start_ts", 0))
+            entries: List[Dict[str, Any]] = by_server_id.get(server_request_id)
+            entries.sort(key=self._start_ts_of)
             if not entries:
                 continue
             top_start_seconds: float = entries[0].get("start_ts", 0)
@@ -470,6 +481,16 @@ class SummaryFileWriter:
             label: str = client.get("id", server_request_id)
             self._format_request_timing(lines, label, entries, client)
         lines.append("")
+
+    @staticmethod
+    def _start_ts_of(timing_entry: Dict[str, Any]) -> float:
+        """
+        Sort key: the start time of a server timing entry.
+
+        :param timing_entry: One server timing entry
+        :return: The entry's "start_ts", 0 if missing
+        """
+        return timing_entry.get("start_ts", 0)
 
     def _collect_client_times(self) -> List[Dict[str, Any]]:
         """

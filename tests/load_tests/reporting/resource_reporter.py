@@ -241,8 +241,15 @@ class ResourceReporter:
         :param after_snapshot: Snapshot from the last stage
         :param fields: (display name, snapshot key, % format) of each field to log
         """
-        maximum_name_length: int = max(len(name) for name, _, _ in fields)
+        maximum_name_length: int = 0
+        name: str
+        key: str
+        format_pattern: str
+        # Find the longest display name.
+        for name, key, format_pattern in fields:
+            maximum_name_length = max(maximum_name_length, len(name))
         logger.info("\n  %s overall deltas (first stage vs last stage):", label)
+        # One delta line per field.
         for name, key, format_pattern in fields:
             delta: float = after_snapshot.get(key) - before_snapshot.get(key)
             padded: str = f"{name}:".ljust(maximum_name_length + 1)

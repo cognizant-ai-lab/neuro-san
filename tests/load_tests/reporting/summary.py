@@ -463,6 +463,10 @@ class SummaryReporter:
         """
         model_counts: Counter = Counter()
         fallback_requests: int = 0
+        summary: Dict[str, Any]
+        result: Dict[str, Any]
+        model_name: str
+        # Count the models of every request in every stage.
         for summary in self._summaries:
             for result in summary.get("results", []):
                 all_models: List[str] = result.get("all_models", [])
@@ -476,13 +480,12 @@ class SummaryReporter:
                     model_counts[model] += 1
         if not model_counts:
             return
-        logger.info(
-            "  LLM models: %s",
-            ", ".join(
-                f"{model_name} ({count})" for model_name, count in
-                model_counts.most_common()
-            ),
-        )
+        model_parts: List[str] = []
+        count: int
+        # One "model (N)" part per model, most used first.
+        for model_name, count in model_counts.most_common():
+            model_parts.append(f"{model_name} ({count})")
+        logger.info("  LLM models: %s", ", ".join(model_parts))
         if fallback_requests > 0:
             logger.info("    Fallback LLM used: %s request(s)", fallback_requests)
 
@@ -543,9 +546,16 @@ class SummaryReporter:
 
         :param events: Validation events from every stage
         """
-        fix_request_ids: Set[str] = {event.get("request_id") for event in events}
+        fix_request_ids: Set[str] = set()
+        event: Dict[str, Any]
+        # Collect the request id of each validation event.
+        for event in events:
+            fix_request_ids.add(event.get("request_id"))
         durations_with_fixes_seconds: List[float] = []
         durations_without_fixes_seconds: List[float] = []
+        summary: Dict[str, Any]
+        result: Dict[str, Any]
+        # Split the request durations into requests with and without fixes.
         for summary in self._summaries:
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")

@@ -173,6 +173,11 @@ Aborting.""",
                 if os.path.isfile(candidate):
                     return candidate
 
+        searched_lines: List[str] = []
+        searched_path: str
+        # One "  - <path>" line per searched path.
+        for searched_path in searched:
+            searched_lines.append(f"  - {searched_path}\n")
         logger.error(
             """No profile found for agent '%s'.
 Searched:
@@ -180,7 +185,7 @@ Searched:
 Create a profile JSON or use --profile-path to specify one.
 Aborting.""",
             agent_name,
-            "".join(f"  - {searched_path}\n" for searched_path in searched),
+            "".join(searched_lines),
         )
         raise LoadTestAbortError(1)
 

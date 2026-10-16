@@ -138,7 +138,15 @@ class SystemResources:
         rows: Tuple[Tuple[str, Optional[SysSnapshot]], ...] = (
             ("before", before_snapshot), ("peak", peak_snapshot), ("after", after_snapshot),
         )
-        if all(snapshot is None for _, snapshot in rows):
+        has_snapshot: bool = False
+        tag: str
+        snapshot: Optional[SysSnapshot]
+        # Look for at least one snapshot that is set.
+        for tag, snapshot in rows:
+            if snapshot is not None:
+                has_snapshot = True
+                break
+        if not has_snapshot:
             return
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  SYSTEM RESOURCES")
@@ -148,12 +156,15 @@ class SystemResources:
         user_limit: str = ""
         system_maximum: str = ""
         user_limit, system_maximum = cls.thread_limits()
+        # One memory row per snapshot that has it.
         for tag, snapshot in rows:
             if snapshot is not None and snapshot.get("mem_pct") is not None:
                 cls._log_row("System memory", tag, cls._fmt_mem(snapshot, total_gigabytes))
+        # One CPU row per snapshot that has it.
         for tag, snapshot in rows:
             if snapshot is not None and snapshot.get("cpu_pct") is not None:
                 cls._log_row("System CPU", tag, cls._fmt_cpu(snapshot, core_count))
+        # One threads row per snapshot that has it.
         for tag, snapshot in rows:
             if snapshot is not None and snapshot.get("threads") is not None:
                 cls._log_row("System threads", tag, cls._fmt_threads(snapshot, tag, user_limit, system_maximum))

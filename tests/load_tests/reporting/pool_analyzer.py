@@ -45,13 +45,15 @@ class PoolAnalyzer:
     # pylint: disable=too-many-locals
     def log_pool_reuse_analysis(self) -> None:
         """Log executor pool reuse analysis across stages."""
-        stages_with_data: List[Dict[str, Any]] = [
-            stage_summary for stage_summary in self._summaries
-            if stage_summary.get("before_threads") is not None
-            and stage_summary.get("after_threads") is not None
-            and stage_summary.get("total_started") is not None
-            and stage_summary.get("total_started") > 0
-        ]
+        stages_with_data: List[Dict[str, Any]] = []
+        stage_summary: Dict[str, Any]
+        # Keep the stages that have both thread counts and at least one server call.
+        for stage_summary in self._summaries:
+            if stage_summary.get("before_threads") is None or stage_summary.get("after_threads") is None:
+                continue
+            total_started: Optional[int] = stage_summary.get("total_started")
+            if total_started is not None and total_started > 0:
+                stages_with_data.append(stage_summary)
         if not stages_with_data:
             return
 
@@ -70,6 +72,9 @@ class PoolAnalyzer:
         total_new_threads: int = 0
         reuse_percentages: List[float] = []
 
+        index: int
+        stage: Dict[str, Any]
+        # One table row per stage.
         for index, stage in enumerate(stages_with_data):
             batch_number: int = index + 1
             server_calls: int = stage.get("total_started")
