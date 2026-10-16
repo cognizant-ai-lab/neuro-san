@@ -345,7 +345,8 @@ class RunContextRunnable(NeuroSanRunnable):
             # graph used today returns a state dict and never an AgentFinish, so
             # this unwrap is kept for backwards compatibility only. Its
             # return_values carry the output in dict form.
-            use_result = use_result.return_values
+            use_result_agent_finish: AgentFinish = use_result
+            use_result = use_result_agent_finish.return_values
 
         if isinstance(use_result, AIMessage):
             # Sometimes we get an AIMessage from a tool call.
@@ -414,11 +415,12 @@ class RunContextRunnable(NeuroSanRunnable):
         # scans everything, exactly as it always has for plain-string output.
         # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
-            output = ContentUtils.flatten_to_text(output)
+            output_list: List[Any] = output
+            output = ContentUtils.flatten_to_text(output_list)
 
         # See if we had some kind of error and format accordingly, if asked for.
-        output = self.error_detector.handle_error(output)
-        return output
+        handled_output: str = self.error_detector.handle_error(output)
+        return handled_output
 
     def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
                              output: str) -> BaseMessage:

@@ -197,7 +197,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             return base_message
 
         content: str = chat_message.get("text")
-        chat_message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(chat_message.get("type"))
+        message_type: str = chat_message.get("type")
+        chat_message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(message_type)
 
         if chat_message_type == ChatMessageType.SYSTEM:
             base_message = SystemMessage(content=content)
@@ -206,8 +207,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         elif chat_message_type == ChatMessageType.AI:
             base_message = AIMessage(content=content)
         elif chat_message_type == ChatMessageType.AGENT_TOOL_RESULT:
-            base_message = AgentToolResultMessage(content=content,
-                                                  tool_result_origin=chat_message.get("tool_result_origin"))
+            tool_result_origin: Dict[str, Any] = chat_message.get("tool_result_origin")
+            base_message = AgentToolResultMessage(content=content, tool_result_origin=tool_result_origin)
 
         if self.langchain_only:
             # Go no further
@@ -216,15 +217,15 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if base_message is None:
             # convert_to_base_message() is primarily for populating langchain chat history.
             # so handle these other types differently.
+            content = chat_message.get("text", "")
+            structure: Dict[str, Any] = chat_message.get("structure")
             if chat_message_type == ChatMessageType.AGENT:
-                base_message = AgentMessage(content=chat_message.get("text", ""),
-                                            structure=chat_message.get("structure"))
+                base_message = AgentMessage(content=content, structure=structure)
             elif chat_message_type == ChatMessageType.AGENT_FRAMEWORK:
                 # Don't bother passing on chat_context
-                base_message = AgentFrameworkMessage(content=chat_message.get("text", ""))
+                base_message = AgentFrameworkMessage(content=content)
             elif chat_message_type == ChatMessageType.AGENT_PROGRESS:
-                base_message = AgentProgressMessage(content=chat_message.get("text", ""),
-                                                    structure=chat_message.get("structure"))
+                base_message = AgentProgressMessage(content=content, structure=structure)
 
         # Any other message type we do not want to send to any agent as chat history.
 

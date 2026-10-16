@@ -572,7 +572,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # This fallback only applies when the user provides a non-default class path
         # and factory resolution failed.
         class_path: str = config.get("class")
-        default_llm_classes: Set[str] = set(self.llm_infos.get("classes"))
+        classes_value: List[str] = self.llm_infos.get("classes")
+        default_llm_classes: Set[str] = set(classes_value)
         if (
             llm_resources is None
             and found_exception is not None
