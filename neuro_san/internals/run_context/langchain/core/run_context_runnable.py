@@ -166,7 +166,7 @@ class RunContextRunnable(NeuroSanRunnable):
         verbose: Union[bool, str] = agent_spec.get("verbose", False)
         if isinstance(verbose, str):
             verbose_string: str = verbose
-            if verbose.lower() in ("true", "extra", "logging"):
+            if verbose_string.lower() in ("true", "extra", "logging"):
                 # This particular class adds a *lot* of very detailed messages
                 # to the logs.  Add this because some people are interested in it.
                 # If you find yourself curious about this setting, what you probably
