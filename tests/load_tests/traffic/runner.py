@@ -430,8 +430,7 @@ class TrafficRunner:
         killed_count: int = collect_result.get("killed_count")
         interrupted: bool = collect_result.get("interrupted")
         if killed_count and not interrupted:
-            logger.warning("  Stage timeout (%ss) reached — %s request(s) killed.", stage_timeout_seconds,
-                           killed_count)
+            logger.warning("  Stage timeout (%ss) reached — %s request(s) killed.", stage_timeout_seconds, killed_count)
         elif interrupted:
             logger.warning(
                 "  Interrupted (Ctrl-C) — %s request(s) still "
