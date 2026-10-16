@@ -114,6 +114,10 @@ class ProviderToolsFitChecker:
         errors: List[str] = []
         inherited_count: int = 0
 
+        # Run the rules for one agent at a time, against the models its llm_config builds.
+        agent_name: str = None
+        agent: Dict[str, Any] = None
+        llm_config: Dict[str, Any] = None
         for agent_name, agent, llm_config in candidates:
             models: List[Tuple[str, str, str, bool, Dict[str, Any]]] = self.resolve_models(llm_config)
             label: str = self.message_label(agent_name, llm_config, inherited)
@@ -157,6 +161,8 @@ class ProviderToolsFitChecker:
                 that resolves to no llm_info class, is left out, so no rule ever judges it.
         """
         resolved: List[Tuple[str, str, str, bool, Dict[str, Any]]] = []
+        # Resolve the main model and every fallback, in chain order.
+        model_config: Dict[str, Any] = None
         for model_config in self.collect_model_configs(llm_config):
             class_value: Any = model_config.get("class")
             if class_value and not isinstance(class_value, str):
@@ -200,6 +206,10 @@ class ProviderToolsFitChecker:
         :return: A list of error messages
         """
         errors: List[str] = []
+        # Report each model whose class lacks the provider_tools marker.
+        model_label: str = None
+        class_name: str = None
+        declares: bool = None
         for model_label, class_name, _, declares, _ in models:
             if not declares:
                 errors.append(f"{label} declares provider_tools for model '{model_label}' whose class '{class_name}'"
@@ -220,6 +230,8 @@ class ProviderToolsFitChecker:
         :return: A list with one error message, or an empty list
         """
         class_names: List[str] = []
+        # Collect the distinct class names in chain order.
+        class_name: str = None
         for _, class_name, _, _, _ in models:
             if class_name not in class_names:
                 class_names.append(class_name)
@@ -244,13 +256,19 @@ class ProviderToolsFitChecker:
                 until check() drops the duplicates
         """
         errors: List[str] = []
+        # Judge every entry against the family of each supported model.
+        family: str = None
+        declares: bool = None
         for _, _, family, declares, _ in models:
             if not declares:
                 # Already reported by check_support(); its shapes are beside the point.
                 continue
+            # Only a non-empty dict has a shape to judge.
+            index: int = None
+            entry: Any = None
             for index, entry in enumerate(provider_tools):
                 if isinstance(entry, dict) and len(entry) > 0:
-                    # Anything else was already reported by the validator's shape check.
+                    # The validator's own shape check reports anything else.
                     errors.extend(self.check_entry_shape(label, index, entry, family))
         return errors
 
@@ -269,6 +287,11 @@ class ProviderToolsFitChecker:
         :return: A list of error messages
         """
         errors: List[str] = []
+        # Only supported OpenAI-family models have a Responses API switch to check.
+        model_label: str = None
+        family: str = None
+        declares: bool = None
+        model_config: Dict[str, Any] = None
         for model_label, _, family, declares, model_config in models:
             if family != self.OPENAI_FAMILY or not declares:
                 continue
@@ -382,6 +405,8 @@ class ProviderToolsFitChecker:
         :param prefixes: The prefixes to try
         :return: True when value starts with at least one prefix
         """
+        # One matching prefix is enough.
+        prefix: str = None
         for prefix in prefixes:
             if value.startswith(prefix):
                 return True
@@ -400,6 +425,8 @@ class ProviderToolsFitChecker:
         """
         if inherited is None:
             return agent_name
+        # Any model-selecting key the agent changes makes the setup its own.
+        key: str = None
         for key in self.MODEL_KEYS:
             if llm_config.get(key) != inherited.get(key):
                 return agent_name
@@ -428,6 +455,8 @@ class ProviderToolsFitChecker:
         :return: The messages without repeats, in their original order
         """
         unique: List[str] = []
+        # Keep the first copy of each message.
+        message: str = None
         for message in messages:
             if message not in unique:
                 unique.append(message)
@@ -452,6 +481,8 @@ class ProviderToolsFitChecker:
             return []
 
         tool_names: List[str] = []
+        # Name every other tool for the message.
+        tool: Any = None
         for tool in other_tools:
             tool_names.append(self.tool_label(tool))
         return [f"{agent_name} declares Gemini provider_tools together with other tools"
@@ -495,6 +526,9 @@ class ProviderToolsFitChecker:
         :return: True when at least one model is of the gemini family and its class
                 declares provider_tools support
         """
+        # One supported Gemini model anywhere in the chain is enough.
+        family: str = None
+        declares: bool = None
         for _, _, family, declares, _ in models:
             if family == self.GEMINI_FAMILY and declares:
                 return True
@@ -525,6 +559,8 @@ class ProviderToolsFitChecker:
         :param fallbacks: The fallbacks list, whose entries are dicts or lists of dicts
         :param into: The list that receives the dict entries, in order
         """
+        # A nested list is a peer group, so descend into it in place.
+        entry: Any = None
         for entry in fallbacks:
             if isinstance(entry, list):
                 self.flatten_fallbacks(entry, into)

@@ -33,7 +33,6 @@ from neuro_san.internals.run_context.langchain.llms.default_llm_factory import D
 from neuro_san.internals.validation.network.provider_tools_fit_checker import ProviderToolsFitChecker
 
 
-# The rule matrix (support, one provider, three shape families, labelling) legitimately needs more than 20 cases.
 # pylint: disable=too-many-public-methods
 class TestProviderToolsFitChecker(TestCase):
     """
@@ -41,7 +40,8 @@ class TestProviderToolsFitChecker(TestCase):
 
     Every test hands the checker (agent name, agent spec, merged llm_config) candidates
     directly, the way ProviderToolsNetworkValidator does once it has loaded llm_info, and
-    asserts the exact list of messages that comes back.
+    asserts the exact list of messages that comes back. The rule matrix (support, one
+    provider, three shape families, labelling) needs more than pylint's 20 public methods.
     """
 
     # The agent under test and a second agent it can call.
@@ -561,6 +561,8 @@ class TestProviderToolsFitChecker(TestCase):
         factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
             self._user_class_hocon(True, extends=None))
 
+        # Try one entry of each known dict shape.
+        entry: Dict[str, Any] = None
         for entry in [self.GOOGLE_SEARCH, self.WEB_SEARCH]:
             errors: List[str] = self._check({"model_name": self.USER_MODEL, "provider_tools": [entry]},
                                             factory=factory)

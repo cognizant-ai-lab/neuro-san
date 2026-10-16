@@ -34,7 +34,6 @@ from neuro_san.internals.validation.network.provider_tools_network_validator imp
 from tests.neuro_san.internals.validation.network.abstract_network_validator_test import AbstractNetworkValidatorTest
 
 
-# The rule matrix (shape, near-miss, fallbacks, Gemini, loading) legitimately needs more than 20 cases.
 # pylint: disable=too-many-public-methods
 class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
     """
@@ -43,6 +42,8 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
     Every test starts from the filtered hello_world.hocon: front man "announcer"
     (tools ["synonymizer"]) and leaf "synonymizer" (no tools), both inheriting the
     network-level llm_config. The inherited test_valid() covers the unchanged network.
+    The rule matrix (shape, near-miss, fallbacks, Gemini, loading) needs more than
+    pylint's 20 public methods.
     """
 
     # A Gemini built-in tool entry.
@@ -105,6 +106,8 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         :return: The same config, for chaining
         """
         config["llm_config"] = llm_config
+        # Drop each agent's own llm_config so every agent inherits the new one.
+        agent: Dict[str, Any] = None
         for agent in config.get("tools"):
             agent.pop("llm_config", None)
         return config
@@ -119,6 +122,8 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         :return: The agent spec dictionary
         :raises KeyError: if no agent has that name
         """
+        # Match on the agent's name.
+        agent: Dict[str, Any] = None
         for agent in config.get("tools"):
             if agent.get("name") == name:
                 return agent
@@ -180,8 +185,9 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         self.assertEqual(1, len(errors), str(errors))
         self.assertIn("synonymizer 'llm_config.provider_tools' must be a list, got str.", errors[0])
 
-        # The load failure itself must be reported, not swallowed.
+        # The load failure itself must be reported, not swallowed, so count the log lines that name it.
         load_warnings: List[str] = []
+        line: str = None
         for line in logs.output:
             if "could not load llm_info" in line:
                 load_warnings.append(line)

@@ -383,6 +383,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             return None
 
         seen: Set[str] = set()
+        # Walk up the "extends" chain; seen stops a cycle in the table.
         while current not in seen:
             seen.add(current)
             entry: Any = chat_classes.get(current)

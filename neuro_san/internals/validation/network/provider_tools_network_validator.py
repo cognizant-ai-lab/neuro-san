@@ -132,6 +132,8 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
             tools: Any = candidate.get("tools")
             if not isinstance(tools, list):
                 return []
+            # The chain raises on a non-dict agent entry as well.
+            tool: Any = None
             for tool in tools:
                 if not isinstance(tool, dict):
                     return []
@@ -189,6 +191,9 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         # agents that would actually bind a non-empty provider_tools list to a model:
         # only those can trip the provider fit rules, so llm_info is loaded only for them.
         fit_candidates: List[Tuple[str, Dict[str, Any], Dict[str, Any]]] = []
+        # Check each agent against its own merged llm_config.
+        agent_name: str = None
+        agent: Any = None
         for agent_name, agent in name_to_spec.items():
             if not isinstance(agent, dict):
                 continue
@@ -278,6 +283,8 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         if not self.is_inherited(llm_config, inherited, self.KEY):
             errors.extend(self.validate_shape(label, llm_config.get(self.KEY)))
 
+        # Report misspelt keys the agent sets itself, not ones it inherits.
+        key: str = None
         for key in self.NEAR_MISS_KEYS:
             if key in llm_config and not self.is_inherited(llm_config, inherited, key):
                 errors.append(self.near_miss_message(label, key))
@@ -315,6 +322,9 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
             return [f"{label} 'llm_config.provider_tools' must be a list, got {type(provider_tools).__name__}."]
 
         errors: List[str] = []
+        # Each entry must be a non-empty dict.
+        index: int = None
+        entry: Any = None
         for index, entry in enumerate(provider_tools):
             # Each entry is passed through to the provider unchanged, and every provider takes a dict.
             if not isinstance(entry, dict):
@@ -355,6 +365,9 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         if not isinstance(fallbacks, list):
             return errors
 
+        # Walk the chain; a nested list is a peer group with its own dotted index path.
+        index: int = None
+        entry: Any = None
         for index, entry in enumerate(fallbacks):
             index_path: str = f"{index_prefix}{index}"
             if isinstance(entry, list):
@@ -368,6 +381,8 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
                               f" declare provider_tools at the top level of llm_config"
                               f" so it applies to every fallback.")
 
+            # Misspelt keys inside a fallback are reported too.
+            key: str = None
             for key in self.NEAR_MISS_KEYS:
                 if key in entry:
                     errors.append(self.near_miss_message(label, f"fallbacks[{index_path}].{key}"))

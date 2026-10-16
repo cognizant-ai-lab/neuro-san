@@ -37,8 +37,6 @@ from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources impo
 from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 
 
-# The class-and-alias matrix plus get_chat_class_name() legitimately need more than 20 cases.
-# pylint: disable=too-many-public-methods
 class TestDefaultLlmFactory(TestCase):
     """
     Test cases for DefaultLlmFactory.create_full_llm_config() and the alias resolution behind it,
@@ -695,13 +693,17 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
         """
         The stock openai, azure-openai, anthropic and gemini classes declare provider_tools in their own args.
         """
+        # Each class carries the marker in its own args.
+        class_name: str = None
         for class_name in ["openai", "azure-openai", "anthropic", "gemini"]:
             self.assertTrue(self.factory.declares_provider_tools(class_name), class_name)
 
     def test_declares_provider_tools_stock_unsupported_classes(self) -> None:
         """
-        Classes that only inherit the key through "extends", or never had it, do not declare it.
+        Classes that only inherit the key through "extends", or lack it entirely, do not declare it.
         """
+        # anthropic-bedrock only inherits the key through "extends"; ollama has no marker at all.
+        class_name: str = None
         for class_name in ["anthropic-bedrock", "ollama"]:
             self.assertFalse(self.factory.declares_provider_tools(class_name), class_name)
 
