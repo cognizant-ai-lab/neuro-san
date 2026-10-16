@@ -34,12 +34,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import TextIO
-from typing import Tuple
 
 import psutil
 
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
@@ -167,27 +167,32 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         if self._client_process is None:
             return
         try:
-            rss_megabytes: float = self._client_process.memory_info().rss / (1024 * 1024)
+            rss_megabytes: float = self._client_process.memory_info().rss / ResourceMonitor.ONE_MEGABYTE
             if Heartbeat.is_new_peak(rss_megabytes, self._peak_client_rss_megabytes):
                 self._peak_client_rss_megabytes = rss_megabytes
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
-    def _sample_server_memory(self) -> Tuple[Optional[float], Optional[float]]:
+    def _sample_server_memory(self) -> Dict[str, Optional[float]]:
         """
         Sample server RSS and swap in MB.
 
-        :return: (rss_megabytes, swap_megabytes), or (None, None) if unavailable
+        :return: Dict with "rss_megabytes" and "swap_megabytes", each None if unavailable
         """
+        server_memory: Dict[str, Optional[float]] = {
+            "rss_megabytes": None,
+            "swap_megabytes": None,
+        }
         if self._server_process is None:
-            return None, None
+            return server_memory
         try:
             memory_info: Any = self._server_process.memory_full_info()
-            rss_megabytes: float = memory_info.rss / (1024 * 1024)
-            swap_megabytes: float = memory_info.swap / (1024 * 1024)
-            return rss_megabytes, swap_megabytes
+            server_memory["rss_megabytes"] = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
+            server_memory["swap_megabytes"] = memory_info.swap / ResourceMonitor.ONE_MEGABYTE
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            return None, None
+            server_memory["rss_megabytes"] = None
+            server_memory["swap_megabytes"] = None
+        return server_memory
 
     def _check_server_alive(self) -> bool:
         """
@@ -229,15 +234,15 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         used_fraction: float = virtual_memory_stats.percent / 100.0
         if used_fraction >= OUT_OF_MEMORY_WARNING_THRESHOLD:
             self._out_of_memory_warned = True
-            total_gigabytes: float = virtual_memory_stats.total / (1024 ** 3)
-            available_gigabytes: float = virtual_memory_stats.available / (1024 ** 3)
+            total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
+            available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
             warning: str = (f"  WARNING: System memory at {virtual_memory_stats.percent:.0f}%"
                             f" ({available_gigabytes:.1f}G free / {total_gigabytes:.1f}G total) — risk of OOM kill")
             logger.warning("%s", warning)
             self._write_to_file(progress_file, warning)
             swap_memory_stats: Any = psutil.swap_memory()
             if swap_memory_stats.total > 0 and swap_memory_stats.used > 0:
-                swap_used_gigabytes: float = swap_memory_stats.used / (1024 ** 3)
+                swap_used_gigabytes: float = swap_memory_stats.used / ResourceMonitor.ONE_GIGABYTE
                 swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f}G"
                                      " — severe performance impact")
                 logger.warning("%s", swap_warning)
@@ -291,19 +296,19 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 if done_count > last_done_count:
                     last_change_seconds = time.perf_counter()
                     last_done_count = done_count
-                thread_info: str = ""
-                server_rss_info: str = ""
-                thread_info, server_rss_info = self._sample_server_metrics(progress_file)
+                server_metrics: Dict[str, str] = self._sample_server_metrics(progress_file)
+                thread_info: str = server_metrics.get("thread_info")
+                server_rss_info: str = server_metrics.get("server_rss_info")
                 tick_count += 1
                 failed_count: int = self.get_failed_request_count()
                 fail_info: str = ""
                 if failed_count > 0:
                     failed_percent: int = Heartbeat._percent(failed_count, done_count)
                     fail_info = f", {failed_count} failed {failed_percent}%"
-                system_memory_info: str = ""
-                current_memory_percent: float = 0.0
-                current_available_gigabytes: float = 0.0
-                system_memory_info, current_memory_percent, current_available_gigabytes = self._format_system_memory()
+                system_memory: Dict[str, Any] = self._format_system_memory()
+                system_memory_info: str = system_memory.get("text")
+                current_memory_percent: float = system_memory.get("memory_percent")
+                current_available_gigabytes: float = system_memory.get("available_gigabytes")
                 self._sample_system_memory(current_memory_percent, current_available_gigabytes)
                 client_durations: List[float] = Heartbeat._client_durations(futures)
                 duration_info: str = "  dur/client: " + Heartbeat.format_duration_stats(client_durations)
@@ -327,18 +332,24 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 progress_file.close()
 
     @staticmethod
-    def _format_system_memory() -> Tuple[str, float, float]:
+    def _format_system_memory() -> Dict[str, Any]:
         """
         Format total system memory usage for the progress line.
 
-        :return: (formatted_string, current_percent, available_gigabytes)
+        :return: Dict with "text" (the progress line part), "memory_percent" and "available_gigabytes"
         """
         virtual_memory_stats: Any = psutil.virtual_memory()
-        used_megabytes: float = (virtual_memory_stats.total - virtual_memory_stats.available) / (1024 ** 2)
-        available_gigabytes: float = virtual_memory_stats.available / (1024 ** 3)
+        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
+        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
+        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         line: str = (f"  sysmem: {virtual_memory_stats.percent:.0f}%"
                      f" ({used_megabytes:.0f}M used / {available_gigabytes:.1f}G free)")
-        return line, virtual_memory_stats.percent, available_gigabytes
+        system_memory: Dict[str, Any] = {
+            "text": line,
+            "memory_percent": virtual_memory_stats.percent,
+            "available_gigabytes": available_gigabytes,
+        }
+        return system_memory
 
     def _sample_system_memory(self, memory_percent: float, available_gigabytes: float) -> None:
         """
@@ -500,17 +511,17 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 durations.append(float(duration_seconds))
         return durations
 
-    def _sample_server_metrics(self, progress_file: Optional[TextIO]) -> Tuple[str, str]:
+    def _sample_server_metrics(self, progress_file: Optional[TextIO]) -> Dict[str, str]:
         """
         Sample server thread count and RSS, keeping each when it is a new peak.
 
         :param progress_file: Open progress.log, or None
-        :return: (thread_info, server_rss_info) parts of the progress line
+        :return: Dict with "thread_info" and "server_rss_info", the parts of the progress line
         """
         thread_info: str = ""
         server_rss_info: str = ""
         if self._server_process is None:
-            return thread_info, server_rss_info
+            return Heartbeat._server_metrics(thread_info, server_rss_info)
         try:
             server_thread_count: int = self._server_process.num_threads()
             if Heartbeat.is_new_peak(server_thread_count, self._peak_server_threads):
@@ -520,9 +531,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 thread_info = f"  threads: {server_thread_count}"
         except (psutil.NoSuchProcess, psutil.AccessDenied) as error:
             logger.debug("Heartbeat thread count unavailable: %s", error)
-        rss_megabytes: Optional[float] = None
-        swap_megabytes: Optional[float] = None
-        rss_megabytes, swap_megabytes = self._sample_server_memory()
+        server_memory: Dict[str, Optional[float]] = self._sample_server_memory()
+        rss_megabytes: Optional[float] = server_memory.get("rss_megabytes")
+        swap_megabytes: Optional[float] = server_memory.get("swap_megabytes")
         if rss_megabytes is not None:
             swap_info: str = ""
             if swap_megabytes > 0:
@@ -531,7 +542,22 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             if Heartbeat.is_new_peak(rss_megabytes, self._peak_server_rss_megabytes):
                 self._peak_server_rss_megabytes = rss_megabytes
             self._check_memory_warnings(swap_megabytes, progress_file)
-        return thread_info, server_rss_info
+        return Heartbeat._server_metrics(thread_info, server_rss_info)
+
+    @staticmethod
+    def _server_metrics(thread_info: str, server_rss_info: str) -> Dict[str, str]:
+        """
+        Put the server parts of the progress line in the dict _sample_server_metrics() returns.
+
+        :param thread_info: Thread count text, or ""
+        :param server_rss_info: RSS and swap text, or ""
+        :return: Dict with "thread_info" and "server_rss_info"
+        """
+        server_metrics: Dict[str, str] = {
+            "thread_info": thread_info,
+            "server_rss_info": server_rss_info,
+        }
+        return server_metrics
 
     def _open_progress_file(self) -> Optional[TextIO]:
         """

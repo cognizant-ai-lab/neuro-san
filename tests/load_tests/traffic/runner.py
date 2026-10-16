@@ -33,7 +33,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
-from typing import Tuple
 
 import psutil
 
@@ -366,9 +365,8 @@ class TrafficRunner:
         })
 
     def run_stage(self, plan: StagePlan, server_process: Optional[psutil.Process] = None,
-                  client_process: Optional[psutil.Process] = None, log_monitor: Optional[ServerLogMonitor] = None
-                  ) -> Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
-                             Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]:
+                  client_process: Optional[psutil.Process] = None,
+                  log_monitor: Optional[ServerLogMonitor] = None) -> Dict[str, Any]:
         """
         Fire the stage's requests concurrently using a thread pool.
 
@@ -379,9 +377,10 @@ class TrafficRunner:
         :param server_process: Server process for the heartbeat's resource readings, or None
         :param client_process: Client process for the heartbeat's resource readings, or None
         :param log_monitor: Server log reader for server-side request timing, or None
-        :return: (total_time_seconds, results, peak_server_threads, peak_client_rss_megabytes,
-                 peak_server_rss_megabytes, peak_system_memory, peak_system_cpu_percent,
-                 peak_system_threads, server_died, interrupted); each peak is None when not measured
+        :return: Dict with "total_time_seconds", "results" (one dict per request), "peak_server_threads",
+            "peak_client_rss_megabytes", "peak_server_rss_megabytes", "peak_system_memory" (dict with
+            "memory_percent" and "available_gigabytes"), "peak_system_cpu_percent", "peak_system_threads",
+            "server_died" and "interrupted" (bools); each peak is None when not measured
         """
         results_list: List[Dict[str, Any]] = []
         heartbeat_kwargs: Dict[str, Any] = TrafficRunner._new_heartbeat_kwargs()
@@ -403,21 +402,13 @@ class TrafficRunner:
             heartbeat_kwargs.get("ready_event").wait()
             self._submit_requests(pool, plan, futures_ref, heartbeat)
             heartbeat_kwargs.get("fires_done_event").set()
-            killed_count: int = 0
-            killed_count, interrupted = self._collect_with_timeout(
+            collect_result: Dict[str, Any] = self._collect_with_timeout(
                 futures_ref, results_list,
                 start_seconds=start_seconds, stage_timeout_seconds=self._args.stage_timeout,
                 cancel_event=self._cancel_event,
             )
-            if killed_count and not interrupted:
-                logger.warning("  Stage timeout (%ss) reached — %s request(s) killed.", self._args.stage_timeout,
-                               killed_count)
-            elif interrupted:
-                logger.warning(
-                    "  Interrupted (Ctrl-C) — %s request(s) still "
-                    "in flight were dropped; reporting completed ones.",
-                    killed_count,
-                )
+            interrupted = collect_result.get("interrupted")
+            TrafficRunner._log_collect_result(collect_result, self._args.stage_timeout)
         finally:
             heartbeat_kwargs.get("stop_event").set()
             if heartbeat_thread is not None:
@@ -429,28 +420,50 @@ class TrafficRunner:
                                                  heartbeat_kwargs.get("server_dead_event"), interrupted)
 
     @staticmethod
-    def _build_stage_result(total_time_seconds: float, results_list: List[Dict[str, Any]], heartbeat: Heartbeat,
-                            server_dead_event: threading.Event, interrupted: bool
-                            ) -> Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
-                                       Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool]:
+    def _log_collect_result(collect_result: Dict[str, Any], stage_timeout_seconds: float) -> None:
         """
-        Put the stage's timing, results and heartbeat peaks together in the order run_stage() returns them.
+        Log the requests that the stage timeout or Ctrl-C dropped.
+
+        :param collect_result: The dict from _collect_with_timeout()
+        :param stage_timeout_seconds: The --stage-timeout value
+        """
+        killed_count: int = collect_result.get("killed_count")
+        interrupted: bool = collect_result.get("interrupted")
+        if killed_count and not interrupted:
+            logger.warning("  Stage timeout (%ss) reached — %s request(s) killed.", stage_timeout_seconds,
+                           killed_count)
+        elif interrupted:
+            logger.warning(
+                "  Interrupted (Ctrl-C) — %s request(s) still "
+                "in flight were dropped; reporting completed ones.",
+                killed_count,
+            )
+
+    @staticmethod
+    def _build_stage_result(total_time_seconds: float, results_list: List[Dict[str, Any]], heartbeat: Heartbeat,
+                            server_dead_event: threading.Event, interrupted: bool) -> Dict[str, Any]:
+        """
+        Put the stage's timing, results and heartbeat peaks together in the dict run_stage() returns.
 
         :param total_time_seconds: Seconds the stage took
         :param results_list: One result per request
         :param heartbeat: The stage's heartbeat, already joined
         :param server_dead_event: Set when the heartbeat found the server process dead
         :param interrupted: True when Ctrl-C stopped the stage
-        :return: The run_stage() result
+        :return: The run_stage() result; its docstring lists the keys
         """
-        server_died: bool = server_dead_event.is_set()
-        stage_result: Tuple[float, List[Dict[str, Any]], Optional[int], Optional[float], Optional[float],
-                            Optional[Dict[str, float]], Optional[float], Optional[int], bool, bool] = (
-            total_time_seconds, results_list, heartbeat.get_peak_server_threads(),
-            heartbeat.get_peak_client_rss_megabytes(), heartbeat.get_peak_server_rss_megabytes(),
-            heartbeat.get_peak_system_memory(), heartbeat.get_peak_system_cpu_percent(),
-            heartbeat.get_peak_system_threads(), server_died, interrupted,
-        )
+        stage_result: Dict[str, Any] = {
+            "total_time_seconds": total_time_seconds,
+            "results": results_list,
+            "peak_server_threads": heartbeat.get_peak_server_threads(),
+            "peak_client_rss_megabytes": heartbeat.get_peak_client_rss_megabytes(),
+            "peak_server_rss_megabytes": heartbeat.get_peak_server_rss_megabytes(),
+            "peak_system_memory": heartbeat.get_peak_system_memory(),
+            "peak_system_cpu_percent": heartbeat.get_peak_system_cpu_percent(),
+            "peak_system_threads": heartbeat.get_peak_system_threads(),
+            "server_died": server_dead_event.is_set(),
+            "interrupted": interrupted,
+        }
         return stage_result
 
     @staticmethod
@@ -501,7 +514,7 @@ class TrafficRunner:
     @staticmethod
     def _collect_with_timeout(futures: List[Future], results_list: List[Dict[str, Any]], start_seconds: float,
                               stage_timeout_seconds: Optional[float],
-                              cancel_event: threading.Event) -> Tuple[int, bool]:
+                              cancel_event: threading.Event) -> Dict[str, Any]:
         """
         Collect future results, cancelling stragglers on timeout/Ctrl-C.
 
@@ -512,7 +525,7 @@ class TrafficRunner:
         :param start_seconds: time.perf_counter() when the stage began
         :param stage_timeout_seconds: Seconds after which unfinished requests are killed, or None
         :param cancel_event: Set by the Ctrl-C handler to stop collecting early
-        :return: (num_killed, interrupted)
+        :return: Dict with "killed_count" (requests killed at --stage-timeout) and "interrupted" (True on Ctrl-C)
         """
         pending_futures: Set[Future] = set(futures)
         interrupted: bool = False
@@ -548,7 +561,11 @@ class TrafficRunner:
         killed: int = TrafficRunner._collect_killed(
             pending_futures, results_list, start_seconds=start_seconds, reason=reason,
         )
-        return killed, interrupted
+        collect_result: Dict[str, Any] = {
+            "killed_count": killed,
+            "interrupted": interrupted,
+        }
+        return collect_result
 
     @staticmethod
     def _collect_during_grace(pending_futures: Set[Future], results_list: List[Dict[str, Any]]) -> None:

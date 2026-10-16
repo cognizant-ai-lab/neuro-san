@@ -340,17 +340,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         first_request_number: int = global_offset + (1 if probe_used else 0)
         plan: StagePlan = StagePlan(stage_requests, stage_workers, first_request_number, self._output_dir)
-        (elapsed, results, peak_threads, peak_client_rss,
-         peak_server_rss, peak_sys_mem_pct, peak_sys_cpu,
-         peak_sys_threads,
-         server_died, interrupted) = (
-            self.runner.run_stage(
-                plan,
-                server_process=self.server_process,
-                client_process=client_process,
-                log_monitor=self.log_monitor,
-            )
-        )
+        stage_run: Dict[str, Any] = self.runner.run_stage(plan, server_process=self.server_process,
+                                                          client_process=client_process, log_monitor=self.log_monitor)
+        elapsed: float = stage_run.get("total_time_seconds")
+        results: List[Dict[str, Any]] = stage_run.get("results")
+        peak_threads: Optional[int] = stage_run.get("peak_server_threads")
+        peak_client_rss: Optional[float] = stage_run.get("peak_client_rss_megabytes")
+        peak_server_rss: Optional[float] = stage_run.get("peak_server_rss_megabytes")
+        peak_sys_mem_pct: Optional[Dict[str, float]] = stage_run.get("peak_system_memory")
+        peak_sys_cpu: Optional[float] = stage_run.get("peak_system_cpu_percent")
+        peak_sys_threads: Optional[int] = stage_run.get("peak_system_threads")
+        server_died: bool = stage_run.get("server_died")
+        interrupted: bool = stage_run.get("interrupted")
         if interrupted:
             self._interrupted = True
 
