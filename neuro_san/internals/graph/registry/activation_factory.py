@@ -19,7 +19,6 @@ from typing import Dict
 from typing import List
 
 from copy import copy as shallow_copy
-from os import environ
 from os import pathsep as os_path_separator
 from os import sep as os_separator
 from pathlib import Path
@@ -37,6 +36,7 @@ from neuro_san.internals.graph.preppers.front_man_activation_prepper import Fron
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -77,7 +77,7 @@ class ActivationFactory(AgentToolFactory):
         :return: the agent tool path to use for source resolution.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = environ.get("AGENT_TOOL_PATH")
+        agent_tool_path: str = Env.getenv("AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
@@ -89,7 +89,7 @@ class ActivationFactory(AgentToolFactory):
             # Find the best of many resolution paths in the PYTHONPATH
             resolved_tool_path: str = str(Path(agent_tool_path).resolve())
             best_path = ""
-            pythonpath: str = environ.get("PYTHONPATH")
+            pythonpath: str = Env.getenv("PYTHONPATH")
             if pythonpath is None:
                 # Trust what we have already
                 best_path = agent_tool_path
@@ -144,7 +144,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         external_preppers: List[ActivationPrepper] = []
 
         prepper_class_name: str = None
-        agent_prepper_classes: str = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        agent_prepper_classes: str = Env.getenv("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
         for prepper_class_name in agent_prepper_classes.split():
             use_prepper_class_name = prepper_class_name.strip()
             prepper: ActivationPrepper = ResolverUtil.create_instance(use_prepper_class_name,

@@ -21,7 +21,6 @@ from typing import List
 from typing import Union
 
 from copy import deepcopy
-from os import environ
 import traceback
 
 from logging import getLogger
@@ -35,6 +34,7 @@ from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryM
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
@@ -68,7 +68,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         # We make a copy of the AgentNetwork at this level to allow for interactions
         # within this scope to modify the network topology.
-        protect_original_copy: bool = environ.get("AGENT_PROTECT_ORIGINAL_COPY", "true").lower() == "true"
+        protect_original_copy: bool = Env.getenv("AGENT_PROTECT_ORIGINAL_COPY", "true").lower() == "true"
         if protect_original_copy:
             agent_network_copy = deepcopy(agent_network)
 
