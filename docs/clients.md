@@ -89,17 +89,28 @@ A neuro-san server uses HTTP under the hood. You can check out the protobufs def
 API under neuro_san/api/grpc.  The place to start is agent.proto for the service definitions.
 The next most important file there is chat.proto for the chat message definitions.
 
-A chat message carries its visible text in `text`. When a message's content carries information beyond that
-text (model reasoning or thinking summaries, images, files, several text blocks, provider extras such as
-signatures or a text block's phase), the message also carries `content_blocks`: a `format` string and a
-`blocks` list. The first format is `langchain_v1`, LangChain's standard content blocks. Whenever
-`content_blocks` is present, `text` holds the flattened text of the blocks, so a client that does not
-recognize the format can ignore the blocks. Today this applies to the AI message of the agent whose model
-returned the blocks, and to the AGENT_TOOL_RESULT message of a tool that returned content blocks; clients
-receive both under the MAXIMAL chat filter. The final AGENT_FRAMEWORK answer that MINIMAL clients receive
-stays text-only for now, and sending attachments from a client is not supported yet: the server reads only the
-`text` of the message a client sends. A message whose content is a plain string, the shape every existing
-client receives today, has no `content_blocks` key, so existing clients see no change.
+### Text and content blocks
+
+Two fields of a chat message need more than the proto comments say: `text` and `content_blocks`. Every client reads
+`text`. Only a client that wants model reasoning, attachments or other block content needs the rest of this section.
+
+A chat message carries its visible text in `text`. When the content says more than that text, such as model reasoning,
+images, files, several text blocks, or provider extras like a signature or a text block's phase, the message also
+carries `content_blocks`: a `format` string and a `blocks` list. The first format is `langchain_v1`, LangChain's
+standard content blocks. `text` always holds the flattened text of the blocks, so a client that does not know the
+format can ignore them. A message whose content is a plain string has no `content_blocks` key, so existing clients see
+no change.
+
+Today blocks appear on two messages, both under the MAXIMAL chat filter: the AI message of the agent whose model
+returned them, and the AGENT_TOOL_RESULT message of a tool that returned them. The final AGENT_FRAMEWORK answer that
+MINIMAL clients receive stays text-only for now.
+
+Blocks can also travel back to the server inside `chat_context`. The server restores blocks in a format it knows as
+the message content, with exceptions: tool calls, server-tool records, `non_standard` blocks and attachments are
+dropped, and reasoning blocks are held back until the message says which provider produced them. When nothing useful
+is left, when the blocks do not add up to `text`, or when the format is unknown, the server uses `text`. The
+`chat_context` the server returns is text-only today, so this matters only to a client that builds its own history.
+Attachments on a new user message are not supported yet: the server reads only its `text`.
 
 ### Content block shapes
 

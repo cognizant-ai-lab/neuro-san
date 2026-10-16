@@ -26,8 +26,10 @@ from copy import copy
 import math
 
 from langchain_core.messages.base import BaseMessage
-from langchain_core.messages.content import KNOWN_BLOCK_TYPES
 
+from neuro_san.message.content_blocks.content_blocks_format import ContentBlocksFormat
+from neuro_san.message.content_blocks.content_blocks_format_registry import ContentBlocksFormatRegistry
+from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 from neuro_san.message.utils.decode_utils import DecodeUtils
 
 
@@ -58,7 +60,7 @@ class ContentUtils:
     # from the standardized view: they are not message *content*, and today's
     # wire format never carries them, so including them would change the wire
     # output of every existing tool-calling agent.
-    TOOL_CALL_BLOCK_TYPES: List[str] = ["tool_call", "tool_call_chunk", "invalid_tool_call"]
+    TOOL_CALL_BLOCK_TYPES: List[str] = LangchainV1ContentBlocksFormat.TOOL_CALL_BLOCK_TYPES
 
     # The response_metadata value that tells langchain the message content
     # already holds standard v1 blocks, so .content_blocks must pass it
@@ -67,9 +69,10 @@ class ContentUtils:
     OUTPUT_VERSION_V1: str = "v1"
 
     # The ContentBlocks.format value (see chat.proto) that says the blocks
-    # are langchain v1 standard content blocks. Any other format is unknown
-    # to this code and is treated as no usable block content.
-    CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1: str = "langchain_v1"
+    # are langchain v1 standard content blocks. The formats this code knows
+    # are listed in ContentBlocksFormatRegistry; any other is treated as no
+    # usable block content.
+    CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1: str = LangchainV1ContentBlocksFormat.NAME
 
     # Keys of a text block that carry no information beyond its text:
     # its type, the text itself, and provider bookkeeping (id, index).
@@ -78,7 +81,7 @@ class ContentUtils:
     # Standard block types whose payload is data, not conversation text.
     # Providers reject these in assistant-role history, so history
     # projections replace them with a short text reference instead.
-    DATA_BLOCK_TYPES: List[str] = ["image", "audio", "video", "file", "text-plain"]
+    DATA_BLOCK_TYPES: List[str] = LangchainV1ContentBlocksFormat.DATA_BLOCK_TYPES
 
     @staticmethod
     def flatten_to_text(source: Union[BaseMessage, str, List[Any], None]) -> str:
@@ -275,15 +278,20 @@ class ContentUtils:
     def wrap_content_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Build the ChatMessage.content_blocks wrapper (see ContentBlocks in
-        chat.proto) around a list of langchain v1 standard blocks.
+        chat.proto) around a list of blocks in the server's default format
+        (see ContentBlocksFormatRegistry).
 
         This and unwrap_content_blocks are the only two places that know the
-        wrapper's layout and format value, so a second format only touches them.
+        wrapper's layout; the format names live in the registry.
 
-        :param blocks: A JSON-safe list of standard content-block dictionaries
-        :return: The wrapper dictionary: {"format": "langchain_v1", "blocks": blocks}
+        :param blocks: A JSON-safe list of content-block dictionaries
+        :return: The wrapper dictionary: {"format": <default format name>, "blocks": blocks}
         """
-        return {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": blocks}
+        default_format: ContentBlocksFormat = ContentBlocksFormatRegistry.get_default()
+        return {
+            "format": default_format.get_name(),
+            "blocks": blocks,
+        }
 
     @staticmethod
     def unwrap_content_blocks(wrapper: Any) -> Optional[List[Dict[str, Any]]]:
@@ -315,9 +323,25 @@ class ContentUtils:
         if len(blocks_list) == 0:
             return []
 
-        if wrapper_dict.get("format") != ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1:
+        if ContentUtils.content_blocks_format(wrapper_dict) is None:
             return None
         return blocks_list
+
+    @staticmethod
+    def content_blocks_format(wrapper: Any) -> Optional[ContentBlocksFormat]:
+        """
+        Find the format a ChatMessage.content_blocks wrapper says its
+        blocks are in.
+
+        :param wrapper: The value of a "content_blocks" key
+        :return: The ContentBlocksFormat named by the wrapper's "format",
+                 or None when the value is not a wrapper or names a format
+                 this server does not know
+        """
+        if not isinstance(wrapper, dict):
+            return None
+        wrapper_dict: Dict[str, Any] = wrapper
+        return ContentBlocksFormatRegistry.get_format(wrapper_dict.get("format"))
 
     @staticmethod
     def normalize_content(message: BaseMessage) -> Union[str, List[Dict[str, Any]]]:
@@ -381,18 +405,30 @@ class ContentUtils:
             update_dict["content"] = normalized
             return ContentUtils.message_model_copy(message, update_dict)
 
+        update_dict = {
+            "content": normalized,
+            "response_metadata": ContentUtils.v1_response_metadata(message),
+        }
+        return ContentUtils.message_model_copy(message, update_dict)
+
+    @staticmethod
+    def v1_response_metadata(message: BaseMessage) -> Dict[str, Any]:
+        """
+        Build the response_metadata of a message whose content is standard
+        v1 blocks: a copy of the message's own with output_version="v1", so
+        that a later .content_blocks access passes the blocks through
+        instead of re-translating them.
+
+        :param message: The BaseMessage whose response_metadata to start from
+        :return: A new response_metadata dictionary
+        """
         response_metadata: Dict[str, Any] = None
         if message.response_metadata is None:
             response_metadata = {}
         else:
             response_metadata = copy(message.response_metadata)
         response_metadata["output_version"] = ContentUtils.OUTPUT_VERSION_V1
-
-        update_dict = {
-            "content": normalized,
-            "response_metadata": response_metadata,
-        }
-        return ContentUtils.message_model_copy(message, update_dict)
+        return response_metadata
 
     @staticmethod
     def message_model_copy(message: BaseMessage, update_dict: Dict[str, Any]) -> BaseMessage:
@@ -413,33 +449,14 @@ class ContentUtils:
         of langchain's KNOWN_BLOCK_TYPES). Does not qualify:
         - provider-native shapes (e.g. Anthropic {"type": "thinking"}),
         - v0-era blocks (marked by a "source_type" key),
-        - tool-call blocks (see TOOL_CALL_BLOCK_TYPES) - they are not
-          message content, and accepting them inbound would let clients
-          inject synthetic tool calls.
+        - tool-call blocks (see TOOL_CALL_BLOCK_TYPES), which are not
+          message content.
 
         :param value: Any value to inspect
         :return: True if the value can be used as standard block content
         """
-        if not isinstance(value, list) or len(value) == 0:
-            return False
-
-        list_value: List[Any] = value
-        item: Any = None
-        for item in list_value:
-
-            if not isinstance(item, dict):
-                return False
-
-            item_dict: Dict[str, Any] = item
-            item_type: str = item_dict.get("type")
-
-            if item_type not in KNOWN_BLOCK_TYPES:
-                return False
-            if item_type in ContentUtils.TOOL_CALL_BLOCK_TYPES:
-                return False
-            if "source_type" in item_dict:
-                return False
-        return True
+        default_format: ContentBlocksFormat = ContentBlocksFormatRegistry.get_default()
+        return default_format.is_block_list(value)
 
     # pylint: disable=too-many-return-statements
     @staticmethod
@@ -481,7 +498,8 @@ class ContentUtils:
                 # Not a wrapper this code knows: fail safe to text.
                 return None
             if len(unwrapped) > 0:
-                if ContentUtils.looks_like_blocks(unwrapped):
+                blocks_format: ContentBlocksFormat = ContentUtils.content_blocks_format(content_blocks)
+                if blocks_format.is_block_list(unwrapped):
                     return unwrapped
                 return None
             # An empty wrapper carries nothing; fall through to mime_data.
@@ -571,6 +589,83 @@ class ContentUtils:
                     mime_type: str = str(dict_item.get("mime_type") or "unknown")
                     parts.append(f"[{block_type} attachment: {mime_type}]")
         return "".join(parts)
+
+    @staticmethod
+    def restorable_blocks(chat_message: Optional[Dict[str, Any]],
+                          for_chat_history: bool = False) -> Optional[List[Dict[str, Any]]]:
+        """
+        Decide what block content, if any, a message rebuilt from a ChatMessage
+        dictionary should carry. This is the inbound counterpart of the
+        content_blocks wrapper that to_dict emits.
+
+        The wrapper's format (see content_blocks_format) keeps the blocks a
+        model can be given again and drops the rest, attachments included.
+        A message bound for a model's chat history also loses its reasoning
+        blocks (see without_reasoning). What remains is used only if its
+        text is the message's text, when the message has one, and it says
+        something beyond that text: a lone text block that only repeats the
+        text adds nothing (see is_trivial).
+
+        :param chat_message: A ChatMessage dictionary
+        :param for_chat_history: True when the message will be replayed to a
+                model as chat history, which holds reasoning blocks back
+        :return: The blocks to use as the message content, or None when the
+                 message should keep its text as content: no wrapper, a format
+                 this server does not know, nothing left after the format's
+                 restore, blocks equivalent to the text, or blocks whose text
+                 is not the message's text.
+                 The returned blocks are the caller's own dictionaries.
+        """
+        wrapper: Any = None
+        if chat_message is not None:
+            wrapper = chat_message.get("content_blocks")
+        blocks_format: Optional[ContentBlocksFormat] = ContentUtils.content_blocks_format(wrapper)
+        if blocks_format is None:
+            # No message, no wrapper, or a format this server does not know.
+            return None
+
+        unwrapped: Optional[List[Dict[str, Any]]] = ContentUtils.unwrap_content_blocks(wrapper)
+        if unwrapped is None or len(unwrapped) == 0:
+            return None
+
+        kept: List[Dict[str, Any]] = blocks_format.restore_blocks(unwrapped)
+        if for_chat_history:
+            kept = ContentUtils.without_reasoning(kept)
+        if len(kept) == 0:
+            return None
+
+        text: Any = chat_message.get("text")
+        message_text: str = ""
+        if isinstance(text, str):
+            message_text = text
+        blocks_text: str = ContentUtils.flatten_to_text(kept)
+        if len(message_text) > 0 and blocks_text != message_text:
+            # The blocks do not add up to the text the message has, so using
+            # them would change or lose it. Fail safe to the text.
+            return None
+        if ContentUtils.is_trivial(kept) and blocks_text == message_text:
+            return None
+        return kept
+
+    @staticmethod
+    def without_reasoning(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Leave reasoning blocks out of a block list.
+
+        A provider replays only the reasoning it produced itself, and the
+        wire does not yet say which provider produced a block, so reasoning
+        cannot be replayed safely yet.
+
+        :param blocks: A list of standard content-block dictionaries
+        :return: A new list with the same blocks minus the reasoning ones
+        """
+        remaining: List[Dict[str, Any]] = []
+        # Copy every block except the reasoning ones.
+        block: Dict[str, Any] = None
+        for block in blocks:
+            if block.get("type") != "reasoning":
+                remaining.append(block)
+        return remaining
 
     @staticmethod
     def _data_block(mime_type: str, base64_str: str) -> Dict[str, Any]:

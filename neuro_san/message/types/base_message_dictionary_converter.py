@@ -46,6 +46,15 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
     back and forth to our own ChatMessage dictionary format (as defined in chat.proto).
     """
 
+    # The ChatMessageTypes that from_dict rebuilds for a model's chat history,
+    # whatever langchain_only says.
+    CHAT_HISTORY_TYPES: List[ChatMessageType] = [
+        ChatMessageType.SYSTEM,
+        ChatMessageType.HUMAN,
+        ChatMessageType.AI,
+        ChatMessageType.AGENT_TOOL_RESULT,
+    ]
+
     def __init__(self, origin: List[Dict[str, Any]] = None,
                  langchain_only: bool = True):
         """
@@ -59,7 +68,9 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                                         of the tool is being dealt with.
             This is only used for to_dict()
         :param langchain_only: When True (default) only convert langchain messages,
-                        and not our own special variants.
+                        and not our own special variants, because the result is bound
+                        for a model's chat history. Reasoning blocks are then held
+                        back as well (see from_dict).
             This is only used for from_dict()
         """
         self.origin: List[Dict[str, Any]] = origin
@@ -189,6 +200,13 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         history *might* need to be converted into something langchain agents will
         understand.
 
+        The content is the message's text, unless its content_blocks wrapper
+        restores to block content (see ContentUtils.restorable_blocks). Then
+        the blocks are the content, and the message is marked as carrying
+        standard blocks. With langchain_only the message is bound for a
+        model's chat history, so reasoning blocks are held back until the
+        wire says which provider produced them.
+
         :param obj_dict: A ChatMessage dictionary to convert into BaseMessage
         :return: A BaseMessage that was converted from the input.
                 Can return None if conversion could not take place
@@ -198,9 +216,21 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if chat_message is None:
             return base_message
 
-        content: str = chat_message.get("text")
+        content: Any = chat_message.get("text")
         message_type: str = chat_message.get("type")
+        restored_blocks: Optional[List[Dict[str, Any]]] = \
+            ContentUtils.restorable_blocks(chat_message, for_chat_history=self.langchain_only)
+        if restored_blocks is not None:
+            content = restored_blocks
         chat_message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(message_type)
+
+        if content is None and chat_message_type in self.CHAT_HISTORY_TYPES:
+            # Message constructors reject None content, so a message with no
+            # text and no block content to restore gets empty text.
+            logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+            logger.warning("A %s ChatMessage has no text and no block content to restore; using empty content",
+                           chat_message.get("type"))
+            content = ""
 
         if chat_message_type == ChatMessageType.SYSTEM:
             base_message = SystemMessage(content=content)
@@ -212,25 +242,47 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             tool_result_origin: List[Dict[str, Any]] = chat_message.get("tool_result_origin")
             base_message = AgentToolResultMessage(content=content, tool_result_origin=tool_result_origin)
 
-        if self.langchain_only:
-            # Go no further
-            return base_message
-
-        if base_message is None:
+        if base_message is None and not self.langchain_only:
             # convert_to_base_message() is primarily for populating langchain chat history.
             # so handle these other types differently.
-            content = chat_message.get("text", "")
-            structure: Dict[str, Any] = chat_message.get("structure")
-            if chat_message_type == ChatMessageType.AGENT:
-                base_message = AgentMessage(content=content, structure=structure)
-            elif chat_message_type == ChatMessageType.AGENT_FRAMEWORK:
-                # Don't bother passing on chat_context
-                base_message = AgentFrameworkMessage(content=content)
-            elif chat_message_type == ChatMessageType.AGENT_PROGRESS:
-                base_message = AgentProgressMessage(content=content, structure=structure)
+            base_message = self.agent_message_from_dict(chat_message, chat_message_type, content)
 
         # Any other message type we do not want to send to any agent as chat history.
 
+        if base_message is not None and restored_blocks is not None:
+            # Mark the content as standard blocks so that later .content_blocks
+            # reads pass them through instead of re-translating them.
+            update_dict: Dict[str, Any] = {
+                "response_metadata": ContentUtils.v1_response_metadata(base_message),
+            }
+            base_message = ContentUtils.message_model_copy(base_message, update_dict)
+
+        return base_message
+
+    @staticmethod
+    def agent_message_from_dict(chat_message: Dict[str, Any], chat_message_type: ChatMessageType,
+                                content: Any) -> Optional[BaseMessage]:
+        """
+        Rebuild one of neuro-san's own message types from a ChatMessage dictionary.
+
+        :param chat_message: The ChatMessage dictionary
+        :param chat_message_type: Its ChatMessageType
+        :param content: The content for the message: its text, or restored blocks
+        :return: The message, or None for a type that is never rebuilt
+        """
+        use_content: Any = content
+        if use_content is None:
+            use_content = ""
+
+        structure: Dict[str, Any] = chat_message.get("structure")
+        base_message: Optional[BaseMessage] = None
+        if chat_message_type == ChatMessageType.AGENT:
+            base_message = AgentMessage(content=use_content, structure=structure)
+        elif chat_message_type == ChatMessageType.AGENT_FRAMEWORK:
+            # Don't bother passing on chat_context
+            base_message = AgentFrameworkMessage(content=use_content)
+        elif chat_message_type == ChatMessageType.AGENT_PROGRESS:
+            base_message = AgentProgressMessage(content=use_content, structure=structure)
         return base_message
 
     @staticmethod

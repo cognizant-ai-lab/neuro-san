@@ -23,10 +23,11 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
+from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.config import RAW_RESULTS_FILE_NAME
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 
 
-# pylint: disable=protected-access
 class TestRebuiltAggregates(TestCase):
     """
     Unit tests for the aggregates a rebuild writes.
@@ -54,13 +55,13 @@ class TestRebuiltAggregates(TestCase):
             with open(path, "w", encoding="utf-8") as handle:
                 handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % request_id)
             lines.append(f"Request {request_id}: CREATED ({elapsed_seconds:.2f}s)\n")
-        log_path: str = os.path.join(self._dir, "load_test.log")
+        log_path: str = os.path.join(self._dir, LEGACY_RUN_LOG_FILE_NAME)
         with open(log_path, "w", encoding="utf-8") as handle:
             handle.writelines(lines)
 
         ResultsRebuilder(self._dir).run()
 
-        json_path: str = os.path.join(self._dir, "raw_results.json")
+        json_path: str = os.path.join(self._dir, RAW_RESULTS_FILE_NAME)
         with open(json_path, "r", encoding="utf-8") as handle:
             return json.load(handle).get("aggregates", {})
 

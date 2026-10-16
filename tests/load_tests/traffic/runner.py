@@ -45,6 +45,7 @@ from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
 
 from tests.load_tests.config import FAILURE_LOG_LIMIT
 from tests.load_tests.config import FAILURE_REASON_LINE_LIMIT
+from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
@@ -655,7 +656,7 @@ class TrafficRunner:
         :param elapsed_seconds: Request duration in seconds
         :param parsed_fields: Flattened sly_data string fields of the response
         """
-        path: str = os.path.join(output_dir, "progress.log")
+        path: str = os.path.join(output_dir, PROGRESS_LOG_FILE_NAME)
         field_parts: List[str] = []
         for key, value in parsed_fields.items():
             field_parts.append(f"{key}: {value or ''}")

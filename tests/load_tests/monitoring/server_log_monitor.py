@@ -174,6 +174,8 @@ class ServerLogMonitor:
             return []
         lines: List[str] = self._read_lines_since(position, "tool warnings")
         warnings: List[Dict[str, str]] = []
+        line: str
+        # Keep each "Failed to create Agent/tool" entry as one warning.
         for line in lines:
             stripped: str = line.strip()
             if "Failed to create Agent/tool" not in stripped:

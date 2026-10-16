@@ -22,7 +22,11 @@ from typing import Optional
 
 from unittest import TestCase
 
+from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.base import BaseMessage
+
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
+from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
@@ -51,6 +55,37 @@ class TestChatHistoryMessageProcessor(TestCase):
         assert result["type"] == ChatMessageType.AI
         # The input dictionary is copied, never mutated.
         assert original["text"] == "a {b} and {{c}}"
+
+    def test_escape_message_keeps_text_of_block_message(self) -> None:
+        """
+        A message that carries content_blocks keeps its text unescaped, so
+        the text still equals the flattened blocks and the message restores
+        to its blocks on the next request, braces and all.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": '{"ok": true}',
+                "phase": "final_answer",
+            },
+        ]
+        response_metadata: Dict[str, Any] = {
+            "model_provider": "openai",
+            "output_version": "v1",
+        }
+        message: AIMessage = AIMessage(content=blocks, response_metadata=response_metadata)
+        converter: BaseMessageDictionaryConverter = BaseMessageDictionaryConverter()
+        wire: Dict[str, Any] = converter.to_dict(message)
+        self.assertIn("content_blocks", wire)
+
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
+        result: Optional[Dict[str, Any]] = processor.escape_message(wire)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.get("text"), '{"ok": true}')
+        self.assertEqual(result.get("content_blocks"), wire.get("content_blocks"))
+
+        restored: BaseMessage = converter.from_dict(result)
+        self.assertEqual(restored.content, blocks)
 
     def test_escape_message_without_text_returns_none(self) -> None:
         """

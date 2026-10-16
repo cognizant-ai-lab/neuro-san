@@ -80,9 +80,7 @@ class TestValidateFixturesHoconDir(TestCase):
             fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
         ).validate_fixtures_hocon_dir()
         self.assertEqual(len(files), 5)
-        self.assertTrue(
-            all(file_path.startswith(HELLO_WORLD_FIXTURES) for file_path in files),
-        )
+        self.assertTrue(all(file_path.startswith(HELLO_WORLD_FIXTURES) for file_path in files))
 
     def test_absolute_dir_is_used_as_is(self) -> None:
         """An absolute DIR ignores --project-root."""
