@@ -134,8 +134,9 @@ class SummaryFileWriter:
             # Collect each request's duration, and its LLM call count when it made any calls.
             for result in stage_summary.get("results", []):
                 durations_seconds.append(result.get("elapsed", 0))
-                if result.get("llm_calls", 0) > 0:
-                    llm_calls.append(result.get("llm_calls", 0))
+                call_count: int = result.get("llm_calls", 0)
+                if call_count > 0:
+                    llm_calls.append(call_count)
         if durations_seconds:
             average_duration_seconds: float = sum(durations_seconds) / len(durations_seconds)
             lines.append(
