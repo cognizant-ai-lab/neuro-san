@@ -56,7 +56,8 @@ class TestProviderToolsFitChecker(TestCase):
     AZURE_MODEL: str = "azure-gpt-4o"
     OLLAMA_MODEL: str = "llama3.1"
     ANTHROPIC_BEDROCK_ALIAS: str = "bedrock-claude-opus"
-    BEDROCK_ALIAS: str = "bedrock-us-claude-sonnet-4"
+    # A model id for the bedrock class, which no stock llm_info entry selects by name.
+    BEDROCK_MODEL: str = "us.anthropic.claude-sonnet-4"
 
     # Things that resolve to no llm_info class.
     UNKNOWN_MODEL: str = "model-neuro-san-has-never-heard-of"
@@ -249,12 +250,12 @@ class TestProviderToolsFitChecker(TestCase):
 
     def test_bedrock_class_is_unsupported(self) -> None:
         """
-        The bedrock class never had the marker, so it is unsupported.
+        The bedrock class has no marker, so it is unsupported even when named directly.
         """
-        errors: List[str] = self._check({"model_name": self.BEDROCK_ALIAS,
+        errors: List[str] = self._check({"class": "bedrock", "model_name": self.BEDROCK_MODEL,
                                          "provider_tools": [self.ANTHROPIC_WEB_SEARCH]})
 
-        self.assertEqual([self._unsupported(self.AGENT, self.BEDROCK_ALIAS, "bedrock")], errors)
+        self.assertEqual([self._unsupported(self.AGENT, self.BEDROCK_MODEL, "bedrock")], errors)
 
     def test_missing_model_name_is_labelled_default(self) -> None:
         """
