@@ -34,6 +34,10 @@ logger: logging.Logger = logging.getLogger(__name__)
 class ResourceMonitor:
     """Captures and logs psutil-based process resource snapshots."""
 
+    # Bytes in a megabyte and in a gigabyte, to convert memory readings
+    ONE_MEGABYTE: int = 1024 ** 2
+    ONE_GIGABYTE: int = 1024 ** 3
+
     @staticmethod
     def find_process(keyword: str) -> Optional[psutil.Process]:
         """
