@@ -67,7 +67,7 @@ class DirectAgentReservationist(AbstractAgentReservationist):
 
         for reservation, value in deployment_dict.items():
 
-            use_reservation: Reservation = reservation
+            use_reservation: AgentReservation = reservation
 
             to_deploy: Dict[Union[str, Event], Dict[AgentReservation, Dict[str, Any]]] = value
             for key, value in to_deploy.items():

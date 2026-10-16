@@ -164,20 +164,22 @@ class RunContextRunnable(NeuroSanRunnable):
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
         verbose: Union[bool, str] = agent_spec.get("verbose", False)
-        if isinstance(verbose, str) and verbose.lower() in ("true", "extra", "logging"):
-            # This particular class adds a *lot* of very detailed messages
-            # to the logs.  Add this because some people are interested in it.
-            # If you find yourself curious about this setting, what you probably
-            # are really looking for is an Observability setup like:
-            #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
-            # See the docs for Observability plugins in neuro-san-studio.
-            # This was our only tie to langchain-classic, so make it optional in this case.
-            # pylint: disable=invalid-name
-            LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
-                "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
-                install_if_missing="langchain-classic"
-            )
-            callbacks.append(LoggingCallbackHandler(self.logger))
+        if isinstance(verbose, str):
+            verbose_string: str = verbose
+            if verbose.lower() in ("true", "extra", "logging"):
+                # This particular class adds a *lot* of very detailed messages
+                # to the logs.  Add this because some people are interested in it.
+                # If you find yourself curious about this setting, what you probably
+                # are really looking for is an Observability setup like:
+                #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
+                # See the docs for Observability plugins in neuro-san-studio.
+                # This was our only tie to langchain-classic, so make it optional in this case.
+                # pylint: disable=invalid-name
+                LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
+                    "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
+                    install_if_missing="langchain-classic"
+                )
+                callbacks.append(LoggingCallbackHandler(self.logger))
 
         # Get the number of attempts from the spec.
         max_attempts: int = agent_spec.get("max_attempts", 3)
