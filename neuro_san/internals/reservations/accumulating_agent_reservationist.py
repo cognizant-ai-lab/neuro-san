@@ -132,8 +132,10 @@ class AccumulatingAgentReservationist(Reservationist):
         errors: Dict[str, List[str]] = {}
         for reservation, agent_network_spec in deployment_dict.items():
 
+            use_reservation: Reservation = reservation
+
             # Validate the reservation id
-            key: str = reservation.get_reservation_id()
+            key: str = use_reservation.get_reservation_id()
             self.validate_id(key)
 
             # Validate what is being reserved.

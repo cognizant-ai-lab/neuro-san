@@ -26,6 +26,7 @@ from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.interfaces.agent_spec_provider import AgentSpecProvider
 from neuro_san.internals.run_context.interfaces.run import Run
@@ -148,5 +149,11 @@ class RunContext(AgentSpecProvider, LingeringResource):
     def get_journal(self) -> Journal:
         """
         :return: The Journal associated with the instance
+        """
+        raise NotImplementedError
+
+    def get_tracing_context(self) -> TracingContext:
+        """
+        :return: The TracingContext associated with the instance
         """
         raise NotImplementedError
