@@ -42,7 +42,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
 
 import psutil
 
@@ -162,7 +161,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             args.agent, args.profile_path, args.project_root,
             hocon_files=self.hocon_files,
         )
-        self.server_proc = None
+        self.server_process = None
         self.server_log = args.server_log
         self.log_monitor = ServerLogMonitor(self.server_log) if self.server_log else None
         self._cancel_event: threading.Event = threading.Event()
@@ -185,7 +184,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-locals
     def _run_all_stages(self, stages, total_cap) -> List[Dict[str, Any]]:
         """Execute all stages of the load test, collecting data per stage."""
-        monitor_resources = self.args.level != LEVEL_MIN or self.args.client_only or self.args.server_only
+        monitor_resources = (self.args.level != LEVEL_MIN
+                             or self.args.client_only
+                             or self.args.server_only)
         has_server_log = self.server_log is not None
         probe_result = self.probe_result
         only_stage = len(stages) == 1 and self.args.num_rounds == 1
@@ -221,19 +222,20 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 remaining = total_cap - total_sent
                 actual_requests = min(num_concurrent, remaining)
 
-                summary, probe_used, should_abort = (
-                    self._run_single_stage(
-                        actual_requests=actual_requests,
-                        num_concurrent=num_concurrent,
-                        stage_num=stage_idx + 1,
-                        round_num=round_num,
-                        global_offset=global_offset,
-                        monitor_resources=monitor_resources,
-                        has_server_log=has_server_log,
-                        probe_result=probe_result,
-                        only_stage=only_stage,
-                    )
+                stage_result: Dict[str, Any] = self._run_single_stage(
+                    actual_requests=actual_requests,
+                    num_concurrent=num_concurrent,
+                    stage_num=stage_idx + 1,
+                    round_num=round_num,
+                    global_offset=global_offset,
+                    monitor_resources=monitor_resources,
+                    has_server_log=has_server_log,
+                    probe_result=probe_result,
+                    only_stage=only_stage,
                 )
+                summary: Dict[str, Any] = stage_result.get("summary")
+                probe_used: bool = stage_result.get("probe_used")
+                should_abort: bool = stage_result.get("should_abort")
 
                 global_offset += actual_requests
                 total_sent += actual_requests
@@ -272,10 +274,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             stage_num, round_num, global_offset,
             monitor_resources, has_server_log,
             probe_result, only_stage=False,
-    ) -> Tuple[Dict[str, Any], bool, bool]:
-        """Execute one stage of the load test.
+    ) -> Dict[str, Any]:
+        """
+        Execute one stage of the load test.
 
-        Returns (stage_summary, probe_was_used, should_abort).
+        :param actual_requests: Number of requests to send in this stage
+        :param num_concurrent: Requested concurrency before the --max-requests cap
+        :param stage_num: Stage number, starting at 1
+        :param round_num: Round number, starting at 1
+        :param global_offset: Number of requests sent by earlier stages
+        :param monitor_resources: True to take resource snapshots around the stage
+        :param has_server_log: True when the server log can be read
+        :param probe_result: Result of the dry-run probe to count in this stage, or None
+        :param only_stage: True when this is the only stage
+        :return: Dict with "summary" (the stage summary dict), "probe_used" (True when probe_result was counted)
+            and "should_abort" (True when the test must stop after this stage)
         """
         stage_workers = self.args.max_workers if not self.args.ramp else actual_requests
 
@@ -296,7 +309,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         log_pos = self.log_monitor.read_position() if has_server_log else None
 
-        before_server, before_client, client_proc = self._capture_before_snapshots(monitor_resources)
+        client_process: Optional[psutil.Process] = None
+        before_server: Optional[Dict[str, Any]] = None
+        before_client: Optional[Dict[str, Any]] = None
+        if monitor_resources:
+            client_process = psutil.Process()
+            before_snapshots: Dict[str, Optional[Dict[str, Any]]] = self._capture_before_snapshots(client_process)
+            before_server = before_snapshots.get("server")
+            before_client = before_snapshots.get("client")
 
         self._log_fire_info(actual_requests, monitor_resources, probe_result=probe_result)
 
@@ -308,11 +328,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
-        stop_event = None
-        monitor = None
+        stop_event: threading.Event = threading.Event()
+        monitor: Optional[threading.Thread] = None
         if has_server_log:
-            stop_event, monitor = self.log_monitor.start_log_monitor(
-                log_pos, stage_requests, time.perf_counter(), client_proc=client_proc,
+            monitor = self.log_monitor.start_log_monitor(
+                log_pos, stage_requests, time.perf_counter(), stop_event, client_process=client_process,
                 primary_start_pattern=self.profile.get_primary_start_pattern(), output_dir=self._output_dir)
 
         sys_before = SystemResources.snapshot()
@@ -320,17 +340,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         first_request_number: int = global_offset + (1 if probe_used else 0)
         plan: StagePlan = StagePlan(stage_requests, stage_workers, first_request_number, self._output_dir)
-        (elapsed, results, peak_threads, peak_client_rss,
-         peak_server_rss, peak_sys_mem_pct, peak_sys_cpu,
-         peak_sys_threads,
-         server_died, interrupted) = (
-            self.runner.run_stage(
-                plan,
-                server_proc=self.server_proc,
-                client_proc=client_proc,
-                log_monitor=self.log_monitor,
-            )
-        )
+        stage_run: Dict[str, Any] = self.runner.run_stage(plan, server_process=self.server_process,
+                                                          client_process=client_process, log_monitor=self.log_monitor)
+        elapsed: float = stage_run.get("total_time_seconds")
+        results: List[Dict[str, Any]] = stage_run.get("results")
+        peak_threads: Optional[int] = stage_run.get("peak_server_threads")
+        peak_client_rss: Optional[float] = stage_run.get("peak_client_rss_megabytes")
+        peak_server_rss: Optional[float] = stage_run.get("peak_server_rss_megabytes")
+        peak_sys_mem_pct: Optional[Dict[str, float]] = stage_run.get("peak_system_memory")
+        peak_sys_cpu: Optional[float] = stage_run.get("peak_system_cpu_percent")
+        peak_sys_threads: Optional[int] = stage_run.get("peak_system_threads")
+        server_died: bool = stage_run.get("server_died")
+        interrupted: bool = stage_run.get("interrupted")
         if interrupted:
             self._interrupted = True
 
@@ -338,8 +359,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             results.insert(0, probe_result)
             elapsed += probe_result.get("elapsed", 0.0)
 
-        if stop_event:
-            stop_event.set()
+        stop_event.set()
         if monitor:
             monitor.join(timeout=THREAD_JOIN_TIMEOUT)
 
@@ -348,7 +368,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if monitor_resources:
             if peak_client_rss is not None:
                 peak_client = {"rss": peak_client_rss}
-            settled_client = ResourceMonitor.snapshot(client_proc)
+            settled_client = ResourceMonitor.snapshot(client_process)
 
         counts = OutputValidator.count_results(results)
 
@@ -408,25 +428,26 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 after_sys=sys_after,
                 peak_sys_threads=peak_sys_threads,
             )
-            return summary_entry, probe_used, True
+            stage_result: Dict[str, Any] = {
+                "summary": summary_entry,
+                "probe_used": probe_used,
+                "should_abort": True,
+            }
+            return stage_result
 
         if has_server_log and stage_requests > 0:
             OutputValidator.log_retry_activity(retries, total_retries, stage_requests)
 
-        server_counts, disconnections, server_errors, \
-            tool_warnings, network_tokens, validation_events, \
-            after_server = (
-                self._collect_post_stage_data(
-                    actual_requests, monitor_resources,
-                    has_server_log,
-                    log_pos, results,
-                    before_server=before_server,
-                    before_client=before_client,
-                    peak_client=peak_client,
-                    settled_client=settled_client,
-                    server_log_requests=stage_requests,
-                )
-            )
+        post_stage_data: Dict[str, Any] = self._collect_post_stage_data(
+            actual_requests, monitor_resources,
+            has_server_log,
+            log_pos, results,
+            before_server=before_server,
+            before_client=before_client,
+            peak_client=peak_client,
+            settled_client=settled_client,
+            server_log_requests=stage_requests,
+        )
 
         sys_after = SystemResources.snapshot()
         after_sys_mem_pct = sys_after["mem_pct"]
@@ -441,17 +462,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             total_retries=total_retries,
             amplification=amplification,
             results=results,
-            server_counts=server_counts,
-            disconnections=disconnections,
-            server_errors=server_errors,
-            tool_warnings=tool_warnings,
-            network_tokens=network_tokens,
-            validation_events=validation_events,
+            server_counts=post_stage_data.get("server_counts"),
+            disconnections=post_stage_data.get("disconnections"),
+            server_errors=post_stage_data.get("server_errors"),
+            tool_warnings=post_stage_data.get("tool_warnings"),
+            network_tokens=post_stage_data.get("network_tokens"),
+            validation_events=post_stage_data.get("validation_events"),
             has_server_log=has_server_log,
             has_tokens=self.args.include_tokens,
             monitor_resources=monitor_resources,
             before_server=before_server,
-            after_server=after_server,
+            after_server=post_stage_data.get("after_server"),
             peak_threads=peak_threads,
             peak_server_rss=peak_server_rss,
             before_client=before_client,
@@ -465,47 +486,69 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_sys=sys_after,
             peak_sys_threads=peak_sys_threads,
         )
-        return summary_entry, probe_used, False
+        stage_result: Dict[str, Any] = {
+            "summary": summary_entry,
+            "probe_used": probe_used,
+            "should_abort": False,
+        }
+        return stage_result
 
-    def _capture_before_snapshots(self, monitor_resources):
-        """Capture server and client resource snapshots before a stage."""
-        before_server = None
-        before_client = None
-        client_proc = None
-        if monitor_resources:
-            before_server = ResourceMonitor.snapshot(self.server_proc) if self.server_proc else None
-            if before_server:
-                ResourceMonitor.log_snapshot("Server BEFORE", before_server)
-            elif not self.args.client_only:
-                logger.info("  Server BEFORE: not available (server not running)")
+    def _snapshot_server_process(self) -> Optional[Dict[str, Any]]:
+        """
+        Take a resource snapshot of the server process.
 
-            client_proc = psutil.Process()
-            before_client = ResourceMonitor.snapshot(client_proc)
-            if before_client:
-                logger.info(
-                    "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
-                    before_client.get("rss"),
-                    before_client.get("cpu"),
-                )
+        :return: The snapshot, or None when there is no server process or it cannot be read
+        """
+        server_snapshot: Optional[Dict[str, Any]] = None
+        if self.server_process:
+            server_snapshot = ResourceMonitor.snapshot(self.server_process)
+        return server_snapshot
 
-            mem = psutil.virtual_memory()
-            used_mb = (mem.total - mem.available) / (1024 ** 2)
-            avail_gb = mem.available / (1024 ** 3)
-            total_gb = mem.total / (1024 ** 3)
+    def _capture_before_snapshots(self, client_process: psutil.Process) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        Capture and log the server, client and system resources before a stage.
+
+        :param client_process: The client process
+        :return: Dict with "server" (server snapshot, or None when not available) and "client" (client snapshot,
+            or None)
+        """
+        before_server: Optional[Dict[str, Any]] = self._snapshot_server_process()
+        if before_server:
+            ResourceMonitor.log_snapshot("Server BEFORE", before_server)
+        elif not self.args.client_only:
+            logger.info("  Server BEFORE: not available (server not running)")
+
+        before_client: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_process)
+        if before_client:
             logger.info(
-                "  System BEFORE: %.0f%% used"
-                " (%.0fM used / %.1fG free / %.1fG total)",
-                mem.percent, used_mb, avail_gb, total_gb,
+                "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
+                before_client.get("rss"),
+                before_client.get("cpu"),
             )
-        return before_server, before_client, client_proc
+
+        virtual_memory_stats: Any = psutil.virtual_memory()
+        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
+        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
+        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
+        logger.info(
+            "  System BEFORE: %.0f%% used"
+            " (%.0fM used / %.1fG free / %.1fG total)",
+            virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes,
+        )
+        before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {
+            "server": before_server,
+            "client": before_client,
+        }
+        return before_snapshots
 
     def _log_fire_info(self, actual_requests, monitor_resources, *, probe_result):
         """Log the 'Firing N requests' line with thread count."""
         fire_ts = time.strftime("%H:%M:%S", time.localtime(time.time()))
         fire_threads = ""
-        if monitor_resources and self.server_proc:
+        if monitor_resources and self.server_process:
             try:
-                fire_threads = f"  threads: {self.server_proc.num_threads()}"
+                fire_threads = f"  threads: {self.server_process.num_threads()}"
             except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
                 logger.debug("Thread count unavailable: %s", exc)
         fire_label = actual_requests
@@ -521,46 +564,40 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_server, before_client,
             peak_client, settled_client,
             server_log_requests=None,
-    ) -> Tuple[
-        Dict[str, Any], List[Dict[str, str]],
-        List[Dict[str, Any]], Optional[Dict[str, Any]],
-    ]:
-        """Settle, snapshot, and analyze server log after a stage.
-
-        Returns (server_counts, disconnections, network_tokens,
-        after_server_snapshot).
+    ) -> Dict[str, Any]:
         """
-        server_counts: Dict[str, Any] = {}
-        disconnections: List[Dict[str, str]] = []
-        server_errors: List[Dict[str, str]] = []
-        tool_warnings: List[Dict[str, str]] = []
-        network_tokens: List[Dict[str, Any]] = []
-        after_server = None
+        Settle, snapshot and analyze the server log after a stage.
+
+        :param actual_requests: Number of requests sent in this stage
+        :param monitor_resources: True to take the server snapshot after the stage
+        :param has_server_log: True when the server log can be read
+        :param log_pos: Server log offset where the stage started, or None
+        :param results: Request results of the stage
+        :param before_server: Server snapshot before the stage, or None
+        :param before_client: Client snapshot before the stage, or None
+        :param peak_client: Peak client snapshot during the stage, or None
+        :param settled_client: Client snapshot after the stage, or None
+        :param server_log_requests: Number of stage requests in the server log, or None to use actual_requests
+        :return: The dict from _analyze_server_log() plus "after_server" (server snapshot after the stage, or None)
+        """
+        after_server: Optional[Dict[str, Any]] = None
 
         if monitor_resources or has_server_log:
             time.sleep(self.args.settle_time)
             settle_end = time.strftime("%H:%M:%S", time.localtime(time.time()))
             logger.info("\n  Settle: waited %ss for server cleanup [%s]", self.args.settle_time, settle_end)
 
-            after_server = ResourceMonitor.snapshot(self.server_proc) if self.server_proc else None
+            after_server = self._snapshot_server_process()
             if after_server:
                 ResourceMonitor.log_snapshot("Server AFTER", after_server)
             elif not self.args.client_only:
                 logger.info("  Server AFTER: not available (server not running)")
 
-        server_counts, disconnections, server_errors, \
-            tool_warnings, network_tokens, validation_events = (
-                self._analyze_server_log(
-                    has_server_log,
-                    log_pos,
-                    results=results,
-                    actual_requests=(
-                        server_log_requests
-                        if server_log_requests is not None
-                        else actual_requests
-                    ),
-                )
-            )
+        log_requests: int = actual_requests
+        if server_log_requests is not None:
+            log_requests = server_log_requests
+        post_stage_data: Dict[str, Any] = self._analyze_server_log(has_server_log, log_pos, results=results,
+                                                                   actual_requests=log_requests)
 
         if before_server and after_server:
             self.resource_reporter.add_resource_row(f"{actual_requests}", before_server, after_server)
@@ -568,11 +605,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if before_client and settled_client:
             self.resource_reporter.add_client_row(f"{actual_requests}", before_client, peak_client, settled_client)
 
-        return (
-            server_counts, disconnections, server_errors,
-            tool_warnings, network_tokens, validation_events,
-            after_server,
-        )
+        post_stage_data["after_server"] = after_server
+        return post_stage_data
 
     @staticmethod
     # pylint: disable=too-many-arguments
@@ -658,19 +692,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_entry["peak_sys_threads"] = peak_sys_threads
         return summary_entry
 
-    # pylint: disable=too-many-arguments
-    def _analyze_server_log(
-            self, has_server_log,
-            log_pos, *, results, actual_requests,
-    ) -> Tuple[
-        Dict[str, Any], List[Dict[str, str]], List[Dict[str, str]],
-        List[Dict[str, str]],
-        List[Dict[str, Any]], List[Dict[str, Any]],
-    ]:
-        """Analyze server log or report unavailability.
+    def _analyze_server_log(self, has_server_log, log_pos, results, actual_requests) -> Dict[str, Any]:
+        """
+        Analyze the server log of a stage, or report that it is not available.
 
-        Returns (server_counts, disconnections, server_errors,
-        tool_warnings, network_tokens, validation_events).
+        :param has_server_log: True when the server log can be read
+        :param log_pos: Server log offset where the stage started, or None
+        :param results: Request results of the stage
+        :param actual_requests: Number of stage requests expected in the server log
+        :return: Dict with "server_counts" (request counts from the log) and "disconnections", "server_errors",
+            "tool_warnings", "network_tokens" and "validation_events" (lists of dicts, empty without a server log)
         """
         server_counts: Dict[str, Any] = {}
         disconnections: List[Dict[str, str]] = []
@@ -727,7 +758,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)
             if self.args.level != LEVEL_MIN:
                 logger.info("\n  Server-side validation: not available (no --server-log)")
-        return (server_counts, disconnections, server_errors, tool_warnings, network_tokens, validation_events)
+        server_log_analysis: Dict[str, Any] = {
+            "server_counts": server_counts,
+            "disconnections": disconnections,
+            "server_errors": server_errors,
+            "tool_warnings": tool_warnings,
+            "network_tokens": network_tokens,
+            "validation_events": validation_events,
+        }
+        return server_log_analysis
 
     def _output_base(self) -> str:
         """Return the base output directory.
@@ -812,13 +851,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 self._test_log_handler.close()
             return
         self._archive_server_log()
-        has_failures = any(
-            summary.get("counts", {}).get(STATUS_FAILED, 0) > 0
-            or summary.get("counts", {}).get(STATUS_TIMEOUT, 0) > 0
-            or summary.get("counts", {}).get(STATUS_KILLED, 0) > 0
-            for summary in stage_summaries
-        )
-        label = "OUTPUT FILES (with failures)" if has_failures else "OUTPUT FILES"
+        has_failures: bool = False
+        summary: Dict[str, Any]
+        # Look for a stage with failed, timed-out or killed requests
+        for summary in stage_summaries:
+            counts: Dict[str, int] = summary.get("counts", {})
+            if (counts.get(STATUS_FAILED, 0) > 0
+                    or counts.get(STATUS_TIMEOUT, 0) > 0
+                    or counts.get(STATUS_KILLED, 0) > 0):
+                has_failures = True
+                break
+        label: str = "OUTPUT FILES"
+        if has_failures:
+            label = "OUTPUT FILES (with failures)"
         logger.info("\n%s", "=" * 60)
         logger.info("  %s", label)
         logger.info("=" * 60)
@@ -831,11 +876,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             logger.info("  Requests:    %s", requests_dir)
         gz_path = os.path.join(self._output_dir, "server.log.gz")
         if os.path.isfile(gz_path):
-            size_mb = os.path.getsize(gz_path) / (1024 * 1024)
-            logger.info("  Server log:  %s (%.1fM)", gz_path, size_mb)
+            size_megabytes: float = os.path.getsize(gz_path) / ResourceMonitor.ONE_MEGABYTE
+            logger.info("  Server log:  %s (%.1fM)", gz_path, size_megabytes)
         if self._test_log_path is not None:
             logger.info("  Stdout log:  %s", self._test_log_path)
-        for history_path in (self._history_path(), self._history_path(successful=False)):
+        history_path: str
+        # Log each history file that exists
+        for history_path in [self._history_path(), self._history_path(successful=False)]:
             if os.path.isfile(history_path):
                 logger.info("  History:     %s", history_path)
         # Close handler last so OUTPUT FILES is captured
@@ -895,10 +942,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             logger.error("Server log not found: %s", server_log)
             sys.exit(1)
 
-        mtime = os.path.getmtime(server_log)
-        age_seconds = time.time() - mtime
+        modification_time: float = os.path.getmtime(server_log)
+        age_seconds: float = time.time() - modification_time
         if age_seconds > STALE_LOG_THRESHOLD_SECONDS:
-            return int(age_seconds // 60)
+            # Whole minutes, e.g. 150.7 seconds -> 2 minutes
+            return int(age_seconds / 60)
         return None
 
     def _confirm_no_server_log(self, level) -> None:
@@ -982,7 +1030,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 primary.append(pair)
         return primary
 
-    def _server_only_dur_stats(self, log_pos, pri_start_re) -> str:
+    def _server_only_duration_stats(self, log_pos, pri_start_re) -> str:
         """Cumulative server-side min/avg/max for the primary agent.
 
         Parses primary streaming_chat Start/Finish pairs seen since
@@ -997,7 +1045,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             if isinstance(pair.get("duration_seconds"), (int, float))
             and pair.get("duration_seconds") > 0
         ]
-        return Heartbeat.format_dur_stats(durations)
+        return Heartbeat.format_duration_stats(durations)
 
     def _log_server_only_token_usage(self, log_pos) -> None:
         """Log the LLM & TOKEN USAGE section for a server-only round.
@@ -1030,44 +1078,41 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _server_only_heartbeat(
             self, received, expected, completed,
-            elapsed, now, snap, cur_mem,
-            dur_stats="n/a",
-            cur_sys_cpu=None, peak_sys_cpu=None,
+            elapsed_seconds, now, server_snapshot, virtual_memory_stats,
+            duration_stats="n/a",
+            current_system_cpu=None, peak_sys_cpu=None,
     ) -> None:
         """Log a periodic heartbeat during server-only monitoring."""
-        cur_used_mb = (cur_mem.total - cur_mem.available) / (1024 ** 2)
-        cur_avail_gb = cur_mem.available / (1024 ** 3)
-        rss_str = ""
-        threads_str = ""
-        if snap:
-            rss_str = f"  RSS: {snap.get('rss', 0):.0f}M"
-            threads_str = f"  threads: {snap.get('threads', 0)}"
-        ts = time.strftime("%H:%M:%S", time.localtime(now))
-        if elapsed < 60:
-            fmt_elapsed = f"{elapsed:.0f}s"
-        else:
-            mins = int(elapsed) // 60
-            fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
+        used_bytes = virtual_memory_stats.total - virtual_memory_stats.available
+        used_megabytes = used_bytes / ResourceMonitor.ONE_MEGABYTE
+        available_gigabytes = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        rss_text = ""
+        threads_text = ""
+        if server_snapshot:
+            rss_text = f"  RSS: {server_snapshot.get("rss", 0):.0f}M"
+            threads_text = f"  threads: {server_snapshot.get("threads", 0)}"
+        timestamp = time.strftime("%H:%M:%S", time.localtime(now))
+        elapsed_text: str = Heartbeat.format_elapsed(int(elapsed_seconds))
         in_flight = max(0, received - completed)
         if received >= expected:
-            progress_str = f" {expected} recv  {completed}/{expected} done  {in_flight} in-flight"
+            progress_text = f" {expected} recv  {completed}/{expected} done  {in_flight} in-flight"
         else:
-            progress_str = f" {received}/{expected} recv  {completed} done  {in_flight} in-flight"
-        sys_cpu_str = ""
-        if cur_sys_cpu is not None:
-            peak_val = peak_sys_cpu if peak_sys_cpu is not None else cur_sys_cpu
-            sys_cpu_str = f"  syscpu: {cur_sys_cpu:.0f}% (peak {peak_val:.0f}%)"
+            progress_text = f" {received}/{expected} recv  {completed} done  {in_flight} in-flight"
+        system_cpu_text = ""
+        if current_system_cpu is not None:
+            peak_system_cpu = peak_sys_cpu if peak_sys_cpu is not None else current_system_cpu
+            system_cpu_text = f"  syscpu: {current_system_cpu:.0f}% (peak {peak_system_cpu:.0f}%)"
         logger.info(
             "  [heartbeat] %s [%s]%s  dur/server: %s%s%s"
             "  sysmem: %.0f%% (%.0fM used"
             " / %.1fG free)%s",
-            fmt_elapsed, ts,
-            progress_str,
-            dur_stats,
-            threads_str, rss_str,
-            cur_mem.percent, cur_used_mb,
-            cur_avail_gb,
-            sys_cpu_str,
+            elapsed_text, timestamp,
+            progress_text,
+            duration_stats,
+            threads_text, rss_text,
+            virtual_memory_stats.percent, used_megabytes,
+            available_gigabytes,
+            system_cpu_text,
         )
 
     def _run_server_only_monitor(self) -> int:
@@ -1155,22 +1200,23 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("=" * 60)
         logger.info("  neuro-san version: %s", self._resolve_ns_version() or "unknown")
 
-        before_server = ResourceMonitor.snapshot(self.server_proc) if self.server_proc else None
+        before_server = self._snapshot_server_process()
         if before_server:
             ResourceMonitor.log_snapshot("Server BEFORE", before_server)
-        mem = psutil.virtual_memory()
-        before_used_mb = (mem.total - mem.available) / (1024 ** 2)
-        avail_gb = mem.available / (1024 ** 3)
-        total_gb = mem.total / (1024 ** 3)
+        before_memory_stats = psutil.virtual_memory()
+        before_used_bytes = before_memory_stats.total - before_memory_stats.available
+        before_used_megabytes = before_used_bytes / ResourceMonitor.ONE_MEGABYTE
+        before_available_gigabytes = before_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        total_gigabytes = before_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
         logger.info(
             "  System BEFORE: %.0f%% used"
             " (%.0fM used / %.1fG free / %.1fG total)",
-            mem.percent, before_used_mb,
-            avail_gb, total_gb,
+            before_memory_stats.percent, before_used_megabytes,
+            before_available_gigabytes, total_gigabytes,
         )
-        ncores = psutil.cpu_count() or 1
+        core_count = psutil.cpu_count() or 1
         before_sys_cpu = psutil.cpu_percent(interval=0.1)
-        logger.info("  System CPU: %d cores (%.0f%% in use)", ncores, before_sys_cpu)
+        logger.info("  System CPU: %d cores (%.0f%% in use)", core_count, before_sys_cpu)
         before_sys_threads = SystemResources.total_threads()
         user_limit, sys_max = SystemResources.thread_limits()
         logger.info(
@@ -1178,10 +1224,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             " per-user (%s max)",
             f"{before_sys_threads:,}", user_limit, sys_max,
         )
-        before_sys_mem_pct = mem.percent
+        before_sys_mem_pct = before_memory_stats.percent
         sys_before = {
-            "mem_pct": mem.percent,
-            "mem_avail_gb": avail_gb,
+            "mem_pct": before_memory_stats.percent,
+            "mem_avail_gb": before_available_gigabytes,
             "cpu_pct": before_sys_cpu,
             "threads": before_sys_threads,
         }
@@ -1194,43 +1240,45 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             expected,
         )
 
-        count, completed, peak_server, \
-            peak_threads, \
-            peak_sys_mem_pct, elapsed, interrupted, \
-            peak_sys_cpu, avg_sys_cpu, peak_sys_threads = (
-                self._tail_server_log(
-                    expected, log_pos,
-                    pri_start_re, pri_finish_re,
-                    before_server, before_sys_mem_pct,
-                )
-            )
+        tail_result: Dict[str, Any] = self._tail_server_log(expected, log_pos, pri_start_re, pri_finish_re,
+                                                            before_server, before_sys_mem_pct)
+        count: int = tail_result.get("count")
+        completed: int = tail_result.get("completed")
+        peak_server: Optional[Dict[str, Any]] = tail_result.get("peak_server")
+        peak_threads: int = tail_result.get("peak_threads")
+        peak_sys_mem_pct: float = tail_result.get("peak_sys_mem_pct")
+        elapsed_seconds: float = tail_result.get("elapsed_seconds")
+        interrupted: bool = tail_result.get("interrupted")
+        peak_sys_cpu: float = tail_result.get("peak_sys_cpu")
+        avg_sys_cpu: float = tail_result.get("avg_sys_cpu")
+        peak_sys_threads: int = tail_result.get("peak_sys_threads")
 
         logger.info(
             "\n  Monitoring complete: %d/%d received,"
             " %d/%d processed in %.1fs",
             count, expected, completed,
-            count, elapsed,
+            count, elapsed_seconds,
         )
 
-        after_server = ResourceMonitor.snapshot(self.server_proc) if self.server_proc else None
+        after_server = self._snapshot_server_process()
         after_kernel = self._read_kernel_memory()
-        mem = psutil.virtual_memory()
-        total_gb = mem.total / (1024 ** 3)
-        after_avail_gb = mem.available / (1024 ** 3)
+        after_memory_stats = psutil.virtual_memory()
+        total_gigabytes = after_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
+        after_available_gigabytes = after_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         after_sys_cpu = psutil.cpu_percent(interval=0.1)
         after_sys_threads = SystemResources.total_threads()
-        peak_avail_gb = total_gb - peak_sys_mem_pct / 100.0 * total_gb
+        peak_available_gigabytes = total_gigabytes - peak_sys_mem_pct / 100.0 * total_gigabytes
         SystemResources.log_section(
             sys_before,
             {
                 "mem_pct": peak_sys_mem_pct,
-                "mem_avail_gb": peak_avail_gb,
+                "mem_avail_gb": peak_available_gigabytes,
                 "cpu_pct": peak_sys_cpu,
                 "threads": peak_sys_threads,
             },
             {
-                "mem_pct": mem.percent,
-                "mem_avail_gb": after_avail_gb,
+                "mem_pct": after_memory_stats.percent,
+                "mem_avail_gb": after_available_gigabytes,
                 "cpu_pct": after_sys_cpu,
                 "threads": after_sys_threads,
             },
@@ -1254,11 +1302,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         kernel_breakdown = self._log_kernel_breakdown(after_kernel, peak_rss_for_breakdown, log=False)
 
         self._export_server_only_json(
-            round_dir, expected, count, elapsed,
+            round_dir, expected, count, elapsed_seconds,
             before_server, after_server, peak_server,
             peak_threads,
             before_sys_mem_pct, peak_sys_mem_pct,
-            mem.percent, interrupted,
+            after_memory_stats.percent, interrupted,
             kernel_breakdown,
             avg_sys_cpu=avg_sys_cpu,
             peak_sys_cpu=peak_sys_cpu,
@@ -1267,7 +1315,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         self._append_server_history_record(
-            expected, count, elapsed, peak_server, peak_sys_cpu,
+            expected, count, elapsed_seconds, peak_server, peak_sys_cpu,
             primary_pairs,
             server_errors=server_errors,
             tool_warnings=tool_warnings,
@@ -1284,10 +1332,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             logger.info("  Raw results: %s", json_path)
         gz_path = os.path.join(round_dir, "server.log.gz")
         if os.path.isfile(gz_path):
-            size_mb = os.path.getsize(gz_path) / (1024 * 1024)
-            logger.info("  Server log:  %s (%.1fM)", gz_path, size_mb)
+            size_megabytes: float = os.path.getsize(gz_path) / ResourceMonitor.ONE_MEGABYTE
+            logger.info("  Server log:  %s (%.1fM)", gz_path, size_megabytes)
         logger.info("  Stdout log:  %s", round_log_path)
-        for history_path in (self._history_path(), self._history_path(successful=False)):
+        history_path: str
+        # Log each history file that exists
+        for history_path in [self._history_path(), self._history_path(successful=False)]:
             if os.path.isfile(history_path):
                 logger.info("  History:     %s", history_path)
 
@@ -1296,17 +1346,23 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("%s", "\u2500" * 45)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _tail_server_log(self, expected, log_pos, pri_start_re, pri_finish_re, before_server, before_sys_mem_pct):
-        """Tail the server log in two phases.
+    def _tail_server_log(self, expected, log_pos, pri_start_re, pri_finish_re, before_server,
+                         before_sys_mem_pct) -> Dict[str, Any]:
+        """
+        Tail the server log in two phases.
 
-        Phase 1: count Start patterns until all requests
-        received.  Phase 2: count Finish patterns until all
-        requests processed.
+        Phase 1 counts Start patterns until all requests are received. Phase 2 counts Finish patterns until all
+        requests are processed.
 
-        Returns (count, completed, peak_server,
-        peak_threads, peak_sys_mem_pct, elapsed,
-        interrupted, peak_sys_cpu, avg_sys_cpu,
-        peak_sys_threads).
+        :param expected: Number of requests to wait for
+        :param log_pos: Server log offset to start reading from
+        :param pri_start_re: Regex for the log line of a primary agent request starting
+        :param pri_finish_re: Regex for the log line of a primary agent request finishing
+        :param before_server: Server snapshot before the round, or None
+        :param before_sys_mem_pct: System memory use in percent before the round
+        :return: Dict with "count" (requests received), "completed" (requests processed), "peak_server" (peak server
+            snapshot), "peak_threads", "peak_sys_mem_pct", "elapsed_seconds", "interrupted" (True on Ctrl-C),
+            "peak_sys_cpu", "avg_sys_cpu" and "peak_sys_threads"
         """
         start_time = time.time()
         count = 0
@@ -1318,8 +1374,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_sys_mem_pct = before_sys_mem_pct
         peak_sys_cpu = 0.0
         peak_sys_threads = 0
-        sys_cpu_sum = 0.0
-        sys_cpu_n = 0
+        system_cpu_sum = 0.0
+        system_cpu_samples = 0
         interrupted = False
         warned_missing_starts = False
         phase = 1
@@ -1328,21 +1384,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         psutil.cpu_percent(interval=None)
 
         try:
-            with open(self.server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(log_pos)
+            with open(self.server_log, "r", encoding="utf-8") as server_log_file:
+                server_log_file.seek(log_pos)
                 last_monitor = start_time
                 monitor_interval = 1.0
                 while True:
                     if phase == 1 and count >= expected:
                         now = time.time()
-                        elapsed = now - start_time
+                        elapsed_seconds = now - start_time
                         logger.info(
                             "\n  All %d request(s)"
                             " received (%.1fs)."
                             " Monitoring until"
                             " processing completes"
                             "...",
-                            expected, elapsed,
+                            expected, elapsed_seconds,
                         )
                         phase = 2
                     if phase == 2 and completed >= count:
@@ -1371,26 +1427,26 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         if completed >= expected:
                             break
 
-                    line = log_fh.readline()
+                    line = server_log_file.readline()
                     if line:
                         if phase == 1 and pri_start_re.search(line):
                             count += 1
                             now = time.time()
-                            ts = time.strftime("%H:%M:%S", time.localtime(now))
-                            elapsed = now - start_time
+                            timestamp = time.strftime("%H:%M:%S", time.localtime(now))
+                            elapsed_seconds = now - start_time
                             if count <= log_limit or count == expected:
                                 logger.info(
                                     "  [server] request"
                                     " %d/%d received"
                                     " [%s] (+%.1fs)",
                                     count, expected,
-                                    ts, elapsed,
+                                    timestamp, elapsed_seconds,
                                 )
                         if pri_finish_re.search(line):
                             completed += 1
                             now = time.time()
-                            ts = time.strftime("%H:%M:%S", time.localtime(now))
-                            elapsed = now - start_time
+                            timestamp = time.strftime("%H:%M:%S", time.localtime(now))
+                            elapsed_seconds = now - start_time
                             total = count if phase == 2 else expected
                             if completed <= log_limit or completed == total:
                                 logger.info(
@@ -1398,45 +1454,45 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                     " %d/%d completed"
                                     " [%s] (+%.1fs)",
                                     completed, total,
-                                    ts, elapsed,
+                                    timestamp, elapsed_seconds,
                                 )
                         continue
-                    pos = log_fh.tell()
-                    log_fh.seek(pos)
+                    position = server_log_file.tell()
+                    server_log_file.seek(position)
                     time.sleep(0.5)
 
                     now = time.time()
-                    elapsed = now - start_time
+                    elapsed_seconds = now - start_time
 
                     if now - last_monitor >= monitor_interval:
-                        snap = ResourceMonitor.snapshot(self.server_proc)
-                        if snap:
-                            if peak_server is None or snap.get("rss", 0) > peak_server.get("rss", 0):
-                                peak_server = snap
-                            cur_threads = snap.get("threads", 0)
-                            peak_threads = max(peak_threads, cur_threads)
-                        cur_mem = psutil.virtual_memory()
-                        peak_sys_mem_pct = max(peak_sys_mem_pct, cur_mem.percent)
-                        cur_sys_cpu = psutil.cpu_percent(interval=None)
-                        sys_cpu_sum += cur_sys_cpu
-                        sys_cpu_n += 1
-                        peak_sys_cpu = max(peak_sys_cpu, cur_sys_cpu)
+                        server_snapshot = ResourceMonitor.snapshot(self.server_process)
+                        if server_snapshot:
+                            if peak_server is None or server_snapshot.get("rss", 0) > peak_server.get("rss", 0):
+                                peak_server = server_snapshot
+                            current_threads = server_snapshot.get("threads", 0)
+                            peak_threads = max(peak_threads, current_threads)
+                        virtual_memory_stats = psutil.virtual_memory()
+                        peak_sys_mem_pct = max(peak_sys_mem_pct, virtual_memory_stats.percent)
+                        current_system_cpu = psutil.cpu_percent(interval=None)
+                        system_cpu_sum += current_system_cpu
+                        system_cpu_samples += 1
+                        peak_sys_cpu = max(peak_sys_cpu, current_system_cpu)
                         peak_sys_threads = max(peak_sys_threads, SystemResources.total_threads())
                         last_monitor = now
 
                         if now - last_heartbeat >= heartbeat_interval:
-                            dur_stats = self._server_only_dur_stats(log_pos, pri_start_re)
+                            duration_stats = self._server_only_duration_stats(log_pos, pri_start_re)
                             self._server_only_heartbeat(
                                 count, expected,
                                 completed,
-                                elapsed, now,
-                                snap, cur_mem,
-                                dur_stats,
-                                cur_sys_cpu, peak_sys_cpu,
+                                elapsed_seconds, now,
+                                server_snapshot, virtual_memory_stats,
+                                duration_stats,
+                                current_system_cpu, peak_sys_cpu,
                             )
                             last_heartbeat = now
 
-                    if elapsed > self.args.stage_timeout:
+                    if elapsed_seconds > self.args.stage_timeout:
                         if phase == 1:
                             logger.warning(
                                 "  Stage timeout"
@@ -1462,14 +1518,23 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             interrupted = True
             logger.info("\n  Interrupted \u2014 reporting partial results...")
 
-        elapsed = time.time() - start_time
-        avg_sys_cpu = sys_cpu_sum / sys_cpu_n if sys_cpu_n else 0.0
-        return (
-            count, completed, peak_server,
-            peak_threads,
-            peak_sys_mem_pct, elapsed, interrupted,
-            peak_sys_cpu, avg_sys_cpu, peak_sys_threads,
-        )
+        elapsed_seconds = time.time() - start_time
+        avg_sys_cpu: float = 0.0
+        if system_cpu_samples:
+            avg_sys_cpu = system_cpu_sum / system_cpu_samples
+        tail_result: Dict[str, Any] = {
+            "count": count,
+            "completed": completed,
+            "peak_server": peak_server,
+            "peak_threads": peak_threads,
+            "peak_sys_mem_pct": peak_sys_mem_pct,
+            "elapsed_seconds": elapsed_seconds,
+            "interrupted": interrupted,
+            "peak_sys_cpu": peak_sys_cpu,
+            "avg_sys_cpu": avg_sys_cpu,
+            "peak_sys_threads": peak_sys_threads,
+        }
+        return tail_result
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _export_server_only_json(
@@ -1704,12 +1769,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if self.args.client_only:
             logger.info("Client-only mode: skipping server process detection.")
         elif self.args.server_only:
-            self.server_proc = EnvironmentValidator.find_local_server(self.args)
+            self.server_process = EnvironmentValidator.find_local_server(self.args)
         elif is_local:
-            self.server_proc = EnvironmentValidator.find_local_server(self.args)
+            self.server_process = EnvironmentValidator.find_local_server(self.args)
 
         if self.args.server_log == "auto":
-            self.args.server_log = EnvironmentValidator.auto_detect_server_log(self.server_proc)
+            self.args.server_log = EnvironmentValidator.auto_detect_server_log(self.server_process)
 
         self.server_log = self.args.server_log
         if self.server_log:
