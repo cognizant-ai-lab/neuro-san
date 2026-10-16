@@ -121,7 +121,7 @@ class ProviderToolsFitChecker:
         for agent_name, agent, llm_config in candidates:
             models: List[Tuple[str, str, str, bool, Dict[str, Any]]] = self.resolve_models(llm_config)
             label: str = self.message_label(agent_name, llm_config, inherited)
-            provider_tools: List[Any] = llm_config.get(self.KEY)
+            provider_tools: List[Any] = llm_config.get(ProviderToolsFitChecker.KEY)
 
             errors.extend(self.check_support(label, models))
             errors.extend(self.check_single_provider(label, models))
@@ -135,7 +135,7 @@ class ProviderToolsFitChecker:
             errors.extend(self.validate_gemini_mixing(agent_name, agent))
 
             if len(provider_tools) > 1:
-                if label == self.NETWORK_LABEL:
+                if label == ProviderToolsFitChecker.NETWORK_LABEL:
                     # Every agent that kept the network's own model and list would repeat this
                     # one, so it is reported once under NETWORK_LABEL below. An agent that moved
                     # the inherited list onto its own Gemini model keeps its own name.
@@ -144,7 +144,7 @@ class ProviderToolsFitChecker:
                     errors.append(self.gemini_count_message(agent_name, len(provider_tools)))
 
         if inherited_count > 0:
-            errors.insert(0, self.gemini_count_message(self.NETWORK_LABEL, inherited_count))
+            errors.insert(0, self.gemini_count_message(ProviderToolsFitChecker.NETWORK_LABEL, inherited_count))
 
         return self.dedupe(errors)
 
@@ -293,7 +293,7 @@ class ProviderToolsFitChecker:
         declares: bool = None
         model_config: Dict[str, Any] = None
         for model_label, _, family, declares, model_config in models:
-            if family != self.OPENAI_FAMILY or not declares:
+            if family != ProviderToolsFitChecker.OPENAI_FAMILY or not declares:
                 continue
             if "use_responses_api" in model_config:
                 value: Any = model_config.get("use_responses_api")
@@ -314,11 +314,11 @@ class ProviderToolsFitChecker:
         :param family: The root llm_info class of the model the entry is bound to
         :return: A list of error messages; empty for a family whose shapes are not known here
         """
-        if family == self.GEMINI_FAMILY:
+        if family == ProviderToolsFitChecker.GEMINI_FAMILY:
             return self.check_gemini_entry(label, index, entry)
-        if family == self.OPENAI_FAMILY:
+        if family == ProviderToolsFitChecker.OPENAI_FAMILY:
             return self.check_openai_entry(label, index, entry)
-        if family == self.ANTHROPIC_FAMILY:
+        if family == ProviderToolsFitChecker.ANTHROPIC_FAMILY:
             return self.check_anthropic_entry(label, index, entry)
         return []
 
@@ -355,7 +355,8 @@ class ProviderToolsFitChecker:
         return [f"{label} 'llm_config.provider_tools[{index}]' has no string 'type';"
                 ' OpenAI built-ins look like {"type": "web_search"}.']
 
-    def check_anthropic_entry(self, label: str, index: int, entry: Dict[str, Any]) -> List[str]:
+    @staticmethod
+    def check_anthropic_entry(label: str, index: int, entry: Dict[str, Any]) -> List[str]:
         """
         Reports an Anthropic entry without a string type, or whose type is not a server tool.
 
@@ -369,20 +370,22 @@ class ProviderToolsFitChecker:
             return [f"{label} 'llm_config.provider_tools[{index}]' has no string 'type';"
                     ' Anthropic server tools look like {"type": "web_search_20250305", "name": "web_search"}.']
 
-        families: List[str] = self.ANTHROPIC_SERVER_PREFIXES + self.ANTHROPIC_SERVER_TYPES
+        families: List[str] = (ProviderToolsFitChecker.ANTHROPIC_SERVER_PREFIXES
+                               + ProviderToolsFitChecker.ANTHROPIC_SERVER_TYPES)
         server_families: str = ", ".join(families)
-        if self._starts_with_any(tool_type, self.ANTHROPIC_CLIENT_PREFIXES):
+        if ProviderToolsFitChecker._starts_with_any(tool_type, ProviderToolsFitChecker.ANTHROPIC_CLIENT_PREFIXES):
             return [f"{label} 'llm_config.provider_tools[{index}]' type '{tool_type}' is an Anthropic client-side"
                     f" tool, which neuro-san does not execute; only server tools ({server_families}) are supported."]
 
-        if not self._is_anthropic_server_tool(tool_type):
+        if not ProviderToolsFitChecker._is_anthropic_server_tool(tool_type):
             # The last family is joined with "and" so the message reads as a sentence.
             listed: str = ", ".join(families[:-1])
             return [f"{label} 'llm_config.provider_tools[{index}]' type '{tool_type}' is not an Anthropic server"
                     f" tool; supported families are {listed} and {families[-1]}."]
         return []
 
-    def _is_anthropic_server_tool(self, tool_type: str) -> bool:
+    @staticmethod
+    def _is_anthropic_server_tool(tool_type: str) -> bool:
         """
         Tells whether an Anthropic tool type names a server tool.
 
@@ -392,9 +395,9 @@ class ProviderToolsFitChecker:
         :param tool_type: The "type" string of a provider_tools entry
         :return: True when the type is a server tool neuro-san can bind
         """
-        if tool_type in self.ANTHROPIC_SERVER_TYPES:
+        if tool_type in ProviderToolsFitChecker.ANTHROPIC_SERVER_TYPES:
             return True
-        return self._starts_with_any(tool_type, self.ANTHROPIC_SERVER_PREFIXES)
+        return ProviderToolsFitChecker._starts_with_any(tool_type, ProviderToolsFitChecker.ANTHROPIC_SERVER_PREFIXES)
 
     @staticmethod
     def _starts_with_any(value: str, prefixes: List[str]) -> bool:
@@ -427,10 +430,10 @@ class ProviderToolsFitChecker:
             return agent_name
         # Any model-selecting key the agent changes makes the setup its own.
         key: str = None
-        for key in self.MODEL_KEYS:
+        for key in ProviderToolsFitChecker.MODEL_KEYS:
             if llm_config.get(key) != inherited.get(key):
                 return agent_name
-        return self.NETWORK_LABEL
+        return ProviderToolsFitChecker.NETWORK_LABEL
 
     @staticmethod
     def is_inherited(llm_config: Dict[str, Any], inherited: Optional[Dict[str, Any]], key: str) -> bool:
@@ -530,7 +533,7 @@ class ProviderToolsFitChecker:
         family: str = None
         declares: bool = None
         for _, _, family, declares, _ in models:
-            if family == self.GEMINI_FAMILY and declares:
+            if family == ProviderToolsFitChecker.GEMINI_FAMILY and declares:
                 return True
         return False
 
@@ -545,7 +548,7 @@ class ProviderToolsFitChecker:
         :param llm_config: The agent's merged llm_config
         :return: The list of llm_config dictionaries that would each become a model
         """
-        fallbacks: Any = llm_config.get(self.FALLBACKS_KEY)
+        fallbacks: Any = llm_config.get(ProviderToolsFitChecker.FALLBACKS_KEY)
         if isinstance(fallbacks, list) and len(fallbacks) > 0:
             model_configs: List[Dict[str, Any]] = []
             self.flatten_fallbacks(fallbacks, model_configs)

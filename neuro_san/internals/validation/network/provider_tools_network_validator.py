@@ -185,7 +185,8 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         inherited: Optional[Dict[str, Any]] = None
         if isinstance(network_llm_config, dict):
             inherited = network_llm_config
-            errors.extend(self.validate_llm_config(self.NETWORK_LABEL, network_llm_config, None))
+            errors.extend(self.validate_llm_config(ProviderToolsNetworkValidator.NETWORK_LABEL,
+                                                   network_llm_config, None))
 
         # The class-independent checks need no llm_info. While running them, note the
         # agents that would actually bind a non-empty provider_tools list to a model:
@@ -280,17 +281,18 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
-        if not self.is_inherited(llm_config, inherited, self.KEY):
-            errors.extend(self.validate_shape(label, llm_config.get(self.KEY)))
+        if not self.is_inherited(llm_config, inherited, ProviderToolsNetworkValidator.KEY):
+            errors.extend(self.validate_shape(label, llm_config.get(ProviderToolsNetworkValidator.KEY)))
 
         # Report misspelt keys the agent sets itself, not ones it inherits.
         key: str = None
-        for key in self.NEAR_MISS_KEYS:
+        for key in ProviderToolsNetworkValidator.NEAR_MISS_KEYS:
             if key in llm_config and not self.is_inherited(llm_config, inherited, key):
                 errors.append(self.near_miss_message(label, key))
 
-        if not self.is_inherited(llm_config, inherited, self.FALLBACKS_KEY):
-            errors.extend(self.validate_fallbacks(label, llm_config.get(self.FALLBACKS_KEY), ""))
+        if not self.is_inherited(llm_config, inherited, ProviderToolsNetworkValidator.FALLBACKS_KEY):
+            errors.extend(self.validate_fallbacks(label,
+                                                  llm_config.get(ProviderToolsNetworkValidator.FALLBACKS_KEY), ""))
 
         return errors
 
@@ -376,14 +378,14 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
             if not isinstance(entry, dict):
                 continue
 
-            if self.KEY in entry:
+            if ProviderToolsNetworkValidator.KEY in entry:
                 errors.append(f"{label} 'llm_config.fallbacks[{index_path}].provider_tools' is ignored at runtime;"
                               f" declare provider_tools at the top level of llm_config"
                               f" so it applies to every fallback.")
 
             # Misspelt keys inside a fallback are reported too.
             key: str = None
-            for key in self.NEAR_MISS_KEYS:
+            for key in ProviderToolsNetworkValidator.NEAR_MISS_KEYS:
                 if key in entry:
                     errors.append(self.near_miss_message(label, f"fallbacks[{index_path}].{key}"))
 
@@ -397,7 +399,7 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         :param llm_config: The agent's merged llm_config
         :return: True when the agent builds an LLM and its provider_tools is a non-empty list
         """
-        provider_tools: Any = llm_config.get(self.KEY)
+        provider_tools: Any = llm_config.get(ProviderToolsNetworkValidator.KEY)
         if not isinstance(provider_tools, list) or len(provider_tools) == 0:
             return False
         return self.is_llm_agent(agent)
