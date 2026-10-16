@@ -49,16 +49,45 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
         """
         Non-empty lists of standard content blocks qualify, data blocks included.
         """
-        accepted: List[List[Dict[str, Any]]] = [
-            [{"type": "text", "text": "hi"}],
-            [{"type": "reasoning", "reasoning": "deep"}, {"type": "text", "text": "hi"}],
-            [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}],
-            [{"type": "non_standard", "value": {"type": "redacted_thinking", "data": "x"}}],
-        ]
+        accepted: Dict[str, List[Dict[str, Any]]] = {
+            "text": [
+                {
+                    "type": "text",
+                    "text": "hi",
+                },
+            ],
+            "reasoning then text": [
+                {
+                    "type": "reasoning",
+                    "reasoning": "deep",
+                },
+                {
+                    "type": "text",
+                    "text": "hi",
+                },
+            ],
+            "image": [
+                {
+                    "type": "image",
+                    "base64": "AAAA",
+                    "mime_type": "image/png",
+                },
+            ],
+            "non_standard": [
+                {
+                    "type": "non_standard",
+                    "value": {
+                        "type": "redacted_thinking",
+                        "data": "x",
+                    },
+                },
+            ],
+        }
         # Each list qualifies as block content.
+        label: str = None
         value: List[Dict[str, Any]] = None
-        for value in accepted:
-            with self.subTest(types=str(self.block_types(value))):
+        for label, value in accepted.items():
+            with self.subTest(case=label):
                 self.assertTrue(self.blocks_format.is_block_list(value))
 
     def test_is_block_list_rejects_other_shapes(self) -> None:
@@ -71,12 +100,46 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
             "empty": [],
             "string": "text",
             "list of str": ["text"],
-            "type is a list": [{"type": [], "text": "hi"}],
-            "type is a dict": [{"type": {}, "text": "hi"}],
-            "native thinking": [{"type": "thinking", "thinking": "deep"}],
-            "v0 block": [{"type": "image", "source_type": "base64", "data": "AAAA"}],
-            "tool call": [{"type": "tool_call", "name": "lookup", "args": {}, "id": "call_1"}],
-            "mixed with non-dict": [{"type": "text", "text": "hi"}, 42],
+            "type is a list": [
+                {
+                    "type": [],
+                    "text": "hi",
+                },
+            ],
+            "type is a dict": [
+                {
+                    "type": {},
+                    "text": "hi",
+                },
+            ],
+            "native thinking": [
+                {
+                    "type": "thinking",
+                    "thinking": "deep",
+                },
+            ],
+            "v0 block": [
+                {
+                    "type": "image",
+                    "source_type": "base64",
+                    "data": "AAAA",
+                },
+            ],
+            "tool call": [
+                {
+                    "type": "tool_call",
+                    "name": "lookup",
+                    "args": {},
+                    "id": "call_1",
+                },
+            ],
+            "mixed with non-dict": [
+                {
+                    "type": "text",
+                    "text": "hi",
+                },
+                42,
+            ],
         }
         # Each case is rejected.
         label: str = None
@@ -92,11 +155,28 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
         dictionaries, in order.
         """
         blocks: List[Dict[str, Any]] = [
-            {"type": "text", "text": "the answer", "phase": "final_answer", "extras": {"k": "v"}},
-            {"type": "text", "text": ""},
-            {"type": "reasoning", "reasoning": "deep"},
-            {"type": "reasoning", "id": "rs_1"},
-            {"type": "reasoning", "extras": {"signature": "sig"}},
+            {
+                "type": "text",
+                "text": "the answer",
+                "phase": "final_answer",
+                "extras": {"k": "v"},
+            },
+            {
+                "type": "text",
+                "text": "",
+            },
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+            },
+            {
+                "type": "reasoning",
+                "id": "rs_1",
+            },
+            {
+                "type": "reasoning",
+                "extras": {"signature": "sig"},
+            },
         ]
         kept: List[Dict[str, Any]] = self.blocks_format.restore_blocks(blocks)
         self.assertEqual(len(kept), len(blocks))
@@ -114,26 +194,97 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
         dropped.
         """
         dropped: Dict[str, Any] = {
-            "tool_call": {"type": "tool_call", "name": "lookup", "args": {}, "id": "call_1"},
-            "tool_call_chunk": {"type": "tool_call_chunk", "name": "lookup", "args": "", "id": "c", "index": 0},
-            "invalid_tool_call": {"type": "invalid_tool_call", "name": "x", "args": "{", "id": "c", "error": "e"},
-            "server_tool_call": {"type": "server_tool_call", "name": "web_search", "args": {}, "id": "s"},
-            "server_tool_result": {"type": "server_tool_result", "tool_call_id": "s", "output": []},
-            "non_standard": {"type": "non_standard", "value": {"type": "redacted_thinking", "data": "x"}},
-            "native thinking": {"type": "thinking", "thinking": "deep", "signature": "sig"},
-            "v0 block": {"type": "image", "source_type": "base64", "data": "AAAA"},
+            "tool_call": {
+                "type": "tool_call",
+                "name": "lookup",
+                "args": {},
+                "id": "call_1",
+            },
+            "tool_call_chunk": {
+                "type": "tool_call_chunk",
+                "name": "lookup",
+                "args": "",
+                "id": "c",
+                "index": 0,
+            },
+            "invalid_tool_call": {
+                "type": "invalid_tool_call",
+                "name": "x",
+                "args": "{",
+                "id": "c",
+                "error": "e",
+            },
+            "server_tool_call": {
+                "type": "server_tool_call",
+                "name": "web_search",
+                "args": {},
+                "id": "s",
+            },
+            "server_tool_result": {
+                "type": "server_tool_result",
+                "tool_call_id": "s",
+                "output": [],
+            },
+            "non_standard": {
+                "type": "non_standard",
+                "value": {
+                    "type": "redacted_thinking",
+                    "data": "x",
+                },
+            },
+            "native thinking": {
+                "type": "thinking",
+                "thinking": "deep",
+                "signature": "sig",
+            },
+            "v0 block": {
+                "type": "image",
+                "source_type": "base64",
+                "data": "AAAA",
+            },
             "non-dict": "just a string",
-            "type is a list": {"type": [], "text": "hi"},
-            "type is a dict": {"type": {}, "text": "hi"},
+            "type is a list": {
+                "type": [],
+                "text": "hi",
+            },
+            "type is a dict": {
+                "type": {},
+                "text": "hi",
+            },
             "text without text": {"type": "text"},
-            "text with non-str text": {"type": "text", "text": 42},
+            "text with non-str text": {
+                "type": "text",
+                "text": 42,
+            },
             "empty reasoning": {"type": "reasoning"},
-            "reasoning with empty parts": {"type": "reasoning", "reasoning": "", "id": "", "extras": {}},
-            "image with payload": {"type": "image", "base64": "AAAA", "mime_type": "image/png"},
-            "image without payload": {"type": "image", "mime_type": "image/png"},
-            "file with url": {"type": "file", "url": "https://example.com/a.pdf"},
-            "audio with file_id": {"type": "audio", "file_id": "file_1"},
-            "text-plain with inline text": {"type": "text-plain", "mime_type": "text/plain", "text": "inline"},
+            "reasoning with empty parts": {
+                "type": "reasoning",
+                "reasoning": "",
+                "id": "",
+                "extras": {},
+            },
+            "image with payload": {
+                "type": "image",
+                "base64": "AAAA",
+                "mime_type": "image/png",
+            },
+            "image without payload": {
+                "type": "image",
+                "mime_type": "image/png",
+            },
+            "file with url": {
+                "type": "file",
+                "url": "https://example.com/a.pdf",
+            },
+            "audio with file_id": {
+                "type": "audio",
+                "file_id": "file_1",
+            },
+            "text-plain with inline text": {
+                "type": "text-plain",
+                "mime_type": "text/plain",
+                "text": "inline",
+            },
         }
         # Each block is dropped on its own.
         label: str = None
@@ -147,10 +298,24 @@ class TestLangchainV1ContentBlocksFormat(TestCase):
         Dropping blocks does not reorder the survivors.
         """
         blocks: List[Dict[str, Any]] = [
-            {"type": "tool_call", "name": "lookup", "args": {}, "id": "call_1"},
-            {"type": "reasoning", "reasoning": "deep"},
-            {"type": "non_standard", "value": {"x": 1}},
-            {"type": "text", "text": "the answer"},
+            {
+                "type": "tool_call",
+                "name": "lookup",
+                "args": {},
+                "id": "call_1",
+            },
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+            },
+            {
+                "type": "non_standard",
+                "value": {"x": 1},
+            },
+            {
+                "type": "text",
+                "text": "the answer",
+            },
         ]
         kept: List[Dict[str, Any]] = self.blocks_format.restore_blocks(blocks)
         self.assertEqual(self.block_types(kept), ["reasoning", "text"])

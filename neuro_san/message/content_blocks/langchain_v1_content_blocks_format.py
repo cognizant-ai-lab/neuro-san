@@ -60,7 +60,7 @@ class LangchainV1ContentBlocksFormat(ContentBlocksFormat):
 
         :return: The "format" value that names this format on the wire
         """
-        return self.NAME
+        return LangchainV1ContentBlocksFormat.NAME
 
     @override
     def is_block_list(self, value: Any) -> bool:
@@ -106,7 +106,7 @@ class LangchainV1ContentBlocksFormat(ContentBlocksFormat):
             return False
         if item_type not in KNOWN_BLOCK_TYPES:
             return False
-        if item_type in self.TOOL_CALL_BLOCK_TYPES:
+        if item_type in LangchainV1ContentBlocksFormat.TOOL_CALL_BLOCK_TYPES:
             return False
         if "source_type" in item_dict:
             return False
@@ -147,7 +147,7 @@ class LangchainV1ContentBlocksFormat(ContentBlocksFormat):
         block: Dict[str, Any] = item
 
         block_type: str = block.get("type")
-        if block_type in self.NOT_INPUT_BLOCK_TYPES:
+        if block_type in LangchainV1ContentBlocksFormat.NOT_INPUT_BLOCK_TYPES:
             return None
         if block_type == "text":
             return self.restore_text_block(block)
