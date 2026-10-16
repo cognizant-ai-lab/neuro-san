@@ -98,6 +98,10 @@ class FakeInvocationContext:
             }
         }
 
+        def get_llm_infos(self) -> Dict[str, Any]:
+            """:return: The llm_infos"""
+            return self.llm_infos
+
     def __init__(self, request_reporting: Dict[str, Any] = None, cloned: bool = False):
         # Like SessionInvocationContext.safe_shallow_copy(), a clone for a
         # same-server external network shares the original's request_reporting.
@@ -122,7 +126,6 @@ class FakeInvocationContext:
     def is_cloned(self) -> bool:
         """:return: True for the clone backing an external network's direct session"""
         return self.cloned
-
 
 class TestNestedTokenAccounting(IsolatedAsyncioTestCase):
     """
