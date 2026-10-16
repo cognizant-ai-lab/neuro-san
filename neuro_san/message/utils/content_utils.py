@@ -288,7 +288,10 @@ class ContentUtils:
         :return: The wrapper dictionary: {"format": <default format name>, "blocks": blocks}
         """
         default_format: ContentBlocksFormat = ContentBlocksFormatRegistry.get_default()
-        return {"format": default_format.get_name(), "blocks": blocks}
+        return {
+            "format": default_format.get_name(),
+            "blocks": blocks,
+        }
 
     @staticmethod
     def unwrap_content_blocks(wrapper: Any) -> Optional[List[Dict[str, Any]]]:

@@ -62,9 +62,18 @@ class TestChatHistoryMessageProcessor(TestCase):
         the text still equals the flattened blocks and the message restores
         to its blocks on the next request, braces and all.
         """
-        blocks: List[Dict[str, Any]] = [{"type": "text", "text": '{"ok": true}', "phase": "final_answer"}]
-        message: AIMessage = AIMessage(content=blocks,
-                                       response_metadata={"model_provider": "openai", "output_version": "v1"})
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": '{"ok": true}',
+                "phase": "final_answer",
+            },
+        ]
+        response_metadata: Dict[str, Any] = {
+            "model_provider": "openai",
+            "output_version": "v1",
+        }
+        message: AIMessage = AIMessage(content=blocks, response_metadata=response_metadata)
         converter: BaseMessageDictionaryConverter = BaseMessageDictionaryConverter()
         wire: Dict[str, Any] = converter.to_dict(message)
         self.assertIn("content_blocks", wire)
