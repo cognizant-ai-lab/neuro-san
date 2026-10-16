@@ -125,7 +125,7 @@ class ResourceReporter:
 
     # Placeholder row (Component + 11 metric columns) shown when a
     # component produced no data at all.
-    _NA_METRICS: Tuple[str, ...] = ("na",) * 11
+    _NA_METRICS: List[str] = ["na", "na", "na", "na", "na", "na", "na", "na", "na", "na", "na"]
 
     def log_combined_analysis(self, total_client_requests: int, total_server_calls: int) -> None:
         """Log one combined server-app + client-app resource table.
@@ -145,7 +145,7 @@ class ResourceReporter:
             "Settled RSS", "RSS Delta", "CPU%", "FDs",
             "Threads", "Thread Delta", "Conns", "Children",
         ]
-        rows: List[tuple] = self._combined_server_rows() + self._combined_client_rows()
+        rows: List[List[str]] = self._combined_server_rows() + self._combined_client_rows()
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         if total_server_calls > 0:
             logger.info(
@@ -159,43 +159,49 @@ class ResourceReporter:
         self._log_resource_deltas()
         self._log_client_deltas()
 
-    def _combined_server_rows(self) -> List[tuple]:
+    def _combined_server_rows(self) -> List[List[str]]:
         """
         Server-app rows for the combined table (na when absent).
 
         :return: One row per stage, or one row of na when there is no server data
         """
         if not self._resource_rows:
-            return [("Server app",) + self._NA_METRICS]
-        rows: List[tuple] = []
+            return [["Server app"] + ResourceReporter._NA_METRICS]
+        rows: List[List[str]] = []
+        display: Tuple[str, ...]
+        unused_before_snapshot: Dict[str, Any]
+        unused_after_snapshot: Dict[str, Any]
+        # One table row per server stage.
         for display, unused_before_snapshot, unused_after_snapshot in self._resource_rows:
             # display: (concurrent, before_rss, settled_rss, rss_delta,
             #   fds, threads, thread_delta, conns, cpu, children)
-            rows.append((
+            rows.append([
                 "Server app", display[0], display[1], "na",
                 display[2], display[3], display[8], display[4],
                 display[5], display[6], display[7], display[9],
-            ))
+            ])
         return rows
 
-    def _combined_client_rows(self) -> List[tuple]:
+    def _combined_client_rows(self) -> List[List[str]]:
         """
         Client-app rows for the combined table (na when absent).
 
         :return: One row per stage, or one row of na when there is no client data
         """
         if not self._client_rows:
-            return [("Client app",) + self._NA_METRICS]
-        rows: List[tuple] = []
+            return [["Client app"] + ResourceReporter._NA_METRICS]
+        rows: List[List[str]] = []
+        row: ClientResourceRow
+        # One table row per client stage.
         for row in self._client_rows:
             display: Tuple[str, ...] = row[0]
             # display: (concurrent, before_rss, peak_rss, settled_rss,
             #   rss_delta, cpu, fds, threads)
-            rows.append((
+            rows.append([
                 "Client app", display[0], display[1], display[2],
                 display[3], display[4], display[5], display[6],
                 display[7], "na", "na", "na",
-            ))
+            ])
         return rows
 
     def _log_resource_deltas(self) -> None:
