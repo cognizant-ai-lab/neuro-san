@@ -18,6 +18,8 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from langchain_core.messages.base import BaseMessage
+
 from neuro_san.message.content_blocks.content_blocks_format import ContentBlocksFormat
 from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 
@@ -25,11 +27,12 @@ from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import 
 class ContentBlocksFormatRegistry:
     """
     Finds the ContentBlocksFormat for a content_blocks wrapper's "format"
-    string.
+    string, or for the mark a message carries.
 
     Adding a format means adding its class and one entry in FORMATS here.
-    The default format is the one the server writes when it builds a
-    wrapper itself.
+    The default format is the one the server writes when it builds blocks
+    itself, and the one that handles content no format has marked, such as
+    content fresh from a provider.
     """
 
     DEFAULT_FORMAT: ContentBlocksFormat = LangchainV1ContentBlocksFormat()
@@ -59,3 +62,19 @@ class ContentBlocksFormatRegistry:
         if not isinstance(format_name, str):
             return None
         return ContentBlocksFormatRegistry.FORMATS.get(format_name)
+
+    @staticmethod
+    def format_for_message(message: BaseMessage) -> ContentBlocksFormat:
+        """
+        Find the format a message's content is in: the format whose mark the
+        message carries, or the default format when it carries none.
+
+        :param message: The BaseMessage to inspect
+        :return: The format to handle the message's content with
+        """
+        # The first format that finds its own mark on the message wins.
+        candidate: ContentBlocksFormat = None
+        for candidate in ContentBlocksFormatRegistry.FORMATS.values():
+            if candidate.is_format_of(message):
+                return candidate
+        return ContentBlocksFormatRegistry.DEFAULT_FORMAT
