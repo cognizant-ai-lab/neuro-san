@@ -823,3 +823,9 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
             main_llm_resources.add_fallback_resources(fallback_llm_resources)
 
         return main_llm_resources
+
+    def get_llm_infos(self) -> Dict[str, Any]:
+        """
+        :return: A dictionary mapping llm names to their descriptions.
+        """
+        return self.llm_infos
