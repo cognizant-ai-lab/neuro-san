@@ -54,7 +54,6 @@ DEFAULT_FIXTURES_HOCON_DIR: str = os.path.join("tests", "fixtures", "load_tests"
 DEFAULT_TIMEOUT_SECONDS: int = 1200
 DEFAULT_IDLE_TIMEOUT_SECONDS: int = 900
 NETWORK_LOOKAHEAD_LINES: int = 10
-TOKENS_PER_MILLION: int = 1_000_000
 # Max per-request failure blocks printed to the console before the rest
 # are suppressed (full detail always remains in raw_results.json).
 FAILURE_LOG_LIMIT: int = 10
@@ -110,17 +109,3 @@ SERVER_ERROR_PATTERN: re.Pattern = re.compile(
     r'"request_id":\s*"([^"]+)"',
     re.DOTALL,
 )
-
-# Model pricing (USD per 1M tokens) — update as providers change rates
-# Source: https://openai.com/api/pricing/
-MODEL_PRICING: Dict[str, Dict[str, float]] = {
-    "gpt-4o": {"prompt": 2.50, "completion": 10.00},
-    "gpt-4o-mini": {"prompt": 0.15, "completion": 0.60},
-    "gpt-4.1": {"prompt": 2.00, "completion": 8.00},
-    "gpt-4.1-mini": {"prompt": 0.40, "completion": 1.60},
-    "gpt-4.1-nano": {"prompt": 0.10, "completion": 0.40},
-    "gpt-5.2": {"prompt": 2.00, "completion": 8.00},
-    "o4-mini": {"prompt": 1.10, "completion": 4.40},
-}
-# Fallback pricing when model is unknown
-DEFAULT_PRICING: Dict[str, float] = {"prompt": 2.50, "completion": 10.00}
