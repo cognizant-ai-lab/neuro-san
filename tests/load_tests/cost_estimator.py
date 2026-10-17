@@ -14,42 +14,46 @@
 #
 # END COPYRIGHT
 
-"""Estimate USD cost from LLM token counts and model pricing tables.
-
-Uses per-model pricing for known OpenAI models and falls back to a
-conservative default for unrecognized model strings.  Pricing is
-matched by substring so dated model names (e.g. gpt-5.2-2025-12-11)
-resolve to their base model entry.
-"""
-
+from threading import Lock
+from typing import Any
 from typing import Dict
+from typing import Optional
 
-from tests.load_tests.config import DEFAULT_PRICING
-from tests.load_tests.config import MODEL_PRICING
-from tests.load_tests.config import TOKENS_PER_MILLION
+from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
+from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
 
 
 class CostEstimator:
-    """Estimate USD cost from token counts and model pricing."""
+    """
+    Estimates the USD cost of a request from its token counts.
+
+    Prices come from the llm_info the server uses: default_llm_info.hocon, overlaid with
+    AGENT_LLM_INFO_FILE when it is set. The server's own LlmTokenCallbackHandler applies them,
+    so the estimate matches the server's "Total Cost (USD)". A model with no price in llm_info
+    costs 0.0, and the handler logs a WARNING that names the model.
+    """
+
+    # Built on the first estimate() call, because loading llm_info parses the whole hocon file.
+    # The lock keeps concurrent request threads from loading it more than once.
+    price_calculator: Optional[LlmTokenCallbackHandler] = None
+    price_calculator_lock: Lock = Lock()
 
     @staticmethod
     def estimate(prompt_tokens: int, completion_tokens: int, model: str = "unknown") -> float:
-        """Estimate USD cost from token counts and model name.
-
-        Looks up per-model pricing by substring match, then computes
-        cost as (tokens / 1M) * rate for prompt and completion
-        separately.
+        """
+        Estimate USD cost from token counts and model name.
 
         :param prompt_tokens: Prompt tokens used
         :param completion_tokens: Completion tokens used
-        :param model: Model name matched against MODEL_PRICING; DEFAULT_PRICING when none match
-        :return: Estimated cost in USD
+        :param model: Model name as the server reports it, looked up in llm_info
+        :return: Estimated cost in USD; 0.0 when llm_info has no price for the model
         """
-        pricing: Dict[str, float] = DEFAULT_PRICING
-        for key in sorted(MODEL_PRICING, key=len, reverse=True):
-            if key in model:
-                pricing = MODEL_PRICING[key]
-                break
-        prompt_cost: float = (prompt_tokens / TOKENS_PER_MILLION) * pricing.get("prompt", 0)
-        completion_cost: float = (completion_tokens / TOKENS_PER_MILLION) * pricing.get("completion", 0)
-        return prompt_cost + completion_cost
+        with CostEstimator.price_calculator_lock:
+            if CostEstimator.price_calculator is None:
+                llm_factory = DefaultLlmFactory()
+                llm_factory.load()
+                llm_infos: Dict[str, Any] = llm_factory.llm_infos
+                CostEstimator.price_calculator = LlmTokenCallbackHandler(llm_infos)
+        price_calculator: LlmTokenCallbackHandler = CostEstimator.price_calculator
+        cost_dollars: float = price_calculator.calculate_token_costs(model, completion_tokens, prompt_tokens)
+        return cost_dollars

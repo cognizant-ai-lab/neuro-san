@@ -67,6 +67,7 @@ class TrendHistory:
         if not records:
             logger.info("No usable records in %s", history_path)
             return
+        record: Dict[str, Any]
         if self._agent_filter:
             # Keep only the records for the agents in the filter.
             matching_records: List[Dict[str, Any]] = []
@@ -78,7 +79,7 @@ class TrendHistory:
                 agent_names: str = ", ".join(sorted(self._agent_filter))
                 logger.info("No records for agent(s) %s in %s", agent_names, history_path)
                 return
-        records.sort(key=lambda record: record.get("timestamp", ""))
+        records.sort(key=self._timestamp_of)
         logger.info("")
         logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
         # One table row per record, in file order.
@@ -87,6 +88,16 @@ class TrendHistory:
             rows.append(self._row(record))
         TableFormatter.log_table(self._header(), rows)
         logger.info("")
+
+    @staticmethod
+    def _timestamp_of(record: Dict[str, Any]) -> str:
+        """
+        Sort key: the timestamp of a history record.
+
+        :param record: One history record
+        :return: The record's "timestamp", "" if missing
+        """
+        return record.get("timestamp", "")
 
     def _resolve_path(self) -> Optional[str]:
         """
