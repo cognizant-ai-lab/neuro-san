@@ -31,6 +31,8 @@ from langchain_core.messages.tool import ToolMessage
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
+from neuro_san.message.content_blocks.content_blocks_format import ContentBlocksFormat
+from neuro_san.message.content_blocks.content_blocks_format_registry import ContentBlocksFormatRegistry
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.agent_progress_message import AgentProgressMessage
@@ -187,7 +189,9 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                            message.__class__.__name__)
             return None
 
-        return ContentUtils.wrap_content_blocks(normalized)
+        # The wrapper is named after the format the message's blocks are in.
+        blocks_format: ContentBlocksFormat = ContentBlocksFormatRegistry.format_for_message(message)
+        return ContentUtils.wrap_content_blocks(normalized, blocks_format)
 
     def from_dict(self, obj_dict: Dict[str, Any]) -> BaseMessage:
         """
@@ -215,6 +219,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             return base_message
 
         content: Any = chat_message.get("text")
+        blocks_format: Optional[ContentBlocksFormat] = \
+            ContentUtils.content_blocks_format(chat_message.get("content_blocks"))
         restored_blocks: Optional[List[Dict[str, Any]]] = \
             ContentUtils.restorable_blocks(chat_message, for_chat_history=self.langchain_only)
         if restored_blocks is not None:
@@ -246,11 +252,11 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
 
         # Any other message type we do not want to send to any agent as chat history.
 
-        if base_message is not None and restored_blocks is not None:
-            # Mark the content as standard blocks so that later .content_blocks
-            # reads pass them through instead of re-translating them.
+        if base_message is not None and restored_blocks is not None and blocks_format is not None:
+            # Mark the content as blocks of the wrapper's format so that later
+            # .content_blocks reads pass them through instead of re-translating them.
             update_dict: Dict[str, Any] = {
-                "response_metadata": ContentUtils.v1_response_metadata(base_message),
+                "response_metadata": blocks_format.response_metadata_for(base_message),
             }
             base_message = ContentUtils.message_model_copy(base_message, update_dict)
 

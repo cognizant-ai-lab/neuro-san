@@ -29,6 +29,7 @@ from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
 
+from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
@@ -446,7 +447,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
         restored: AIMessage = BaseMessageDictionaryConverter(langchain_only=False).from_dict(wire)
         self.assertIsInstance(restored, AIMessage)
         self.assertEqual(restored.content, blocks)
-        self.assertEqual(restored.response_metadata.get("output_version"), ContentUtils.OUTPUT_VERSION_V1)
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
         self.assertEqual(restored.content_blocks, blocks)
         self.assertEqual(restored.text, "the answer")
         self.assertEqual(restored.tool_calls, [])
@@ -475,7 +477,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
         }
         restored: AIMessage = BaseMessageDictionaryConverter().from_dict(wire)
         self.assertEqual(restored.content, [phased])
-        self.assertEqual(restored.response_metadata.get("output_version"), ContentUtils.OUTPUT_VERSION_V1)
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
         self.assertEqual(self.block_types(BaseMessageDictionaryConverter().to_dict(restored)), ["text"])
 
         plain: Dict[str, Any] = {
@@ -688,7 +691,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
         self.assertIsInstance(restored, AgentToolResultMessage)
         self.assertEqual(restored.content, blocks)
         self.assertEqual(restored.tool_result_origin, self.ORIGIN)
-        self.assertEqual(restored.response_metadata.get("output_version"), ContentUtils.OUTPUT_VERSION_V1)
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
 
     def test_from_dict_restores_blocks_for_agent_types_when_not_langchain_only(self) -> None:
         """
@@ -717,7 +721,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
         self.assertIsInstance(restored, AgentMessage)
         self.assertEqual(restored.content, blocks)
         self.assertEqual(restored.structure, structure)
-        self.assertEqual(restored.response_metadata.get("output_version"), ContentUtils.OUTPUT_VERSION_V1)
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
 
         textless: AgentFrameworkMessage = converter.from_dict({"type": ChatMessageType.AGENT_FRAMEWORK})
         self.assertIsInstance(textless, AgentFrameworkMessage)
@@ -749,6 +754,6 @@ class TestBaseMessageDictionaryConverter(TestCase):
         wrapper: Dict[str, Any] = chat_message.get("content_blocks")
         blocks: List[Dict[str, Any]] = wrapper.get("blocks")
         self.assertEqual(sorted(wrapper.keys()), ["blocks", "format"])
-        self.assertEqual(wrapper.get("format"), ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1)
+        self.assertEqual(wrapper.get("format"), LangchainV1ContentBlocksFormat.NAME)
         self.assertGreater(len(blocks), 0)
         self.assertEqual(ContentUtils.flatten_to_text(blocks), chat_message.get("text"))

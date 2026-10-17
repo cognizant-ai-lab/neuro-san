@@ -481,14 +481,14 @@ class RunContextRunnable(NeuroSanRunnable):
         # answer with extended thinking on (thinking blocks, then text;
         # normalized to reasoning + text with the signature kept in extras,
         # while a redacted_thinking block stays a non_standard wrapper around
-        # its opaque data, see ContentUtils.standard_blocks), an OpenAI
+        # its opaque data, see LangchainV1ContentBlocksFormat.blocks_of), an OpenAI
         # Responses answer with reasoning summaries on (reasoning items, then
         # text, with their ids kept on the blocks), or any answer whose text
         # arrives as two or more text blocks or as a text block carrying a
         # key with a value beyond type/text/id/index (annotations, extras, an
-        # OpenAI Responses "phase"), since is_trivial collapses only a single
+        # OpenAI Responses "phase"), since the format's is_trivial collapses only a single
         # plain text block. Not expected here: tool-call blocks
-        # (standard_blocks leaves them out), data blocks (providers do not
+        # (blocks_of leaves them out), data blocks (providers do not
         # emit them in assistant answers), chunks (converted above) and mixed
         # string-and-block lists (caught by the text check above).
         return preserved
