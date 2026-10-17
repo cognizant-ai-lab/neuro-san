@@ -152,9 +152,10 @@ Aborting.""",
 
         # Search in the built-in profiles directory next to this module
         profiles_dir: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+        profile_names: List[str] = [agent_name, agent_base]
         name: str
         # Check the full agent name, then its base name
-        for name in (agent_name, agent_base):
+        for name in profile_names:
             candidate = os.path.join(profiles_dir, f"{name}.json")
             searched.append(candidate)
             if os.path.isfile(candidate):
@@ -164,7 +165,7 @@ Aborting.""",
         resolved_root: Optional[str] = ProjectPaths.resolve_project_root(project_root)
         if resolved_root:
             # Check the full agent name, then its base name, under the project root
-            for name in (agent_name, agent_base):
+            for name in profile_names:
                 candidate = os.path.normpath(os.path.join(
                     resolved_root, "tests", "load_tests",
                     "prompts", "profiles", f"{name}.json",
@@ -173,6 +174,11 @@ Aborting.""",
                 if os.path.isfile(candidate):
                     return candidate
 
+        searched_lines: List[str] = []
+        searched_path: str
+        # One "  - <path>" line per searched path.
+        for searched_path in searched:
+            searched_lines.append(f"  - {searched_path}\n")
         logger.error(
             """No profile found for agent '%s'.
 Searched:
@@ -180,7 +186,7 @@ Searched:
 Create a profile JSON or use --profile-path to specify one.
 Aborting.""",
             agent_name,
-            "".join(f"  - {searched_path}\n" for searched_path in searched),
+            "".join(searched_lines),
         )
         raise LoadTestAbortError(1)
 

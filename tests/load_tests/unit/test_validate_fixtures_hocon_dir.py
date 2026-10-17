@@ -65,11 +65,13 @@ class TestValidateFixturesHoconDir(TestCase):
         """DIR default + agent name -> tests/fixtures/load_tests/hello_world."""
         files: List[str] = self._validator(fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR).validate_fixtures_hocon_dir()
 
-        expected: List[str] = sorted(
-            os.path.join(HELLO_WORLD_FIXTURES, name)
-            for name in os.listdir(HELLO_WORLD_FIXTURES)
-            if name.endswith(".hocon")
-        )
+        expected: List[str] = []
+        name: str
+        # Expect every *.hocon file of the hello_world fixtures, sorted.
+        for name in os.listdir(HELLO_WORLD_FIXTURES):
+            if name.endswith(".hocon"):
+                expected.append(os.path.join(HELLO_WORLD_FIXTURES, name))
+        expected.sort()
         self.assertEqual(files, expected)
         self.assertEqual(len(files), 5)
 
@@ -80,7 +82,10 @@ class TestValidateFixturesHoconDir(TestCase):
             fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
         ).validate_fixtures_hocon_dir()
         self.assertEqual(len(files), 5)
-        self.assertTrue(all(file_path.startswith(HELLO_WORLD_FIXTURES) for file_path in files))
+        file_path: str
+        # Every file is in the hello_world fixtures directory.
+        for file_path in files:
+            self.assertTrue(file_path.startswith(HELLO_WORLD_FIXTURES), file_path)
 
     def test_absolute_dir_is_used_as_is(self) -> None:
         """An absolute DIR ignores --project-root."""

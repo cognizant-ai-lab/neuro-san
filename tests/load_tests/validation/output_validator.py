@@ -231,17 +231,28 @@ class OutputValidator:
         """
         if not results:
             return False
-        all_failed: bool = all(result.get("status") == STATUS_FAILED for result in results)
+        all_failed: bool = True
+        result: Dict[str, Any]
+        # Look for a request that did not fail.
+        for result in results:
+            if result.get("status") != STATUS_FAILED:
+                all_failed = False
+                break
         if not all_failed:
             return False
         permission_keywords: List[str] = ["permissions", "permission", "not found"]
-        has_permission_error: bool = any(
-            any(
-                keyword in (result.get("error") or "").lower()
-                for keyword in permission_keywords
-            )
-            for result in results
-        )
+        has_permission_error: bool = False
+        keyword: str
+        # Look for a permissions keyword in the error of any request.
+        for result in results:
+            error_text: str = (result.get("error") or "").lower()
+            # Check each keyword against the error text.
+            for keyword in permission_keywords:
+                if keyword in error_text:
+                    has_permission_error = True
+                    break
+            if has_permission_error:
+                break
         if not has_permission_error:
             return False
         if "/" in agent_name:
