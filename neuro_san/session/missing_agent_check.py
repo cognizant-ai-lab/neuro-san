@@ -15,9 +15,8 @@
 #
 # END COPYRIGHT
 
-from os import environ
-
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class MissingAgentCheck:
@@ -34,7 +33,7 @@ class MissingAgentCheck:
         """
 
         if agent_network is None:
-            manifest_file: str = environ.get("AGENT_MANIFEST_FILE")
+            manifest_file: str = Env.getenv("AGENT_MANIFEST_FILE")
             message = f"""
 Agent named "{agent_name}" not found in manifest file: {manifest_file}.
 

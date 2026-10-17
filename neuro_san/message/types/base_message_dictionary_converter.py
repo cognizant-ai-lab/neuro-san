@@ -172,8 +172,9 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                  or could not be standardized without losing text
         """
         logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+        normalized: Union[str, List[Dict[str, Any]]] = None
         try:
-            normalized: Union[str, List[Dict[str, Any]]] = ContentUtils.normalize_content(message)
+            normalized = ContentUtils.normalize_content(message)
         except (KeyError, ValueError, TypeError, AttributeError) as exception:
             logger.warning("Could not standardize the block content of a %s; sending its text only: %s",
                            message.__class__.__name__, exception)
@@ -182,7 +183,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if not isinstance(normalized, list):
             return None
 
-        blocks_text: str = ContentUtils.flatten_to_text(normalized)
+        use_normalized: List[Dict[str, Any]] = normalized
+        blocks_text: str = ContentUtils.flatten_to_text(use_normalized)
         message_text: str = ContentUtils.flatten_to_text(message)
         if blocks_text != message_text:
             logger.warning("Standardizing the block content of a %s lost text; sending its text only",
@@ -219,13 +221,14 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             return base_message
 
         content: Any = chat_message.get("text")
-        blocks_format: Optional[ContentBlocksFormat] = \
-            ContentUtils.content_blocks_format(chat_message.get("content_blocks"))
+        message_type: str = chat_message.get("type")
+        content_blocks: Optional[Dict[str, Any]] = chat_message.get("content_blocks")
+        blocks_format: Optional[ContentBlocksFormat] = ContentUtils.content_blocks_format(content_blocks)
         restored_blocks: Optional[List[Dict[str, Any]]] = \
             ContentUtils.restorable_blocks(chat_message, for_chat_history=self.langchain_only)
         if restored_blocks is not None:
             content = restored_blocks
-        chat_message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(chat_message.get("type"))
+        chat_message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(message_type)
 
         if content is None and chat_message_type in self.CHAT_HISTORY_TYPES:
             # Message constructors reject None content, so a message with no
@@ -242,8 +245,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         elif chat_message_type == ChatMessageType.AI:
             base_message = AIMessage(content=content)
         elif chat_message_type == ChatMessageType.AGENT_TOOL_RESULT:
-            base_message = AgentToolResultMessage(content=content,
-                                                  tool_result_origin=chat_message.get("tool_result_origin"))
+            tool_result_origin: List[Dict[str, Any]] = chat_message.get("tool_result_origin")
+            base_message = AgentToolResultMessage(content=content, tool_result_origin=tool_result_origin)
 
         if base_message is None and not self.langchain_only:
             # convert_to_base_message() is primarily for populating langchain chat history.
@@ -277,16 +280,15 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if use_content is None:
             use_content = ""
 
+        structure: Dict[str, Any] = chat_message.get("structure")
         base_message: Optional[BaseMessage] = None
         if chat_message_type == ChatMessageType.AGENT:
-            base_message = AgentMessage(content=use_content,
-                                        structure=chat_message.get("structure"))
+            base_message = AgentMessage(content=use_content, structure=structure)
         elif chat_message_type == ChatMessageType.AGENT_FRAMEWORK:
             # Don't bother passing on chat_context
             base_message = AgentFrameworkMessage(content=use_content)
         elif chat_message_type == ChatMessageType.AGENT_PROGRESS:
-            base_message = AgentProgressMessage(content=use_content,
-                                                structure=chat_message.get("structure"))
+            base_message = AgentProgressMessage(content=use_content, structure=structure)
         return base_message
 
     @staticmethod

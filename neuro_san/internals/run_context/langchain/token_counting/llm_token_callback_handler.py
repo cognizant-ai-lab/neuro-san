@@ -410,3 +410,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         else:
             has_content = bool(content)
         return not has_content and not getattr(message, "tool_calls", None)
+
+    def close(self):
+        """
+        Allow the instance to be closed within a python context manager.
+        Doesn't do anything.
+        """

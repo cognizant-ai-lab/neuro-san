@@ -100,8 +100,9 @@ class ApiKeyErrorCheck:
         api_key: str = None
         string_list: List[str] = None
         for api_key, string_list in API_KEY_EXCEPTIONS.items():
+            use_string_list: List[str] = string_list
             find_string: str = None
-            for find_string in string_list:
+            for find_string in use_string_list:
                 if find_string in exception_message:
                     matched_keys.append(api_key)
                     matched_documentation_link = API_KEY_DOCUMENTATION.get(api_key, "")

@@ -18,7 +18,7 @@
 from typing import Any
 from typing import List
 
-from os import environ
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class SessionUtil:
@@ -38,7 +38,7 @@ class SessionUtil:
         use_agents_list: List[Any] = agents_list
 
         max_agents: int = 0
-        max_agents_str: str = environ.get("MAX_AGENTS_FROM_EXTERNAL_SERVER")
+        max_agents_str: str = Env.getenv("MAX_AGENTS_FROM_EXTERNAL_SERVER")
         if max_agents_str is not None:
             try:
                 max_agents = int(max_agents_str)

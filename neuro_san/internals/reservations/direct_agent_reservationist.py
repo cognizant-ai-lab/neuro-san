@@ -67,11 +67,13 @@ class DirectAgentReservationist(AbstractAgentReservationist):
 
         for reservation, value in deployment_dict.items():
 
+            use_reservation: AgentReservation = reservation
+
             to_deploy: Dict[Union[str, Event], Dict[AgentReservation, Dict[str, Any]]] = value
             for key, value in to_deploy.items():
 
                 # Prepare basic information
-                source = reservation.get_prefix()
+                source = use_reservation.get_prefix()
                 deployment_dict = value
                 max_lifetime_in_seconds = self.max_lifetime_in_seconds
 

@@ -37,6 +37,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
@@ -54,7 +55,7 @@ API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
                                         ])
 
 
-class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
+class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangChainLlmFactory):
     """
     Factory class for LLM operations
 
@@ -572,7 +573,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # This fallback only applies when the user provides a non-default class path
         # and factory resolution failed.
         class_path: str = config.get("class")
-        default_llm_classes: Set[str] = set(self.llm_infos.get("classes"))
+        classes_value: List[str] = self.llm_infos.get("classes")
+        default_llm_classes: Set[str] = set(classes_value)
         if (
             llm_resources is None
             and found_exception is not None
@@ -821,3 +823,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             main_llm_resources.add_fallback_resources(fallback_llm_resources)
 
         return main_llm_resources
+
+    def get_llm_infos(self) -> Dict[str, Any]:
+        """
+        :return: A dictionary mapping llm names to their descriptions.
+        """
+        return self.llm_infos
