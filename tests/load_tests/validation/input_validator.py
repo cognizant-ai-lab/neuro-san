@@ -115,12 +115,14 @@ Then use:
             )
             raise LoadTestAbortError(1)
 
-        hocon_files: List[str] = sorted(
-            os.path.join(hocon_dir, file_name)
-            for file_name in os.listdir(hocon_dir)
-            if file_name.endswith(".hocon")
-            and os.path.isfile(os.path.join(hocon_dir, file_name))
-        )
+        hocon_files: List[str] = []
+        file_name: str
+        # Keep the *.hocon files of the directory.
+        for file_name in os.listdir(hocon_dir):
+            file_path: str = os.path.join(hocon_dir, file_name)
+            if file_name.endswith(".hocon") and os.path.isfile(file_path):
+                hocon_files.append(file_path)
+        hocon_files.sort()
         if not hocon_files:
             logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
             raise LoadTestAbortError(1)
@@ -140,19 +142,26 @@ Then use:
         if self._args.ramp:
             if self._args.stages is not None:
                 stages: List[int] = []
+                stage_text: str
                 try:
-                    stages = [
-                        int(stage_text.strip())
-                        for stage_text in self._args.stages.split(",")
-                        if stage_text.strip()
-                    ]
+                    # Parse each non-empty comma-separated value.
+                    for stage_text in self._args.stages.split(","):
+                        if stage_text.strip():
+                            stages.append(int(stage_text.strip()))
                 except ValueError as value_error:
                     logger.error(
                         "--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
                         self._args.stages,
                     )
                     raise LoadTestAbortError(1) from value_error
-                if not stages or any(stage <= 0 for stage in stages):
+                has_non_positive: bool = False
+                stage: int
+                # Look for a stage that is zero or negative.
+                for stage in stages:
+                    if stage <= 0:
+                        has_non_positive = True
+                        break
+                if not stages or has_non_positive:
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     raise LoadTestAbortError(1)
                 return stages

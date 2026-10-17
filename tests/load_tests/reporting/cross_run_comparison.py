@@ -77,6 +77,9 @@ class CrossRunComparison:
             logger.info("No raw_results.json files found in %s", self._base_dir)
             return
         groups: Dict[str, List[Dict[str, Any]]] = self._group_by_agent(all_runs)
+        agent_name: str
+        run_metrics: Dict[str, Any]
+        # One comparison table per agent, in name order.
         for agent_name in sorted(groups):
             runs: List[Dict[str, Any]] = (
                 groups[agent_name]
@@ -90,11 +93,21 @@ class CrossRunComparison:
                     if run_metrics.get("num_requests", 0) >= self._baseline_requests:
                         baseline_runs.append(run_metrics)
                 runs = baseline_runs
-            runs.sort(key=lambda run_metrics: run_metrics.get("num_requests", 0))
+            runs.sort(key=self._num_requests_of)
             if not runs:
                 continue
             self._log_table(runs, agent_name)
             self._log_validation_loops(runs)
+
+    @staticmethod
+    def _num_requests_of(run_metrics: Dict[str, Any]) -> int:
+        """
+        Sort key: the number of requests of a run.
+
+        :param run_metrics: Metrics of one run
+        :return: The run's "num_requests", 0 if missing
+        """
+        return run_metrics.get("num_requests", 0)
 
     def _collect_runs(self) -> List[Dict[str, Any]]:
         """
@@ -370,6 +383,7 @@ class CrossRunComparison:
         total_retries: int = 0
         total_tokens: int = 0
         total_cost_dollars: float = 0.0
+        loop_entry: Dict[str, Any]
         for loop_entry in loops:
             total_retries += loop_entry.get("retries", 0)
             total_tokens += loop_entry.get("total_tokens", 0)
@@ -377,7 +391,8 @@ class CrossRunComparison:
         logger.info("")
         logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
         logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
-        for loop_entry in sorted(loops, key=lambda x: x.get("retries", 0), reverse=True):
+        # One line per validation-loop request, most retries first.
+        for loop_entry in sorted(loops, key=CrossRunComparison._retries_of, reverse=True):
             logger.info(
                 "    %s: %s retries, %s tokens ($%.2f)",
                 loop_entry.get("request_id", ""),
@@ -385,6 +400,16 @@ class CrossRunComparison:
                 f"{loop_entry.get("total_tokens", 0):,}",
                 loop_entry.get("cost_usd", 0.0),
             )
+
+    @staticmethod
+    def _retries_of(loop_entry: Dict[str, Any]) -> int:
+        """
+        Sort key: the number of retries of a validation-loop request.
+
+        :param loop_entry: One validation-loop entry
+        :return: The entry's "retries", 0 if missing
+        """
+        return loop_entry.get("retries", 0)
 
     @staticmethod
     def _compute_deltas(previous_metrics: Optional[Dict[str, Any]], current_metrics: Dict[str, Any],

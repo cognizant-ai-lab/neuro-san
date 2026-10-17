@@ -123,9 +123,8 @@ class ResourceReporter:
         self._client_rows.append(row)
         return row
 
-    # Placeholder row (Component + 11 metric columns) shown when a
-    # component produced no data at all.
-    _NA_METRICS: Tuple[str, ...] = ("na",) * 11
+    # Metric columns after "Component" in the combined table.
+    METRIC_COLUMN_COUNT: int = 11
 
     def log_combined_analysis(self, total_client_requests: int, total_server_calls: int) -> None:
         """Log one combined server-app + client-app resource table.
@@ -145,7 +144,7 @@ class ResourceReporter:
             "Settled RSS", "RSS Delta", "CPU%", "FDs",
             "Threads", "Thread Delta", "Conns", "Children",
         ]
-        rows: List[tuple] = self._combined_server_rows() + self._combined_client_rows()
+        rows: List[List[str]] = self._combined_server_rows() + self._combined_client_rows()
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         if total_server_calls > 0:
             logger.info(
@@ -159,44 +158,65 @@ class ResourceReporter:
         self._log_resource_deltas()
         self._log_client_deltas()
 
-    def _combined_server_rows(self) -> List[tuple]:
+    def _combined_server_rows(self) -> List[List[str]]:
         """
         Server-app rows for the combined table (na when absent).
 
         :return: One row per stage, or one row of na when there is no server data
         """
         if not self._resource_rows:
-            return [("Server app",) + self._NA_METRICS]
-        rows: List[tuple] = []
+            return [ResourceReporter._na_row("Server app")]
+        rows: List[List[str]] = []
+        display: Tuple[str, ...]
+        unused_before_snapshot: Dict[str, Any]
+        unused_after_snapshot: Dict[str, Any]
+        # One table row per server stage.
         for display, unused_before_snapshot, unused_after_snapshot in self._resource_rows:
             # display: (concurrent, before_rss, settled_rss, rss_delta,
             #   fds, threads, thread_delta, conns, cpu, children)
-            rows.append((
+            rows.append([
                 "Server app", display[0], display[1], "na",
                 display[2], display[3], display[8], display[4],
                 display[5], display[6], display[7], display[9],
-            ))
+            ])
         return rows
 
-    def _combined_client_rows(self) -> List[tuple]:
+    def _combined_client_rows(self) -> List[List[str]]:
         """
         Client-app rows for the combined table (na when absent).
 
         :return: One row per stage, or one row of na when there is no client data
         """
         if not self._client_rows:
-            return [("Client app",) + self._NA_METRICS]
-        rows: List[tuple] = []
+            return [ResourceReporter._na_row("Client app")]
+        rows: List[List[str]] = []
+        row: ClientResourceRow
+        # One table row per client stage.
         for row in self._client_rows:
             display: Tuple[str, ...] = row[0]
             # display: (concurrent, before_rss, peak_rss, settled_rss,
             #   rss_delta, cpu, fds, threads)
-            rows.append((
+            rows.append([
                 "Client app", display[0], display[1], display[2],
                 display[3], display[4], display[5], display[6],
                 display[7], "na", "na", "na",
-            ))
+            ])
         return rows
+
+    @staticmethod
+    def _na_row(component: str) -> List[str]:
+        """
+        Build a combined-table row for a component with no data.
+
+        :param component: Component name for the first column
+        :return: The component name, then "na" for each metric column
+        """
+        row: List[str] = [component]
+        unused_index: int
+        # One "na" cell per metric column.
+        for unused_index in range(ResourceReporter.METRIC_COLUMN_COUNT):
+            row.append("na")
+        return row
 
     def _log_resource_deltas(self) -> None:
         """Log overall resource deltas if enough data points."""
@@ -207,11 +227,11 @@ class ResourceReporter:
         self._log_snapshot_deltas(
             "Server", first_before_snapshot, last_after_snapshot,
             fields=[
-                ("RSS", "rss", "%.1f MB"),
-                ("FDs", "fds", "%s"),
-                ("Threads", "threads", "%s"),
-                ("Connections", "connections", "%s"),
-                ("Children", "children", "%s"),
+                ["RSS", "rss", "%.1f MB"],
+                ["FDs", "fds", "%s"],
+                ["Threads", "threads", "%s"],
+                ["Connections", "connections", "%s"],
+                ["Children", "children", "%s"],
             ],
         )
 
@@ -224,25 +244,32 @@ class ResourceReporter:
         self._log_snapshot_deltas(
             "Client", first_before_snapshot, last_settled_snapshot,
             fields=[
-                ("RSS", "rss", "%.1f MB"),
-                ("FDs", "fds", "%s"),
-                ("Threads", "threads", "%s"),
+                ["RSS", "rss", "%.1f MB"],
+                ["FDs", "fds", "%s"],
+                ["Threads", "threads", "%s"],
             ],
         )
 
     @staticmethod
     def _log_snapshot_deltas(label: str, before_snapshot: Dict[str, Any], after_snapshot: Dict[str, Any],
-                             fields: List[Tuple[str, str, str]]) -> None:
+                             fields: List[List[str]]) -> None:
         """
         Log deltas between two ResourceSnapshots.
 
         :param label: Component name shown in the heading
         :param before_snapshot: Snapshot from the first stage
         :param after_snapshot: Snapshot from the last stage
-        :param fields: (display name, snapshot key, % format) of each field to log
+        :param fields: [display name, snapshot key, % format] of each field to log
         """
-        maximum_name_length: int = max(len(name) for name, _, _ in fields)
+        maximum_name_length: int = 0
+        name: str
+        key: str
+        format_pattern: str
+        # Find the longest display name.
+        for name, key, format_pattern in fields:
+            maximum_name_length = max(maximum_name_length, len(name))
         logger.info("\n  %s overall deltas (first stage vs last stage):", label)
+        # One delta line per field.
         for name, key, format_pattern in fields:
             delta: float = after_snapshot.get(key) - before_snapshot.get(key)
             padded: str = f"{name}:".ljust(maximum_name_length + 1)
