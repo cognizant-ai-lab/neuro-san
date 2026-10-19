@@ -55,6 +55,8 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
     @staticmethod
     def _make_runnable() -> RunContextRunnable:
         """
+        Builds a RunContextRunnable with a pass-through error detector.
+
         :return: A runnable whose error detector is a pass-through
         """
         error_detector: MagicMock = MagicMock()
@@ -90,6 +92,8 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
     @staticmethod
     def _tool_call(call_id: str) -> Dict[str, Any]:
         """
+        Builds a tool call dictionary for the Accountant tool.
+
         :param call_id: The id of the tool call
         :return: A langchain tool call dictionary for the Accountant tool
         """

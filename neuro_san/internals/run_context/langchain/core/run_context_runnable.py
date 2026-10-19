@@ -418,6 +418,8 @@ class RunContextRunnable(NeuroSanRunnable):
 
     def recorded_call_ids(self) -> Set[str]:
         """
+        Collects the ids of the tool calls already recorded in the chat history.
+
         :return: The ids of the tool calls the chat history already holds.
                  Empty when no history is kept.
         """
@@ -468,6 +470,8 @@ class RunContextRunnable(NeuroSanRunnable):
     @staticmethod
     def results_by_call_id(turn: List[BaseMessage]) -> Dict[str, ToolMessage]:
         """
+        Indexes the tool results of a turn by the call each one answers.
+
         :param turn: The messages of a turn
         :return: The turn's ToolMessages, by the id of the tool call each one answers
         """

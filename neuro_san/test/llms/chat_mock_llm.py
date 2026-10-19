@@ -193,6 +193,8 @@ class ChatMockLlm(BaseChatModel):
     @staticmethod
     def _count_tool_results(messages: List[BaseMessage]) -> int:
         """
+        Counts the tool results in the prompt.
+
         :param messages: The prompt
         :return: How many tool results the prompt holds
         """

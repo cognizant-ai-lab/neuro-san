@@ -38,6 +38,8 @@ class TestToolPairing(TestCase):
     @staticmethod
     def tool_call(call_id: str) -> Dict[str, Any]:
         """
+        Builds a tool call dictionary for the Accountant tool.
+
         :param call_id: The id of the tool call
         :return: A langchain tool call dictionary for the Accountant tool
         """

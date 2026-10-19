@@ -48,6 +48,8 @@ class TestChatHistoryMessageProcessor(TestCase):
     @staticmethod
     def types_of(history: List[Dict[str, Any]]) -> List[ChatMessageType]:
         """
+        Lists the type of each ChatMessage dictionary in a history.
+
         :param history: A list of ChatMessage dictionaries
         :return: The type of each dictionary, in order
         """

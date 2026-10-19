@@ -68,6 +68,8 @@ class ToolPairing:
     @staticmethod
     def results_after(messages: List[BaseMessage], start: int) -> List[ToolMessage]:
         """
+        Collects the tool results that directly follow a tool-calling message.
+
         :param messages: The messages of a chat history
         :param start: The index right after a tool-calling message
         :return: The run of ToolMessages that starts there, possibly empty
@@ -123,6 +125,8 @@ class ToolPairing:
     @staticmethod
     def with_calls(message: AIMessage, calls: List[Dict[str, Any]]) -> Optional[AIMessage]:
         """
+        Copies a tool-calling message so that it carries only the given calls.
+
         :param message: An AIMessage with tool calls
         :param calls: The calls to keep
         :return: A copy of the message carrying only those calls, or None when no

@@ -369,6 +369,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
     @staticmethod
     def call_field(raw_call: Any, key: str) -> Any:
         """
+        Reads one field of a tool call from the wire without assuming its shape.
+
         :param raw_call: One entry of the tool_calls list of a ChatMessage dictionary
         :param key: The field to read
         :return: The field's value when the entry is a dictionary, else None
