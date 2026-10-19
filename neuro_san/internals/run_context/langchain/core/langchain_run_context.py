@@ -60,6 +60,7 @@ from neuro_san.internals.run_context.langchain.middleware.middleware_factory imp
 from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.utils.tool_pairing import ToolPairing
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -211,6 +212,10 @@ class LangChainRunContext(RunContext):
                 base_message: BaseMessage = converter.from_dict(chat_message)
                 if base_message is not None:
                     self.chat_history.append(base_message)
+
+            # A client can send the history back with a tool call or a tool result
+            # missing. Only complete pairs go to the model.
+            self.chat_history[:] = ToolPairing.complete_pairs(self.chat_history)
 
             # Nothing left to search for
             break

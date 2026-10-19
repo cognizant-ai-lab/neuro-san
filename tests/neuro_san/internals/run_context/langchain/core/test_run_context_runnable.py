@@ -822,6 +822,22 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         self.assertEqual(exchange[0].content, "")
         self.assertEqual(exchange[0].tool_calls, [self._tool_call("call_1")])
 
+    def test_find_tool_exchange_skips_exchange_already_in_history(self) -> None:
+        """
+        A tool round that a summarization already copied into the shared history,
+        state messages and all, is not appended a second time.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        state: Dict[str, Any] = self._tool_turn_state(human)
+        runnable: RunContextRunnable = self._make_runnable()
+        # What the summarization middleware leaves behind: the state's own messages.
+        runnable.chat_history = [human, state["messages"][3], state["messages"][4]]
+
+        self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, state), [])
+
+        runnable.chat_history = [human]
+        self.assertEqual(len(runnable.find_tool_exchange({"messages": [human]}, state)), 2)
+
     def test_find_tool_exchange_without_tool_calls_is_empty(self) -> None:
         """
         A turn that only answered adds nothing to the history beyond the answer itself.

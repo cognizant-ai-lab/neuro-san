@@ -244,6 +244,76 @@ class TestChatHistoryMessageProcessor(TestCase):
         self.assertEqual(history[0].get("text"), "<redacted>")
         self.assertEqual(history[1].get("text"), "second question")
 
+    def test_process_messages_trim_without_system_keeps_a_whole_history(self) -> None:
+        """
+        A history with no system placeholder, as the server produces, is left whole
+        when it fits within max_message_history, tool pair included.
+        """
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor(max_message_history=10)
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_calls": self.TOOL_CALLS,
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "{'running_cost': 3.0}",
+                "tool_call_id": "toolu_1",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "answer",
+            },
+        ]
+
+        processor.process_messages(messages)
+
+        self.assertEqual(processor.get_message_history(), messages)
+
+    def test_process_messages_trim_without_system_starts_at_a_user_message(self) -> None:
+        """
+        Without a system placeholder the kept tail still starts at a user message:
+        a limit that cuts into the last turn's tool round drops that turn.
+        """
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor(max_message_history=3)
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "first question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "first answer",
+            },
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "second question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_calls": self.TOOL_CALLS,
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "{'running_cost': 3.0}",
+                "tool_call_id": "toolu_1",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "second answer",
+            },
+        ]
+
+        processor.process_messages(messages)
+
+        self.assertEqual(processor.get_message_history(), [])
+
     def test_process_messages_trim_drops_a_cut_tool_pair(self) -> None:
         """
         When the kept tail cuts into a tool round, the whole tail is dropped rather

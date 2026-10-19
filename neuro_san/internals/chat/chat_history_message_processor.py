@@ -70,8 +70,12 @@ class ChatHistoryMessageProcessor(MessageProcessor):
             # Nothing to do.
             return
 
-        # Save the first item in the list. This is the redacted placeholder for instructions
-        instructions: Dict[str, Any] = self.message_history.pop(0)
+        # A history that starts with the redacted placeholder for the instructions
+        # keeps it in front of whatever is trimmed. The server's own histories
+        # carry no system message and start at the first user message.
+        instructions: Optional[Dict[str, Any]] = None
+        if len(self.message_history) > 0 and self.message_history[0].get("type") == ChatMessageType.SYSTEM:
+            instructions = self.message_history.pop(0)
 
         # Preserve the most recent n elements in the message history
         self.message_history = self.message_history[-self.max_message_history:]
@@ -81,8 +85,8 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         while len(self.message_history) > 0 and self.message_history[0].get("type") != ChatMessageType.HUMAN:
             self.message_history.pop(0)
 
-        # Prepend the instructions to the list
-        self.message_history.insert(0, instructions)
+        if instructions is not None:
+            self.message_history.insert(0, instructions)
 
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):
         """

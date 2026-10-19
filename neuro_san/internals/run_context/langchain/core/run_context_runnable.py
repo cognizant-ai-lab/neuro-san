@@ -351,7 +351,8 @@ class RunContextRunnable(NeuroSanRunnable):
         or a step limit is left out. The answer, the last AIMessage of the turn,
         is not included; it is journaled separately. Contents are projected to
         history-safe text so no provider-native blocks reach another provider
-        or the client.
+        or the client. An exchange the history already holds is skipped: a
+        summarization that keeps the round in context copies it there first.
 
         :param inputs: The inputs the agent chain was invoked with
         :param chain_result: The result from invoking the agent chain
@@ -367,12 +368,15 @@ class RunContextRunnable(NeuroSanRunnable):
 
         turn: List[BaseMessage] = self.before_answer(messages[start + 1:])
         results: Dict[str, ToolMessage] = self.results_by_call_id(turn)
+        recorded_ids: List[str] = self.recorded_call_ids()
 
         exchange: List[BaseMessage] = []
         # Each tool-calling AIMessage goes in followed by the results of its calls.
         message: BaseMessage = None
         for message in turn:
             if not isinstance(message, AIMessage) or not message.tool_calls:
+                continue
+            if self.is_recorded(message, recorded_ids):
                 continue
             paired: Optional[List[ToolMessage]] = self.paired_results(message, results)
             if paired is None:
@@ -386,6 +390,40 @@ class RunContextRunnable(NeuroSanRunnable):
                 exchange.append(ToolMessage(content=ContentUtils.history_safe_text(result),
                                             tool_call_id=result.tool_call_id))
         return exchange
+
+    def recorded_call_ids(self) -> List[str]:
+        """
+        :return: The ids of the tool calls the chat history already holds.
+                 Empty when no history is kept.
+        """
+        ids: List[str] = []
+        # No history kept means nothing recorded.
+        history: List[BaseMessage] = self.chat_history or []
+        # Collect the id of every tool call already in the history.
+        message: BaseMessage = None
+        for message in history:
+            if not isinstance(message, AIMessage) or not message.tool_calls:
+                continue
+            tool_call: Dict[str, Any] = None
+            for tool_call in message.tool_calls:
+                ids.append(tool_call.get("id"))
+        return ids
+
+    @staticmethod
+    def is_recorded(message: AIMessage, recorded_ids: List[str]) -> bool:
+        """
+        Tells whether a tool-calling message is already in the chat history.
+
+        :param message: An AIMessage with tool calls
+        :param recorded_ids: The ids of the tool calls the history already holds
+        :return: True if any call of the message is among them
+        """
+        # One shared id is enough: the whole exchange was copied together.
+        tool_call: Dict[str, Any] = None
+        for tool_call in message.tool_calls:
+            if tool_call.get("id") in recorded_ids:
+                return True
+        return False
 
     @staticmethod
     def before_answer(turn: List[BaseMessage]) -> List[BaseMessage]:
