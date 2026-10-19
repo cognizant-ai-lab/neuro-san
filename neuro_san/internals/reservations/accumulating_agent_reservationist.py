@@ -158,7 +158,7 @@ class AccumulatingAgentReservationist(Reservationist):
                              f"{dumps(errors, indent=4, sort_keys=True)}")
 
         event: Event = None
-        key: Union[str, Event] = None
+        key: Union[Event, str] = None
         if confirmation:
             # Create an async.Event. This will be the key for the dictionary
             event = Event()
@@ -169,7 +169,7 @@ class AccumulatingAgentReservationist(Reservationist):
             key = first_res.get_reservation_id()
             # event is already None
 
-        entry: Map[Union[str, Event], Map[Reservation, Dict[str, Any]]] = {
+        entry: Map[Union[Event, str], Map[Reservation, Dict[str, Any]]] = {
             key: deployment_dict
         }
         self.deployments.update(entry)
