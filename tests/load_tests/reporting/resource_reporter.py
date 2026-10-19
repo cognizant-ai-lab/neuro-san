@@ -110,6 +110,7 @@ class ResourceReporter:
         before_rss_megabytes: float = before_snapshot.get("rss")
         settled_rss_megabytes: float = settled_snapshot.get("rss")
         rss_delta_megabytes: float = settled_rss_megabytes - before_rss_megabytes
+        # Memory cells: megabytes with 1 decimal place, e.g. 123.5M.
         peak_rss_text: str = "-"
         if peak_snapshot:
             peak_rss_megabytes: float = peak_snapshot.get("rss")
