@@ -75,7 +75,7 @@ class ManifestDictConfigFilter(ConfigFilter):
             expanded_value: Dict[str, Any] = {
                 "serve": True,
                 StorageClass.PUBLIC: True,
-                "mcp": self.MCP_DEFAULT_MODE,
+                "mcp": ManifestDictConfigFilter.MCP_DEFAULT_MODE,
                 "periodic": False
             }
 

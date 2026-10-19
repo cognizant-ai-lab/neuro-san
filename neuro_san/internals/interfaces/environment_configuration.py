@@ -46,6 +46,19 @@ class EnvironmentConfiguration:
             value = config.get(key)
 
         if value is None and env_key is not None:
-            value = os.getenv(env_key)
+            value = EnvironmentConfiguration.getenv(env_key)
 
+        return value
+
+    @staticmethod
+    def getenv(env_key: str, default_value: str = None) -> str:
+        """
+        :param env_key: The os.environ key whose value should be gotten
+        :param default_value: default value when the key is not present
+        :return: The value of the environment variable which is always a string
+        """
+        value: str = None
+        if env_key is None:
+            return value
+        value = os.getenv(env_key, default_value) or default_value
         return value

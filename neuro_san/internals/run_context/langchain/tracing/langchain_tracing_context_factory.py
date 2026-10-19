@@ -18,8 +18,7 @@
 from typing import Any
 from typing import Dict
 
-from os import getenv
-
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
@@ -42,7 +41,7 @@ class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
         """
         tracing_context: TracingContext = None
 
-        test_for_langfuse: bool = getenv("LANGFUSE_ENABLED", "false").lower() == "true"
+        test_for_langfuse: bool = Env.getenv("LANGFUSE_ENABLED", "false").lower() == "true"
 
         if test_for_langfuse:
             tracing_context = LangfuseTracingContext(run_target=run_target, config=config)

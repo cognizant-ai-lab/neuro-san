@@ -102,7 +102,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         Logs the usage of the agent network if enabled.
         :param operation: The operation being performed (e.g., "function", "connectivity", "streaming_chat").
         """
-        if self.LOG_AGENT_NETWORK_USAGE:
+        if AsyncDirectAgentSession.LOG_AGENT_NETWORK_USAGE:
             self.logger.info("Agent network '%s' (ID: %d) used for operation: %s",
                              self.agent_network.get_network_name(),
                              id(self.agent_network),

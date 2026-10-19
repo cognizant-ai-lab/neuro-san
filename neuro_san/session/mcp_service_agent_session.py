@@ -168,7 +168,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         }
         headers: Dict[str, str] = self.get_headers()
         headers["Content-Type"] = "application/json"
-        headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
+        headers[McpServiceAgentSession.MCP_PROTOCOL_VERSION] = self.protocol_version
 
         path: str = self.get_request_path("tools/list")
         response: Response = None
@@ -282,7 +282,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
         headers: Dict[str, str] = self.get_headers()
         headers["Content-Type"] = "application/json"
-        headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
+        headers[McpServiceAgentSession.MCP_PROTOCOL_VERSION] = self.protocol_version
 
         path: str = self.get_request_path("streaming_chat")
         try:

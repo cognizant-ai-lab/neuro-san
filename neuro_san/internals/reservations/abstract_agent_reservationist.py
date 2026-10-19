@@ -107,8 +107,10 @@ class AbstractAgentReservationist(Reservationist):
         reservations_dict: Dict[Reservation, Dict[str, Any]] = {}
         for reservation, agent_spec in deployment_dict.items():
 
+            use_reservation: AgentReservation = reservation
+
             # For each reservation in the block, set a consistent expiration time
-            reservation.set_expiration_from(use_now, max_lifetime_in_seconds)
+            use_reservation.set_expiration_from(use_now, max_lifetime_in_seconds)
 
             # Put together a dictionary of reservations -> agent specs
             reservations_dict[reservation] = agent_spec
