@@ -239,7 +239,7 @@ class RunContextRunnable(NeuroSanRunnable):
             # ended it (not every branch below captures a backtrace).
             backtrace = None
             try:
-                chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
+                chain_result: Dict[str, Any] = await self.run_chain(inputs, runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
@@ -311,10 +311,32 @@ class RunContextRunnable(NeuroSanRunnable):
         output: str = self.parse_chain_result(chain_result, exception)
         return_message: BaseMessage = self.build_return_message(chain_result, output)
 
-        # The turn's tool calls and results go into the chat history first, then the answer.
+        # The turn's tool calls and results went into the chat history as the
+        # chain ran (see run_chain); the answer follows them.
         # Chat history is updated in write_message
-        self.record_tool_exchange(inputs, chain_result)
         await self.journal.write_message(return_message)
+
+    async def run_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Runs the agent chain and returns its final state.
+
+        The chain is read as a stream of states, one per step, and the turn's
+        completed tool exchanges are recorded as each state arrives. A tool round
+        that completed before a later step failed, or before a summarization
+        compacted it out of the state, is in the history all the same.
+
+        :param inputs: The inputs to the agent chain
+        :param runnable_config: The runnable_config to send to the agent chain
+        :return: The chain's final state, the same value ainvoke() returns.
+                 None when the chain produced no state at all.
+        """
+        final_state: Dict[str, Any] = None
+        # Every state is the full message list after one step of the graph.
+        state: Dict[str, Any] = None
+        async for state in self.agent_chain.astream(input=inputs, config=runnable_config, stream_mode="values"):
+            final_state = state
+            self.record_tool_exchange(inputs, state)
+        return final_state
 
     def record_tool_exchange(self, inputs: Dict[str, Any],
                              chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]):
@@ -428,21 +450,17 @@ class RunContextRunnable(NeuroSanRunnable):
     @staticmethod
     def before_answer(turn: List[BaseMessage]) -> List[BaseMessage]:
         """
-        Cuts a turn's messages off at its answer, the last AIMessage.
+        Cuts a turn's messages off at its answer, a trailing AIMessage without tool calls.
+
+        A trailing AIMessage that made tool calls is not an answer: the turn is
+        still under way, and its results, when present, are paired like any other.
 
         :param turn: The messages the turn added after the user's message
-        :return: The messages before the answer. Empty when there is no AIMessage.
+        :return: The messages before the answer, or all of them while there is no answer yet
         """
-        last_ai_index: int = -1
-        # Remember the position of the last AIMessage seen.
-        index: int = None
-        message: BaseMessage = None
-        for index, message in enumerate(turn):
-            if isinstance(message, AIMessage):
-                last_ai_index = index
-        if last_ai_index < 0:
-            return []
-        return turn[:last_ai_index]
+        if len(turn) > 0 and isinstance(turn[-1], AIMessage) and not turn[-1].tool_calls:
+            return turn[:-1]
+        return turn
 
     @staticmethod
     def results_by_call_id(turn: List[BaseMessage]) -> Dict[str, ToolMessage]:
