@@ -352,10 +352,23 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             if tool_call is not None:
                 tool_calls.append(tool_call)
             else:
+                # The arguments are not logged: a client's call can carry secrets.
                 logger: logging.Logger = logging.getLogger(self.__class__.__name__)
-                logger.warning("Ignoring a tool call in chat_context without a string id and name "
-                               "and a dictionary of args: %s", raw_call)
+                logger.warning("Ignoring a tool call in chat_context (id %r, name %r): a call needs a string id "
+                               "and name and a dictionary of args", self.call_field(raw_call, "id"),
+                               self.call_field(raw_call, "name"))
         return tool_calls
+
+    @staticmethod
+    def call_field(raw_call: Any, key: str) -> Any:
+        """
+        :param raw_call: One entry of the tool_calls list of a ChatMessage dictionary
+        :param key: The field to read
+        :return: The field's value when the entry is a dictionary, else None
+        """
+        if not isinstance(raw_call, dict):
+            return None
+        return raw_call.get(key)
 
     @staticmethod
     def restore_tool_call(raw_call: Any) -> Optional[Dict[str, Any]]:
@@ -386,21 +399,25 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             "type": "tool_call",
         }
 
-    @staticmethod
-    def tool_result_from_dict(content: Union[str, List[Any]], chat_message: Dict[str, Any]) -> BaseMessage:
+    def tool_result_from_dict(self, content: Union[str, List[Any]],
+                              chat_message: Dict[str, Any]) -> Optional[BaseMessage]:
         """
         Restores a tool result.
 
         With a tool_call_id it is the ToolMessage that answers a tool call of the AI
-        message before it. Without one it is the stand-alone AgentToolResultMessage form.
+        message before it. Without one it is the stand-alone AgentToolResultMessage
+        form, which no model accepts, so on the chat-history leg it is left out.
 
         :param content: The content of the message, its text or a list of content blocks
         :param chat_message: The ChatMessage dictionary
-        :return: The ToolMessage or AgentToolResultMessage
+        :return: The ToolMessage, the AgentToolResultMessage when not converting for a
+                 chat history, or None for a stand-alone result bound for one
         """
         tool_call_id: Any = chat_message.get("tool_call_id")
         if isinstance(tool_call_id, str) and len(tool_call_id) > 0:
             return ToolMessage(content=content, tool_call_id=tool_call_id)
+        if self.langchain_only:
+            return None
         return AgentToolResultMessage(content=content,
                                       tool_result_origin=chat_message.get("tool_result_origin"))
 

@@ -156,15 +156,35 @@ class TestBaseMessageDictionaryConverter(TestCase):
 
     def test_from_dict_round_trips_agent_tool_result(self) -> None:
         """
-        AgentToolResultMessage round-trips content and tool_result_origin.
+        AgentToolResultMessage round-trips content and tool_result_origin when
+        not converting for a chat history.
         """
-        converter = BaseMessageDictionaryConverter()
+        converter = BaseMessageDictionaryConverter(langchain_only=False)
         original = AgentToolResultMessage(content="tool says", tool_result_origin=self.ORIGIN)
         wire_dict: Dict[str, Any] = converter.to_dict(original)
         restored: BaseMessage = converter.from_dict(wire_dict)
         self.assertIsInstance(restored, AgentToolResultMessage)
         self.assertEqual(restored.content, "tool says")
         self.assertEqual(restored.tool_result_origin, self.ORIGIN)
+
+    def test_from_dict_drops_a_stand_alone_tool_result_for_chat_history(self) -> None:
+        """
+        A tool result with no tool_call_id, or an empty one, has no call to pair
+        with and no model accepts it, so it is not restored for a chat history.
+        """
+        converter = BaseMessageDictionaryConverter()
+        without_id: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT_TOOL_RESULT,
+            "text": "tool says",
+        }
+        empty_id: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT_TOOL_RESULT,
+            "text": "tool says",
+            "tool_call_id": "",
+        }
+
+        self.assertIsNone(converter.from_dict(without_id))
+        self.assertIsNone(converter.from_dict(empty_id))
 
     def test_from_dict_unknown_type_yields_none_when_langchain_only(self) -> None:
         """
@@ -258,6 +278,9 @@ class TestBaseMessageDictionaryConverter(TestCase):
             restored: BaseMessage = converter.from_dict(chat_message)
 
         self.assertEqual(len(logs.output), 3)
+        # The warning names the call but never carries its arguments, which can hold secrets.
+        self.assertIn("'toolu_1'", logs.output[1])
+        self.assertNotIn("not a dictionary", logs.output[1])
         self.assertEqual(len(restored.tool_calls), 1)
         self.assertEqual(restored.tool_calls[0].get("id"), "toolu_2")
         self.assertEqual(restored.tool_calls[0].get("args"), {})
@@ -824,8 +847,9 @@ class TestBaseMessageDictionaryConverter(TestCase):
 
     def test_from_dict_restores_blocks_on_tool_result(self) -> None:
         """
-        An AGENT_TOOL_RESULT keeps its tool_result_origin and restores its
-        blocks like any other message.
+        An AGENT_TOOL_RESULT restores its blocks like any other message: as the
+        ToolMessage answering its call for a chat history, and as the stand-alone
+        AgentToolResultMessage, tool_result_origin kept, when not converting for one.
         """
         blocks: List[Dict[str, Any]] = [
             {
@@ -844,7 +868,17 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "tool_result_origin": self.ORIGIN,
             "content_blocks": ContentUtils.wrap_content_blocks(blocks),
         }
-        restored: AgentToolResultMessage = BaseMessageDictionaryConverter().from_dict(wire)
+        paired_wire: Dict[str, Any] = dict(wire)
+        paired_wire["tool_call_id"] = "toolu_1"
+
+        paired: ToolMessage = BaseMessageDictionaryConverter().from_dict(paired_wire)
+        restored: AgentToolResultMessage = BaseMessageDictionaryConverter(langchain_only=False).from_dict(wire)
+
+        self.assertIsInstance(paired, ToolMessage)
+        self.assertEqual(paired.content, blocks)
+        self.assertEqual(paired.tool_call_id, "toolu_1")
+        self.assertEqual(paired.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
         self.assertIsInstance(restored, AgentToolResultMessage)
         self.assertEqual(restored.content, blocks)
         self.assertEqual(restored.tool_result_origin, self.ORIGIN)
