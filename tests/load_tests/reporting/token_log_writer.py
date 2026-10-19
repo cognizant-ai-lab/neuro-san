@@ -230,6 +230,8 @@ class TokenLogWriter:
         total_prompt_tokens: int = 0
         total_completion_tokens: int = 0
         count: int = 0
+        result: Dict[str, Any]
+        # Add up the tokens of each request that reported any.
         for result in results:
             token_count: int = result.get("total_tokens", 0)
             if not token_count:
@@ -240,7 +242,8 @@ class TokenLogWriter:
             count += 1
         if count == 0:
             return
-        average_tokens: int = total_tokens // count
+        # Whole tokens per request, rounded down, e.g. 1001 / 2 -> 500.
+        average_tokens: int = int(total_tokens / count)
         logger.info(
             "  Total: %s tokens (%s prompt + %s completion)",
             f"{total_tokens:,}", f"{total_prompt_tokens:,}",

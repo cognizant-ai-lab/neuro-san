@@ -22,6 +22,7 @@ from typing import Dict
 from typing import Optional
 
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
@@ -74,10 +75,13 @@ class AgentRequestExecutor:
         start_seconds: float = time.perf_counter()
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds)
 
-        security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
+        security_cfg: Optional[Dict[str, Any]] = None
+        if use_https:
+            security_cfg = {}
+        port_text: str = str(port)
         session: HttpServiceAgentSession = HttpServiceAgentSession(
             host=host,
-            port=str(port),
+            port=port_text,
             agent_name=agent,
             security_cfg=security_cfg,
             timeout_in_seconds=CONNECT_TIMEOUT_SECONDS,
@@ -134,7 +138,9 @@ class AgentRequestExecutor:
             return AgentRequestResult(status, None, error_text, 0.0, {})
 
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
+        message_processor: BasicMessageProcessor = processor.get_message_processor()
+        time_to_first_response_seconds: float = timed_chat.get_time_to_first_response_seconds()
         return AgentRequestResult(
-            status, processor.get_message_processor(), answer_text,
-            timed_chat.get_time_to_first_response_seconds(), token_accounting,
+            status, message_processor, answer_text,
+            time_to_first_response_seconds, token_accounting,
         )

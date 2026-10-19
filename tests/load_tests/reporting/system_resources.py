@@ -24,8 +24,8 @@ copies across the input validator, load test, and summary reporter.
 
 import logging
 from typing import Dict
+from typing import List
 from typing import Optional
-from typing import Tuple
 
 try:
     import resource
@@ -62,27 +62,33 @@ class SystemResources:
         return total
 
     @staticmethod
-    def thread_limits() -> Tuple[str, str]:
+    def thread_limits() -> List[str]:
         """
-        Return (per-user limit, system max) as display strings.
+        Return [per-user limit, system max] as display strings.
 
-        :return: (per-user limit, system max); "n/a" when a value cannot be read
+        :return: [per-user limit, system max]; "n/a" when a value cannot be read
         """
         user_limit: str = "n/a"
         if resource is not None:
             try:
                 soft_limit: int = 0
                 soft_limit, _ = resource.getrlimit(resource.RLIMIT_NPROC)
-                user_limit = "unlimited" if soft_limit == resource.RLIM_INFINITY else f"{soft_limit:,}"
+                if soft_limit == resource.RLIM_INFINITY:
+                    user_limit = "unlimited"
+                else:
+                    user_limit = f"{soft_limit:,}"
             except (ValueError, OSError, AttributeError):
                 user_limit = "n/a"
         system_maximum: str = "n/a"
         try:
             with open("/proc/sys/kernel/threads-max", encoding="utf-8") as file_handle:
-                system_maximum = f"{int(file_handle.read().strip()):,}"
+                threads_max_text: str = file_handle.read().strip()
+                threads_max: int = int(threads_max_text)
+                system_maximum = f"{threads_max:,}"
         except (OSError, ValueError):
             pass
-        return user_limit, system_maximum
+        limits: List[str] = [user_limit, system_maximum]
+        return limits
 
     @classmethod
     def snapshot(cls, cpu_interval_seconds: float = 0.1) -> SysSnapshot:

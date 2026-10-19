@@ -80,20 +80,21 @@ class OutputValidator:
         :param show_counts: False to log only the Duration/Avg line
         """
         if show_counts:
+            created_count: int = counts.get(STATUS_CREATED, 0)
+            failed_count: int = counts.get(STATUS_FAILED, 0)
+            timeout_count: int = counts.get(STATUS_TIMEOUT, 0)
+            killed_count: int = counts.get(STATUS_KILLED, 0)
             logger.info("\n  Requests: %s", actual_requests)
-            logger.info("    Created: %s  (success criteria met)", counts.get(STATUS_CREATED, 0))
-            logger.info("    Failed:  %s  (error or crash)", counts.get(STATUS_FAILED, 0))
-            logger.info("    Timed out: %s  (hit %ss hard cap)", counts.get(STATUS_TIMEOUT, 0), timeout)
-            logger.info(
-                "    Killed:  %s  (no output for %ss, presumed hanging)",
-                counts.get(STATUS_KILLED, 0), idle_timeout,
-            )
-        average_seconds_per_request: float = elapsed_seconds / actual_requests if actual_requests else 0
-        logger.info(
-            "  Duration: %s | Avg: %s per request",
-            Formatters.fmt_duration(elapsed_seconds, precision=2),
-            Formatters.fmt_duration(average_seconds_per_request, precision=2),
-        )
+            logger.info("    Created: %s  (success criteria met)", created_count)
+            logger.info("    Failed:  %s  (error or crash)", failed_count)
+            logger.info("    Timed out: %s  (hit %ss hard cap)", timeout_count, timeout)
+            logger.info("    Killed:  %s  (no output for %ss, presumed hanging)", killed_count, idle_timeout)
+        average_seconds_per_request: float = 0
+        if actual_requests:
+            average_seconds_per_request = elapsed_seconds / actual_requests
+        elapsed_text: str = Formatters.fmt_duration(elapsed_seconds, precision=2)
+        average_text: str = Formatters.fmt_duration(average_seconds_per_request, precision=2)
+        logger.info("  Duration: %s | Avg: %s per request", elapsed_text, average_text)
 
     @staticmethod
     def log_retry_activity(retries: Dict[str, int], total_retries: int, actual_requests: int) -> None:
@@ -143,7 +144,9 @@ class OutputValidator:
         total_started: int = server_counts.get("total_started")
         total_finished: int = server_counts.get("total_finished")
         internal_calls: int = total_started - primary_started
-        match_label: str = "OK" if primary_started >= actual_requests else "MISMATCH"
+        match_label: str = "MISMATCH"
+        if primary_started >= actual_requests:
+            match_label = "OK"
         logger.info("\n  Server-side validation (from server log):")
         logger.info("    %s received:  %s/%s  (%s)", agent_name, primary_started, actual_requests, match_label)
         logger.info("    %s completed: %s/%s", agent_name, primary_finished, actual_requests)
@@ -165,14 +168,17 @@ class OutputValidator:
         """
         if not disconnections:
             return
-        logger.warning("\n  Client disconnections detected: %s", len(disconnections))
+        disconnection_count: int = len(disconnections)
+        logger.warning("\n  Client disconnections detected: %s", disconnection_count)
         disconnection: Dict[str, str]
         # Log one line for each disconnected request.
         for disconnection in disconnections:
             agent: str = disconnection.get("agent", "unknown")
             request_id: str = disconnection.get("request_id", "unknown")
             client_request: Optional[str] = disconnection.get("client_request")
-            label: str = f"{client_request}/{request_id}" if client_request else request_id
+            label: str = request_id
+            if client_request:
+                label = f"{client_request}/{request_id}"
             logger.warning("    %s: %s still running at disconnect", label, agent)
 
     @staticmethod
