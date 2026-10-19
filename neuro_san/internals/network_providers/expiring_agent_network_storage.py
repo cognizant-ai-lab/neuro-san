@@ -21,7 +21,8 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-import logging
+from logging import getLogger
+from logging import Logger
 import time
 
 from leaf_common.config.config_filter import ConfigFilter
@@ -67,7 +68,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         self.items_overflow_threshold: int = 0
 
         self.base_storage: ReservationsStorage = None
-        self.logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def set_base_storage(self, base_storage: ReservationsStorage):
         """
