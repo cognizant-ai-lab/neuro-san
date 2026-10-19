@@ -24,7 +24,9 @@ import os
 import shutil
 import sys
 
-import argparse
+from argparse import ArgumentParser
+from argparse import _ArgumentGroup
+from argparse import Namespace
 import json
 
 from pathlib import Path
@@ -56,7 +58,7 @@ class AgentCli:
         """
         self.poll_timeout_seconds: float = 5.0
         self.input_timeout_seconds: float = 5000.0
-        self.args: argparse.Namespace = None
+        self.args: Namespace = None
         self.arg_groups: Dict[str, Any] = {}
 
         self.session: AgentSession = None
@@ -246,7 +248,7 @@ Some suggestions:
                     If omitted, sys.argv will be used.
         """
 
-        arg_parser: argparse.ArgumentParser = argparse.ArgumentParser()
+        arg_parser: ArgumentParser = ArgumentParser()
 
         self.add_args(arg_parser)
 
@@ -264,17 +266,17 @@ Some suggestions:
             self.args.thinking_file = FileOfClass.check_file(self.args.thinking_file, "/")
         self.args.first_prompt_file = FileOfClass.check_file(self.args.first_prompt_file, "/")
 
-    def add_args(self, arg_parser: argparse.ArgumentParser):
+    def add_args(self, arg_parser: ArgumentParser):
         """
         Adds arguments.  Allows subclasses a chance to add their own.
-        :param arg_parser: The argparse.ArgumentParser to add.
+        :param arg_parser: The ArgumentParser to add.
         """
         # What agent are we talking to?
         arg_parser.add_argument("--agent", type=str, default="esp_decision_assistant",
                                 help="Name of the agent to talk to")
 
         # What agents can we connect to?
-        group: argparse._ArgumentGroup = \
+        group: _ArgumentGroup = \
             arg_parser.add_argument_group(title="Agent Listings",
                                           description="What agents can we connect to?")
         group.add_argument("--list", default=False, dest="list", action="store_true",

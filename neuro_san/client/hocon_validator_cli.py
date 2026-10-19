@@ -19,7 +19,9 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import argparse
+from argparse import ArgumentParser
+from argparse import Namespace
+from argparse import RawDescriptionHelpFormatter
 import json
 import os
 import shutil
@@ -55,7 +57,7 @@ class HoconValidatorCli:
         """
         Constructor
         """
-        self.args: argparse.Namespace = None
+        self.args: Namespace = None
 
     def main(self) -> int:
         """
@@ -97,9 +99,9 @@ class HoconValidatorCli:
         """
         Parse command line arguments.
         """
-        arg_parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        arg_parser: ArgumentParser = ArgumentParser(
             description="Validate a HOCON agent network configuration file.",
-            formatter_class=argparse.RawDescriptionHelpFormatter,
+            formatter_class=RawDescriptionHelpFormatter,
             epilog="""
 Examples:
   python -m neuro_san.client.hocon_validator_cli registries/hello_world.hocon
