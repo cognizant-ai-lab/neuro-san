@@ -31,6 +31,7 @@ from pyparsing.exceptions import ParseSyntaxException
 from leaf_common.validation.dictionary_validator import DictionaryValidator
 
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -54,7 +55,7 @@ class HoconValidatorCli:
         """
         Constructor
         """
-        self.args = None
+        self.args: argparse.Namespace = None
 
     def main(self) -> int:
         """
@@ -81,6 +82,8 @@ class HoconValidatorCli:
 
         if errors:
             print(f"Validation failed with {len(errors)} error(s):\n")
+            i: int = 0
+            error: str = None
             for i, error in enumerate(errors, 1):
                 print(f"  {i}. {error}")
             return 1
@@ -94,7 +97,7 @@ class HoconValidatorCli:
         """
         Parse command line arguments.
         """
-        arg_parser = argparse.ArgumentParser(
+        arg_parser: argparse.ArgumentParser = argparse.ArgumentParser(
             description="Validate a HOCON agent network configuration file.",
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
@@ -177,8 +180,8 @@ Examples:
         if self.args.registry_dir:
             return self._load_with_registry_dir(abs_file_path, self.args.registry_dir)
 
-        restorer = AgentNetworkRestorer(registry_dir=None)
-        agent_network = restorer.restore(file_reference=abs_file_path)
+        restorer: AgentNetworkRestorer = AgentNetworkRestorer(registry_dir=None)
+        agent_network: AgentNetwork = restorer.restore(file_reference=abs_file_path)
         return agent_network.get_config()
 
     def _load_with_registry_dir(self, file_path: str, registry_dir: str) -> Dict[str, Any]:
@@ -203,8 +206,8 @@ Examples:
 
             shutil.copy(file_path, temp_file)
 
-            restorer = AgentNetworkRestorer(registry_dir=None)
-            agent_network = restorer.restore(file_reference=temp_file)
+            restorer: AgentNetworkRestorer = AgentNetworkRestorer(registry_dir=None)
+            agent_network: AgentNetwork = restorer.restore(file_reference=temp_file)
             return agent_network.get_config()
         finally:
             if temp_file and os.path.exists(temp_file):
@@ -241,6 +244,7 @@ Examples:
 
         if tools:
             print("\nAgents:")
+            tool: Dict[str, Any] = None
             for tool in tools:
                 name: str = tool.get("name", "<unnamed>")
                 has_instructions: bool = tool.get("instructions") is not None

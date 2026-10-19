@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Set
 
 import os
 import shutil
@@ -55,7 +56,7 @@ class AgentCli:
         """
         self.poll_timeout_seconds: float = 5.0
         self.input_timeout_seconds: float = 5000.0
-        self.args = None
+        self.args: argparse.Namespace = None
         self.arg_groups: Dict[str, Any] = {}
 
         self.session: AgentSession = None
@@ -88,10 +89,11 @@ class AgentCli:
         response: Dict[str, Any] = self.session.connectivity(empty)
 
         empty_list: List[Dict[str, Any]] = []
+        connectivity_info: Dict[str, Any] = None
         for connectivity_info in response.get("connectivity_info", empty_list):
             print(f"{json.dumps(connectivity_info, indent=4, sort_keys=True)}")
 
-        metadata = response.get("metadata")
+        metadata: Dict[str, Any] = response.get("metadata")
         metadata_str: str = "<None>"
         if metadata is not None:
             metadata_str = json.dumps(metadata, indent=4, sort_keys=True)
@@ -133,7 +135,7 @@ class AgentCli:
                 not bool(self.args.chat_filter):
             chat_filter["chat_filter_type"] = "MINIMAL"
 
-        message = f"""
+        message: str = f"""
 The agent "{self.args.agent}" is not implemented on the server.
 
 Some suggestions:
@@ -182,15 +184,16 @@ Some suggestions:
             "chat_filter": chat_filter,
         }
 
-        input_processor = StreamingInputProcessor(self.DEFAULT_INPUT,
-                                                  self.args.thinking_file,
-                                                  self.session,
-                                                  self.thinking_dir)
+        input_processor: StreamingInputProcessor = \
+            StreamingInputProcessor(self.DEFAULT_INPUT,
+                                    self.args.thinking_file,
+                                    self.session,
+                                    self.thinking_dir)
 
         while not self.is_done(state):
 
-            prompt = state.get("prompt")
-            timeout = state.get("timeout")
+            prompt: str = state.get("prompt")
+            timeout: float = state.get("timeout")
             user_input = state.get("user_input")
             if user_input is None:
                 if prompt is not None and len(prompt) > 0:
@@ -243,7 +246,7 @@ Some suggestions:
                     If omitted, sys.argv will be used.
         """
 
-        arg_parser = argparse.ArgumentParser()
+        arg_parser: argparse.ArgumentParser = argparse.ArgumentParser()
 
         self.add_args(arg_parser)
 
@@ -271,8 +274,9 @@ Some suggestions:
                                 help="Name of the agent to talk to")
 
         # What agents can we connect to?
-        group = arg_parser.add_argument_group(title="Agent Listings",
-                                              description="What agents can we connect to?")
+        group: argparse._ArgumentGroup = \
+            arg_parser.add_argument_group(title="Agent Listings",
+                                          description="What agents can we connect to?")
         group.add_argument("--list", default=False, dest="list", action="store_true",
                            help="List all available agents")
         group.add_argument("--tag", type=str,
@@ -388,7 +392,7 @@ Have external tools that can be found in the local agent manifest use a service 
         """
         Opens a session based on the parsed command line arguments
         """
-        hostname = "localhost"
+        hostname: str = "localhost"
         if self.args.host is not None or not self.args.local:
             hostname = self.args.host
 
@@ -460,7 +464,7 @@ Have external tools that can be found in the local agent manifest use a service 
         """
         List available agents via a concierge session
         """
-        hostname = "localhost"
+        hostname: str = "localhost"
         if self.args.host is not None or not self.args.local:
             hostname = self.args.host
 
@@ -480,8 +484,9 @@ Have external tools that can be found in the local agent manifest use a service 
 
         empty_list: List[Dict[str, Any]] = []
         if self.args.tags:
-            tags = set()
+            tags: Set[str] = set()
             agent_infos: List[Dict[str, Any]] = response_dict.get("agents", empty_list)
+            agent_info: Dict[str, Any] = None
             for agent_info in agent_infos:
                 agent_tags: List[str] = agent_info.get("tags", empty_list)
                 tags.update(agent_tags)
@@ -490,6 +495,7 @@ Have external tools that can be found in the local agent manifest use a service 
         elif self.args.tag:
             print(f"Available agents for tag {self.args.tag}:\n")
             agent_infos: List[Dict[str, Any]] = response_dict.get("agents", empty_list)
+            agent_info: Dict[str, Any] = None
             for agent_info in agent_infos:
                 agent_tags: List[str] = agent_info.get("tags", empty_list)
                 if self.args.tag in agent_tags:

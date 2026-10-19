@@ -57,6 +57,7 @@ class CompositeMessageProcessor(MessageProcessor):
         """
         Resets any previously accumulated state
         """
+        message_processor: MessageProcessor = None
         for message_processor in self.message_processors:
             message_processor.reset()
 
@@ -71,6 +72,7 @@ class CompositeMessageProcessor(MessageProcessor):
         if not self.depth_blocks_breadth:
             return False
 
+        message_processor: MessageProcessor = None
         for message_processor in self.message_processors:
             if message_processor.should_block_downstream_processing(chat_message_dict, message_type):
                 return True
@@ -86,6 +88,7 @@ class CompositeMessageProcessor(MessageProcessor):
         if message_type is None:
             message_type = MessageFilter.get_message_type(chat_message_dict)
 
+        message_processor: MessageProcessor = None
         for message_processor in self.message_processors:
             message_processor.process_message(chat_message_dict, message_type)
             if message_processor.should_block_downstream_processing(chat_message_dict, message_type):
@@ -102,6 +105,7 @@ class CompositeMessageProcessor(MessageProcessor):
         if message_type is None:
             message_type = MessageFilter.get_message_type(chat_message_dict)
 
+        message_processor: MessageProcessor = None
         for message_processor in self.message_processors:
             await message_processor.async_process_message(chat_message_dict, message_type)
             if message_processor.should_block_downstream_processing(chat_message_dict, message_type):
