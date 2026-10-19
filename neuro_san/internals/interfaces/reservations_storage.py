@@ -19,11 +19,12 @@ from __future__ import annotations
 from abc import abstractmethod
 
 from typing import Any
-from typing import Dict
 from typing import Tuple
 
 from leaf_common.utils.interface import interface
+from leaf_common.utils.map import Map
 from leaf_common.utils.startable import Startable
+
 from neuro_san.interfaces.reservation import Reservation
 
 
@@ -36,8 +37,7 @@ class ReservationsStorage(Startable):
     """
 
     @abstractmethod
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                               source: str = None):
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 

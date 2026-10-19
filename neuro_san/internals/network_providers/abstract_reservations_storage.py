@@ -16,7 +16,6 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import Dict
 from typing import Optional
 from typing import Tuple
 
@@ -27,6 +26,7 @@ from threading import Event
 from threading import Thread
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.utils.map import Map
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -91,8 +91,7 @@ class AbstractReservationsStorage(ReservationsStorage):
                 self._stop_event.wait(timeout=sleep_time)
             # We're behind schedule; skip sleeping (prevents drift accumulation)
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                               source: str = None):
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 

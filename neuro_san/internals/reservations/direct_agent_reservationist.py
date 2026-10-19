@@ -23,6 +23,8 @@ from asyncio import Event
 from asyncio import get_running_loop
 from asyncio import run_coroutine_threadsafe
 
+from leaf_common.utils.map import Map
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.abstract_agent_reservationist import AbstractAgentReservationist
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
@@ -35,10 +37,10 @@ class DirectAgentReservationist(AbstractAgentReservationist):
     """
 
     async def deploy(self,
-                     deployment_dict: Dict[Reservation,
-                                           Dict[Union[str, Event],
-                                                Dict[AgentReservation,
-                                                     Dict[str, Any]]]],
+                     deployment_dict: Map[Reservation,
+                                          Map[Union[str, Event],
+                                              Map[AgentReservation,
+                                                  Dict[str, Any]]]],
                      confirmation: bool = False) -> Event:
         """
         Deploy multiple Reservations.
@@ -69,7 +71,7 @@ class DirectAgentReservationist(AbstractAgentReservationist):
 
             use_reservation: AgentReservation = reservation
 
-            to_deploy: Dict[Union[str, Event], Dict[AgentReservation, Dict[str, Any]]] = value
+            to_deploy: Map[Union[str, Event], Map[AgentReservation, Dict[str, Any]]] = value
             for key, value in to_deploy.items():
 
                 # Prepare basic information

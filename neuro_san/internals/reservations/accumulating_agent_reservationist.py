@@ -22,6 +22,8 @@ from typing import Union
 from asyncio import Event
 from json import dumps
 
+from leaf_common.utils.map import Map
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
@@ -42,7 +44,7 @@ class AccumulatingAgentReservationist(Reservationist):
 
         # Creating Reservations can be done outside the with-statement
         reservation: Reservation = await reservationist.reserve()
-        deployments: Dict[Reservation, Dict[str, Any]] = {
+        deployments: Map[Reservation, Dict[str, Any]] = {
             reservation: my_agent_spec,
             ...
         }
@@ -68,7 +70,7 @@ class AccumulatingAgentReservationist(Reservationist):
         """
         self.max_lifetime_in_seconds: float = max_lifetime_in_seconds
         self.agent_name: str = agent_name
-        self.deployments: Dict[Union[Event, str], Dict[Reservation, Dict[str, Any]]] = {}
+        self.deployments: Map[Union[Event, str], Map[Reservation, Dict[str, Any]]] = {}
         self._supporting_reservationist: Reservationist = supporting_reservationist
         self._supporting_reservation: Reservation = None
         self._external_networks: List[str] = None
@@ -112,7 +114,7 @@ class AccumulatingAgentReservationist(Reservationist):
         self.deployments = {}
         self._supporting_reservation = await self._supporting_reservationist.reserve(prefix=self.agent_name)
 
-    async def deploy(self, deployment_dict: Dict[Reservation, Dict[str, Any]], confirmation: bool = False) -> Event:
+    async def deploy(self, deployment_dict: Map[Reservation, Dict[str, Any]], confirmation: bool = False) -> Event:
         """
         Deploy multiple Reservations.
 
@@ -165,7 +167,7 @@ class AccumulatingAgentReservationist(Reservationist):
             key = first_res.get_reservation_id()
             # event is already None
 
-        entry: Dict[Union[str, Event], Dict[Reservation, Dict[str, Any]]] = {
+        entry: Map[Union[str, Event], Map[Reservation, Dict[str, Any]]] = {
             key: deployment_dict
         }
         self.deployments.update(entry)
