@@ -68,7 +68,8 @@ class TestParseTokenAccountingSince(TestCase):
         :param model: caller_model value
         :return: One formatted log record
         """
-        prompt: int = total_tokens * 4 // 5
+        # 80% of the tokens, rounded down, e.g. 1001 -> 800.
+        prompt: int = int(total_tokens * 4 / 5)
         payload: Dict[str, Any] = {
             "total_cost": 0.0075,
             "total_tokens": total_tokens,

@@ -66,7 +66,9 @@ class SummaryReporter:
         :param is_ramp: True to label each row by stage, False by round
         """
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        title: str = "RAMP-UP SUMMARY" if is_ramp else "ROUND SUMMARY"
+        title: str = "ROUND SUMMARY"
+        if is_ramp:
+            title = "RAMP-UP SUMMARY"
         logger.info("  %s", title)
         logger.info("=" * SEPARATOR_WIDTH)
 
@@ -77,7 +79,9 @@ class SummaryReporter:
             if summary.get("primary_started") is not None:
                 has_server_counts = True
                 break
-        first_col: str = "Stage" if is_ramp else "Round"
+        first_col: str = "Round"
+        if is_ramp:
+            first_col = "Stage"
         header: List[str] = [
             first_col, "Concurrent", "Created", "Failed",
             "Timeout", "Killed", "Retries", "Amplification",
@@ -85,39 +89,18 @@ class SummaryReporter:
         ]
         if has_server_counts:
             header.extend(["Recv", "Done", "Internal"])
-        rows: List[Tuple[str, ...]] = []
+        rows: List[List[str]] = []
         # One table row per stage.
         for summary in self._summaries:
-            counts: Dict[str, int] = summary.get("counts", {})
-            row: Tuple[str, ...] = (
-                str(summary.get("stage") if is_ramp
-                    else summary.get("round", summary.get("stage"))),
-                str(summary.get("concurrent")),
-                str(counts.get(STATUS_CREATED, 0)),
-                str(counts.get(STATUS_FAILED, 0)),
-                str(counts.get(STATUS_TIMEOUT, 0)),
-                str(counts.get(STATUS_KILLED, 0)),
-                str(summary.get("total_retries", 0)),
-                f"{summary.get("amplification", 1.0):.2f}x",
-                f"{summary.get("elapsed", 0):.1f}s",
-            )
+            row_label: Any = summary.get("stage")
+            if not is_ramp:
+                row_label = summary.get("round", row_label)
+            row: List[str] = [str(row_label)]
+            stage_cells: List[str] = SummaryReporter._stage_cells(summary)
+            row.extend(stage_cells)
             if has_server_counts:
-                primary_started: Optional[int] = summary.get("primary_started")
-                primary_finished: Optional[int] = summary.get("primary_finished")
-                total_started: Optional[int] = summary.get("total_started")
-                internal: str = (
-                    str(total_started - primary_started)
-                    if primary_started is not None
-                    and total_started is not None
-                    else "-"
-                )
-                row += (
-                    str(primary_started)
-                    if primary_started is not None else "-",
-                    str(primary_finished)
-                    if primary_finished is not None else "-",
-                    internal,
-                )
+                server_cells: List[str] = SummaryReporter._server_count_cells(summary)
+                row.extend(server_cells)
             rows.append(row)
         TableFormatter.log_table(header, rows)
 
@@ -155,7 +138,8 @@ class SummaryReporter:
         logger.info("    Failed:    %s", total_failed)
         logger.info("    Timed out: %s", total_timeout)
         logger.info("    Killed:    %s", total_killed)
-        logger.info("  Total wall time: %s", Formatters.fmt_duration(total_time_seconds, precision=2))
+        total_time_text: str = Formatters.fmt_duration(total_time_seconds, precision=2)
+        logger.info("  Total wall time: %s", total_time_text)
         self._log_performance_stats()
 
         if total_retries > 0:
@@ -164,7 +148,9 @@ class SummaryReporter:
             # Add up the requests of every stage.
             for stage_summary in self._summaries:
                 total_requests += stage_summary.get("concurrent", 0)
-            amplification: float = (total_requests + total_retries) / total_requests if total_requests > 0 else 1.0
+            amplification: float = 1.0
+            if total_requests > 0:
+                amplification = (total_requests + total_retries) / total_requests
             logger.info("\n  Overall retry totals:")
             logger.info("    Total retries:   %s", total_retries)
             logger.info("    Amplification:   %.2fx", amplification)
@@ -602,3 +588,55 @@ class SummaryReporter:
         for summary in self._summaries:
             events.extend(summary.get("validation_events", []))
         return events
+
+    @staticmethod
+    def _stage_cells(summary: Dict[str, Any]) -> List[str]:
+        """
+        Build the cells from Workers to Duration of one summary table row.
+
+        :param summary: One stage or round summary
+        :return: Workers, the 4 status counts, retries, amplification and duration
+        """
+        counts: Dict[str, int] = summary.get("counts", {})
+        concurrent: Optional[int] = summary.get("concurrent")
+        created_count: int = counts.get(STATUS_CREATED, 0)
+        failed_count: int = counts.get(STATUS_FAILED, 0)
+        timeout_count: int = counts.get(STATUS_TIMEOUT, 0)
+        killed_count: int = counts.get(STATUS_KILLED, 0)
+        total_retries: int = summary.get("total_retries", 0)
+        amplification: float = summary.get("amplification", 1.0)
+        elapsed_seconds: float = summary.get("elapsed", 0)
+        cells: List[str] = [
+            str(concurrent),
+            str(created_count),
+            str(failed_count),
+            str(timeout_count),
+            str(killed_count),
+            str(total_retries),
+            f"{amplification:.2f}x",
+            f"{elapsed_seconds:.1f}s",
+        ]
+        return cells
+
+    @staticmethod
+    def _server_count_cells(summary: Dict[str, Any]) -> List[str]:
+        """
+        Build the Recv, Done and Internal cells of one summary table row.
+
+        :param summary: One stage or round summary
+        :return: Primary requests started, primary requests finished and internal calls, "-" when a count is missing
+        """
+        primary_started: Optional[int] = summary.get("primary_started")
+        primary_finished: Optional[int] = summary.get("primary_finished")
+        total_started: Optional[int] = summary.get("total_started")
+        primary_started_text: str = "-"
+        if primary_started is not None:
+            primary_started_text = str(primary_started)
+        primary_finished_text: str = "-"
+        if primary_finished is not None:
+            primary_finished_text = str(primary_finished)
+        internal: str = "-"
+        if primary_started is not None and total_started is not None:
+            internal = str(total_started - primary_started)
+        cells: List[str] = [primary_started_text, primary_finished_text, internal]
+        return cells
