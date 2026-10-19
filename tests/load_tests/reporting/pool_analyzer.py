@@ -83,15 +83,21 @@ class PoolAnalyzer:
             new_threads: int = max(after_threads - before_threads, 0)
             total_new_threads += new_threads
             reused: int = max(server_calls - new_threads, 0)
-            reuse_percentage: float = (reused / server_calls * 100.0) if server_calls > 0 else 0.0
+            reuse_percentage: float = 0.0
+            if server_calls > 0:
+                reuse_percentage = reused / server_calls * 100.0
             reuse_percentages.append(reuse_percentage)
             pool_available_threads: int = max(before_threads - base_threads, 0)
 
             primary_requests: int = stage.get("primary_started") or stage.get("concurrent")
-            executors_per_request: float = server_calls / primary_requests if primary_requests > 0 else 0.0
+            executors_per_request: float = 0.0
+            if primary_requests > 0:
+                executors_per_request = server_calls / primary_requests
 
             peak_threads: Optional[int] = stage.get("peak_threads")
-            peak_threads_text: str = str(peak_threads) if peak_threads is not None else "-"
+            peak_threads_text: str = "-"
+            if peak_threads is not None:
+                peak_threads_text = str(peak_threads)
 
             rows.append([
                 str(batch_number),

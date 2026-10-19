@@ -537,18 +537,22 @@ class SummaryFileWriter:
         top_agent: str = top.get("agent", "?")
         client_start_seconds: float = client.get("start", 0)
         client_end_seconds: float = client.get("end", 0)
-        total_duration_seconds: float = (
-            client_end_seconds - client_start_seconds if client_start_seconds and client_end_seconds else 0
-        )
+        total_duration_seconds: float = 0
+        if client_start_seconds and client_end_seconds:
+            total_duration_seconds = client_end_seconds - client_start_seconds
         server_start_seconds: float = top.get("start_ts", 0)
         server_finish_seconds: float = top.get("finish_ts", 0)
         lines.append("")
         lines.append(f"  {request_id} ({total_duration_seconds:.1f}s total):")
-        if client_start_seconds and server_start_seconds and server_start_seconds > client_start_seconds:
+        if (client_start_seconds
+                and server_start_seconds
+                and server_start_seconds > client_start_seconds):
             lines.append(f"    Client -> Server:  {server_start_seconds - client_start_seconds:6.1f}s")
         lines.append(f"    Server: {top_agent:<25s} {top.get('duration_seconds', 0):6.1f}s")
         SummaryFileWriter._format_sub_agents(lines, entries, top_agent)
-        if client_end_seconds and server_finish_seconds and client_end_seconds > server_finish_seconds:
+        if (client_end_seconds
+                and server_finish_seconds
+                and client_end_seconds > server_finish_seconds):
             lines.append(f"    Server -> Client:  {client_end_seconds - server_finish_seconds:6.1f}s")
 
     @staticmethod
@@ -571,7 +575,9 @@ class SummaryFileWriter:
         # One tree line per sub-agent.
         for index, sub_agent in enumerate(sub_agents):
             # "\u2514\u2500" draws "└─" (last sub-agent), "\u251c\u2500" draws "├─" (the others).
-            prefix: str = "\u2514\u2500" if index == len(sub_agents) - 1 else "\u251c\u2500"
+            prefix: str = "\u251c\u2500"
+            if index == len(sub_agents) - 1:
+                prefix = "\u2514\u2500"
             name: str = sub_agent.get("agent", "?")
             duration_seconds: float = sub_agent.get("duration_seconds", 0)
             lines.append(f"      {prefix} {name:<23s} {duration_seconds:6.1f}s")

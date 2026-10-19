@@ -74,7 +74,9 @@ class AgentRequestExecutor:
         start_seconds: float = time.perf_counter()
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds)
 
-        security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
+        security_cfg: Optional[Dict[str, Any]] = None
+        if use_https:
+            security_cfg = {}
         session: HttpServiceAgentSession = HttpServiceAgentSession(
             host=host,
             port=str(port),

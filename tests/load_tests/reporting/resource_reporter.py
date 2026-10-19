@@ -108,7 +108,9 @@ class ResourceReporter:
         :return: (display_row, before_snapshot, peak_snapshot or {}, settled_snapshot)
         """
         rss_delta_megabytes: float = settled_snapshot.get("rss") - before_snapshot.get("rss")
-        peak_rss_text: str = f"{peak_snapshot.get('rss'):.1f}M" if peak_snapshot else "-"
+        peak_rss_text: str = "-"
+        if peak_snapshot:
+            peak_rss_text = f"{peak_snapshot.get('rss'):.1f}M"
         display: Tuple[str, ...] = (
             str(stage_label),
             f"{before_snapshot.get('rss'):.1f}M",
@@ -274,5 +276,7 @@ class ResourceReporter:
             delta: float = after_snapshot.get(key) - before_snapshot.get(key)
             padded: str = f"{name}:".ljust(maximum_name_length + 1)
             formatted: str = format_pattern % abs(delta)
-            sign: str = "+" if delta >= 0 else "-"
+            sign: str = "-"
+            if delta >= 0:
+                sign = "+"
             logger.info("    %s %s%s", padded, sign, formatted)

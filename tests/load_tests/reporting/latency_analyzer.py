@@ -80,10 +80,15 @@ class LatencyAnalyzer:
 
         groups: Dict[int, List[Dict[str, Any]]] = self._group_by_concurrency()
         has_degradation: bool = False
+        concurrency: int
+        summaries: List[Dict[str, Any]]
+        # One degradation line per concurrency level that ran 2 or more rounds.
         for concurrency, summaries in sorted(groups.items()):
             if len(summaries) < 2:
                 continue
             average_latencies_seconds: List[float] = []
+            stage_summary: Dict[str, Any]
+            # Average latency of each round that has latency data.
             for stage_summary in summaries:
                 latencies_seconds: List[float] = self._extract_latencies(stage_summary)
                 if latencies_seconds:
@@ -93,16 +98,20 @@ class LatencyAnalyzer:
             if not has_degradation:
                 logger.info("\n  Latency degradation (round-over-round):")
                 has_degradation = True
-            # One "12.3s" text per round, in round order.
             latency_texts: List[str] = []
+            average_latency_seconds: float
+            # One "12.3s" text per round, in round order.
             for average_latency_seconds in average_latencies_seconds:
                 latency_texts.append(f"{average_latency_seconds:.1f}s")
             parts: str = " -> ".join(latency_texts)
-            change_percentage: float = (
-                (average_latencies_seconds[-1] - average_latencies_seconds[0]) / average_latencies_seconds[0] * 100
-                if average_latencies_seconds[0] > 0 else 0
-            )
-            sign: str = "+" if change_percentage >= 0 else ""
+            change_percentage: float = 0
+            if average_latencies_seconds[0] > 0:
+                change_percentage = (
+                    (average_latencies_seconds[-1] - average_latencies_seconds[0]) / average_latencies_seconds[0] * 100
+                )
+            sign: str = ""
+            if change_percentage >= 0:
+                sign = "+"
             logger.info("    %s concurrent: %s (%s%.0f%%)", concurrency, parts, sign, change_percentage)
 
     # ----------------------------------------------------------

@@ -23,7 +23,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
-from typing import Tuple
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
@@ -64,9 +63,13 @@ class CrossRunComparison:
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
         self._base_dir: str = base_dir
-        self._agent_filter: Set[str] = set(agent_filter) if agent_filter else set()
+        self._agent_filter: Set[str] = set()
+        if agent_filter:
+            self._agent_filter = set(agent_filter)
         self._baseline_requests: int = baseline_requests
-        self._run_filter: Set[str] = set(run_filter) if run_filter else set()
+        self._run_filter: Set[str] = set()
+        if run_filter:
+            self._run_filter = set(run_filter)
 
     def run(self) -> None:
         """
@@ -81,14 +84,12 @@ class CrossRunComparison:
         run_metrics: Dict[str, Any]
         # One comparison table per agent, in name order.
         for agent_name in sorted(groups):
-            runs: List[Dict[str, Any]] = (
-                groups[agent_name]
-                if self._run_filter
-                else self._deduplicate(groups[agent_name])
-            )
+            runs: List[Dict[str, Any]] = groups.get(agent_name)
+            if not self._run_filter:
+                runs = self._deduplicate(runs)
             if self._baseline_requests > 0:
-                # Keep only the runs with at least the baseline number of requests.
                 baseline_runs: List[Dict[str, Any]] = []
+                # Keep only the runs with at least the baseline number of requests.
                 for run_metrics in runs:
                     if run_metrics.get("num_requests", 0) >= self._baseline_requests:
                         baseline_runs.append(run_metrics)
@@ -278,18 +279,24 @@ class CrossRunComparison:
             "First resp avg", "Peak RSS",
             "Failed requests",
         ]
-        rows: List[Tuple[str, ...]] = []
+        rows: List[List[str]] = []
         metric_keys: List[str] = [
             "num_requests", "wall_time",
             "avg_success",
             "time_to_first_response_avg", "peak_rss",
             "failed",
         ]
-        baseline: Optional[Dict[str, Any]] = runs[0] if runs else None
+        baseline: Optional[Dict[str, Any]] = None
+        if runs:
+            baseline = runs[0]
+        run: Dict[str, Any]
+        # One table row per run; each run after the first shows its change from the first.
         for run in runs:
-            baseline_metrics: Optional[Dict[str, Any]] = baseline if run is not baseline else None
+            baseline_metrics: Optional[Dict[str, Any]] = None
+            if run is not baseline:
+                baseline_metrics = baseline
             deltas: Dict[str, float] = CrossRunComparison._compute_deltas(baseline_metrics, run, metric_keys)
-            rows.append((
+            rows.append([
                 run.get("folder", ""),
                 CrossRunComparison._val_with_delta(
                     str(run.get("num_requests", 0)),
@@ -317,7 +324,7 @@ class CrossRunComparison:
                     run.get("num_requests", 0),
                     run.get("fail_breakdown", {}),
                 ),
-            ))
+            ])
         TableFormatter.log_table(header, rows)
 
     def _log_validation_loops(self, runs: List[Dict[str, Any]]) -> None:
@@ -443,7 +450,9 @@ class CrossRunComparison:
         """
         if delta_percentage is None:
             return formatted_value
-        sign: str = "+" if delta_percentage >= 0 else ""
+        sign: str = ""
+        if delta_percentage >= 0:
+            sign = "+"
         return f"{formatted_value} ({sign}{delta_percentage:.0f}%)"
 
     @staticmethod
@@ -504,15 +513,18 @@ class CrossRunComparison:
         base: str = f"{count} ({percentage}%)"
         if not breakdown:
             return base
-        labels: Tuple[Tuple[str, str], ...] = (
-            ("empty_llm", "empty LLM"),
-            ("validation", "validation"),
-            ("incomplete", "incomplete"),
-            ("no_token_data", "no token data"),
-            ("other", "other"),
-        )
+        labels_by_key: Dict[str, str] = {
+            "empty_llm": "empty LLM",
+            "validation": "validation",
+            "incomplete": "incomplete",
+            "no_token_data": "no token data",
+            "other": "other",
+        }
         parts: List[str] = []
-        for key, label in labels:
+        key: str
+        label: str
+        # One "<count> <label>" part per failure category that has any, in the order above.
+        for key, label in labels_by_key.items():
             value: int = breakdown.get(key, 0)
             if value:
                 parts.append(f"{value} {label}")

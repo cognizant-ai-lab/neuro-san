@@ -73,7 +73,10 @@ class SystemResources:
             try:
                 soft_limit: int = 0
                 soft_limit, _ = resource.getrlimit(resource.RLIMIT_NPROC)
-                user_limit = "unlimited" if soft_limit == resource.RLIM_INFINITY else f"{soft_limit:,}"
+                if soft_limit == resource.RLIM_INFINITY:
+                    user_limit = "unlimited"
+                else:
+                    user_limit = f"{soft_limit:,}"
             except (ValueError, OSError, AttributeError):
                 user_limit = "n/a"
         system_maximum: str = "n/a"
