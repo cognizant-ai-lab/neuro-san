@@ -53,9 +53,9 @@ class TestBedrockLlmPolicy(TestCase):
         """
         Pins the environment, loads the stock default_llm_info.hocon and starts tracking policies.
 
-        AGENT_LLM_INFO_FILE and every AWS variable are removed so that neither a deployer override
-        nor a local AWS setup can change what these tests build. Dummy AWS keys are then set so that
-        boto3 never searches for real credentials.
+        AGENT_LLM_INFO_FILE and every AWS environment variable are removed, so that neither a deployer
+        override nor the shell's AWS settings can change what these tests build. Dummy AWS keys are then
+        set so that boto3 never searches for real credentials.
         """
         # patch.dict restores the whole environment on stop(), including the variables removed below.
         env_patcher: Any = patch.dict(os.environ)

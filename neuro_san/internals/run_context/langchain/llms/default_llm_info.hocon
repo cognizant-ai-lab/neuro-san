@@ -1905,6 +1905,8 @@
             # An llm_config that names this class should also set "max_tokens".
             # neuro-san fills it in from "max_output_tokens" only when an llm_config
             # has no "class", and langchain's default for a Bedrock model id is 4096.
+            # A "max_tokens" default in this class's args has no effect: the null
+            # that the "anthropic" class declares for it takes precedence.
             "extends": "anthropic",
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
@@ -2072,8 +2074,10 @@
                 "temperature": null,
 
                 # Extra request parameters for the model that have no key of their own
-                # above. Use the parameter names that the model's provider documents
-                # for Bedrock; they differ from one provider to another.
+                # above, named as the model's provider documents them for Bedrock.
+                # With "beta_use_converse_api": true, a provider-specific key such as
+                # "top_k" must go under "additional_model_request_fields", e.g.
+                # {"additional_model_request_fields": {"top_k": 50}}, or it is dropped.
                 "model_kwargs": null,
             }
         }

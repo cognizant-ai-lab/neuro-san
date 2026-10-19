@@ -602,16 +602,20 @@ neuro-san fills in `max_tokens` from the model's [`max_output_tokens`](#max_outp
 llm_config has no `class`. With `"class": "anthropic-bedrock"` the langchain-anthropic package picks the value
 instead. It has output limits for Anthropic's own model ids but not for Bedrock ids such as
 `global.anthropic.claude-fable-5-1`, so every request asks for at most 4096 output tokens, which can cut long
-answers short. To get the model's full limit, do one of the following:
+answers short. To raise the limit, do one of the following:
 
-- Set `max_tokens` in the llm_config next to the `class`, for example `"max_tokens": 64000`. It can be at most
-  the model's `max_output_tokens`.
+- Set `max_tokens` in the llm_config next to the `class`, for example `"max_tokens": 64000`, up to the model's
+  `max_output_tokens`.
 - Leave `class` out and give a `model_name` that has an entry in the llm info file, such as
   `bedrock-claude-fable` or `global.anthropic.claude-fable-5-1`. neuro-san then sets `max_tokens` from that entry.
 
-The stock file has only `global.` ids. A region-pinned id such as `us.anthropic.claude-fable-5-1` needs an entry
-in your own llm info file (see [Extending LLM Info Specifications](#extending-llm-info-specifications)), and a
-`class` and a `max_output_tokens` are enough:
+A `max_tokens` default under `classes.anthropic-bedrock.args` in your own llm info file does not help: the `null`
+default of the `anthropic` class, which `anthropic-bedrock` extends, takes precedence.
+
+The second way needs an entry for the model id, and `default_llm_info.hocon` lists only `global.` Bedrock ids. To
+use a region-pinned id such as `us.anthropic.claude-fable-5-1` without `class`, add an entry for it to your own
+llm info file (see [Extending LLM Info Specifications](#extending-llm-info-specifications)). An entry with just
+`class` and `max_output_tokens` is enough:
 
 ```hocon
 "us.anthropic.claude-fable-5-1": {
