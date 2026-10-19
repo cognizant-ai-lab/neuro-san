@@ -70,7 +70,7 @@ from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.formatters import Formatters
-from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
+from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer

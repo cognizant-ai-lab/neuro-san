@@ -35,15 +35,6 @@ from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-_NORMAL_LLM_CALLS: int = 4
-_LOOP_THRESHOLD: int = 10
-_SERVER_TOKEN_RE: re.Pattern = re.compile(
-    r"(request-\d+):\s*([\d,]+)\s*tokens"
-    r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
-    r"\s*(\d+)\s*LLM call\(s\),"
-    r"\s*model=([^\s]+)",
-)
-
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -51,6 +42,18 @@ class CrossRunComparison:
     """
     Scans a base directory for raw_results.json files and logs a comparison table across runs.
     """
+
+    NORMAL_LLM_CALLS: int = 4
+    LOOP_THRESHOLD: int = 10
+    # A per-request token line with the prompt/completion split, e.g.
+    # "request-3: 1,234 tokens (1,000 prompt + 234 completion), 4 LLM call(s), model=gpt-4o-mini".
+    # Groups: 1 request id, 2 total tokens, 3 prompt tokens, 4 completion tokens, 5 LLM calls, 6 model.
+    SERVER_TOKEN_RE: re.Pattern = re.compile(
+        r"(request-\d+):\s*([\d,]+)\s*tokens"
+        r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
+        r"\s*(\d+)\s*LLM call\(s\),"
+        r"\s*model=([^\s]+)",
+    )
 
     def __init__(self, base_dir: str, agent_filter: Optional[List[str]] = None, baseline_requests: int = 0,
                  run_filter: Optional[List[str]] = None) -> None:
@@ -372,23 +375,25 @@ class CrossRunComparison:
         Parse server_tokens.log for validation loop requests.
 
         :param log_path: Path to a run's server_tokens.log
-        :return: One entry per request with at least _LOOP_THRESHOLD LLM calls; empty when the file is missing
+        :return: One entry per request with at least LOOP_THRESHOLD LLM calls; empty when the file is missing
         """
         if not os.path.isfile(log_path):
             return []
         loops: List[Dict[str, Any]] = []
         with open(log_path, "r", encoding="utf-8") as file_handle:
+            line: str
+            # Keep each request whose LLM call count reaches LOOP_THRESHOLD.
             for line in file_handle:
-                match: Optional[re.Match] = _SERVER_TOKEN_RE.search(line)
+                match: Optional[re.Match] = CrossRunComparison.SERVER_TOKEN_RE.search(line)
                 if not match:
                     continue
                 llm_calls: int = int(match.group(5))
-                if llm_calls < _LOOP_THRESHOLD:
+                if llm_calls < CrossRunComparison.LOOP_THRESHOLD:
                     continue
                 prompt_tokens: int = int(match.group(3).replace(",", ""))
                 completion_tokens: int = int(match.group(4).replace(",", ""))
                 model: str = match.group(6)
-                retries: int = llm_calls - _NORMAL_LLM_CALLS
+                retries: int = llm_calls - CrossRunComparison.NORMAL_LLM_CALLS
                 cost_dollars: float = CostEstimator.estimate(prompt_tokens, completion_tokens, model)
                 loop_entry: Dict[str, Any] = {
                     "request_id": match.group(1),
