@@ -214,7 +214,7 @@ class ResultsRebuilder:
         :return: Request id to its status and elapsed seconds, from the run log and progress.log
         """
         timing: Dict[int, Dict[str, Any]] = {}
-        log_files: List[str] = list(self.RUN_LOG_FILES)
+        log_files: List[str] = list(ResultsRebuilder.RUN_LOG_FILES)
         log_files.append(PROGRESS_LOG_FILE_NAME)
         filename: str
         # Failed requests are in the run log, successful ones in progress.log.
@@ -244,7 +244,7 @@ class ResultsRebuilder:
         request_count: int = 0
         filename: str
         # Read each run log name that exists in the run directory.
-        for filename in self.RUN_LOG_FILES:
+        for filename in ResultsRebuilder.RUN_LOG_FILES:
             log_path: str = os.path.join(self._output_dir, filename)
             if not os.path.isfile(log_path):
                 continue
