@@ -148,12 +148,12 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         self.assertEqual(written[0].content, "a thought")
         self.assertIs(written[1], incoming)
 
-    async def test_tool_result_history_copy_is_text_projected(self) -> None:
+    async def test_block_tool_result_is_journaled_but_not_in_history(self) -> None:
         """
         A tool result carrying text + image blocks is journaled with its blocks
-        intact, but its chat-history copy is a plain AIMessage holding the
-        history-safe text: providers reject data blocks in assistant-role
-        history, and the image is replaced by a short reference.
+        intact, but it is not appended to the chat history on its own. The history
+        gets the tool call and its result as a pair from the chain state instead
+        (see RunContextRunnable.record_tool_exchange).
         """
         wrapped: MagicMock = self._make_wrapped_journal()
         chat_history: List[BaseMessage] = []
@@ -162,20 +162,15 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         tool_result: AgentToolResultMessage = AgentToolResultMessage(content=blocks, tool_result_origin=self.ORIGIN)
         await journal.write_message(tool_result)
 
-        self.assertEqual(len(chat_history), 1)
-        history_copy: BaseMessage = chat_history[0]
-        self.assertIsInstance(history_copy, AIMessage)
-        self.assertNotIsInstance(history_copy, AgentToolResultMessage)
-        self.assertEqual(history_copy.content, "Here is the chart.[image attachment: image/png]")
+        self.assertEqual(chat_history, [])
 
         written: List[BaseMessage] = self._written_messages(wrapped)
         self.assertIs(written[0], tool_result)
         self.assertEqual(written[0].content, blocks)
 
-    async def test_tool_result_str_history_copy_unchanged(self) -> None:
+    async def test_str_tool_result_is_journaled_but_not_in_history(self) -> None:
         """
-        A plain-string tool result gets a plain AIMessage history copy with
-        the same text.
+        A plain-string tool result is journaled as it is and stays out of the chat history.
         """
         wrapped: MagicMock = self._make_wrapped_journal()
         chat_history: List[BaseMessage] = []
@@ -184,9 +179,9 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
                                                                      tool_result_origin=self.ORIGIN)
         await journal.write_message(tool_result)
 
-        self.assertEqual(len(chat_history), 1)
-        self.assertIsInstance(chat_history[0], AIMessage)
-        self.assertEqual(chat_history[0].content, "tool says")
+        self.assertEqual(chat_history, [])
+        written: List[BaseMessage] = self._written_messages(wrapped)
+        self.assertIs(written[0], tool_result)
 
     async def test_block_answer_history_copy_is_text_projected(self) -> None:
         """

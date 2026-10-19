@@ -32,33 +32,50 @@ from neuro_san.message.types.chat_message_type import ChatMessageType
 
 class TestChatHistoryMessageProcessor(TestCase):
     """
-    Tests for ChatHistoryMessageProcessor.escape_message.
-
-    The escaping is only meaningful for str text. Every dictionary the
-    processor sees today comes from BaseMessageDictionaryConverter.to_dict,
-    which always emits str text, so the non-str guard is defensive; these
-    tests lock the str behavior and the pass-through for anything else.
+    Tests for ChatHistoryMessageProcessor: which messages go into the chat_context
+    history, that their text is kept exactly as written, and that trimming with
+    max_message_history never separates a tool call from its result.
     """
 
-    def test_escape_message_escapes_braces_in_str_text(self) -> None:
-        """
-        Braces in str text are normalized to the doubled, template-safe form,
-        whether or not they were already escaped.
-        """
-        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
-        original: Dict[str, Any] = {"type": ChatMessageType.AI, "text": "a {b} and {{c}}"}
+    TOOL_CALLS: List[Dict[str, Any]] = [
+        {
+            "id": "toolu_1",
+            "name": "Accountant",
+            "args": {"running_cost": 0.0},
+        },
+    ]
 
-        result: Optional[Dict[str, Any]] = processor.escape_message(original)
-
-        assert result is not None
-        assert result["text"] == "a {{b}} and {{c}}"
-        assert result["type"] == ChatMessageType.AI
-        # The input dictionary is copied, never mutated.
-        assert original["text"] == "a {b} and {{c}}"
-
-    def test_escape_message_keeps_text_of_block_message(self) -> None:
+    @staticmethod
+    def types_of(history: List[Dict[str, Any]]) -> List[ChatMessageType]:
         """
-        A message that carries content_blocks keeps its text unescaped, so
+        :param history: A list of ChatMessage dictionaries
+        :return: The type of each dictionary, in order
+        """
+        types: List[ChatMessageType] = []
+        # Collect the type of each message, in order.
+        message: Dict[str, Any] = None
+        for message in history:
+            types.append(message.get("type"))
+        return types
+
+    def test_keep_message_copies_text_unchanged(self) -> None:
+        """
+        Text goes into the history exactly as written, braces included, in a copy of the dictionary.
+        """
+        original: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "a {b} and {{c}}",
+        }
+
+        result: Optional[Dict[str, Any]] = ChatHistoryMessageProcessor.keep_message(original)
+
+        self.assertIsNotNone(result)
+        self.assertIsNot(result, original)
+        self.assertEqual(result, original)
+
+    def test_keep_message_keeps_text_of_block_message(self) -> None:
+        """
+        A message that carries content_blocks keeps its text and its blocks, so
         the text still equals the flattened blocks and the message restores
         to its blocks on the next request, braces and all.
         """
@@ -78,8 +95,7 @@ class TestChatHistoryMessageProcessor(TestCase):
         wire: Dict[str, Any] = converter.to_dict(message)
         self.assertIn("content_blocks", wire)
 
-        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
-        result: Optional[Dict[str, Any]] = processor.escape_message(wire)
+        result: Optional[Dict[str, Any]] = ChatHistoryMessageProcessor.keep_message(wire)
         self.assertIsNotNone(result)
         self.assertEqual(result.get("text"), '{"ok": true}')
         self.assertEqual(result.get("content_blocks"), wire.get("content_blocks"))
@@ -87,25 +103,178 @@ class TestChatHistoryMessageProcessor(TestCase):
         restored: BaseMessage = converter.from_dict(result)
         self.assertEqual(restored.content, blocks)
 
-    def test_escape_message_without_text_returns_none(self) -> None:
+    def test_keep_message_passes_non_str_text_through(self) -> None:
+        """
+        Non-str text (block content) is kept as it is: the message is copied,
+        not dropped, and its text still refers to the same blocks.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "{not escaped}",
+            },
+        ]
+        original: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": blocks,
+        }
+
+        result: Optional[Dict[str, Any]] = ChatHistoryMessageProcessor.keep_message(original)
+
+        self.assertIsNotNone(result)
+        self.assertIsNot(result, original)
+        self.assertIs(result.get("text"), blocks)
+        self.assertEqual(result.get("type"), ChatMessageType.AI)
+
+    def test_keep_message_without_text_returns_none(self) -> None:
         """
         A message with no text key at all is dropped from the history.
         """
-        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
-        assert processor.escape_message({"type": ChatMessageType.AI}) is None
+        self.assertIsNone(ChatHistoryMessageProcessor.keep_message({"type": ChatMessageType.AI}))
 
-    def test_escape_message_passes_non_str_text_through(self) -> None:
+    def test_process_message_keeps_tool_calls_on_ai_message(self) -> None:
         """
-        Non-str text (block content) cannot be brace-escaped, so the message
-        is passed through untouched rather than dropped or crashed on.
+        An AI message that made tool calls keeps them in the history, text and all.
         """
         processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
-        blocks: List[Dict[str, Any]] = [{"type": "text", "text": "{not escaped}"}]
-        original: Dict[str, Any] = {"type": ChatMessageType.AI, "text": blocks}
+        message: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "",
+            "tool_calls": self.TOOL_CALLS,
+        }
 
-        result: Optional[Dict[str, Any]] = processor.escape_message(original)
+        processor.process_message(message, ChatMessageType.AI)
 
-        assert result is not None
-        assert result is not original
-        assert result["text"] is blocks
-        assert result["type"] == ChatMessageType.AI
+        self.assertEqual(processor.get_message_history(), [message])
+
+    def test_process_message_keeps_tool_result_with_tool_call_id(self) -> None:
+        """
+        A tool result that names the call it answers goes into the history.
+        """
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
+        message: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT_TOOL_RESULT,
+            "text": "{'running_cost': 3.0}",
+            "tool_call_id": "toolu_1",
+        }
+
+        processor.process_message(message, ChatMessageType.AGENT_TOOL_RESULT)
+
+        self.assertEqual(processor.get_message_history(), [message])
+
+    def test_process_message_drops_tool_result_without_tool_call_id(self) -> None:
+        """
+        A stand-alone tool result, with no call to pair it with, stays out of the history.
+        """
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
+        message: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT_TOOL_RESULT,
+            "text": "tool says",
+        }
+
+        processor.process_message(message, ChatMessageType.AGENT_TOOL_RESULT)
+
+        self.assertEqual(processor.get_message_history(), [])
+
+    def test_process_message_drops_agent_messages(self) -> None:
+        """
+        Framework-only message types never go into the history.
+        """
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
+        agent: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT,
+            "text": "thinking",
+        }
+        framework: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT_FRAMEWORK,
+            "text": "done",
+        }
+
+        processor.process_message(agent, ChatMessageType.AGENT)
+        processor.process_message(framework, ChatMessageType.AGENT_FRAMEWORK)
+
+        self.assertEqual(processor.get_message_history(), [])
+
+    def test_process_messages_trim_starts_at_a_user_message(self) -> None:
+        """
+        With max_message_history set, the kept tail starts at a user message, so a
+        tool result is never left without the call that asked for it.
+        """
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor(max_message_history=3)
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.SYSTEM,
+                "text": "instructions",
+            },
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "first question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_calls": self.TOOL_CALLS,
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "{'running_cost': 3.0}",
+                "tool_call_id": "toolu_1",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "first answer",
+            },
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "second question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "second answer",
+            },
+        ]
+
+        processor.process_messages(messages)
+
+        # The last three are [first answer, second question, second answer]; the
+        # answer before the question is dropped so the history starts at a user turn.
+        history: List[Dict[str, Any]] = processor.get_message_history()
+        self.assertEqual(self.types_of(history),
+                         [ChatMessageType.SYSTEM, ChatMessageType.HUMAN, ChatMessageType.AI])
+        self.assertEqual(history[0].get("text"), "<redacted>")
+        self.assertEqual(history[1].get("text"), "second question")
+
+    def test_process_messages_trim_drops_a_cut_tool_pair(self) -> None:
+        """
+        When the kept tail cuts into a tool round, the whole tail is dropped rather
+        than sending a tool result with no call before it.
+        """
+        processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor(max_message_history=2)
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.SYSTEM,
+                "text": "instructions",
+            },
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_calls": self.TOOL_CALLS,
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "{'running_cost': 3.0}",
+                "tool_call_id": "toolu_1",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "answer",
+            },
+        ]
+
+        processor.process_messages(messages)
+
+        self.assertEqual(self.types_of(processor.get_message_history()), [ChatMessageType.SYSTEM])

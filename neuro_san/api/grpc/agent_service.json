@@ -300,6 +300,17 @@
           },
           "content_blocks": {
             "$ref": "#/components/schemas/ContentBlocks"
+          },
+          "tool_calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            },
+            "description": "Optional tool calls an AI message made. Each is answered by the AGENT_TOOL_RESULT message that follows with the matching tool_call_id. A chat history keeps both, so the next turn sees where a value came from."
+          },
+          "tool_call_id": {
+            "type": "string",
+            "description": "Optional id of the tool call an AGENT_TOOL_RESULT message answers."
           }
         },
         "description": "Structure describing a single chat message. This could be a single response, or a list of these might comprise a chat history."
@@ -498,6 +509,24 @@
           }
         },
         "description": "The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors)."
+      },
+      "ToolCall": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The id the model gave the call."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the tool that was called."
+          },
+          "args": {
+            "type": "object",
+            "description": "The arguments the call was made with."
+          }
+        },
+        "description": "A tool call made by an AI message. Its result is the AGENT_TOOL_RESULT message whose tool_call_id equals this id."
       }
     }
   },

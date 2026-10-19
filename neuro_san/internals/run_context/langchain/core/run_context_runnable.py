@@ -26,12 +26,15 @@ from typing import Union
 import traceback
 
 from pydantic import ConfigDict
+from pydantic import SkipValidation
 
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
+from langchain_core.messages.human import HumanMessage
+from langchain_core.messages.tool import ToolMessage
 from langchain_core.messages.utils import message_chunk_to_message
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.config import ensure_config
@@ -100,6 +103,12 @@ class RunContextRunnable(NeuroSanRunnable):
     error_detector: ErrorDetector
 
     session_id: str
+    # The chat history of the RunContext this runnable works for. Each turn's tool
+    # calls and their results are appended here ahead of the answer. None when
+    # no history is kept, as in unit tests that only exercise the chain result.
+    # SkipValidation keeps the RunContext's own list: pydantic's validation of a
+    # list field builds a new list, and appends to a copy would be lost.
+    chat_history: SkipValidation[List[BaseMessage]] = None
 
     # This guy needs to be a pydantic class and in order to have
     # a non-pydantic Journal as a member, we need to do this.
@@ -302,8 +311,176 @@ class RunContextRunnable(NeuroSanRunnable):
         output: str = self.parse_chain_result(chain_result, exception)
         return_message: BaseMessage = self.build_return_message(chain_result, output)
 
+        # The turn's tool calls and results go into the chat history first, then the answer.
         # Chat history is updated in write_message
+        self.record_tool_exchange(inputs, chain_result)
         await self.journal.write_message(return_message)
+
+    def record_tool_exchange(self, inputs: Dict[str, Any],
+                             chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]):
+        """
+        Appends this turn's tool calls and their results to the chat history,
+        ahead of the answer that is journaled next.
+
+        The chain state is the only record of the tool calls the model made.
+        Each result is journaled as it arrives, but on its own, with no link to
+        the call that asked for it. Keeping the call and its result together in
+        the history lets the next turn's model see where a value came from,
+        instead of a bare number it might take for a guess.
+
+        :param inputs: The inputs the agent chain was invoked with
+        :param chain_result: The result from invoking the agent chain
+        """
+        if self.chat_history is None:
+            return
+        exchange: List[BaseMessage] = self.find_tool_exchange(inputs, chain_result)
+        # Append in place: the list is shared with the RunContext.
+        message: BaseMessage = None
+        for message in exchange:
+            self.chat_history.append(message)
+
+    def find_tool_exchange(self, inputs: Dict[str, Any],
+                           chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) \
+            -> List[BaseMessage]:
+        """
+        Picks this turn's tool calls and their results out of the chain state.
+
+        Only complete pairs are kept: an AIMessage whose every tool call has a
+        ToolMessage answering it, followed by those ToolMessages. Providers
+        reject a tool call without its result, so a call cut short by an error
+        or a step limit is left out. The answer, the last AIMessage of the turn,
+        is not included; it is journaled separately. Contents are projected to
+        history-safe text so no provider-native blocks reach another provider
+        or the client.
+
+        :param inputs: The inputs the agent chain was invoked with
+        :param chain_result: The result from invoking the agent chain
+        :return: The messages to append to the chat history, in order.
+                 Empty when the turn made no tool calls.
+        """
+        if not isinstance(chain_result, dict):
+            return []
+        messages: List[BaseMessage] = chain_result.get("messages", [])
+        start: int = self.find_turn_start(inputs, messages)
+        if start < 0:
+            return []
+
+        turn: List[BaseMessage] = self.before_answer(messages[start + 1:])
+        results: Dict[str, ToolMessage] = self.results_by_call_id(turn)
+
+        exchange: List[BaseMessage] = []
+        # Each tool-calling AIMessage goes in followed by the results of its calls.
+        message: BaseMessage = None
+        for message in turn:
+            if not isinstance(message, AIMessage) or not message.tool_calls:
+                continue
+            paired: Optional[List[ToolMessage]] = self.paired_results(message, results)
+            if paired is None:
+                # A call without its result would be rejected on replay.
+                continue
+            exchange.append(AIMessage(content=ContentUtils.history_safe_text(message),
+                                      tool_calls=message.tool_calls))
+            # Results follow their call, in call order.
+            result: ToolMessage = None
+            for result in paired:
+                exchange.append(ToolMessage(content=ContentUtils.history_safe_text(result),
+                                            tool_call_id=result.tool_call_id))
+        return exchange
+
+    @staticmethod
+    def before_answer(turn: List[BaseMessage]) -> List[BaseMessage]:
+        """
+        Cuts a turn's messages off at its answer, the last AIMessage.
+
+        :param turn: The messages the turn added after the user's message
+        :return: The messages before the answer. Empty when there is no AIMessage.
+        """
+        last_ai_index: int = -1
+        # Remember the position of the last AIMessage seen.
+        index: int = None
+        message: BaseMessage = None
+        for index, message in enumerate(turn):
+            if isinstance(message, AIMessage):
+                last_ai_index = index
+        if last_ai_index < 0:
+            return []
+        return turn[:last_ai_index]
+
+    @staticmethod
+    def results_by_call_id(turn: List[BaseMessage]) -> Dict[str, ToolMessage]:
+        """
+        :param turn: The messages of a turn
+        :return: The turn's ToolMessages, by the id of the tool call each one answers
+        """
+        results: Dict[str, ToolMessage] = {}
+        # Index the results by the call they answer.
+        message: BaseMessage = None
+        for message in turn:
+            if isinstance(message, ToolMessage) and message.tool_call_id:
+                results[message.tool_call_id] = message
+        return results
+
+    @staticmethod
+    def paired_results(message: AIMessage, results: Dict[str, ToolMessage]) -> Optional[List[ToolMessage]]:
+        """
+        Finds the result of every tool call an AIMessage made.
+
+        Call ids must be unique within the message. Providers reject or quietly
+        merge repeated ids on replay, so a message that repeats one is not kept.
+
+        :param message: An AIMessage with tool calls
+        :param results: The turn's ToolMessages by tool call id
+        :return: One ToolMessage per tool call, in call order, or None when any
+                 call has no result or two calls share an id
+        """
+        paired: List[ToolMessage] = []
+        seen_ids: List[str] = []
+        # Look up the result of each call, in call order.
+        tool_call: Dict[str, Any] = None
+        for tool_call in message.tool_calls:
+            call_id: Optional[str] = tool_call.get("id")
+            if call_id in seen_ids:
+                return None
+            seen_ids.append(call_id)
+            result: Optional[ToolMessage] = results.get(call_id)
+            if result is None:
+                return None
+            paired.append(result)
+        return paired
+
+    @staticmethod
+    def find_turn_start(inputs: Dict[str, Any], messages: List[BaseMessage]) -> int:
+        """
+        Finds the user's message that started this turn in the chain state.
+
+        The state holds the input messages followed by what the turn added, and
+        the last input message is the user's. langgraph gives it an id in place,
+        so it is found by identity or by id. When neither matches, because a
+        middleware replaced the list, the last HumanMessage is used instead.
+
+        :param inputs: The inputs the agent chain was invoked with
+        :param messages: The messages from the chain state
+        :return: The index of the turn's user message, or -1 when there is none
+        """
+        human: Optional[BaseMessage] = None
+        if isinstance(inputs, dict):
+            input_messages: List[BaseMessage] = inputs.get("messages", [])
+            if len(input_messages) > 0:
+                human = input_messages[-1]
+
+        index: int = None
+        if human is not None:
+            # Search from the end: the turn's user message is the last one of the inputs.
+            for index in range(len(messages) - 1, -1, -1):
+                message: BaseMessage = messages[index]
+                if message is human or (human.id is not None and message.id == human.id):
+                    return index
+
+        # Fall back to the last HumanMessage in the state.
+        for index in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[index], HumanMessage):
+                return index
+        return -1
 
     async def journal_retry_reason(self, error: Exception, reason: str):
         """

@@ -401,6 +401,7 @@ class LangChainRunContext(RunContext):
                                       primary_llm=self.llm_resources.get_model(),
                                       invocation_context=self.invocation_context,
                                       journal=self.journal,
+                                      chat_history=self.chat_history,
                                       interceptor=self.interceptor,
                                       origin=self.origin,
                                       tool_caller=self.tool_caller,
@@ -444,8 +445,9 @@ class LangChainRunContext(RunContext):
                 tool_message = self.parse_tool_output(tool_output)
                 if tool_message is not None:
                     # Write the tool message to the journal.
-                    # Chat history should only contain user and AI messages.
-                    # It will not be updated in the write_message() call below.
+                    # The chat history is not updated here. It gets the tool call and
+                    # its result as a pair once the chain finishes, in
+                    # RunContextRunnable.record_tool_exchange().
                     await self.journal.write_message(tool_message)
 
         # Create a run to return

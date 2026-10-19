@@ -35,6 +35,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
+from langchain_core.messages.tool import ToolMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
 from openai import RateLimitError
@@ -714,3 +715,176 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         # The SDK error only reads request, status_code and headers from its response.
         response: MagicMock = MagicMock(status_code=429)
         return RateLimitError("rate limited", response=response, body=None)
+
+    @staticmethod
+    def _tool_call(call_id: str) -> Dict[str, Any]:
+        """
+        :param call_id: The id of the tool call
+        :return: A langchain tool call dictionary for the Accountant tool
+        """
+        return {
+            "name": "Accountant",
+            "args": {"running_cost": 0.0},
+            "id": call_id,
+            "type": "tool_call",
+        }
+
+    @staticmethod
+    def _tool_turn_state(human: HumanMessage) -> Dict[str, Any]:
+        """
+        Builds a chain state for a turn in which the model called a tool once.
+
+        :param human: The user's message that started the turn
+        :return: A state dict whose messages are an earlier exchange, the user's
+                 message, a tool-calling AIMessage with Anthropic-shaped content,
+                 the ToolMessage answering it, and the answer
+        """
+        tool_call: Dict[str, Any] = TestRunContextRunnable._tool_call("toolu_1")
+        content: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "Let me check.",
+            },
+            {
+                "type": "tool_use",
+                "id": "toolu_1",
+                "name": "Accountant",
+                "input": {"running_cost": 0.0},
+            },
+        ]
+        calling: AIMessage = AIMessage(content=content, tool_calls=[tool_call])
+        result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="toolu_1", name="Accountant")
+        return {"messages": [HumanMessage(content="earlier", id="h0"), AIMessage(content="earlier answer", id="a0"),
+                             human, calling, result, AIMessage(content="the answer")]}
+
+    def test_find_tool_exchange_pairs_call_with_result(self) -> None:
+        """
+        The turn's tool-calling AIMessage and the ToolMessage answering it are
+        returned in order, the call's content projected to its text with the
+        tool calls kept, and the answer left out.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        runnable: RunContextRunnable = self._make_runnable()
+
+        exchange: List[BaseMessage] = runnable.find_tool_exchange({"messages": [human]},
+                                                                  self._tool_turn_state(human))
+
+        self.assertEqual(len(exchange), 2)
+        self.assertIsInstance(exchange[0], AIMessage)
+        self.assertEqual(exchange[0].content, "Let me check.")
+        self.assertEqual(exchange[0].tool_calls, [self._tool_call("toolu_1")])
+        self.assertIsInstance(exchange[1], ToolMessage)
+        self.assertEqual(exchange[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(exchange[1].tool_call_id, "toolu_1")
+
+    def test_find_tool_exchange_drops_call_without_result(self) -> None:
+        """
+        A tool call that has no ToolMessage answering it, as after a step limit,
+        is left out, since providers reject a call without its result.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        calling: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("toolu_1")])
+        state: Dict[str, Any] = {"messages": [human, calling, AIMessage(content="", tool_calls=[
+            self._tool_call("toolu_2")])]}
+        runnable: RunContextRunnable = self._make_runnable()
+
+        self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, state), [])
+
+    def test_find_tool_exchange_drops_message_with_repeated_call_id(self) -> None:
+        """
+        An AIMessage whose tool calls share an id is left out even though a
+        result exists for it, since providers reject or merge repeated ids.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        calling: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("toolu_1"),
+                                                               self._tool_call("toolu_1")])
+        result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="toolu_1")
+        state: Dict[str, Any] = {"messages": [human, calling, result, AIMessage(content="the answer")]}
+        runnable: RunContextRunnable = self._make_runnable()
+
+        self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, state), [])
+
+    def test_find_tool_exchange_projects_empty_list_content_to_empty_text(self) -> None:
+        """
+        A tool-calling AIMessage with empty list content, as the OpenAI Responses
+        API returns for a call-only turn, is kept with empty string content, so
+        its dictionary carries a text key and survives the history processor.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        calling: AIMessage = AIMessage(content=[], tool_calls=[self._tool_call("call_1")])
+        result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1")
+        state: Dict[str, Any] = {"messages": [human, calling, result, AIMessage(content="the answer")]}
+        runnable: RunContextRunnable = self._make_runnable()
+
+        exchange: List[BaseMessage] = runnable.find_tool_exchange({"messages": [human]}, state)
+
+        self.assertEqual(len(exchange), 2)
+        self.assertEqual(exchange[0].content, "")
+        self.assertEqual(exchange[0].tool_calls, [self._tool_call("call_1")])
+
+    def test_find_tool_exchange_without_tool_calls_is_empty(self) -> None:
+        """
+        A turn that only answered adds nothing to the history beyond the answer itself.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        state: Dict[str, Any] = {"messages": [human, AIMessage(content="the answer")]}
+        runnable: RunContextRunnable = self._make_runnable()
+
+        self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, state), [])
+        self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, AIMessage(content="bare")), [])
+
+    def test_find_turn_start_matches_by_id_then_falls_back_to_last_human(self) -> None:
+        """
+        The turn's user message is found by identity or id; when a middleware
+        replaced the list and neither matches, the last HumanMessage is used.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        copy_of_human: HumanMessage = HumanMessage(content="question", id="h1")
+        messages: List[BaseMessage] = [HumanMessage(content="earlier", id="h0"), copy_of_human,
+                                       AIMessage(content="the answer")]
+
+        self.assertEqual(RunContextRunnable.find_turn_start({"messages": [human]}, messages), 1)
+        self.assertEqual(RunContextRunnable.find_turn_start({"messages": [HumanMessage(content="other", id="hx")]},
+                                                            messages), 1)
+        self.assertEqual(RunContextRunnable.find_turn_start({}, [AIMessage(content="no human")]), -1)
+
+    @staticmethod
+    def _record_history_length(lengths: List[int], chat_history: List[BaseMessage],
+                               message: BaseMessage, *_args: Any, **_kwargs: Any) -> None:
+        """
+        Note how many messages the chat history holds when the journal is written to,
+        standing in for Journal.write_message.
+
+        :param lengths: The list that collects the chat history length at each write
+        :param chat_history: The chat history being watched
+        :param message: The message being journaled (ignored)
+        :param _args: Further positional arguments write_message accepts; ignored
+        :param _kwargs: Further keyword arguments write_message accepts; ignored
+        """
+        _ = message
+        lengths.append(len(chat_history))
+
+    async def test_invoke_agent_chain_appends_tool_exchange_before_answer(self) -> None:
+        """
+        The tool call and its result are appended to the chat history before the
+        answer is journaled, so the history reads call, result, answer.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.ainvoke = AsyncMock(return_value=self._tool_turn_state(human))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=self._passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [2])
+        self.assertIsInstance(chat_history[0], AIMessage)
+        self.assertEqual(chat_history[0].tool_calls, [self._tool_call("toolu_1")])
+        self.assertIsInstance(chat_history[1], ToolMessage)
