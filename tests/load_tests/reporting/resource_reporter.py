@@ -107,19 +107,25 @@ class ResourceReporter:
         :param settled_snapshot: Client process snapshot taken after the stage settled
         :return: (display_row, before_snapshot, peak_snapshot or {}, settled_snapshot)
         """
-        rss_delta_megabytes: float = settled_snapshot.get("rss") - before_snapshot.get("rss")
+        before_rss_megabytes: float = before_snapshot.get("rss")
+        settled_rss_megabytes: float = settled_snapshot.get("rss")
+        rss_delta_megabytes: float = settled_rss_megabytes - before_rss_megabytes
         peak_rss_text: str = "-"
         if peak_snapshot:
-            peak_rss_text = f"{peak_snapshot.get('rss'):.1f}M"
+            peak_rss_megabytes: float = peak_snapshot.get("rss")
+            peak_rss_text = f"{peak_rss_megabytes:.1f}M"
+        settled_cpu_percent: float = settled_snapshot.get("cpu")
+        settled_fds: Optional[int] = settled_snapshot.get("fds")
+        settled_threads: Optional[int] = settled_snapshot.get("threads")
         display: Tuple[str, ...] = (
             str(stage_label),
-            f"{before_snapshot.get('rss'):.1f}M",
+            f"{before_rss_megabytes:.1f}M",
             peak_rss_text,
-            f"{settled_snapshot.get('rss'):.1f}M",
+            f"{settled_rss_megabytes:.1f}M",
             f"{rss_delta_megabytes:+.1f}M",
-            f"{settled_snapshot.get('cpu'):.1f}%",
-            str(settled_snapshot.get("fds")),
-            str(settled_snapshot.get("threads")),
+            f"{settled_cpu_percent:.1f}%",
+            str(settled_fds),
+            str(settled_threads),
         )
         row: ClientResourceRow = (display, before_snapshot, peak_snapshot or {}, settled_snapshot)
         self._client_rows.append(row)
@@ -269,7 +275,8 @@ class ResourceReporter:
         format_pattern: str
         # Find the longest display name.
         for name, key, format_pattern in fields:
-            maximum_name_length = max(maximum_name_length, len(name))
+            name_length: int = len(name)
+            maximum_name_length = max(maximum_name_length, name_length)
         logger.info("\n  %s overall deltas (first stage vs last stage):", label)
         # One delta line per field.
         for name, key, format_pattern in fields:

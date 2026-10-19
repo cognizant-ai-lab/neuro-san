@@ -548,7 +548,8 @@ class SummaryFileWriter:
                 and server_start_seconds
                 and server_start_seconds > client_start_seconds):
             lines.append(f"    Client -> Server:  {server_start_seconds - client_start_seconds:6.1f}s")
-        lines.append(f"    Server: {top_agent:<25s} {top.get('duration_seconds', 0):6.1f}s")
+        top_duration_seconds: float = top.get("duration_seconds", 0)
+        lines.append(f"    Server: {top_agent:<25s} {top_duration_seconds:6.1f}s")
         SummaryFileWriter._format_sub_agents(lines, entries, top_agent)
         if (client_end_seconds
                 and server_finish_seconds

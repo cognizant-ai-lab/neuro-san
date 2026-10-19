@@ -296,36 +296,61 @@ class CrossRunComparison:
             if run is not baseline:
                 baseline_metrics = baseline
             deltas: Dict[str, float] = CrossRunComparison._compute_deltas(baseline_metrics, run, metric_keys)
-            rows.append([
-                run.get("folder", ""),
-                CrossRunComparison._val_with_delta(
-                    str(run.get("num_requests", 0)),
-                    deltas.get("num_requests"),
-                ),
-                str(run.get("succeeded", 0)),
-                CrossRunComparison._val_with_delta(
-                    Formatters.fmt_duration(run.get("wall_time", 0)),
-                    deltas.get("wall_time"),
-                ),
-                CrossRunComparison._fmt_optional(
-                    run.get("avg_success", 0),
-                    deltas.get("avg_success"),
-                ),
-                CrossRunComparison._fmt_time_to_first_response(
-                    run.get("time_to_first_response_avg", 0),
-                    deltas.get("time_to_first_response_avg"),
-                ),
-                CrossRunComparison._fmt_rss(
-                    run.get("peak_rss", 0),
-                    deltas.get("peak_rss"),
-                ),
-                CrossRunComparison._fmt_failed(
-                    run.get("failed", 0),
-                    run.get("num_requests", 0),
-                    run.get("fail_breakdown", {}),
-                ),
-            ])
+            row: List[str] = CrossRunComparison._leading_cells(run, deltas)
+            trailing_cells: List[str] = CrossRunComparison._trailing_cells(run, deltas)
+            row.extend(trailing_cells)
+            rows.append(row)
         TableFormatter.log_table(header, rows)
+
+    @staticmethod
+    def _leading_cells(run: Dict[str, Any], deltas: Dict[str, float]) -> List[str]:
+        """
+        Build the Folder, Requests, Succeeded and Wall Time cells of one comparison table row.
+
+        :param run: Metrics of one run
+        :param deltas: Change of each metric from the first run, in percent
+        :return: The 4 cells, in table order
+        """
+        num_requests: int = run.get("num_requests", 0)
+        num_requests_text: str = str(num_requests)
+        num_requests_delta: Optional[float] = deltas.get("num_requests")
+        succeeded: int = run.get("succeeded", 0)
+        wall_time_seconds: float = run.get("wall_time", 0)
+        wall_time_text: str = Formatters.fmt_duration(wall_time_seconds)
+        wall_time_delta: Optional[float] = deltas.get("wall_time")
+        cells: List[str] = [
+            run.get("folder", ""),
+            CrossRunComparison._val_with_delta(num_requests_text, num_requests_delta),
+            str(succeeded),
+            CrossRunComparison._val_with_delta(wall_time_text, wall_time_delta),
+        ]
+        return cells
+
+    @staticmethod
+    def _trailing_cells(run: Dict[str, Any], deltas: Dict[str, float]) -> List[str]:
+        """
+        Build the Avg success, First resp avg, Peak RSS and Failed requests cells of one comparison table row.
+
+        :param run: Metrics of one run
+        :param deltas: Change of each metric from the first run, in percent
+        :return: The 4 cells, in table order
+        """
+        average_success_seconds: float = run.get("avg_success", 0)
+        average_success_delta: Optional[float] = deltas.get("avg_success")
+        first_response_seconds: float = run.get("time_to_first_response_avg", 0)
+        first_response_delta: Optional[float] = deltas.get("time_to_first_response_avg")
+        peak_rss_megabytes: float = run.get("peak_rss", 0)
+        peak_rss_delta: Optional[float] = deltas.get("peak_rss")
+        failed: int = run.get("failed", 0)
+        num_requests: int = run.get("num_requests", 0)
+        fail_breakdown: Dict[str, int] = run.get("fail_breakdown", {})
+        cells: List[str] = [
+            CrossRunComparison._fmt_optional(average_success_seconds, average_success_delta),
+            CrossRunComparison._fmt_time_to_first_response(first_response_seconds, first_response_delta),
+            CrossRunComparison._fmt_rss(peak_rss_megabytes, peak_rss_delta),
+            CrossRunComparison._fmt_failed(failed, num_requests, fail_breakdown),
+        ]
+        return cells
 
     def _log_validation_loops(self, runs: List[Dict[str, Any]]) -> None:
         """
@@ -530,4 +555,5 @@ class CrossRunComparison:
                 parts.append(f"{value} {label}")
         if not parts:
             return base
-        return f"{base}: {", ".join(parts)}"
+        parts_text: str = ", ".join(parts)
+        return f"{base}: {parts_text}"

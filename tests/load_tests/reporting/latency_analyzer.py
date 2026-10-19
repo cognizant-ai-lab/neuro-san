@@ -80,10 +80,11 @@ class LatencyAnalyzer:
 
         groups: Dict[int, List[Dict[str, Any]]] = self._group_by_concurrency()
         has_degradation: bool = False
+        concurrency_levels: List[int] = sorted(groups)
         concurrency: int
-        summaries: List[Dict[str, Any]]
-        # One degradation line per concurrency level that ran 2 or more rounds.
-        for concurrency, summaries in sorted(groups.items()):
+        # One degradation line per concurrency level that ran 2 or more rounds, lowest level first.
+        for concurrency in concurrency_levels:
+            summaries: List[Dict[str, Any]] = groups.get(concurrency, [])
             if len(summaries) < 2:
                 continue
             average_latencies_seconds: List[float] = []

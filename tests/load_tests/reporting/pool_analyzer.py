@@ -99,7 +99,7 @@ class PoolAnalyzer:
             if peak_threads is not None:
                 peak_threads_text = str(peak_threads)
 
-            rows.append([
+            row: List[str] = [
                 str(batch_number),
                 str(server_calls),
                 f"+{new_threads}",
@@ -108,7 +108,8 @@ class PoolAnalyzer:
                 f"{reuse_percentage:.1f}%",
                 str(pool_available_threads),
                 f"{executors_per_request:.1f}",
-            ])
+            ]
+            rows.append(row)
 
         TableFormatter.log_table(header, rows)
 

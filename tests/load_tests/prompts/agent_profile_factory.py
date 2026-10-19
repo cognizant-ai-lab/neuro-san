@@ -283,13 +283,14 @@ Aborting.""",
             )
             raise LoadTestAbortError(1)
         interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
-        if len(interactions) > 1:
+        interaction_count: int = len(interactions)
+        if interaction_count > 1:
             logger.error(
                 """Load-test hocon must have exactly one interaction.
   File: %s
   Interactions: %d
 Aborting.""",
-                path, len(interactions),
+                path, interaction_count,
             )
             raise LoadTestAbortError(1)
         interaction: Dict[str, Any] = {}

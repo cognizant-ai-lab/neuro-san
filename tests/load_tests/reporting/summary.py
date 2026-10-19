@@ -92,21 +92,12 @@ class SummaryReporter:
         rows: List[List[str]] = []
         # One table row per stage.
         for summary in self._summaries:
-            counts: Dict[str, int] = summary.get("counts", {})
             row_label: Any = summary.get("stage")
             if not is_ramp:
                 row_label = summary.get("round", row_label)
-            row: List[str] = [
-                str(row_label),
-                str(summary.get("concurrent")),
-                str(counts.get(STATUS_CREATED, 0)),
-                str(counts.get(STATUS_FAILED, 0)),
-                str(counts.get(STATUS_TIMEOUT, 0)),
-                str(counts.get(STATUS_KILLED, 0)),
-                str(summary.get("total_retries", 0)),
-                f"{summary.get("amplification", 1.0):.2f}x",
-                f"{summary.get("elapsed", 0):.1f}s",
-            ]
+            row: List[str] = [str(row_label)]
+            stage_cells: List[str] = SummaryReporter._stage_cells(summary)
+            row.extend(stage_cells)
             if has_server_counts:
                 server_cells: List[str] = SummaryReporter._server_count_cells(summary)
                 row.extend(server_cells)
@@ -147,7 +138,8 @@ class SummaryReporter:
         logger.info("    Failed:    %s", total_failed)
         logger.info("    Timed out: %s", total_timeout)
         logger.info("    Killed:    %s", total_killed)
-        logger.info("  Total wall time: %s", Formatters.fmt_duration(total_time_seconds, precision=2))
+        total_time_text: str = Formatters.fmt_duration(total_time_seconds, precision=2)
+        logger.info("  Total wall time: %s", total_time_text)
         self._log_performance_stats()
 
         if total_retries > 0:
@@ -596,6 +588,35 @@ class SummaryReporter:
         for summary in self._summaries:
             events.extend(summary.get("validation_events", []))
         return events
+
+    @staticmethod
+    def _stage_cells(summary: Dict[str, Any]) -> List[str]:
+        """
+        Build the cells from Workers to Duration of one summary table row.
+
+        :param summary: One stage or round summary
+        :return: Workers, the 4 status counts, retries, amplification and duration
+        """
+        counts: Dict[str, int] = summary.get("counts", {})
+        concurrent: Optional[int] = summary.get("concurrent")
+        created_count: int = counts.get(STATUS_CREATED, 0)
+        failed_count: int = counts.get(STATUS_FAILED, 0)
+        timeout_count: int = counts.get(STATUS_TIMEOUT, 0)
+        killed_count: int = counts.get(STATUS_KILLED, 0)
+        total_retries: int = summary.get("total_retries", 0)
+        amplification: float = summary.get("amplification", 1.0)
+        elapsed_seconds: float = summary.get("elapsed", 0)
+        cells: List[str] = [
+            str(concurrent),
+            str(created_count),
+            str(failed_count),
+            str(timeout_count),
+            str(killed_count),
+            str(total_retries),
+            f"{amplification:.2f}x",
+            f"{elapsed_seconds:.1f}s",
+        ]
+        return cells
 
     @staticmethod
     def _server_count_cells(summary: Dict[str, Any]) -> List[str]:

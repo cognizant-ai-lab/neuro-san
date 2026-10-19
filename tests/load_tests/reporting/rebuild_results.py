@@ -167,8 +167,10 @@ class ResultsRebuilder:
             if result.get("status") == STATUS_CREATED:
                 passed += 1
             total_tokens += result.get("total_tokens", 0)
-            durations_seconds.append(result.get("elapsed", 0))
-            costs_dollars.append(result.get("cost_usd", 0.0))
+            duration_seconds: float = result.get("elapsed", 0)
+            durations_seconds.append(duration_seconds)
+            cost_dollars: float = result.get("cost_usd", 0.0)
+            costs_dollars.append(cost_dollars)
         total: int = len(results)
         # The slowest request stands in for the run's wall-clock time,
         # which is not recoverable from per-request files alone.
