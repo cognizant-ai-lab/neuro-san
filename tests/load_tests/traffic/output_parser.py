@@ -78,7 +78,9 @@ class OutputParser:
         :param stderr: Captured stderr, or None
         :return: Last line of stderr, or "" when it is empty
         """
-        stripped: str = stderr.strip() if stderr else ""
+        stripped: str = ""
+        if stderr:
+            stripped = stderr.strip()
         if not stripped:
             return ""
         return stripped.rsplit("\n", maxsplit=1)[-1]
