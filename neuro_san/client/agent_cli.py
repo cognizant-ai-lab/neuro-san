@@ -276,9 +276,8 @@ Some suggestions:
                                 help="Name of the agent to talk to")
 
         # What agents can we connect to?
-        group: _ArgumentGroup = \
-            arg_parser.add_argument_group(title="Agent Listings",
-                                          description="What agents can we connect to?")
+        group: _ArgumentGroup = arg_parser.add_argument_group(title="Agent Listings",
+                                                              description="What agents can we connect to?")
         group.add_argument("--list", default=False, dest="list", action="store_true",
                            help="List all available agents")
         group.add_argument("--tag", type=str,
