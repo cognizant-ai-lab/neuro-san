@@ -45,7 +45,7 @@ from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import STDOUT_LOG_FILE_NAME
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
-from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
+from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
 
