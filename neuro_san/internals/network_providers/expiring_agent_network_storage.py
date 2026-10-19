@@ -26,6 +26,7 @@ import time
 
 from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.utils.map import Map
 from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
@@ -131,7 +132,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         return time.time() > reservation.get_expiration_time_in_seconds()
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
+    async def add_reservations(self, reservations_dict: Map[Reservation, Dict[str, Any]],
                                source: str = None):
         """
         Add a set of reservations for agent networks en-masse
@@ -154,7 +155,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         # The filter always returns a copy, so the caller's dictionaries are neither stored
         # nor mutated, and a metadata-injecting writer (S3ReservationsWriter) cannot reach them.
         spec_filter: ConfigFilter = ResolvedNetworkConfigFilter()
-        use_reservations: Dict[Reservation, Dict[str, Any]] = {}
+        use_reservations: Map[Reservation, Dict[str, Any]] = {}
         reservation: Reservation = None
         agent_spec: Dict[str, Any] = None
         for reservation, agent_spec in reservations_dict.items():

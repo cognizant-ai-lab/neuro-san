@@ -22,6 +22,8 @@ from typing import Union
 from asyncio import Event
 from time import time
 
+from leaf_common.utils.map import Map
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -60,10 +62,10 @@ class AbstractAgentReservationist(Reservationist):
         return reservation
 
     async def deploy(self,
-                     deployment_dict: Dict[Reservation,
-                                           Dict[Union[str, Event],
-                                                Dict[AgentReservation,
-                                                     Dict[str, Any]]]],
+                     deployment_dict: Map[Reservation,
+                                          Map[Union[str, Event],
+                                              Map[AgentReservation,
+                                                  Dict[str, Any]]]],
                      confirmation: bool = False) -> Event:
         """
         Deploy multiple Reservations.
@@ -92,7 +94,7 @@ class AbstractAgentReservationist(Reservationist):
         """
         event.set()
 
-    async def deploy_together(self, deployment_dict: Dict[AgentReservation, Dict[str, Any]],
+    async def deploy_together(self, deployment_dict: Map[AgentReservation, Dict[str, Any]],
                               source: str,
                               max_lifetime_in_seconds: float):
         """
@@ -104,7 +106,7 @@ class AbstractAgentReservationist(Reservationist):
         # Get a timestamp as a basis of coordinated expiration.
         use_now: float = time()
 
-        reservations_dict: Dict[Reservation, Dict[str, Any]] = {}
+        reservations_dict: Map[Reservation, Dict[str, Any]] = {}
         for reservation, agent_spec in deployment_dict.items():
 
             use_reservation: AgentReservation = reservation

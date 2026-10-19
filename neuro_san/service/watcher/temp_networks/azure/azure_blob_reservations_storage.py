@@ -16,7 +16,6 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import Dict
 from typing import Optional
 from typing import Tuple
 
@@ -24,6 +23,8 @@ from asyncio import get_running_loop
 from asyncio import run
 from logging import getLogger
 from logging import Logger
+
+from leaf_common.utils.map import Map
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
@@ -81,7 +82,7 @@ class AzureBlobReservationsStorage(AbstractReservationsStorage):
         self.logger.info("Azure Blob Reservations Storage initialized")
         super().start()
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any], source: str = None):
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         """
         Add/update reservations in Azure Blob Storage.
 
