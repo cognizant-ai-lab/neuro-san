@@ -149,9 +149,17 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         a template, so braces and other characters need no escaping and the model
         sees the text exactly as it was written.
 
+        A message that takes part in a tool exchange, a call or a result, is kept
+        even without text, with empty text, so the exchange stays complete.
+
         :param chat_message_dict: The ChatMessage dictionary to copy
-        :return: A shallow copy of the dictionary, or None if the message carries no text at all
+        :return: A shallow copy of the dictionary, or None if the message carries no text
+                 and is neither a tool call nor a tool result
         """
-        if chat_message_dict.get("text") is None:
-            return None
-        return copy(chat_message_dict)
+        kept: Dict[str, Any] = copy(chat_message_dict)
+        if kept.get("text") is None:
+            if not kept.get("tool_calls") and not kept.get("tool_call_id"):
+                return None
+            # A call-only message from some providers has list content with no text.
+            kept["text"] = ""
+        return kept

@@ -112,6 +112,22 @@ class TestToolPairing(TestCase):
         self.assertEqual(kept[0].tool_calls, [self.tool_call("c2")])
         self.assertEqual(kept[1].tool_call_id, "c2")
 
+    def test_complete_pairs_uses_each_result_once(self) -> None:
+        """
+        Two calls with the same id and one result keep one call and one result;
+        the repeated call is treated as unanswered.
+        """
+        messages: List[BaseMessage] = [
+            AIMessage(content="", tool_calls=[self.tool_call("c1"), self.tool_call("c1")]),
+            ToolMessage(content="3.0", tool_call_id="c1"),
+        ]
+
+        kept: List[BaseMessage] = ToolPairing.complete_pairs(messages)
+
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(kept[0].tool_calls, [self.tool_call("c1")])
+        self.assertEqual(kept[1].tool_call_id, "c1")
+
     def test_complete_pairs_drops_an_empty_message_whose_calls_are_all_unanswered(self) -> None:
         """
         A call-only message with no result left to pair is dropped altogether,

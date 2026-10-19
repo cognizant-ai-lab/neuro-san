@@ -85,6 +85,9 @@ class ToolPairing:
         """
         Pairs a tool-calling message with the results that follow it.
 
+        Each result answers one call. A call that repeats an id already answered
+        finds no result left and is treated as unanswered.
+
         :param message: An AIMessage with tool calls
         :param results: The ToolMessages right after it
         :return: The message with only its answered calls, followed by the results
@@ -99,10 +102,10 @@ class ToolPairing:
 
         answered_calls: List[Dict[str, Any]] = []
         answered_results: List[ToolMessage] = []
-        # Keep each call that has a result, together with that result.
+        # Keep each call that has a result, together with that result, using each result once.
         tool_call: Dict[str, Any] = None
         for tool_call in message.tool_calls:
-            result = by_id.get(tool_call.get("id"))
+            result = by_id.pop(tool_call.get("id"), None)
             if result is not None:
                 answered_calls.append(tool_call)
                 answered_results.append(result)

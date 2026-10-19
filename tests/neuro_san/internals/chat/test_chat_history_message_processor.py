@@ -132,6 +132,30 @@ class TestChatHistoryMessageProcessor(TestCase):
         """
         self.assertIsNone(ChatHistoryMessageProcessor.keep_message({"type": ChatMessageType.AI}))
 
+    def test_keep_message_keeps_tool_exchange_entries_without_text(self) -> None:
+        """
+        A tool-calling AI entry or a tool result with no text key, as a raw
+        call-only message with list content produces, is kept with empty text
+        rather than dropped, so its exchange stays complete.
+        """
+        call: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "tool_calls": self.TOOL_CALLS,
+        }
+        result: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT_TOOL_RESULT,
+            "tool_call_id": "toolu_1",
+        }
+
+        kept_call: Optional[Dict[str, Any]] = ChatHistoryMessageProcessor.keep_message(call)
+        kept_result: Optional[Dict[str, Any]] = ChatHistoryMessageProcessor.keep_message(result)
+
+        self.assertEqual(kept_call.get("text"), "")
+        self.assertEqual(kept_call.get("tool_calls"), self.TOOL_CALLS)
+        self.assertNotIn("text", call)
+        self.assertEqual(kept_result.get("text"), "")
+        self.assertEqual(kept_result.get("tool_call_id"), "toolu_1")
+
     def test_process_message_keeps_tool_calls_on_ai_message(self) -> None:
         """
         An AI message that made tool calls keeps them in the history, text and all.
