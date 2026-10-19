@@ -14,35 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Local-filesystem implementation of the reservations storage interface.
-
-Mirrors the semantics of S3ReservationsStorage / S3ReservationsWriter /
-S3ReservationsReader / S3ReservationsExpiration, but persists each
-reservation as a JSON file under a configurable local directory. Intended
-for single-node deployments, tests, and local development where standing
-up S3 is overkill.
-
-On-disk layout:
-    <base_path>/<reservation_id>.json
-
-On-disk JSON schema per reservation (same as the S3 variant):
-    {
-        "name": ...,
-        "llm_config": ...,
-        "tools": ...,
-        ...                          # any other agent_spec top-level fields
-        "metadata": {
-            ...                                          # user-authored metadata (merged in)
-            "reservation": {
-                "id": <str>,
-                "lifetime_in_seconds": <float>,
-                "expiration_time_in_seconds": <float>,
-            },
-            "stored_at": <float>,                        # time.time() at write
-        }
-    }
-"""
 
 import asyncio
 import json
@@ -56,6 +27,7 @@ from typing import Optional
 from typing import Tuple
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.utils.map import Map
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.filters.resolved_network_config_filter import ResolvedNetworkConfigFilter
@@ -79,6 +51,32 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     in this single module -- add_reservations, get_one_reservation,
     expire_reservations -- since the file-based paths are short enough
     that splitting them buys nothing.
+
+    Mirrors the semantics of S3ReservationsStorage / S3ReservationsWriter /
+    S3ReservationsReader / S3ReservationsExpiration, but persists each
+    reservation as a JSON file under a configurable local directory. Intended
+    for single-node deployments, tests, and local development where standing
+    up S3 is overkill.
+
+    On-disk layout:
+        <base_path>/<reservation_id>.json
+
+    On-disk JSON schema per reservation (same as the S3 variant):
+        {
+            "name": ...,
+            "llm_config": ...,
+            "tools": ...,
+            ...                          # any other agent_spec top-level fields
+            "metadata": {
+                ...                                          # user-authored metadata (merged in)
+                "reservation": {
+                    "id": <str>,
+                    "lifetime_in_seconds": <float>,
+                    "expiration_time_in_seconds": <float>,
+                },
+                "stored_at": <float>,                        # time.time() at write
+            }
+        }
     """
 
     # Suffix used for the on-disk files. Kept as a constant so expiration/read
@@ -133,7 +131,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     # Write path
     # ---------------------------------------------------------------------
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any],
                                source: str = None):
         """
         Persist a batch of reservations. Writes are performed concurrently
