@@ -271,7 +271,8 @@ Aborting.""",
         """
         test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
         hocon_agent: str = test_case.get("agent", "")
-        if hocon_agent not in (agent_name, ProjectPaths.agent_base_name(agent_name)):
+        expected_agents: List[str] = [agent_name, ProjectPaths.agent_base_name(agent_name)]
+        if hocon_agent not in expected_agents:
             logger.error(
                 """Hocon agent does not match --agent.
   File: %s
@@ -282,18 +283,26 @@ Aborting.""",
             )
             raise LoadTestAbortError(1)
         interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
-        if len(interactions) > 1:
+        interaction_count: int = len(interactions)
+        if interaction_count > 1:
             logger.error(
                 """Load-test hocon must have exactly one interaction.
   File: %s
   Interactions: %d
 Aborting.""",
-                path, len(interactions),
+                path, interaction_count,
             )
             raise LoadTestAbortError(1)
-        interaction: Dict[str, Any] = interactions[0] if interactions else {}
+        interaction: Dict[str, Any] = {}
+        if interactions:
+            interaction = interactions[0]
         response: Any = interaction.get("response", {})
-        sly_checks: Any = response.get("sly_data", {}) if isinstance(response, dict) else None
+        sly_checks: Any = None
+        bad_value: Any = response
+        if isinstance(response, dict):
+            response_dict: Dict[str, Any] = response
+            sly_checks = response_dict.get("sly_data", {})
+            bad_value = sly_checks
         if not isinstance(sly_checks, dict):
             logger.error(
                 """response and response.sly_data must be maps of field -> check \
@@ -301,7 +310,7 @@ Aborting.""",
   File: %s
   Got: %r
 Aborting.""",
-                path, sly_checks if isinstance(response, dict) else response,
+                path, bad_value,
             )
             raise LoadTestAbortError(1)
         return test_case

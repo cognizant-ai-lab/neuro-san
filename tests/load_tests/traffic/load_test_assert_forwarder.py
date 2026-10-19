@@ -47,7 +47,10 @@ class LoadTestAssertForwarder(AssertForwarder):
         :raises AssertionError: When condition is false
         """
         if not condition:
-            raise AssertionError(message if message is not None else default_message)
+            error_message: str = default_message
+            if message is not None:
+                error_message = message
+            raise AssertionError(error_message)
 
     # pylint: disable=invalid-name
     @override

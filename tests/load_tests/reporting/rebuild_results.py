@@ -167,13 +167,17 @@ class ResultsRebuilder:
             if result.get("status") == STATUS_CREATED:
                 passed += 1
             total_tokens += result.get("total_tokens", 0)
-            durations_seconds.append(result.get("elapsed", 0))
-            costs_dollars.append(result.get("cost_usd", 0.0))
+            duration_seconds: float = result.get("elapsed", 0)
+            durations_seconds.append(duration_seconds)
+            cost_dollars: float = result.get("cost_usd", 0.0)
+            costs_dollars.append(cost_dollars)
         total: int = len(results)
         # The slowest request stands in for the run's wall-clock time,
         # which is not recoverable from per-request files alone.
         total_elapsed_seconds: float = max(durations_seconds)
-        average_latency_seconds: float = sum(durations_seconds) / total if total > 0 else 0
+        average_latency_seconds: float = 0
+        if total > 0:
+            average_latency_seconds = sum(durations_seconds) / total
         total_cost_dollars: float = sum(costs_dollars)
 
         rebuilt_results: Dict[str, Any] = {
@@ -455,7 +459,10 @@ class ResultsRebuilder:
         if status == STATUS_CREATED:
             return None
         reasons: List[str] = []
-        for field in ("reservation_id", "agent_network_name"):
+        field_names: List[str] = ["reservation_id", "agent_network_name"]
+        field: str
+        # Note each field that stdout does not have.
+        for field in field_names:
             if not parsed_fields.get(field):
                 reasons.append(f"missing {field}")
         tokens: Dict[str, Any] = OutputParser.parse_token_accounting(stdout)
@@ -471,4 +478,7 @@ class ResultsRebuilder:
                 )
             else:
                 reasons.append("incomplete response")
-        return "; ".join(reasons) if reasons else None
+        diagnosis: Optional[str] = None
+        if reasons:
+            diagnosis = "; ".join(reasons)
+        return diagnosis
