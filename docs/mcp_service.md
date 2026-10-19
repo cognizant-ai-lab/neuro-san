@@ -192,6 +192,10 @@ replicated from neuro-san OpenAPI specification:
                         "tool_call_id": {
                           "type": "string",
                           "description": "Optional id of the tool call an AGENT_TOOL_RESULT message answers."
+                        },
+                        "tool_status": {
+                          "type": "string",
+                          "description": "Optional status of the tool call an AGENT_TOOL_RESULT message answers: \"error\" when the tool failed. Absent when the tool succeeded."
                         }
                       },
                       "description": "Structure describing a single chat message."

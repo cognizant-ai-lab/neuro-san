@@ -19,6 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from typing import Type
 from typing import Union
@@ -390,7 +391,7 @@ class RunContextRunnable(NeuroSanRunnable):
 
         turn: List[BaseMessage] = self.before_answer(messages[start + 1:])
         results: Dict[str, ToolMessage] = self.results_by_call_id(turn)
-        recorded_ids: List[str] = self.recorded_call_ids()
+        recorded_ids: Set[str] = self.recorded_call_ids()
 
         exchange: List[BaseMessage] = []
         # Each tool-calling AIMessage goes in followed by the results of its calls.
@@ -406,19 +407,21 @@ class RunContextRunnable(NeuroSanRunnable):
                 continue
             exchange.append(AIMessage(content=ContentUtils.history_safe_text(message),
                                       tool_calls=message.tool_calls))
-            # Results follow their call, in call order.
+            # Results follow their call, in call order. The status says whether
+            # the tool failed, which providers pass on to the model.
             result: ToolMessage = None
             for result in paired:
                 exchange.append(ToolMessage(content=ContentUtils.history_safe_text(result),
-                                            tool_call_id=result.tool_call_id))
+                                            tool_call_id=result.tool_call_id,
+                                            status=result.status))
         return exchange
 
-    def recorded_call_ids(self) -> List[str]:
+    def recorded_call_ids(self) -> Set[str]:
         """
         :return: The ids of the tool calls the chat history already holds.
                  Empty when no history is kept.
         """
-        ids: List[str] = []
+        ids: Set[str] = set()
         # No history kept means nothing recorded.
         history: List[BaseMessage] = self.chat_history or []
         # Collect the id of every tool call already in the history.
@@ -428,11 +431,11 @@ class RunContextRunnable(NeuroSanRunnable):
                 continue
             tool_call: Dict[str, Any] = None
             for tool_call in message.tool_calls:
-                ids.append(tool_call.get("id"))
+                ids.add(tool_call.get("id"))
         return ids
 
     @staticmethod
-    def is_recorded(message: AIMessage, recorded_ids: List[str]) -> bool:
+    def is_recorded(message: AIMessage, recorded_ids: Set[str]) -> bool:
         """
         Tells whether a tool-calling message is already in the chat history.
 
@@ -490,14 +493,14 @@ class RunContextRunnable(NeuroSanRunnable):
                  call has no result or two calls share an id
         """
         paired: List[ToolMessage] = []
-        seen_ids: List[str] = []
+        seen_ids: Set[str] = set()
         # Look up the result of each call, in call order.
         tool_call: Dict[str, Any] = None
         for tool_call in message.tool_calls:
             call_id: Optional[str] = tool_call.get("id")
             if call_id in seen_ids:
                 return None
-            seen_ids.append(call_id)
+            seen_ids.add(call_id)
             result: Optional[ToolMessage] = results.get(call_id)
             if result is None:
                 return None

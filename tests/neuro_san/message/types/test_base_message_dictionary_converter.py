@@ -245,6 +245,47 @@ class TestBaseMessageDictionaryConverter(TestCase):
         self.assertEqual(restored_result.content, "{'running_cost': 3.0}")
         self.assertEqual(restored_result.tool_call_id, "toolu_1")
 
+    def test_tool_result_error_status_round_trips(self) -> None:
+        """
+        A failed tool result goes out with tool_status "error" and comes back as a
+        ToolMessage with that status; a successful one carries no tool_status.
+        """
+        converter = BaseMessageDictionaryConverter()
+        failed: ToolMessage = ToolMessage(content="denied", tool_call_id="toolu_1", status="error")
+        succeeded: ToolMessage = ToolMessage(content="3.0", tool_call_id="toolu_2")
+
+        failed_dict: Dict[str, Any] = converter.to_dict(failed)
+        succeeded_dict: Dict[str, Any] = converter.to_dict(succeeded)
+        restored: ToolMessage = converter.from_dict(failed_dict)
+
+        self.assertEqual(failed_dict.get("tool_status"), "error")
+        self.assertNotIn("tool_status", succeeded_dict)
+        self.assertEqual(restored.status, "error")
+        self.assertEqual(converter.from_dict(succeeded_dict).status, "success")
+
+    def test_from_dict_drops_a_call_only_message_whose_calls_are_all_malformed(self) -> None:
+        """
+        A call-only AI entry whose every call is rejected restores to nothing
+        rather than to an empty assistant message, which providers reject.
+        """
+        converter = BaseMessageDictionaryConverter()
+        chat_message: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "",
+            "tool_calls": [
+                {
+                    "id": "toolu_1",
+                    "name": "",
+                    "args": {},
+                },
+            ],
+        }
+
+        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
+            restored: BaseMessage = converter.from_dict(chat_message)
+
+        self.assertIsNone(restored)
+
     def test_from_dict_skips_malformed_tool_calls(self) -> None:
         """
         A tool call without a string id and name, or with args that are not a

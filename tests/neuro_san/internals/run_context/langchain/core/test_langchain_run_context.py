@@ -50,6 +50,56 @@ class TestLangChainRunContext(TestCase):
         run_context.chat_history = []
         return run_context
 
+    def test_update_from_chat_context_drops_a_message_whose_calls_are_all_malformed(self) -> None:
+        """
+        A call-only AI entry whose only call is malformed, and the result that
+        answered it, both stay out of the restored history, which then holds the
+        user's message and the answer alone.
+        """
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "name": "",
+                        "args": {},
+                    },
+                ],
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "orphan",
+                "tool_call_id": "c1",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "answer",
+            },
+        ]
+        chat_context: Dict[str, Any] = {
+            "chat_histories": [
+                {
+                    "origin": self.ORIGIN,
+                    "messages": messages,
+                },
+            ],
+        }
+        run_context: LangChainRunContext = self.make_run_context()
+
+        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
+            run_context.update_from_chat_context(chat_context)
+
+        history: List[BaseMessage] = run_context.chat_history
+        self.assertEqual(len(history), 2)
+        self.assertIsInstance(history[0], HumanMessage)
+        self.assertEqual(history[1].content, "answer")
+
     def test_update_from_chat_context_keeps_only_complete_tool_pairs(self) -> None:
         """
         A chat_context that carries a malformed call with its result, and a good

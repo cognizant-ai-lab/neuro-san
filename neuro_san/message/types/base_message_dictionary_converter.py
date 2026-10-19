@@ -158,6 +158,9 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             chat_message["tool_calls"] = self.wire_tool_calls(message.tool_calls)
         if isinstance(message, ToolMessage):
             chat_message["tool_call_id"] = message.tool_call_id
+            if message.status == "error":
+                # Success is the default and is not sent.
+                chat_message["tool_status"] = message.status
 
         return chat_message
 
@@ -314,7 +317,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                                                 structure=chat_message.get("structure"))
         return base_message
 
-    def ai_message_from_dict(self, content: Union[str, List[Any]], chat_message: Dict[str, Any]) -> AIMessage:
+    def ai_message_from_dict(self, content: Union[str, List[Any]],
+                             chat_message: Dict[str, Any]) -> Optional[AIMessage]:
         """
         Restores an AI message, with the tool calls it made when the dictionary carries any.
 
@@ -324,10 +328,13 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
 
         :param content: The content of the message, its text or a list of content blocks
         :param chat_message: The ChatMessage dictionary
-        :return: The AIMessage
+        :return: The AIMessage, or None when every call the dictionary carried was
+                 malformed and no text is left: providers reject an empty assistant message
         """
         tool_calls: List[Dict[str, Any]] = self.restore_tool_calls(chat_message)
         if len(tool_calls) == 0:
+            if chat_message.get("tool_calls") and ContentUtils.flatten_to_text(content) == "":
+                return None
             return AIMessage(content=content)
         return AIMessage(content=content, tool_calls=tool_calls)
 
@@ -415,7 +422,11 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         """
         tool_call_id: Any = chat_message.get("tool_call_id")
         if isinstance(tool_call_id, str) and len(tool_call_id) > 0:
-            return ToolMessage(content=content, tool_call_id=tool_call_id)
+            # Only an error is ever sent; anything else means the tool succeeded.
+            status: str = "success"
+            if chat_message.get("tool_status") == "error":
+                status = "error"
+            return ToolMessage(content=content, tool_call_id=tool_call_id, status=status)
         if self.langchain_only:
             return None
         return AgentToolResultMessage(content=content,
