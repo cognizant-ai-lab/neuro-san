@@ -23,6 +23,7 @@ from contextlib import suppress
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from neuro_san.internals.run_context.langchain.llms.closeable_client import CloseableClient
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -106,7 +107,8 @@ class OllamaLlmPolicy(LlmPolicy):
 
         if ollama_async_client is not None:
             with suppress(Exception):
-                await ollama_async_client._client.aclose()      # pylint:disable=protected-access
+                closeable_client: CloseableClient = ollama_async_client._client     # pylint:disable=protected-access
+                await closeable_client.aclose()
 
         # Let's not do this again, shall we?
         self.llm = None

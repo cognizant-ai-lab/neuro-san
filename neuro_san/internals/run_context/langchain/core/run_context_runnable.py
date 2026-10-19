@@ -174,20 +174,22 @@ class RunContextRunnable(NeuroSanRunnable):
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
         verbose: Union[bool, str] = agent_spec.get("verbose", False)
-        if isinstance(verbose, str) and verbose.lower() in ("true", "extra", "logging"):
-            # This particular class adds a *lot* of very detailed messages
-            # to the logs.  Add this because some people are interested in it.
-            # If you find yourself curious about this setting, what you probably
-            # are really looking for is an Observability setup like:
-            #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
-            # See the docs for Observability plugins in neuro-san-studio.
-            # This was our only tie to langchain-classic, so make it optional in this case.
-            # pylint: disable=invalid-name
-            LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
-                "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
-                install_if_missing="langchain-classic"
-            )
-            callbacks.append(LoggingCallbackHandler(self.logger))
+        if isinstance(verbose, str):
+            verbose_string: str = verbose
+            if verbose_string.lower() in ("true", "extra", "logging"):
+                # This particular class adds a *lot* of very detailed messages
+                # to the logs.  Add this because some people are interested in it.
+                # If you find yourself curious about this setting, what you probably
+                # are really looking for is an Observability setup like:
+                #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
+                # See the docs for Observability plugins in neuro-san-studio.
+                # This was our only tie to langchain-classic, so make it optional in this case.
+                # pylint: disable=invalid-name
+                LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
+                    "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
+                    install_if_missing="langchain-classic"
+                )
+                callbacks.append(LoggingCallbackHandler(self.logger))
 
         # Get the number of attempts from the spec.
         max_attempts: int = agent_spec.get("max_attempts", 3)
@@ -585,7 +587,8 @@ class RunContextRunnable(NeuroSanRunnable):
             # graph used today returns a state dict and never an AgentFinish, so
             # this unwrap is kept for backwards compatibility only. Its
             # return_values carry the output in dict form.
-            use_result = use_result.return_values
+            use_result_agent_finish: AgentFinish = use_result
+            use_result = use_result_agent_finish.return_values
 
         if isinstance(use_result, AIMessage):
             # Sometimes we get an AIMessage from a tool call.
@@ -654,11 +657,12 @@ class RunContextRunnable(NeuroSanRunnable):
         # scans everything, exactly as it always has for plain-string output.
         # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
-            output = ContentUtils.flatten_to_text(output)
+            output_list: List[Any] = output
+            output = ContentUtils.flatten_to_text(output_list)
 
         # See if we had some kind of error and format accordingly, if asked for.
-        output = self.error_detector.handle_error(output)
-        return output
+        handled_output: str = self.error_detector.handle_error(output)
+        return handled_output
 
     def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
                              output: str) -> BaseMessage:

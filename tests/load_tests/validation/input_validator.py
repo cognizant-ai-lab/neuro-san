@@ -279,24 +279,33 @@ Then use:
         logger.info("  Level:    %s", args.level)
         if args.ramp:
             logger.info("  Stages:   %s", stages)
+        round_suffix: str = ""
+        if args.num_rounds > 1:
+            round_suffix = "s"
         logger.info(
             "  Requests: %s x %s round%s = %s total",
             args.num_requests,
             args.num_rounds,
-            "s" if args.num_rounds > 1 else "",
+            round_suffix,
             total_planned_requests,
         )
         if capped_requests < total_planned_requests:
             logger.info("  Capped:   %s (--max-requests)", capped_requests)
         logger.info("  Workers:  %s (concurrent)", args.max_workers)
+        # Whole minutes, rounded down, e.g. 150s -> 2m.
+        request_timeout_minutes: int = int(args.request_timeout / 60)
+        idle_timeout_minutes: int = int(args.idle_timeout / 60)
+        stage_timeout_minutes: int = int(args.stage_timeout / 60)
         logger.info(
             "  Timeouts: --request-timeout %ss (%sm) / --idle-timeout %ss (%sm) / --stage-timeout %ss (%sm)",
-            args.request_timeout, args.request_timeout // 60,
-            args.idle_timeout, args.idle_timeout // 60,
-            args.stage_timeout, args.stage_timeout // 60,
+            args.request_timeout, request_timeout_minutes,
+            args.idle_timeout, idle_timeout_minutes,
+            args.stage_timeout, stage_timeout_minutes,
         )
         if args.total_timeout > 0:
-            logger.info("            --total-timeout %ss (%sm)", args.total_timeout, args.total_timeout // 60)
+            # Whole minutes, rounded down, e.g. 150s -> 2m.
+            total_timeout_minutes: int = int(args.total_timeout / 60)
+            logger.info("            --total-timeout %ss (%sm)", args.total_timeout, total_timeout_minutes)
         else:
             logger.info("            --total-timeout disabled")
         SystemResources.log_prerun()

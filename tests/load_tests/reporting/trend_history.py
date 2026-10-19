@@ -50,7 +50,9 @@ class TrendHistory:
         :param agent_filter: Agent names to include; None or empty includes every agent
         """
         self._path: str = path
-        self._agent_filter: Set[str] = set(agent_filter) if agent_filter else set()
+        self._agent_filter: Set[str] = set()
+        if agent_filter:
+            self._agent_filter = set(agent_filter)
 
     def run(self) -> None:
         """
