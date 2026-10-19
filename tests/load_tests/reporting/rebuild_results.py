@@ -37,12 +37,6 @@ from tests.load_tests.traffic.output_parser import OutputParser
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-_TIMING_RE: re.Pattern = re.compile(r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s")
-
-_CONFIG_AGENT_RE: re.Pattern = re.compile(r"Config:.*agent=([^,]+)")
-
-_CONFIG_NUM_REQ_RE: re.Pattern = re.compile(r"Requests:\s*(\d+)")
-
 
 class ResultsRebuilder:
     """
@@ -55,6 +49,12 @@ class ResultsRebuilder:
 
     # Legacy name first, so a current stdout.log line wins for the same request.
     RUN_LOG_FILES: List[str] = [LEGACY_RUN_LOG_FILE_NAME, STDOUT_LOG_FILE_NAME]
+
+    TIMING_RE: re.Pattern = re.compile(r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s")
+
+    CONFIG_AGENT_RE: re.Pattern = re.compile(r"Config:.*agent=([^,]+)")
+
+    CONFIG_NUM_REQ_RE: re.Pattern = re.compile(r"Requests:\s*(\d+)")
 
     def __init__(self, output_dir: str, force: bool = False) -> None:
         """
@@ -226,7 +226,7 @@ class ResultsRebuilder:
                 line: str
                 # Keep the last status line seen for each request.
                 for line in file_handle:
-                    match: Optional[re.Match] = _TIMING_RE.search(line)
+                    match: Optional[re.Match] = ResultsRebuilder.TIMING_RE.search(line)
                     if match:
                         request_id: int = int(match.group(1))
                         status: str = match.group(2)
@@ -252,10 +252,10 @@ class ResultsRebuilder:
                 line: str
                 # Keep the last agent and request count lines seen.
                 for line in file_handle:
-                    match: Optional[re.Match] = _CONFIG_AGENT_RE.search(line)
+                    match: Optional[re.Match] = ResultsRebuilder.CONFIG_AGENT_RE.search(line)
                     if match:
                         agent = match.group(1).strip()
-                    match = _CONFIG_NUM_REQ_RE.search(line)
+                    match = ResultsRebuilder.CONFIG_NUM_REQ_RE.search(line)
                     if match:
                         request_count = int(match.group(1))
         return agent, request_count
