@@ -45,6 +45,9 @@ class CrossRunComparison:
 
     NORMAL_LLM_CALLS: int = 4
     LOOP_THRESHOLD: int = 10
+    # A per-request token line with the prompt/completion split, e.g.
+    # "request-3: 1,234 tokens (1,000 prompt + 234 completion), 4 LLM call(s), model=gpt-4o-mini".
+    # Groups: 1 request id, 2 total tokens, 3 prompt tokens, 4 completion tokens, 5 LLM calls, 6 model.
     SERVER_TOKEN_RE: re.Pattern = re.compile(
         r"(request-\d+):\s*([\d,]+)\s*tokens"
         r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"

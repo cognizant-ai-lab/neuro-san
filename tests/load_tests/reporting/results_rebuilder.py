@@ -50,10 +50,15 @@ class ResultsRebuilder:
     # Legacy name first, so a current stdout.log line wins for the same request.
     RUN_LOG_FILES: List[str] = [LEGACY_RUN_LOG_FILE_NAME, STDOUT_LOG_FILE_NAME]
 
+    # A request result line, e.g. "Request 3: CREATED (1.25s)".
+    # Groups: 1 request id, 2 status, 3 elapsed seconds.
     TIMING_RE: re.Pattern = re.compile(r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s")
 
+    # The run config line, e.g. "Config: agent=hello_world, mode=flat, ...". Group 1: agent name.
     CONFIG_AGENT_RE: re.Pattern = re.compile(r"Config:.*agent=([^,]+)")
 
+    # A request count line, e.g. "Requests: 5 x 2 rounds = 10 total" or "Requests: 10".
+    # Group 1: the first number on the line.
     CONFIG_NUM_REQ_RE: re.Pattern = re.compile(r"Requests:\s*(\d+)")
 
     def __init__(self, output_dir: str, force: bool = False) -> None:
