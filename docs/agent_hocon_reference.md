@@ -284,6 +284,11 @@ for the trade-offs. The `anthropic-bedrock` class is provided by the
 [`langchain-aws[anthropic]`](https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock)
 extra, which neuro-san lazy-installs on first use.
 
+An llm_config that names `"class": "anthropic-bedrock"` should also set `max_tokens`. neuro-san fills it in only
+when the llm_config has no `class`; without it, each request asks for at most 4096 output tokens. See
+[Anthropic Claude on Bedrock](./llm_info_hocon_reference.md#anthropic-claude-on-bedrock) in the llm info reference
+for the details, including region-pinned model ids.
+
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
