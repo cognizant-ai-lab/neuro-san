@@ -22,7 +22,7 @@ from typing import Optional
 from unittest import TestCase
 
 from neuro_san import TOP_LEVEL_DIR
-from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
+from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 

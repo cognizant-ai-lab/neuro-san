@@ -29,8 +29,8 @@ from unittest.mock import patch
 
 from typing_extensions import override
 
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 

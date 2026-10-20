@@ -25,7 +25,7 @@ from typing import Optional
 from unittest import TestCase
 
 from neuro_san import TOP_LEVEL_DIR
-from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
+from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError

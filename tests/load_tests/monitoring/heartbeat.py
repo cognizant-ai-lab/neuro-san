@@ -37,8 +37,8 @@ from typing import TextIO
 
 import psutil
 
-from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
-from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import HEARTBEAT_INTERVAL_SECONDS
+from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.reporting.formatters import Formatters

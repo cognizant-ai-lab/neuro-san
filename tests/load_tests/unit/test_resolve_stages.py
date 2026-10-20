@@ -18,7 +18,7 @@ from argparse import Namespace
 from typing import Optional
 from unittest import TestCase
 
-from tests.load_tests.config import DEFAULT_STAGES
+from tests.load_tests.load_test_constants import DEFAULT_STAGES
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 

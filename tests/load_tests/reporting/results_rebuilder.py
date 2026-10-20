@@ -24,14 +24,14 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
-from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.config import STDOUT_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.traffic.output_parser import OutputParser
 

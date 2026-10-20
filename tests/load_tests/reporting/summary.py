@@ -25,11 +25,11 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.config import SEPARATOR_WIDTH
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SysSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources

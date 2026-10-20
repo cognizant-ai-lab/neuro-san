@@ -42,13 +42,13 @@ from neuro_san.message.processors.basic_message_processor import BasicMessagePro
 from neuro_san.test.driver.assert_capture import AssertCapture
 from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
 
-from tests.load_tests.config import FAILURE_LOG_LIMIT
-from tests.load_tests.config import FAILURE_REASON_LINE_LIMIT
-from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import THREAD_JOIN_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import FAILURE_LOG_LIMIT
+from tests.load_tests.load_test_constants import FAILURE_REASON_LINE_LIMIT
+from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import THREAD_JOIN_TIMEOUT_SECONDS
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor

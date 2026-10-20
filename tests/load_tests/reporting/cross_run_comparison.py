@@ -27,10 +27,10 @@ from typing import Set
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import SEPARATOR_WIDTH
-from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
