@@ -68,7 +68,6 @@ from tests.load_tests.load_test_constants import HISTORY_UNKNOWN_FILE_NAME
 from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.load_test_constants import THREAD_JOIN_TIMEOUT_SECONDS
 from tests.load_tests.confirm import Confirm
-from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -83,6 +82,7 @@ from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.latency_analyzer import COMPLETION_MILESTONES
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
+from tests.load_tests.reporting.stage_summary_builder import StageSummaryBuilder
 from tests.load_tests.reporting.summary import SummaryReporter
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter
@@ -101,67 +101,6 @@ logger = logging.getLogger(__name__)
 
 class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     """Orchestrates the full load test workflow."""
-
-    @staticmethod
-    def _token_sort_key(request_id) -> int:
-        """Extract numeric suffix from a request_id for sorting."""
-        match = re.search(r"(\d+)$", request_id)
-        return int(match.group(1)) if match else 0
-
-    @staticmethod
-    def _enrich_failure_reasons(results, validation_events):
-        """Append validation fix cycle info to failure reasons."""
-        if not validation_events:
-            return
-        by_request_id = {e.get("request_id"): e for e in validation_events}
-        result: Dict[str, Any]
-        # Add the fix cycles of each result's validation event to its failure reason.
-        for result in results:
-            request_id = result.get("request_id", "")
-            event = by_request_id.get(request_id)
-            if event is None:
-                continue
-            fix_cycles = event.get("fix_cycles", 0)
-            if fix_cycles <= 0:
-                continue
-            existing = result.get("failure_reason") or ""
-            suffix = f" ({fix_cycles} validation fix cycle(s))"
-            result["failure_reason"] = existing + suffix
-
-    @staticmethod
-    def _attach_token_data(results, token_data) -> None:
-        """Attach token accounting data to request results.
-
-        The server assigns its own request_id numbering (e.g. request-3,
-        request-4) which differs from the client's (request-1, request-2).
-        Match by order: sort server entries by request_id number, then
-        attach to client results in submission order.
-        """
-        if not token_data:
-            return
-
-        key_fn = LoadTestOrchestrator._token_sort_key
-        sorted_entries = sorted(token_data.values(), key=lambda e: key_fn(e.get("request_id", "")))
-        sorted_results = sorted(results, key=lambda r: key_fn(r.get("request_id", "")))
-
-        result: Dict[str, Any]
-        entry: Dict[str, Any]
-        # Copy each entry's token counts to the result in the same sorted place.
-        for result, entry in zip(sorted_results, sorted_entries):
-            result.update({
-                "total_tokens": entry.get("total_tokens"),
-                "prompt_tokens": entry.get("prompt_tokens"),
-                "completion_tokens": entry.get("completion_tokens"),
-                "llm_calls": entry.get("llm_calls"),
-                "model": entry.get("model"),
-                "reporting_agent": entry.get("reporting_agent"),
-                "server_request_id": entry.get("request_id"),
-                "cost_usd": CostEstimator.estimate(
-                    entry.get("prompt_tokens", 0),
-                    entry.get("completion_tokens", 0),
-                    entry.get("model", "unknown"),
-                ),
-            })
 
     def __init__(self, args) -> None:
         """Initialize the orchestrator with parsed arguments."""
@@ -410,7 +349,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if should_abort:
             sys_after = SystemResources.snapshot()
             after_system_memory_percent = sys_after["mem_pct"]
-            summary_entry = self._build_stage_summary(
+            summary_entry = StageSummaryBuilder.build_stage_summary(
                 stage_num=stage_num,
                 round_num=round_num,
                 actual_requests=actual_requests,
@@ -468,7 +407,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         sys_after = SystemResources.snapshot()
         after_system_memory_percent = sys_after["mem_pct"]
 
-        summary_entry = self._build_stage_summary(
+        summary_entry = StageSummaryBuilder.build_stage_summary(
             stage_num=stage_num,
             round_num=round_num,
             actual_requests=actual_requests,
@@ -624,104 +563,6 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         post_stage_data["after_server"] = after_server
         return post_stage_data
 
-    @staticmethod
-    # pylint: disable=too-many-arguments
-    def _build_stage_summary(
-            *,
-            stage_num: int,
-            round_num: int,
-            actual_requests: int,
-            counts: Dict[str, Any],
-            elapsed: float,
-            retries: Dict[str, int],
-            total_retries: int,
-            amplification: float,
-            results: List[Dict[str, Any]],
-            server_counts: Dict[str, Any],
-            disconnections: List[Dict[str, str]],
-            server_errors: List[Dict[str, str]],
-            tool_warnings: List[Dict[str, str]],
-            network_tokens: List[Dict[str, Any]],
-            validation_events: List[Dict[str, Any]],
-            has_server_log: bool,
-            has_tokens: bool,
-            monitor_resources: bool,
-            before_server: Optional[Dict[str, Any]],
-            after_server: Optional[Dict[str, Any]],
-            peak_threads: Optional[int],
-            peak_server_rss: Optional[float],
-            before_client: Optional[Dict[str, Any]] = None,
-            peak_client: Optional[Dict[str, Any]] = None,
-            settled_client: Optional[Dict[str, Any]] = None,
-            before_system_memory_percent: Optional[float] = None,
-            after_system_memory_percent: Optional[float] = None,
-            peak_system_memory: Optional[Dict[str, float]] = None,
-            peak_system_cpu_percent: Optional[float] = None,
-            before_sys: Optional[Dict[str, float]] = None,
-            after_sys: Optional[Dict[str, float]] = None,
-            peak_system_threads: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """Assemble the stage summary dict."""
-        summary_entry: Dict[str, Any] = {
-            "stage": stage_num,
-            "round": round_num,
-            "concurrent": actual_requests,
-            "counts": counts,
-            "elapsed": elapsed,
-            "retries": retries,
-            "total_retries": total_retries,
-            "amplification": amplification,
-            "results": results,
-            "primary_started": server_counts.get("primary_started"),
-            "primary_finished": server_counts.get("primary_finished"),
-            "total_started": server_counts.get("total_started"),
-            "total_finished": server_counts.get("total_finished"),
-            "disconnections": disconnections,
-            "server_errors": server_errors,
-            "tool_warnings": tool_warnings,
-            "network_tokens": network_tokens,
-            "validation_events": validation_events,
-            "has_server_log": has_server_log,
-            "has_tokens": has_tokens,
-        }
-        if monitor_resources:
-            if before_server:
-                summary_entry["before_threads"] = before_server.get("threads")
-                summary_entry["before_server_rss"] = before_server.get("rss")
-            if after_server:
-                summary_entry["after_threads"] = after_server.get("threads")
-                summary_entry["after_server_rss"] = after_server.get("rss")
-        if peak_threads is not None:
-            summary_entry["peak_threads"] = peak_threads
-        if peak_server_rss is not None:
-            summary_entry["peak_server_rss"] = peak_server_rss
-        if before_client:
-            summary_entry["before_client_rss"] = before_client.get("rss")
-        if settled_client:
-            summary_entry["after_client_rss"] = settled_client.get("rss")
-        if peak_client:
-            summary_entry["peak_client_rss"] = peak_client.get("rss")
-        if before_system_memory_percent is not None:
-            summary_entry["before_sys_mem_pct"] = before_system_memory_percent
-        if after_system_memory_percent is not None:
-            summary_entry["after_sys_mem_pct"] = after_system_memory_percent
-        if peak_system_memory is not None:
-            summary_entry["peak_sys_mem_pct"] = peak_system_memory.get("memory_percent")
-            summary_entry["peak_sys_mem_avail_gb"] = peak_system_memory.get("available_gigabytes")
-        if peak_system_cpu_percent is not None:
-            summary_entry["peak_sys_cpu"] = peak_system_cpu_percent
-        if before_sys:
-            summary_entry["before_sys_mem_avail_gb"] = before_sys.get("mem_avail_gb")
-            summary_entry["before_sys_cpu"] = before_sys.get("cpu_pct")
-            summary_entry["before_sys_threads"] = before_sys.get("threads")
-        if after_sys:
-            summary_entry["after_sys_mem_avail_gb"] = after_sys.get("mem_avail_gb")
-            summary_entry["after_sys_cpu"] = after_sys.get("cpu_pct")
-            summary_entry["after_sys_threads"] = after_sys.get("threads")
-        if peak_system_threads is not None:
-            summary_entry["peak_sys_threads"] = peak_system_threads
-        return summary_entry
-
     def _analyze_server_log(self, has_server_log, log_position, results, actual_requests) -> Dict[str, Any]:
         """
         Analyze the server log of a stage, or report that it is not available.
@@ -765,10 +606,10 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                     result["client_prompt_tokens"] = result.get("prompt_tokens", 0)
                     result["client_completion_tokens"] = result.get("completion_tokens", 0)
                     result["client_llm_calls"] = result.get("llm_calls", 0)
-            LoadTestOrchestrator._attach_token_data(stage_results, token_data)
+            StageSummaryBuilder.attach_token_data(stage_results, token_data)
             network_tokens = self.log_monitor.parse_per_network_tokens_since(log_position)
             validation_events = self.log_monitor.parse_validation_events_since(log_position)
-            LoadTestOrchestrator._enrich_failure_reasons(results, validation_events)
+            StageSummaryBuilder.enrich_failure_reasons(results, validation_events)
             if token_data:
                 logger.info("\n  Token usage (from server log):")
                 TokenLogWriter.log_token_summary(
