@@ -426,6 +426,8 @@ class ServerLogMonitor:
         :return: The errors, or the whole text as one error when no quoted error is found in a non-empty list
         """
         errors: List[str] = []
+        single_quoted: str
+        double_quoted: str
         # Each match fills only the group of the quote Python chose for that error.
         for single_quoted, double_quoted in VALIDATION_ERROR_ITEM_PATTERN.findall(error_list_text):
             errors.append(single_quoted or double_quoted)
