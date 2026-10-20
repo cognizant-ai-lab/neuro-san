@@ -41,6 +41,12 @@ class LatencyAnalyzer:
     round-over-round degradation and concurrency timeline, for diagnosing LLM bottlenecks.
     """
 
+    # Largest number of buckets in the concurrency chart.
+    MAXIMUM_CHART_BUCKETS: int = 20
+
+    # Width of the concurrency chart bars, in characters.
+    CHART_WIDTH_CHARACTERS: int = 40
+
     def __init__(self, stage_summaries: List[Dict[str, Any]]) -> None:
         """
         Constructor.
@@ -123,6 +129,8 @@ class LatencyAnalyzer:
         """
         Log actual in-flight request counts over time per stage.
         """
+        summary: Dict[str, Any]
+        # Log the concurrency timeline of each stage that has one.
         for summary in self._summaries:
             results: List[Dict[str, Any]] = summary.get("results", [])
             timeline: List[Tuple[float, int]] = self._build_timeline(results)
@@ -146,6 +154,8 @@ class LatencyAnalyzer:
 
         :param is_ramp: True to label each stage, False to label each round
         """
+        summary: Dict[str, Any]
+        # Log the completion percentiles of each stage that has latencies.
         for summary in self._summaries:
             latencies_seconds: List[float] = self._extract_latencies(summary)
             if not latencies_seconds:
@@ -162,6 +172,8 @@ class LatencyAnalyzer:
             else:
                 label = f"Round {round_number}"
             parts_list: List[str] = []
+            percentage: int
+            # One "p<N> <duration>" part per milestone percentage.
             for percentage in COMPLETION_MILESTONES:
                 percentile_seconds: float = self._percentile(latencies_seconds, percentage)
                 formatted_duration: str = Formatters.fmt_duration(percentile_seconds, precision=1)
@@ -184,6 +196,8 @@ class LatencyAnalyzer:
         if not milestones or milestones[-1] != total:
             milestones.append(total)
         logger.info("\n  Completion by count:")
+        count: int
+        # One log line per count milestone.
         for count in milestones:
             duration_seconds: float = sorted_latencies_seconds[count - 1]
             formatted_duration: str = Formatters.fmt_duration(duration_seconds, precision=1)
@@ -219,6 +233,8 @@ class LatencyAnalyzer:
         results: List[Dict[str, Any]] = summary.get("results", [])
         # Keep only the results that have an elapsed time.
         latencies_seconds: List[float] = []
+        result: Dict[str, Any]
+        # Collect the elapsed time of each request that has one.
         for result in results:
             elapsed_seconds: float = result.get("elapsed", 0)
             if elapsed_seconds > 0:
@@ -232,6 +248,8 @@ class LatencyAnalyzer:
         :return: Concurrency level to the stage summaries run at that level
         """
         groups: Dict[int, List[Dict[str, Any]]] = {}
+        stage_summary: Dict[str, Any]
+        # Group the stage summaries by concurrency.
         for stage_summary in self._summaries:
             concurrency: int = stage_summary.get("concurrent", 0)
             groups.setdefault(concurrency, []).append(stage_summary)
@@ -248,6 +266,8 @@ class LatencyAnalyzer:
         :return: (seconds since the first start, requests in flight) after each start and end
         """
         events: List[Tuple[float, int]] = []
+        result: Dict[str, Any]
+        # Add a start event (+1) and an end event (-1) for each timed request.
         for result in results:
             start_time_seconds: float = result.get("start_time", 0)
             end_time_seconds: float = result.get("end_time", 0)
@@ -260,6 +280,9 @@ class LatencyAnalyzer:
         base_time_seconds: float = events[0][0]
         timeline: List[Tuple[float, int]] = []
         in_flight_count: int = 0
+        timestamp_seconds: float
+        delta: int
+        # Apply each event to the running in-flight count.
         for timestamp_seconds, delta in events:
             in_flight_count += delta
             timeline.append((timestamp_seconds - base_time_seconds, in_flight_count))
@@ -273,11 +296,13 @@ class LatencyAnalyzer:
         :param timeline: Non-empty timeline from _build_timeline
         :return: The largest in-flight count
         """
-        # Each timeline event is (seconds since start, in-flight count). Keep the largest count seen so far.
+        # Each timeline event is (seconds since start, in-flight count).
         peak_in_flight_count: int = timeline[0][1]
-        for event in timeline:
-            if event[1] > peak_in_flight_count:
-                peak_in_flight_count = event[1]
+        unused_timestamp_seconds: float
+        in_flight_count: int
+        # Keep the largest count seen so far.
+        for unused_timestamp_seconds, in_flight_count in timeline:
+            peak_in_flight_count = max(peak_in_flight_count, in_flight_count)
         return peak_in_flight_count
 
     @staticmethod
@@ -293,13 +318,18 @@ class LatencyAnalyzer:
         total_duration_seconds: float = timeline[-1][0]
         if total_duration_seconds <= 0 or maximum_in_flight_count <= 0:
             return
-        bucket_count: int = min(20, int(total_duration_seconds) + 1)
+        bucket_count: int = min(LatencyAnalyzer.MAXIMUM_CHART_BUCKETS, int(total_duration_seconds) + 1)
         bucket_size_seconds: float = total_duration_seconds / bucket_count
-        bucket_peaks: List[int] = [0] * bucket_count
+        bucket_peaks: List[int] = []
+        index: int
+        # Start every bucket at 0.
+        for index in range(bucket_count):
+            bucket_peaks.append(0)
         # Carry forward the in-flight count so buckets
         # without events reflect the actual state.
         current_in_flight_count: int = 0
         event_index: int = 0
+        # Fill each bucket with the peak in-flight count during its time span.
         for index in range(bucket_count):
             bucket_end_seconds: float = (index + 1) * bucket_size_seconds
             bucket_peaks[index] = current_in_flight_count
@@ -307,12 +337,16 @@ class LatencyAnalyzer:
                 current_in_flight_count = timeline[event_index][1]
                 bucket_peaks[index] = max(bucket_peaks[index], current_in_flight_count)
                 event_index += 1
+        peak_in_flight_count: int
+        # One chart line per bucket.
         for index, peak_in_flight_count in enumerate(bucket_peaks):
             bucket_start_seconds: float = index * bucket_size_seconds
             bar_length_characters: int = 0
             if maximum_in_flight_count:
-                # Bar length scaled so the busiest bucket fills 40 characters; int() drops the fraction.
-                bar_length_characters = int(peak_in_flight_count * 40 / maximum_in_flight_count)
+                # Bar length scaled so the busiest bucket fills the chart width; int() drops the fraction.
+                bar_length_characters = int(peak_in_flight_count * LatencyAnalyzer.CHART_WIDTH_CHARACTERS
+                                            / maximum_in_flight_count)
             chart: str = "#" * bar_length_characters
             label: str = Formatters.fmt_duration(bucket_start_seconds)
-            logger.info("    %8s |%-40s| %d", label, chart, peak_in_flight_count)
+            # "%-*s" takes its width from the argument before the bar.
+            logger.info("    %8s |%-*s| %d", label, LatencyAnalyzer.CHART_WIDTH_CHARACTERS, chart, peak_in_flight_count)

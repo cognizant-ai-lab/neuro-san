@@ -31,6 +31,7 @@ from collections import Counter
 
 import psutil
 
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.reporting.formatters import Formatters
 
@@ -96,9 +97,9 @@ class SummaryFileWriter:
         request_count: int = self._args.num_requests
         round_count: int = self._args.num_rounds
         workers: int = self._args.max_workers
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
         lines.append("  LOAD TEST SUMMARY")
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
         lines.append(f"  Agent:       {agent}")
         lines.append(f"  Date:        {date_text} UTC")
         lines.append(f"  Requests:    {request_count} x {round_count} round(s) = {total_requests} total")
@@ -156,8 +157,10 @@ class SummaryFileWriter:
         """
         first_response_seconds: List[float] = []
         summary: Dict[str, Any]
+        # Collect the time to first response of every request.
         for summary in self._summaries:
             result: Dict[str, Any]
+            # Keep only the requests that got a first response.
             for result in summary.get("results", []):
                 time_to_first_response_seconds: float = result.get("time_to_first_response", 0)
                 if time_to_first_response_seconds > 0:
@@ -173,6 +176,8 @@ class SummaryFileWriter:
         start_rss_megabytes: Optional[float] = None
         end_rss_megabytes: Optional[float] = None
         peak_rss_megabytes: Optional[float] = None
+        summary: Dict[str, Any]
+        # Track the first, last and peak server RSS over the stages.
         for summary in self._summaries:
             before_rss_megabytes: Optional[float] = summary.get("before_server_rss")
             after_rss_megabytes: Optional[float] = summary.get("after_server_rss")
@@ -201,6 +206,8 @@ class SummaryFileWriter:
         start_rss_megabytes: Optional[float] = None
         end_rss_megabytes: Optional[float] = None
         peak_rss_megabytes: Optional[float] = None
+        summary: Dict[str, Any]
+        # Track the first, last and peak client RSS over the stages.
         for summary in self._summaries:
             before_rss_megabytes: Optional[float] = summary.get("before_client_rss")
             after_rss_megabytes: Optional[float] = summary.get("after_client_rss")
@@ -230,6 +237,8 @@ class SummaryFileWriter:
         end_memory_percentage: Optional[float] = None
         peak_memory_percentage: Optional[float] = None
         peak_available_gigabytes: Optional[float] = None
+        summary: Dict[str, Any]
+        # Track the first, last and peak system memory over the stages.
         for summary in self._summaries:
             before_memory_percentage: Optional[float] = summary.get("before_sys_mem_pct")
             after_memory_percentage: Optional[float] = summary.get("after_sys_mem_pct")
@@ -290,7 +299,8 @@ class SummaryFileWriter:
             # One "error (Nx)" part per top error.
             for error, count in top:
                 parts.append(f"{error} ({count}x)")
-            lines.append(f"    {len(all_errors)} errors found: {', '.join(parts)}")
+            top_errors_text: str = ", ".join(parts)
+            lines.append(f"    {len(all_errors)} errors found: {top_errors_text}")
 
     def _write_validation_time_impact(self, lines: List[str], events: List[Dict[str, Any]]) -> None:
         """
@@ -310,6 +320,7 @@ class SummaryFileWriter:
         result: Dict[str, Any]
         # Split the request durations into requests with and without fixes.
         for summary in self._summaries:
+            # One duration per request of the stage.
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")
                 elapsed_seconds: float = result.get("elapsed", 0)
@@ -334,15 +345,19 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         """
         all_results: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Gather the results of every stage.
         for summary in self._summaries:
             all_results.extend(summary.get("results", []))
         if not all_results:
             return
 
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
         lines.append("  REQUEST RESULTS")
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
 
+        result: Dict[str, Any]
+        # One line per request result.
         for result in all_results:
             self._format_result_line(lines, result)
 
@@ -399,7 +414,11 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         """
         all_latencies_seconds: List[float] = []
+        summary: Dict[str, Any]
+        # Collect the elapsed time of every request.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # One latency per request of the stage.
             for result in summary.get("results", []):
                 all_latencies_seconds.append(result.get("elapsed", 0))
         if not all_latencies_seconds:
@@ -408,11 +427,13 @@ class SummaryFileWriter:
         all_latencies_seconds.sort()
         total: int = len(all_latencies_seconds)
         milestones: List[int] = [50, 60, 70, 80, 90, 95, 100]
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
         lines.append("  COMPLETION TIMELINE")
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
 
         previous_count: int = -1
+        percentage: int
+        # One line per percentage milestone, skipping repeated counts.
         for percentage in milestones:
             index: int = min(int(total * percentage / 100 + 0.999999) - 1, total - 1)
             count: int = index + 1
@@ -444,6 +465,8 @@ class SummaryFileWriter:
             milestones.append(total)
         lines.append("")
         lines.append("  Completion by count:")
+        count: int
+        # One line per count milestone.
         for count in milestones:
             duration_seconds: float = sorted_latencies_seconds[count - 1]
             lines.append(f"  {count:5d} requests completed by {Formatters.fmt_duration(duration_seconds, precision=1)}")
@@ -465,9 +488,9 @@ class SummaryFileWriter:
             server_request_id: str = entry.get("request_id", "")
             by_server_id.setdefault(server_request_id, []).append(entry)
 
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
         lines.append("  SERVER TIMING BREAKDOWN")
-        lines.append("=" * 60)
+        lines.append("=" * SEPARATOR_WIDTH)
 
         server_request_id: str
         # One timing block per server request, in id order.
@@ -499,12 +522,18 @@ class SummaryFileWriter:
         :return: id, start and end of each result that has both times
         """
         results: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Collect the start and end time of every timed request.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # Keep the requests that have an id and both times.
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")
                 start_time_seconds: float = result.get("start_time", 0)
                 end_time_seconds: float = result.get("end_time", 0)
-                if request_id and start_time_seconds and end_time_seconds:
+                if (request_id
+                        and start_time_seconds
+                        and end_time_seconds):
                     results.append({"id": request_id, "start": start_time_seconds, "end": end_time_seconds})
         return results
 
@@ -517,6 +546,8 @@ class SummaryFileWriter:
         :param client_results: Client times from _collect_client_times
         :return: The matching client entry, or {} when none matches
         """
+        client: Dict[str, Any]
+        # Return the first client request whose time span holds the server start time.
         for client in client_results:
             if client.get("start", 0) <= server_start_seconds <= client.get("end", 0):
                 return client
@@ -592,6 +623,8 @@ class SummaryFileWriter:
         :return: Network name or reservation id, then failure reason; empty when neither is set
         """
         parts: List[str] = []
+        key: str
+        # Use the first detail field that has a value.
         for key in ("agent_network_name", "reservation_id"):
             value: Optional[str] = result.get(key, "")
             if value:
