@@ -48,7 +48,7 @@ from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import THREAD_JOIN_TIMEOUT
+from tests.load_tests.config import THREAD_JOIN_TIMEOUT_SECONDS
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -412,7 +412,7 @@ class TrafficRunner:
         finally:
             heartbeat_kwargs.get("stop_event").set()
             if heartbeat_thread is not None:
-                heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
+                heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT_SECONDS)
             pool.shutdown(wait=not interrupted, cancel_futures=True)
         total_time_seconds: float = time.perf_counter() - start_seconds
         # The heartbeat thread was joined above, so its peaks are final.

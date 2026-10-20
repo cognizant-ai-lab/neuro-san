@@ -49,7 +49,7 @@ from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import LEVEL_MIN
 from tests.load_tests.config import LOCAL_HOSTS
 from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
+from tests.load_tests.config import SOCKET_CHECK_TIMEOUT_SECONDS
 from tests.load_tests.config import STALE_LOG_THRESHOLD_SECONDS
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -60,7 +60,7 @@ from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import HISTORY_FILE_NAME
 from tests.load_tests.config import HISTORY_UNKNOWN_FILE_NAME
 from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
-from tests.load_tests.config import THREAD_JOIN_TIMEOUT
+from tests.load_tests.config import THREAD_JOIN_TIMEOUT_SECONDS
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.load_test_arguments import LoadTestArguments
@@ -347,9 +347,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_threads: Optional[int] = stage_run.get("peak_server_threads")
         peak_client_rss: Optional[float] = stage_run.get("peak_client_rss_megabytes")
         peak_server_rss: Optional[float] = stage_run.get("peak_server_rss_megabytes")
-        peak_sys_mem_pct: Optional[Dict[str, float]] = stage_run.get("peak_system_memory")
-        peak_sys_cpu: Optional[float] = stage_run.get("peak_system_cpu_percent")
-        peak_sys_threads: Optional[int] = stage_run.get("peak_system_threads")
+        peak_system_memory: Optional[Dict[str, float]] = stage_run.get("peak_system_memory")
+        peak_system_cpu_percent: Optional[float] = stage_run.get("peak_system_cpu_percent")
+        peak_system_threads: Optional[int] = stage_run.get("peak_system_threads")
         server_died: bool = stage_run.get("server_died")
         interrupted: bool = stage_run.get("interrupted")
         if interrupted:
@@ -361,7 +361,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         stop_event.set()
         if monitor:
-            monitor.join(timeout=THREAD_JOIN_TIMEOUT)
+            monitor.join(timeout=THREAD_JOIN_TIMEOUT_SECONDS)
 
         peak_client = None
         settled_client = None
@@ -382,8 +382,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         OutputValidator.log_stage_results(
             actual_requests, counts, elapsed,
-            timeout=self.args.request_timeout,
-            idle_timeout=self.args.idle_timeout,
+            timeout_seconds=self.args.request_timeout,
+            idle_timeout_seconds=self.args.idle_timeout,
             show_counts=not only_stage,
         )
         should_abort = server_died or interrupted
@@ -422,11 +422,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 settled_client=settled_client,
                 before_sys_mem_pct=before_sys_mem_pct,
                 after_sys_mem_pct=after_sys_mem_pct,
-                peak_sys_mem_pct=peak_sys_mem_pct,
-                peak_sys_cpu=peak_sys_cpu,
+                peak_system_memory=peak_system_memory,
+                peak_system_cpu_percent=peak_system_cpu_percent,
                 before_sys=sys_before,
                 after_sys=sys_after,
-                peak_sys_threads=peak_sys_threads,
+                peak_system_threads=peak_system_threads,
             )
             stage_result: Dict[str, Any] = {
                 "summary": summary_entry,
@@ -480,11 +480,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             settled_client=settled_client,
             before_sys_mem_pct=before_sys_mem_pct,
             after_sys_mem_pct=after_sys_mem_pct,
-            peak_sys_mem_pct=peak_sys_mem_pct,
-            peak_sys_cpu=peak_sys_cpu,
+            peak_system_memory=peak_system_memory,
+            peak_system_cpu_percent=peak_system_cpu_percent,
             before_sys=sys_before,
             after_sys=sys_after,
-            peak_sys_threads=peak_sys_threads,
+            peak_system_threads=peak_system_threads,
         )
         stage_result: Dict[str, Any] = {
             "summary": summary_entry,
@@ -625,11 +625,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             settled_client=None,
             before_sys_mem_pct=None,
             after_sys_mem_pct=None,
-            peak_sys_mem_pct=None,
-            peak_sys_cpu=None,
+            peak_system_memory=None,
+            peak_system_cpu_percent=None,
             before_sys=None,
             after_sys=None,
-            peak_sys_threads=None,
+            peak_system_threads=None,
     ) -> Dict[str, Any]:
         """Assemble the stage summary dict."""
         summary_entry: Dict[str, Any] = {
@@ -675,11 +675,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_entry["before_sys_mem_pct"] = before_sys_mem_pct
         if after_sys_mem_pct is not None:
             summary_entry["after_sys_mem_pct"] = after_sys_mem_pct
-        if peak_sys_mem_pct is not None:
-            summary_entry["peak_sys_mem_pct"] = peak_sys_mem_pct.get("memory_percent")
-            summary_entry["peak_sys_mem_avail_gb"] = peak_sys_mem_pct.get("available_gigabytes")
-        if peak_sys_cpu is not None:
-            summary_entry["peak_sys_cpu"] = peak_sys_cpu
+        if peak_system_memory is not None:
+            summary_entry["peak_sys_mem_pct"] = peak_system_memory.get("memory_percent")
+            summary_entry["peak_sys_mem_avail_gb"] = peak_system_memory.get("available_gigabytes")
+        if peak_system_cpu_percent is not None:
+            summary_entry["peak_sys_cpu"] = peak_system_cpu_percent
         if before_sys:
             summary_entry["before_sys_mem_avail_gb"] = before_sys.get("mem_avail_gb")
             summary_entry["before_sys_cpu"] = before_sys.get("cpu_pct")
@@ -688,8 +688,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_entry["after_sys_mem_avail_gb"] = after_sys.get("mem_avail_gb")
             summary_entry["after_sys_cpu"] = after_sys.get("cpu_pct")
             summary_entry["after_sys_threads"] = after_sys.get("threads")
-        if peak_sys_threads is not None:
-            summary_entry["peak_sys_threads"] = peak_sys_threads
+        if peak_system_threads is not None:
+            summary_entry["peak_sys_threads"] = peak_system_threads
         return summary_entry
 
     def _analyze_server_log(self, has_server_log, log_pos, results, actual_requests) -> Dict[str, Any]:
@@ -836,7 +836,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         scheme = "https" if getattr(self.args, "https", False) else "http"
         url = f"{scheme}://{self.args.host}:{self.args.port}/healthz"
         try:
-            with urllib.request.urlopen(url, timeout=SOCKET_CHECK_TIMEOUT) as response:
+            with urllib.request.urlopen(url, timeout=SOCKET_CHECK_TIMEOUT_SECONDS) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             return payload.get("versions", {}).get("neuro-san")
         except (urllib.error.URLError, OSError, ValueError) as exc:
@@ -1080,7 +1080,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, received, expected, completed,
             elapsed_seconds, now, server_snapshot, virtual_memory_stats,
             duration_stats="n/a",
-            current_system_cpu=None, peak_sys_cpu=None,
+            current_system_cpu=None, peak_system_cpu_percent=None,
     ) -> None:
         """Log a periodic heartbeat during server-only monitoring."""
         used_bytes = virtual_memory_stats.total - virtual_memory_stats.available
@@ -1100,7 +1100,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             progress_text = f" {received}/{expected} recv  {completed} done  {in_flight} in-flight"
         system_cpu_text = ""
         if current_system_cpu is not None:
-            peak_system_cpu = peak_sys_cpu if peak_sys_cpu is not None else current_system_cpu
+            peak_system_cpu = peak_system_cpu_percent if peak_system_cpu_percent is not None else current_system_cpu
             system_cpu_text = f"  syscpu: {current_system_cpu:.0f}% (peak {peak_system_cpu:.0f}%)"
         logger.info(
             "  [heartbeat] %s [%s]%s  dur/server: %s%s%s"
@@ -1246,12 +1246,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         completed: int = tail_result.get("completed")
         peak_server: Optional[Dict[str, Any]] = tail_result.get("peak_server")
         peak_threads: int = tail_result.get("peak_threads")
-        peak_sys_mem_pct: float = tail_result.get("peak_sys_mem_pct")
+        peak_system_memory_percent: float = tail_result.get("peak_sys_mem_pct")
         elapsed_seconds: float = tail_result.get("elapsed_seconds")
         interrupted: bool = tail_result.get("interrupted")
-        peak_sys_cpu: float = tail_result.get("peak_sys_cpu")
+        peak_system_cpu_percent: float = tail_result.get("peak_sys_cpu")
         avg_sys_cpu: float = tail_result.get("avg_sys_cpu")
-        peak_sys_threads: int = tail_result.get("peak_sys_threads")
+        peak_system_threads: int = tail_result.get("peak_sys_threads")
 
         logger.info(
             "\n  Monitoring complete: %d/%d received,"
@@ -1267,14 +1267,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         after_available_gigabytes = after_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         after_sys_cpu = psutil.cpu_percent(interval=0.1)
         after_sys_threads = SystemResources.total_threads()
-        peak_available_gigabytes = total_gigabytes - peak_sys_mem_pct / 100.0 * total_gigabytes
+        peak_available_gigabytes = total_gigabytes - peak_system_memory_percent / 100.0 * total_gigabytes
         SystemResources.log_section(
             sys_before,
             {
-                "mem_pct": peak_sys_mem_pct,
+                "mem_pct": peak_system_memory_percent,
                 "mem_avail_gb": peak_available_gigabytes,
-                "cpu_pct": peak_sys_cpu,
-                "threads": peak_sys_threads,
+                "cpu_pct": peak_system_cpu_percent,
+                "threads": peak_system_threads,
             },
             {
                 "mem_pct": after_memory_stats.percent,
@@ -1305,17 +1305,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             round_dir, expected, count, elapsed_seconds,
             before_server, after_server, peak_server,
             peak_threads,
-            before_sys_mem_pct, peak_sys_mem_pct,
+            before_sys_mem_pct, peak_system_memory_percent,
             after_memory_stats.percent, interrupted,
             kernel_breakdown,
             avg_sys_cpu=avg_sys_cpu,
-            peak_sys_cpu=peak_sys_cpu,
+            peak_system_cpu_percent=peak_system_cpu_percent,
             server_errors=server_errors,
             tool_warnings=tool_warnings,
         )
 
         self._append_server_history_record(
-            expected, count, elapsed_seconds, peak_server, peak_sys_cpu,
+            expected, count, elapsed_seconds, peak_server, peak_system_cpu_percent,
             primary_pairs,
             server_errors=server_errors,
             tool_warnings=tool_warnings,
@@ -1371,9 +1371,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
         peak_server = before_server
         peak_threads = 0
-        peak_sys_mem_pct = before_sys_mem_pct
-        peak_sys_cpu = 0.0
-        peak_sys_threads = 0
+        peak_system_memory_percent: float = before_sys_mem_pct
+        peak_system_cpu_percent: float = 0.0
+        peak_system_threads: int = 0
         system_cpu_sum = 0.0
         system_cpu_samples = 0
         interrupted = False
@@ -1472,12 +1472,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             current_threads = server_snapshot.get("threads", 0)
                             peak_threads = max(peak_threads, current_threads)
                         virtual_memory_stats = psutil.virtual_memory()
-                        peak_sys_mem_pct = max(peak_sys_mem_pct, virtual_memory_stats.percent)
+                        peak_system_memory_percent = max(peak_system_memory_percent, virtual_memory_stats.percent)
                         current_system_cpu = psutil.cpu_percent(interval=None)
                         system_cpu_sum += current_system_cpu
                         system_cpu_samples += 1
-                        peak_sys_cpu = max(peak_sys_cpu, current_system_cpu)
-                        peak_sys_threads = max(peak_sys_threads, SystemResources.total_threads())
+                        peak_system_cpu_percent = max(peak_system_cpu_percent, current_system_cpu)
+                        peak_system_threads = max(peak_system_threads, SystemResources.total_threads())
                         last_monitor = now
 
                         if now - last_heartbeat >= heartbeat_interval:
@@ -1488,7 +1488,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                 elapsed_seconds, now,
                                 server_snapshot, virtual_memory_stats,
                                 duration_stats,
-                                current_system_cpu, peak_sys_cpu,
+                                current_system_cpu, peak_system_cpu_percent,
                             )
                             last_heartbeat = now
 
@@ -1527,12 +1527,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "completed": completed,
             "peak_server": peak_server,
             "peak_threads": peak_threads,
-            "peak_sys_mem_pct": peak_sys_mem_pct,
+            "peak_sys_mem_pct": peak_system_memory_percent,
             "elapsed_seconds": elapsed_seconds,
             "interrupted": interrupted,
-            "peak_sys_cpu": peak_sys_cpu,
+            "peak_sys_cpu": peak_system_cpu_percent,
             "avg_sys_cpu": avg_sys_cpu,
-            "peak_sys_threads": peak_sys_threads,
+            "peak_sys_threads": peak_system_threads,
         }
         return tail_result
 
@@ -1541,10 +1541,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, round_dir, expected, count,
             elapsed, before_server, after_server,
             peak_server, peak_threads,
-            before_sys_pct, peak_sys_pct,
+            before_sys_pct, peak_system_memory_percent,
             after_sys_pct, interrupted,
             kernel_breakdown=None,
-            avg_sys_cpu=None, peak_sys_cpu=None,
+            avg_sys_cpu=None, peak_system_cpu_percent=None,
             server_errors=None, tool_warnings=None,
     ) -> None:
         """Write raw_results.json for a server-only round."""
@@ -1581,12 +1581,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             },
             "system_memory": {
                 "before_pct": before_sys_pct,
-                "peak_pct": peak_sys_pct,
+                "peak_pct": peak_system_memory_percent,
                 "after_pct": after_sys_pct,
             },
             "system_cpu": {
                 "avg_pct": avg_sys_cpu,
-                "peak_pct": peak_sys_cpu,
+                "peak_pct": peak_system_cpu_percent,
                 "server_cpu_seconds_total": server_cpu_seconds,
                 "server_cpu_seconds_per_request": (
                     server_cpu_seconds / count
@@ -1746,7 +1746,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._apply_scale(self.args)
         self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
-        stale_log_age = self._validate_server_log()
+        stale_log_age_minutes: Optional[int] = self._validate_server_log()
 
         stages = self.input_validator.resolve_stages()
         total_cap = self.input_validator.resolve_max_requests(stages)
@@ -1759,7 +1759,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     stages, total_cap,
                     runner=self.runner,
                     output_dir=self._output_dir,
-                    stale_log_age=stale_log_age,
+                    stale_log_age_minutes=stale_log_age_minutes,
                 )
             )
 
@@ -2039,7 +2039,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _append_server_history_record(
             self, expected, received, elapsed,
-            peak_server, peak_sys_cpu, primary_pairs=None,
+            peak_server, peak_system_cpu_percent, primary_pairs=None,
             server_errors=None, tool_warnings=None,
     ) -> None:
         """Append one server-only trend record for plotting later.
@@ -2071,7 +2071,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "expected_requests": expected,
             "received_requests": received,
             "peak_cpu_cores": round(
-                (peak_sys_cpu or 0.0) / 100
+                (peak_system_cpu_percent or 0.0) / 100
                 * (psutil.cpu_count() or 1), 2,
             ),
             "peak_memory_gb": (

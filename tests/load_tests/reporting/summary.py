@@ -232,18 +232,18 @@ class SummaryReporter:
         if first_response_stats is not None:
             logger.info(
                 "  Time to first response: %s min / %s avg / %s max",
-                Formatters.fmt_duration(first_response_stats.get("min", 0)),
-                Formatters.fmt_duration(first_response_stats.get("avg", 0)),
-                Formatters.fmt_duration(first_response_stats.get("max", 0)),
+                Formatters.fmt_duration(first_response_stats.get("min_seconds", 0)),
+                Formatters.fmt_duration(first_response_stats.get("avg_seconds", 0)),
+                Formatters.fmt_duration(first_response_stats.get("max_seconds", 0)),
             )
 
         request_duration_stats: Optional[Dict[str, float]] = self._request_duration_stats()
         if request_duration_stats is not None:
             logger.info(
                 "  Request duration: %s min / %s avg / %s max",
-                Formatters.fmt_duration(request_duration_stats.get("min", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("avg", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("max", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("min_seconds", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("avg_seconds", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("max_seconds", 0)),
             )
 
         self._log_validation_summary()
@@ -424,7 +424,7 @@ class SummaryReporter:
         """
         Compute min/avg/max elapsed time across requests.
 
-        :return: min, avg and max elapsed seconds; None when there are no results
+        :return: "min_seconds", "avg_seconds" and "max_seconds" of the elapsed time; None when there are no results
         """
         durations_seconds: List[float] = []
         for summary in self._summaries:
@@ -433,9 +433,9 @@ class SummaryReporter:
         if not durations_seconds:
             return None
         return {
-            "min": min(durations_seconds),
-            "avg": sum(durations_seconds) / len(durations_seconds),
-            "max": max(durations_seconds),
+            "min_seconds": min(durations_seconds),
+            "avg_seconds": sum(durations_seconds) / len(durations_seconds),
+            "max_seconds": max(durations_seconds),
         }
 
     def _log_model_distribution(self) -> None:
@@ -459,11 +459,11 @@ class SummaryReporter:
                 model: Optional[str] = result.get("model")
                 if all_models:
                     for model_name in all_models:
-                        model_counts[model_name] += 1
+                        model_counts[model_name] = model_counts.get(model_name, 0) + 1
                     if len(all_models) > 1:
                         fallback_requests += 1
                 elif model and model != "unknown":
-                    model_counts[model] += 1
+                    model_counts[model] = model_counts.get(model, 0) + 1
         if not model_counts:
             return
         model_parts: List[str] = []
@@ -479,7 +479,7 @@ class SummaryReporter:
         """
         Compute min/avg/max time-to-first-response.
 
-        :return: Dictionary with "min", "avg" and "max" in seconds over the
+        :return: Dictionary with "min_seconds", "avg_seconds" and "max_seconds" over the
                  requests that received a first response; None when none did
         """
         first_response_seconds: List[float] = []
@@ -493,9 +493,9 @@ class SummaryReporter:
         if not first_response_seconds:
             return None
         return {
-            "min": min(first_response_seconds),
-            "avg": sum(first_response_seconds) / len(first_response_seconds),
-            "max": max(first_response_seconds),
+            "min_seconds": min(first_response_seconds),
+            "avg_seconds": sum(first_response_seconds) / len(first_response_seconds),
+            "max_seconds": max(first_response_seconds),
         }
 
     def _log_validation_summary(self) -> None:

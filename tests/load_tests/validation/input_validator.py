@@ -190,7 +190,8 @@ Then use:
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def confirm_cost(self, stages: List[int], total_cap_requests: int, runner: TrafficRunner,
-                     output_dir: Optional[str] = None, stale_log_age: Optional[int] = None) -> Optional[Dict[str, Any]]:
+                     output_dir: Optional[str] = None,
+                     stale_log_age_minutes: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
@@ -207,7 +208,7 @@ Then use:
         :param total_cap_requests: Most requests to send, from resolve_max_requests
         :param runner: Traffic runner used to fire the probe request
         :param output_dir: Directory for the probe's output files, or None
-        :param stale_log_age: Minutes since the server log was last modified when it looks stale, or None
+        :param stale_log_age_minutes: Minutes since the server log was last modified when it looks stale, or None
         :return: The probe result, or None when no probe was run
         """
         total_planned_requests: int = sum(stages) * self._args.num_rounds
@@ -219,7 +220,7 @@ Then use:
         if self._args.no_dry_run or self._args.level == LEVEL_ADV:
             warnings = self._collect_warnings(capped_requests=capped_requests,
                                               total_planned_requests=total_planned_requests,
-                                              stale_log_age_minutes=stale_log_age)
+                                              stale_log_age_minutes=stale_log_age_minutes)
             self._print_warnings(warnings)
             logger.info("=" * SEPARATOR_WIDTH)
             return None
@@ -229,22 +230,23 @@ Then use:
         probe_result, probe_measurements = self._run_cost_probe(runner, output_dir)
 
         remaining_requests: int = max(capped_requests - 1, 0)
-        estimated_stage_duration_seconds: float = self._estimate_stage_duration(probe_measurements.get("elapsed", 0),
+        probe_elapsed_seconds: float = probe_measurements.get("elapsed_seconds", 0)
+        estimated_stage_duration_seconds: float = self._estimate_stage_duration(probe_elapsed_seconds,
                                                                                 remaining_requests)
         logger.info(
             "  Estimated stage duration: ~%ss (%.1fs x %s requests)",
             int(estimated_stage_duration_seconds),
-            probe_measurements.get("elapsed", 0),
+            probe_elapsed_seconds,
             remaining_requests,
         )
 
         warnings = self._collect_warnings(
             capped_requests=capped_requests,
             total_planned_requests=total_planned_requests,
-            stale_log_age_minutes=stale_log_age,
+            stale_log_age_minutes=stale_log_age_minutes,
             estimated_stage_duration_seconds=estimated_stage_duration_seconds,
             probe_tokens=probe_measurements.get("tokens", 0),
-            probe_cost_dollars=probe_measurements.get("cost", 0.0),
+            probe_cost_dollars=probe_measurements.get("cost_dollars", 0.0),
             probe_model=probe_measurements.get("model", "unknown"),
         )
         self._print_warnings(warnings)
@@ -464,7 +466,8 @@ server log to fall back on:
 
         :param runner: Traffic runner used to fire the probe request
         :param output_dir: Directory for the probe's output files, or None
-        :return: (probe_result, probe_measurements), where probe_measurements holds tokens, cost, model and elapsed
+        :return: (probe_result, probe_measurements), where probe_measurements holds tokens, cost_dollars, model and
+            elapsed_seconds
         """
         logger.info("\n  Running 1 dry-run probe to measure actual cost...")
 
@@ -486,8 +489,8 @@ server log to fall back on:
 
         probe_measurements: Dict[str, Any] = {
             "tokens": probe_tokens,
-            "cost": probe_cost_dollars,
+            "cost_dollars": probe_cost_dollars,
             "model": probe_model,
-            "elapsed": probe_elapsed_seconds,
+            "elapsed_seconds": probe_elapsed_seconds,
         }
         return probe_result, probe_measurements
