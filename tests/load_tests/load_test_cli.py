@@ -2016,11 +2016,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         tracked over time.  Best-effort: any write failure is logged
         and swallowed so it never fails the test.
         """
-        results = []
+        results: List[Dict[str, Any]] = []
+        server_errors: List[Dict[str, str]] = []
+        tool_warnings: List[Dict[str, str]] = []
         summary: Dict[str, Any]
-        # Collect the results of every stage.
+        # Collect the results, server errors and tool warnings of every stage.
         for summary in stage_summaries:
-            results.extend(summary.get("results", []))
+            stage_results: List[Dict[str, Any]] = summary.get("results", [])
+            results.extend(stage_results)
+            stage_server_errors: List[Dict[str, str]] = summary.get("server_errors", [])
+            server_errors.extend(stage_server_errors)
+            stage_tool_warnings: List[Dict[str, str]] = summary.get("tool_warnings", [])
+            tool_warnings.extend(stage_tool_warnings)
         if not results:
             return
 
@@ -2037,12 +2044,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_first_response: float = 0.0
         if first_responses:
             avg_first_response = round(sum(first_responses) / len(first_responses), 2)
-        server_errors: List[Dict[str, str]] = []
-        tool_warnings: List[Dict[str, str]] = []
-        # Collect the server errors and tool warnings of every stage.
-        for summary in stage_summaries:
-            server_errors.extend(summary.get("server_errors", []))
-            tool_warnings.extend(summary.get("tool_warnings", []))
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": self._server_ns_version or "unknown",
@@ -2195,11 +2196,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     def _export_raw_json(self, stage_summaries, *, exit_code) -> None:
         """Save all test data as a single raw_results.json file."""
-        all_results = []
-        s: Dict[str, Any]
-        # Collect the results of every stage.
-        for s in stage_summaries:
-            all_results.extend(s.get("results", []))
+        all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
 
         total_tokens = sum(r.get("total_tokens", 0) for r in all_results)
         total_cost = sum(r.get("cost_usd", 0.0) for r in all_results)
@@ -2302,11 +2299,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     def _check_results(self, stage_summaries) -> int:
         """Log pass/fail verdict and return appropriate exit code."""
-        all_results = []
-        s: Dict[str, Any]
-        # Collect the results of every stage.
-        for s in stage_summaries:
-            all_results.extend(s.get("results", []))
+        all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
         total = len(all_results)
         passed = sum(1 for r in all_results if r.get("status") == STATUS_CREATED)
         failed = total - passed
@@ -2317,6 +2310,22 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         logger.info("\nLOAD TEST PASSED: all %s requests completed successfully", total)
         return 0
+
+    @staticmethod
+    def _collect_stage_results(stage_summaries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Collect the request results of every stage into one list.
+
+        :param stage_summaries: The summary dict of each stage, each with a "results" list
+        :return: The results of all stages, in stage order
+        """
+        all_results: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Collect the results of every stage.
+        for summary in stage_summaries:
+            stage_results: List[Dict[str, Any]] = summary.get("results", [])
+            all_results.extend(stage_results)
+        return all_results
 
     @staticmethod
     def _get_package_version(package_name) -> Optional[str]:
