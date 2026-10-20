@@ -29,6 +29,7 @@ from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
@@ -422,13 +423,14 @@ server log to fall back on:
         :return: Warning text, or None when available memory looks sufficient
         """
         virtual_memory_stats: Any = psutil.virtual_memory()
-        available_gigabytes: float = virtual_memory_stats.available / (1024 ** 3)
+        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         per_request_megabytes: int = 2
         needed_gigabytes: float = (num_requests * per_request_megabytes) / 1024
         if needed_gigabytes > available_gigabytes * 0.8:
+            total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:
      Estimated need: ~{needed_gigabytes:.1f}G ({num_requests} x ~{per_request_megabytes}MB per request)
-     Available: {available_gigabytes:.1f}G / {virtual_memory_stats.total / (1024 ** 3):.1f}G total
+     Available: {available_gigabytes:.1f}G / {total_gigabytes:.1f}G total
      Consider fewer concurrent workers or a larger instance"""
             return memory_warning
         return None

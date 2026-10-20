@@ -99,9 +99,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     """Orchestrates the full load test workflow."""
 
     @staticmethod
-    def _token_sort_key(rid) -> int:
+    def _token_sort_key(request_id) -> int:
         """Extract numeric suffix from a request_id for sorting."""
-        match = re.search(r"(\d+)$", rid)
+        match = re.search(r"(\d+)$", request_id)
         return int(match.group(1)) if match else 0
 
     @staticmethod
@@ -109,10 +109,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Append validation fix cycle info to failure reasons."""
         if not validation_events:
             return
-        by_rid = {e.get("request_id"): e for e in validation_events}
+        by_request_id = {e.get("request_id"): e for e in validation_events}
         for result in results:
-            rid = result.get("request_id", "")
-            event = by_rid.get(rid)
+            request_id = result.get("request_id", "")
+            event = by_request_id.get(request_id)
             if event is None:
                 continue
             fix_cycles = event.get("fix_cycles", 0)
@@ -309,7 +309,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if actual_requests < num_concurrent:
             logger.info("  (Capped from %s to %s by --max-requests)", num_concurrent, actual_requests)
 
-        log_pos = self.log_monitor.read_position() if has_server_log else None
+        log_position = self.log_monitor.read_position() if has_server_log else None
 
         client_process: Optional[psutil.Process] = None
         before_server: Optional[Dict[str, Any]] = None
@@ -323,7 +323,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._log_fire_info(actual_requests, monitor_resources, probe_result=probe_result)
 
         # If a dry-run probe ran, inject it into stage 1.  The probe
-        # fired before log_pos was captured, so only stage_requests of
+        # fired before log_position was captured, so only stage_requests of
         # them appear in the server log from here on.
         stage_requests = actual_requests
         probe_used = probe_result is not None
@@ -334,7 +334,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         monitor: Optional[threading.Thread] = None
         if has_server_log:
             monitor = self.log_monitor.start_log_monitor(
-                log_pos, stage_requests, time.perf_counter(), stop_event, client_process=client_process,
+                log_position, stage_requests, time.perf_counter(), stop_event, client_process=client_process,
                 primary_start_pattern=self.profile.get_primary_start_pattern(), output_dir=self._output_dir)
 
         sys_before = SystemResources.snapshot()
@@ -378,7 +378,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         total_retries = 0
         amplification = 1.0
         if has_server_log:
-            retries = self.log_monitor.count_retries_since(log_pos)
+            retries = self.log_monitor.count_retries_since(log_position)
             total_retries = sum(retries.values())
             amplification = Formatters.compute_amplification(stage_requests, total_retries)
 
@@ -443,7 +443,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         post_stage_data: Dict[str, Any] = self._collect_post_stage_data(
             actual_requests, monitor_resources,
             has_server_log,
-            log_pos, results,
+            log_position, results,
             before_server=before_server,
             before_client=before_client,
             peak_client=peak_client,
@@ -562,7 +562,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _collect_post_stage_data(
             self, actual_requests, monitor_resources,
             has_server_log,
-            log_pos, results, *,
+            log_position, results, *,
             before_server, before_client,
             peak_client, settled_client,
             server_log_requests=None,
@@ -573,7 +573,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         :param actual_requests: Number of requests sent in this stage
         :param monitor_resources: True to take the server snapshot after the stage
         :param has_server_log: True when the server log can be read
-        :param log_pos: Server log offset where the stage started, or None
+        :param log_position: Server log offset where the stage started, or None
         :param results: Request results of the stage
         :param before_server: Server snapshot before the stage, or None
         :param before_client: Client snapshot before the stage, or None
@@ -598,7 +598,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         log_requests: int = actual_requests
         if server_log_requests is not None:
             log_requests = server_log_requests
-        post_stage_data: Dict[str, Any] = self._analyze_server_log(has_server_log, log_pos, results=results,
+        post_stage_data: Dict[str, Any] = self._analyze_server_log(has_server_log, log_position, results=results,
                                                                    actual_requests=log_requests)
 
         if before_server and after_server:
@@ -708,12 +708,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_entry["peak_sys_threads"] = peak_system_threads
         return summary_entry
 
-    def _analyze_server_log(self, has_server_log, log_pos, results, actual_requests) -> Dict[str, Any]:
+    def _analyze_server_log(self, has_server_log, log_position, results, actual_requests) -> Dict[str, Any]:
         """
         Analyze the server log of a stage, or report that it is not available.
 
         :param has_server_log: True when the server log can be read
-        :param log_pos: Server log offset where the stage started, or None
+        :param log_position: Server log offset where the stage started, or None
         :param results: Request results of the stage
         :param actual_requests: Number of stage requests expected in the server log
         :return: Dict with "server_counts" (request counts from the log) and "disconnections", "server_errors",
@@ -728,20 +728,20 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if has_server_log:
             server_counts = (
                 self.log_monitor.count_requests_since(
-                    log_pos,
+                    log_position,
                     self.profile.get_primary_start_pattern(),
                     self.profile.get_primary_finish_pattern(),
                 )
             )
             disconnections = (
                 self.log_monitor.scan_disconnections_since(
-                    log_pos,
+                    log_position,
                     primary_start_pattern=(
                         self.profile.get_primary_start_pattern()
                     ),
                 )
             )
-            token_data = self.log_monitor.parse_token_accounting_since(log_pos)
+            token_data = self.log_monitor.parse_token_accounting_since(log_position)
             stage_results = [r for r in results if r.get("request_id") != "request-0"]
             if token_data:
                 for result in stage_results:
@@ -750,8 +750,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     result["client_completion_tokens"] = result.get("completion_tokens", 0)
                     result["client_llm_calls"] = result.get("llm_calls", 0)
             LoadTestOrchestrator._attach_token_data(stage_results, token_data)
-            network_tokens = self.log_monitor.parse_per_network_tokens_since(log_pos)
-            validation_events = self.log_monitor.parse_validation_events_since(log_pos)
+            network_tokens = self.log_monitor.parse_per_network_tokens_since(log_position)
+            validation_events = self.log_monitor.parse_validation_events_since(log_position)
             LoadTestOrchestrator._enrich_failure_reasons(results, validation_events)
             if token_data:
                 logger.info("\n  Token usage (from server log):")
@@ -761,9 +761,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     validation_events=validation_events,
                 )
             OutputValidator.log_disconnections(disconnections)
-            server_errors = self.log_monitor.scan_server_errors_since(log_pos)
+            server_errors = self.log_monitor.scan_server_errors_since(log_position)
             OutputValidator.log_server_errors(server_errors)
-            tool_warnings = self.log_monitor.scan_tool_warnings_since(log_pos)
+            tool_warnings = self.log_monitor.scan_tool_warnings_since(log_position)
             OutputValidator.log_tool_warnings(tool_warnings)
             OutputValidator.log_server_validation(server_counts, actual_requests, self.args.agent)
         else:
@@ -1025,8 +1025,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             args.total_timeout *= factor
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _server_only_primary_pairs(self, log_pos, pri_start_re) -> List[Dict]:
-        """Primary-agent streaming_chat Start/Finish pairs since log_pos.
+    def _server_only_primary_pairs(self, log_position, primary_start_regex) -> List[Dict]:
+        """Primary-agent streaming_chat Start/Finish pairs since log_position.
 
         Returns the subset of parsed pairs whose agent matches the
         primary (front-man) agent, each with ``start_ts``,
@@ -1036,18 +1036,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if self.log_monitor is None:
             return []
         try:
-            pairs = self.log_monitor.parse_streaming_chat_timing_since(log_pos)
+            pairs = self.log_monitor.parse_streaming_chat_timing_since(log_position)
         except (OSError, ValueError):
             return []
         primary = []
         for pair in pairs:
             agent = pair.get("agent", "")
             start_line = f"Start {agent}/streaming_chat"
-            if pri_start_re.search(start_line):
+            if primary_start_regex.search(start_line):
                 primary.append(pair)
         return primary
 
-    def _server_only_duration_stats(self, log_pos, pri_start_re) -> str:
+    def _server_only_duration_stats(self, log_position, primary_start_regex) -> str:
         """Cumulative server-side min/avg/max for the primary agent.
 
         Parses primary streaming_chat Start/Finish pairs seen since
@@ -1057,21 +1057,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         durations = [
             float(pair.get("duration_seconds"))
             for pair in self._server_only_primary_pairs(
-                log_pos, pri_start_re,
+                log_position, primary_start_regex,
             )
             if isinstance(pair.get("duration_seconds"), (int, float))
             and pair.get("duration_seconds") > 0
         ]
         return Heartbeat.format_duration_stats(durations)
 
-    def _log_server_only_token_usage(self, log_pos) -> None:
+    def _log_server_only_token_usage(self, log_position) -> None:
         """Log the LLM & TOKEN USAGE section for a server-only round.
 
         There is no client side in server-only, so the client line
         reads "not available" and the numbers come solely from
         server.log token accounting.
         """
-        token_data = self.log_monitor.parse_token_accounting_since(log_pos)
+        token_data = self.log_monitor.parse_token_accounting_since(log_position)
         server_stats = SummaryReporter.aggregate_token_entries(token_data.values())
         printed = SummaryReporter.render_token_usage(None, server_stats, client_source="HTTP token_accounting")
         if not printed:
@@ -1152,9 +1152,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         at the prompt.
         """
         primary_start_pattern = self.profile.get_primary_start_pattern()
-        pri_start_re = re.compile(primary_start_pattern)
+        primary_start_regex = re.compile(primary_start_pattern)
         primary_finish_pattern = self.profile.get_primary_finish_pattern()
-        pri_finish_re = re.compile(primary_finish_pattern)
+        primary_finish_regex = re.compile(primary_finish_pattern)
         round_num = 0
 
         while True:
@@ -1177,7 +1177,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 continue
 
             round_num += 1
-            self._run_server_only_round(expected, round_num, pri_start_re, pri_finish_re)
+            self._run_server_only_round(expected, round_num, primary_start_regex, primary_finish_regex)
 
     def _setup_round_output_dir(self, expected) -> str:
         """Create an output directory for a server-only round."""
@@ -1188,7 +1188,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         os.makedirs(round_dir, exist_ok=True)
         return round_dir
 
-    def _run_server_only_round(self, expected, round_num, pri_start_re, pri_finish_re) -> None:
+    def _run_server_only_round(self, expected, round_num, primary_start_regex, primary_finish_regex) -> None:
         """Execute one round of server-only monitoring.
 
         Wraps the round body with a per-round ``stdout.log`` file
@@ -1196,7 +1196,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         output (heartbeats + summary) in its output directory.
         """
         round_dir = self._setup_round_output_dir(expected)
-        log_pos = self.log_monitor.read_position()
+        log_position = self.log_monitor.read_position()
         round_log_path: str = os.path.join(round_dir, STDOUT_LOG_FILE_NAME)
         round_handler = logging.FileHandler(round_log_path, encoding="utf-8")
         round_handler.setLevel(logging.INFO)
@@ -1206,8 +1206,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         try:
             self._server_only_round_body(
                 expected, round_num,
-                pri_start_re, pri_finish_re,
-                round_dir, log_pos, round_log_path,
+                primary_start_regex, primary_finish_regex,
+                round_dir, log_position, round_log_path,
             )
         finally:
             root_logger.removeHandler(round_handler)
@@ -1217,8 +1217,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-positional-arguments
     def _server_only_round_body(
             self, expected, round_num,
-            pri_start_re, pri_finish_re,
-            round_dir, log_pos, round_log_path,
+            primary_start_regex, primary_finish_regex,
+            round_dir, log_position, round_log_path,
     ) -> None:
         """Execute one round of server-only monitoring."""
         logger.info("\n%s", "=" * 60)
@@ -1266,8 +1266,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             expected,
         )
 
-        tail_result: Dict[str, Any] = self._tail_server_log(expected, log_pos, pri_start_re, pri_finish_re,
-                                                            before_server, before_system_memory_percent)
+        tail_result: Dict[str, Any] = self._tail_server_log(expected, log_position, primary_start_regex,
+                                                            primary_finish_regex, before_server,
+                                                            before_system_memory_percent)
         count: int = tail_result.get("count")
         completed: int = tail_result.get("completed")
         peak_server: Optional[Dict[str, Any]] = tail_result.get("peak_server")
@@ -1310,15 +1311,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             },
         )
 
-        primary_pairs = self._server_only_primary_pairs(log_pos, pri_start_re)
+        primary_pairs = self._server_only_primary_pairs(log_position, primary_start_regex)
         self._log_server_completion_percentiles(primary_pairs)
 
-        server_errors = self.log_monitor.scan_server_errors_since(log_pos)
+        server_errors = self.log_monitor.scan_server_errors_since(log_position)
         OutputValidator.log_server_errors(server_errors)
-        tool_warnings = self.log_monitor.scan_tool_warnings_since(log_pos)
+        tool_warnings = self.log_monitor.scan_tool_warnings_since(log_position)
         OutputValidator.log_tool_warnings(tool_warnings)
 
-        self._log_server_only_token_usage(log_pos)
+        self._log_server_only_token_usage(log_position)
 
         peak_rss_for_breakdown = 0.0
         if peak_server:
@@ -1372,8 +1373,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("%s", "\u2500" * 45)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _tail_server_log(self, expected: int, log_pos: Optional[int], pri_start_re: re.Pattern,
-                         pri_finish_re: re.Pattern, before_server: Optional[Dict[str, Any]],
+    def _tail_server_log(self, expected: int, log_position: Optional[int], primary_start_regex: re.Pattern,
+                         primary_finish_regex: re.Pattern, before_server: Optional[Dict[str, Any]],
                          before_system_memory_percent: float) -> Dict[str, Any]:
         """
         Tail the server log in two phases.
@@ -1382,9 +1383,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         requests are processed.
 
         :param expected: Number of requests to wait for
-        :param log_pos: Server log offset to start reading from
-        :param pri_start_re: Regex for the log line of a primary agent request starting
-        :param pri_finish_re: Regex for the log line of a primary agent request finishing
+        :param log_position: Server log offset to start reading from
+        :param primary_start_regex: Regex for the log line of a primary agent request starting
+        :param primary_finish_regex: Regex for the log line of a primary agent request finishing
         :param before_server: Server snapshot before the round, or None
         :param before_system_memory_percent: System memory use in percent before the round
         :return: Dict with "count" (requests received), "completed" (requests processed), "peak_server" (peak server
@@ -1412,7 +1413,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         try:
             with open(self.server_log, "r", encoding="utf-8") as server_log_file:
-                server_log_file.seek(log_pos)
+                server_log_file.seek(log_position)
                 last_monitor = start_time
                 monitor_interval = 1.0
                 while True:
@@ -1456,7 +1457,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
                     line = server_log_file.readline()
                     if line:
-                        if phase == 1 and pri_start_re.search(line):
+                        if phase == 1 and primary_start_regex.search(line):
                             count += 1
                             now = time.time()
                             timestamp = time.strftime("%H:%M:%S", time.localtime(now))
@@ -1469,7 +1470,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                     count, expected,
                                     timestamp, elapsed_seconds,
                                 )
-                        if pri_finish_re.search(line):
+                        if primary_finish_regex.search(line):
                             completed += 1
                             now = time.time()
                             timestamp = time.strftime("%H:%M:%S", time.localtime(now))
@@ -1508,7 +1509,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         last_monitor = now
 
                         if now - last_heartbeat >= heartbeat_interval:
-                            duration_stats = self._server_only_duration_stats(log_pos, pri_start_re)
+                            duration_stats = self._server_only_duration_stats(log_position, primary_start_regex)
                             self._server_only_heartbeat(
                                 count, expected,
                                 completed,
@@ -1638,8 +1639,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if kernel_breakdown:
             raw_data["kernel_memory_breakdown"] = kernel_breakdown
         json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
-        with open(json_path, "w", encoding="utf-8") as fh:
-            json.dump(raw_data, fh, indent=2)
+        with open(json_path, "w", encoding="utf-8") as json_file:
+            json.dump(raw_data, json_file, indent=2)
 
     @staticmethod
     def _read_kernel_memory() -> Optional[Dict[str, float]]:
@@ -1652,8 +1653,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             return None
         result = {}
         try:
-            with open("/proc/meminfo", "r", encoding="utf-8") as fh:
-                for line in fh:
+            with open("/proc/meminfo", "r", encoding="utf-8") as meminfo_file:
+                for line in meminfo_file:
                     parts = line.split()
                     if len(parts) < 2:
                         continue
@@ -1665,12 +1666,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         tcp_mem_mb = 0.0
         try:
-            with open("/proc/net/sockstat", "r", encoding="utf-8") as fh:
-                for line in fh:
+            with open("/proc/net/sockstat", "r", encoding="utf-8") as sockstat_file:
+                for line in sockstat_file:
                     if line.startswith("TCP:"):
                         parts = line.split()
-                        idx = parts.index("mem")
-                        pages = int(parts[idx + 1])
+                        mem_index = parts.index("mem")
+                        pages = int(parts[mem_index + 1])
                         tcp_mem_mb = (pages * 4) / 1024.0
                         break
         except (OSError, ValueError, IndexError):
@@ -1862,7 +1863,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         stage_summaries: List[Dict[str, Any]] = []
         exit_code = 1
-        pre_test_log_pos = self.log_monitor.read_position() if self.server_log else None
+        pre_test_log_position = self.log_monitor.read_position() if self.server_log else None
         prev_sigint_handler = self._install_interrupt_handler()
         try:
             stage_summaries = self._run_all_stages(stages, total_cap)
@@ -1891,8 +1892,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             latency_analyzer.log_degradation(is_ramp=self.args.ramp)
 
             server_chat_timing = []
-            if self.server_log and pre_test_log_pos is not None:
-                server_chat_timing = self.log_monitor.parse_streaming_chat_timing_since(pre_test_log_pos)
+            if self.server_log and pre_test_log_position is not None:
+                server_chat_timing = self.log_monitor.parse_streaming_chat_timing_since(pre_test_log_position)
 
             if monitor_resources:
                 total_client_reqs = sum(s.get("concurrent", 0) for s in stage_summaries)
@@ -2242,8 +2243,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         }
         raw_data.update(JsonMetadata.build())
         json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
-        with open(json_path, "w", encoding="utf-8") as fh:
-            json.dump(raw_data, fh, indent=2, default=str)
+        with open(json_path, "w", encoding="utf-8") as json_file:
+            json.dump(raw_data, json_file, indent=2, default=str)
 
     def _rename_interrupted(self) -> None:
         """Append _interrupted to the output directory name."""
