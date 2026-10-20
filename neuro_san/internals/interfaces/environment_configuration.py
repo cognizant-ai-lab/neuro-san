@@ -17,7 +17,7 @@
 from typing import Any
 from typing import Dict
 
-import os
+from leaf_common.utils.environment_util import EnvironmentUtil
 
 
 class EnvironmentConfiguration:
@@ -32,7 +32,7 @@ class EnvironmentConfiguration:
         """
         :param config: The config dictionary to search
         :param key: The key for the config to look for
-        :param env_key: The os.environ key whose value should be gotten if either
+        :param env_key: The environment key whose value should be gotten if either
                         the key does not exist or the value for the key is None
         :param none_obj:  An optional object instance to test.
                           If present this method will return None, implying
@@ -53,12 +53,9 @@ class EnvironmentConfiguration:
     @staticmethod
     def getenv(env_key: str, default_value: str = None) -> str:
         """
-        :param env_key: The os.environ key whose value should be gotten
+        :param env_key: The environment key whose value should be gotten
         :param default_value: default value when the key is not present
         :return: The value of the environment variable which is always a string
         """
-        value: str = None
-        if env_key is None:
-            return value
-        value = os.getenv(env_key, default_value) or default_value
+        value: str = EnvironmentUtil.getenv(env_key, default_value)
         return value
