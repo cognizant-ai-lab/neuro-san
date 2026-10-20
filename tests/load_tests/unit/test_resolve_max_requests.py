@@ -43,19 +43,25 @@ class TestResolveMaxRequests(TestCase):
         return InputValidator(Namespace(num_rounds=num_rounds, max_requests=max_requests))
 
     def test_cap_is_stage_total_times_rounds(self) -> None:
-        """The default cap covers every stage of every round."""
+        """
+        The default cap covers every stage of every round.
+        """
         validator: InputValidator = self._validator(num_rounds=3)
 
         self.assertEqual(validator.resolve_max_requests([2, 4, 8]), 42)
 
     def test_explicit_max_requests_wins(self) -> None:
-        """--max-requests overrides the computed cap."""
+        """
+        --max-requests overrides the computed cap.
+        """
         validator: InputValidator = self._validator(num_rounds=3, max_requests=5)
 
         self.assertEqual(validator.resolve_max_requests([2, 4, 8]), 5)
 
     def test_zero_rounds_exits(self) -> None:
-        """--num-rounds 0 must exit before the probe spends tokens."""
+        """
+        --num-rounds 0 must exit before the probe spends tokens.
+        """
         validator: InputValidator = self._validator(num_rounds=0)
 
         with self.assertRaises(LoadTestAbortError) as caught:
@@ -64,7 +70,9 @@ class TestResolveMaxRequests(TestCase):
         self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_negative_rounds_exits(self) -> None:
-        """A negative --num-rounds is rejected the same way."""
+        """
+        A negative --num-rounds is rejected the same way.
+        """
         validator: InputValidator = self._validator(num_rounds=-3)
 
         with self.assertRaises(LoadTestAbortError) as caught:
@@ -73,7 +81,8 @@ class TestResolveMaxRequests(TestCase):
         self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_rounds_are_validated_before_explicit_max_requests(self) -> None:
-        """--max-requests must not mask an invalid --num-rounds.
+        """
+        --max-requests must not mask an invalid --num-rounds.
 
         The rounds check runs first, so passing both does not slip
         past validation through the early return.
@@ -86,7 +95,9 @@ class TestResolveMaxRequests(TestCase):
         self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_zero_max_requests_exits(self) -> None:
-        """--max-requests 0 caps the run at nothing, so it is rejected."""
+        """
+        --max-requests 0 caps the run at nothing, so it is rejected.
+        """
         validator: InputValidator = self._validator(max_requests=0)
 
         with self.assertRaises(LoadTestAbortError) as caught:

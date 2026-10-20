@@ -32,27 +32,37 @@ class TestLatencyAnalyzer(TestCase):
     """
 
     def test_percentile_of_no_values_is_zero(self) -> None:
-        """An empty list has no percentile, so the result is 0.0."""
+        """
+        An empty list has no percentile, so the result is 0.0.
+        """
         self.assertEqual(LatencyAnalyzer._percentile([], 50), 0.0)
 
     def test_percentile_of_one_value_is_that_value(self) -> None:
-        """With one value, every percentile is that value."""
+        """
+        With one value, every percentile is that value.
+        """
         self.assertEqual(LatencyAnalyzer._percentile([4.0], 0), 4.0)
         self.assertEqual(LatencyAnalyzer._percentile([4.0], 90), 4.0)
         self.assertEqual(LatencyAnalyzer._percentile([4.0], 100), 4.0)
 
     def test_percentile_ends_are_minimum_and_maximum(self) -> None:
-        """The 0th percentile is the smallest value and the 100th the largest."""
+        """
+        The 0th percentile is the smallest value and the 100th the largest.
+        """
         values_seconds: List[float] = [1.0, 2.0, 5.0, 9.0]
         self.assertEqual(LatencyAnalyzer._percentile(values_seconds, 0), 1.0)
         self.assertEqual(LatencyAnalyzer._percentile(values_seconds, 100), 9.0)
 
     def test_percentile_on_a_value_returns_that_value(self) -> None:
-        """The median of an odd-length list is its middle value."""
+        """
+        The median of an odd-length list is its middle value.
+        """
         self.assertEqual(LatencyAnalyzer._percentile([1.0, 3.0, 8.0], 50), 3.0)
 
     def test_percentile_between_values_is_interpolated(self) -> None:
-        """A percentile between two values lies on the straight line between them."""
+        """
+        A percentile between two values lies on the straight line between them.
+        """
         self.assertEqual(LatencyAnalyzer._percentile([1.0, 2.0, 3.0, 4.0], 50), 2.5)
         self.assertAlmostEqual(LatencyAnalyzer._percentile([10.0, 20.0], 90), 19.0)
 

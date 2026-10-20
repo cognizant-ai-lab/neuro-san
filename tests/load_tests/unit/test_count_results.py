@@ -36,7 +36,9 @@ class TestCountResults(TestCase):
     """
 
     def test_each_status_is_counted(self) -> None:
-        """Every known status lands in its own bucket."""
+        """
+        Every known status lands in its own bucket.
+        """
         counts: Dict[str, Any] = OutputValidator.count_results([
             {"status": STATUS_CREATED},
             {"status": STATUS_CREATED},
@@ -51,13 +53,16 @@ class TestCountResults(TestCase):
         self.assertEqual(counts[STATUS_KILLED], 1)
 
     def test_no_results_counts_zero_not_empty(self) -> None:
-        """An aborted stage still reports every bucket, all zero."""
+        """
+        An aborted stage still reports every bucket, all zero.
+        """
         counts: Dict[str, Any] = OutputValidator.count_results([])
 
         self.assertEqual(counts, {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0})
 
     def test_unknown_status_counts_as_failed(self) -> None:
-        """An unrecognized status is a failure, never a success.
+        """
+        An unrecognized status is a failure, never a success.
 
         Counting it anywhere else -- or dropping it -- would let a
         run's totals disagree with the number of requests fired.
@@ -68,13 +73,17 @@ class TestCountResults(TestCase):
         self.assertEqual(counts[STATUS_CREATED], 0)
 
     def test_missing_status_counts_as_failed(self) -> None:
-        """A result with no status recorded is treated as a failure."""
+        """
+        A result with no status recorded is treated as a failure.
+        """
         counts: Dict[str, Any] = OutputValidator.count_results([{}])
 
         self.assertEqual(counts[STATUS_FAILED], 1)
 
     def test_totals_match_the_number_of_results(self) -> None:
-        """No request is lost or double-counted, whatever its status."""
+        """
+        No request is lost or double-counted, whatever its status.
+        """
         results: List[Dict[str, Any]] = [
             {"status": STATUS_CREATED},
             {"status": "WEIRD"},

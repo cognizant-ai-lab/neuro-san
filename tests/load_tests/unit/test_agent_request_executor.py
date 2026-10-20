@@ -32,7 +32,9 @@ from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
 
 class FakeSession:
-    """Stand-in for HttpServiceAgentSession that streams on a timer."""
+    """
+    Stand-in for HttpServiceAgentSession that streams on a timer.
+    """
 
     def __init__(self, message_count: int, message_interval_seconds: float, **_kwargs: Any) -> None:
         """
@@ -62,7 +64,9 @@ class FakeSession:
 
 
 class FakeProcessor:
-    """Stand-in for StreamingInputProcessor that drains the stream."""
+    """
+    Stand-in for StreamingInputProcessor that drains the stream.
+    """
 
     def __init__(self, session: FakeSession, **_kwargs: Any) -> None:
         """
@@ -137,7 +141,9 @@ class TestAgentRequestExecutor(TestCase):
         return result, session
 
     def test_streaming_past_the_cap_is_a_timeout(self) -> None:
-        """A stream that outruns the cap reports TIMEOUT."""
+        """
+        A stream that outruns the cap reports TIMEOUT.
+        """
         execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
                                                                           message_interval_seconds=0.05)
         result: AgentRequestResult = execution[0]
@@ -145,11 +151,12 @@ class TestAgentRequestExecutor(TestCase):
         self.assertEqual(result.get_status(), STATUS_TIMEOUT)
 
     def test_streaming_past_the_cap_stops_early(self) -> None:
-        """The request is abandoned rather than drained to the end.
+        """
+        The request is abandoned rather than drained to the end.
 
         Reporting TIMEOUT after draining the whole stream would still
-        label the request correctly while the worker stayed occupied,
-        which is the behaviour being fixed.
+        label the request correctly, but the worker would stay occupied
+        until the stream ends.
         """
         start_seconds: float = time.perf_counter()
         execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
@@ -161,7 +168,9 @@ class TestAgentRequestExecutor(TestCase):
         self.assertLess(elapsed_seconds, 20 * 0.05)
 
     def test_request_within_the_cap_succeeds(self) -> None:
-        """A request that finishes in time is unaffected."""
+        """
+        A request that finishes in time is unaffected.
+        """
         result: Optional[AgentRequestResult] = None
         session: Optional[FakeSession] = None
         result, session = self._execute(timeout_seconds=30, message_count=3, message_interval_seconds=0.01)
