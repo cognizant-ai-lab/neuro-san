@@ -23,8 +23,8 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
 from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 
 

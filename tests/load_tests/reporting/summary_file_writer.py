@@ -31,7 +31,7 @@ from collections import Counter
 
 import psutil
 
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)

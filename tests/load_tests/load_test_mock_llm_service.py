@@ -83,7 +83,7 @@ from typing import Tuple
 
 import psutil
 
-from tests.load_tests.config import LOCAL_HOSTS
+from tests.load_tests.load_test_constants import LOCAL_HOSTS
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.table_formatter import TableFormatter
 

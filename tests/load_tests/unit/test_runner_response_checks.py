@@ -29,10 +29,10 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor

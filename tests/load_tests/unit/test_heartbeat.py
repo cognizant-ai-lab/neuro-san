@@ -23,8 +23,8 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from tests.load_tests.config import PROGRESS_LOG_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult

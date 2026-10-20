@@ -19,7 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 
 logger: logging.Logger = logging.getLogger(__name__)
 

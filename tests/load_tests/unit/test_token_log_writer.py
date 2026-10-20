@@ -22,7 +22,7 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 
 LOGGER_NAME: str = "tests.load_tests.reporting.token_log_writer"

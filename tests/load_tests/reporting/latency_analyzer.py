@@ -23,7 +23,7 @@ from typing import Tuple
 from typing import Union
 
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)

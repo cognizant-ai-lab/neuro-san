@@ -16,10 +16,10 @@
 # END COPYRIGHT
 from unittest import TestCase
 
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 
 

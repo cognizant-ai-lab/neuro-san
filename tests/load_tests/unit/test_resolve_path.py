@@ -19,7 +19,7 @@ import os
 import tempfile
 from unittest import TestCase
 
-from tests.load_tests.config import HISTORY_FILE_NAME
+from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
 from tests.load_tests.reporting.trend_history import TrendHistory
 
 

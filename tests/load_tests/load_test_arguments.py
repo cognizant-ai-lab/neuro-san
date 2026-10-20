@@ -19,12 +19,12 @@ import os
 from typing import Dict
 from typing import Set
 
-from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
-from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
-from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
-from tests.load_tests.config import LEVEL_ADV
-from tests.load_tests.config import LEVEL_MIN
-from tests.load_tests.config import LEVEL_NORM
+from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
+from tests.load_tests.load_test_constants import DEFAULT_IDLE_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import DEFAULT_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import LEVEL_ADV
+from tests.load_tests.load_test_constants import LEVEL_MIN
+from tests.load_tests.load_test_constants import LEVEL_NORM
 from tests.load_tests.duration import DurationParser
 
 
