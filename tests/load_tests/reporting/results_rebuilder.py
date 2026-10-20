@@ -97,6 +97,8 @@ class ResultsRebuilder:
         rebuilt: int = 0
         reclassified: int = 0
         skipped: int = 0
+        entry: str
+        # Rebuild the results of each run folder that has a requests folder.
         for entry in sorted(os.listdir(self._output_dir)):
             sub_dir: str = os.path.join(self._output_dir, entry)
             if not os.path.isdir(sub_dir):
@@ -274,6 +276,8 @@ class ResultsRebuilder:
         :return: One result dict per stdout file, in file name order
         """
         results: List[Dict[str, Any]] = []
+        filename: str
+        # Build one result from each request stdout file.
         for filename in sorted(os.listdir(requests_dir)):
             if not filename.endswith("_stdout.txt"):
                 continue
@@ -360,6 +364,8 @@ class ResultsRebuilder:
         :return: Request id to the contents of its stdout file
         """
         cache: Dict[int, str] = {}
+        filename: str
+        # Cache each request stdout file by request number.
         for filename in os.listdir(requests_dir):
             if not filename.endswith("_stdout.txt"):
                 continue
@@ -388,7 +394,11 @@ class ResultsRebuilder:
         stdout_cache: Dict[int, str] = ResultsRebuilder._load_stdout_cache(requests_dir)
 
         updated: int = 0
+        stage: Dict[str, Any]
+        # Look at every result of every stage.
         for stage in raw_results.get("stage_summaries", []):
+            result: Dict[str, Any]
+            # Check each request that did not succeed against its stdout.
             for result in stage.get("results", []):
                 if result.get("status") == STATUS_CREATED:
                     continue
