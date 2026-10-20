@@ -38,6 +38,10 @@ LEVEL_MIN: str = "min"
 LEVEL_NORM: str = "norm"
 LEVEL_ADV: str = "adv"
 
+# Flat-mode defaults for --level adv, unless the flag is given
+ADV_NUM_REQUESTS: int = 50
+ADV_NUM_ROUNDS: int = 3
+
 # Tracked retry error types.  All but ProviderRetry are neuro-san's own
 # max_attempts retries; ProviderRetry counts retries the LLM provider
 # SDK performs internally.

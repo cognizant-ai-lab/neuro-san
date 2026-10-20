@@ -20,6 +20,8 @@ from typing import Dict
 from typing import List
 from typing import Set
 
+from tests.load_tests.load_test_constants import ADV_NUM_REQUESTS
+from tests.load_tests.load_test_constants import ADV_NUM_ROUNDS
 from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.load_test_constants import DEFAULT_HTTPS_PORT
 from tests.load_tests.load_test_constants import DEFAULT_IDLE_TIMEOUT_SECONDS
@@ -355,11 +357,12 @@ class LoadTestArguments:
             type=str,
             choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
             default=LEVEL_NORM,
-            help="""
+            help=f"""
             Test depth level (default: %(default)s).
             min: traffic + validation only (only with --client-only/--server-only; not valid for an all-in-one run).
             norm: adds resource monitoring and server log analysis (if --server-log given).
-            adv: adds pool analysis (defaults to 50 requests, 50 workers, 3 rounds unless overridden).
+            adv: adds pool analysis (defaults to {ADV_NUM_REQUESTS} requests, {ADV_NUM_ROUNDS} rounds
+            unless overridden).
             """,
         )
         parser.add_argument(

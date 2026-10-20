@@ -33,12 +33,16 @@ class TestResolvePath(TestCase):
     """
 
     def setUp(self) -> None:
-        """Create a scratch directory removed again after each test."""
+        """
+        Create a scratch directory removed again after each test.
+        """
         self._dir: str = tempfile.mkdtemp()
         self.addCleanup(self._remove_dir)
 
     def _remove_dir(self) -> None:
-        """Remove the scratch directory and anything left in it."""
+        """
+        Remove the scratch directory and anything left in it.
+        """
         name: str
         # Delete each file left in the directory.
         for name in os.listdir(self._dir):
@@ -57,17 +61,23 @@ class TestResolvePath(TestCase):
         return path
 
     def test_a_file_path_is_used_directly(self) -> None:
-        """Passing the history file itself resolves to that file."""
+        """
+        Passing the history file itself resolves to that file.
+        """
         path: str = self._create_history()
 
         self.assertEqual(TrendHistory(path)._resolve_path(), path)
 
     def test_a_directory_resolves_to_its_history_file(self) -> None:
-        """Passing the output directory finds history.jsonl inside it."""
+        """
+        Passing the output directory finds history.jsonl inside it.
+        """
         path: str = self._create_history()
 
         self.assertEqual(TrendHistory(self._dir)._resolve_path(), path)
 
     def test_missing_history_resolves_to_none(self) -> None:
-        """A directory with no history file resolves to None."""
+        """
+        A directory with no history file resolves to None.
+        """
         self.assertIsNone(TrendHistory(self._dir)._resolve_path())
