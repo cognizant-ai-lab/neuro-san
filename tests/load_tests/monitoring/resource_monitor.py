@@ -14,12 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Resource monitoring — psutil-based process snapshots.
-
-Interim implementation. May be replaced by neuro-san built-in
-monitoring and telemetry when those features become available.
-"""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -32,7 +26,12 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResourceMonitor:
-    """Captures and logs psutil-based process resource snapshots."""
+    """
+    Captures and logs psutil-based process resource snapshots.
+
+    Interim implementation. May be replaced by neuro-san built-in
+    monitoring and telemetry when those features become available.
+    """
 
     # Bytes in a megabyte and in a gigabyte, to convert memory readings
     ONE_MEGABYTE: int = 1024 ** 2

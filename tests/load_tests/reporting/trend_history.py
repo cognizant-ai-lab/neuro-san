@@ -14,14 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Trend history — read the append-only history file and log a table.
-
-Complements the cross-run comparison, which answers a different
-question: that one groups runs by request count to show how the system
-scales, while this one keeps runs in the order they happened so a
-regression between neuro-san versions is visible.
-"""
-
 import json
 import logging
 import os
@@ -40,7 +32,14 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TrendHistory:
-    """Reads history JSONL records and logs them in run order."""
+    """
+    Reads history JSONL records and logs them in run order.
+
+    Complements the cross-run comparison, which answers a different
+    question: that one groups runs by request count to show how the system
+    scales, while this one keeps runs in the order they happened so a
+    regression between neuro-san versions is visible.
+    """
 
     def __init__(self, path: str, agent_filter: Optional[List[str]] = None) -> None:
         """

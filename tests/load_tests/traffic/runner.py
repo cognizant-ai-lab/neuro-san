@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Traffic runner — fires concurrent requests via a thread pool."""
-
 import json
 import logging
 import os
@@ -70,7 +68,8 @@ INTERRUPT_GRACE_SECONDS: float = 2.0
 
 
 class TrafficRunner:
-    """Fires concurrent requests via a thread pool and collects results.
+    """
+    Fires concurrent requests via a thread pool and collects results.
 
     Holds the parsed CLI args and the agent profile so that callers
     do not need to thread them through every method.

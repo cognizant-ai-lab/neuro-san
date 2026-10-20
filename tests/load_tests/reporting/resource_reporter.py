@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Builds and logs server and client resource delta tables."""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -36,7 +34,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResourceReporter:
-    """Builds and logs server and client resource delta tables.
+    """
+    Builds and logs server and client resource delta tables.
 
     Accumulates resource rows during the test run, then logs
     the complete analysis tables at the end.
@@ -64,7 +63,8 @@ class ResourceReporter:
 
     def add_resource_row(self, stage_label: str, before_snapshot: Dict[str, Any],
                          after_snapshot: Dict[str, Any]) -> ServerResourceRow:
-        """Build and store a server resource row from before/after snapshots.
+        """
+        Build and store a server resource row from before/after snapshots.
 
         Returns (display_row, before_snapshot, after_snapshot) so that
         delta calculations can use raw numeric values instead of
@@ -100,7 +100,8 @@ class ResourceReporter:
 
     def add_client_row(self, stage_label: str, before_snapshot: Dict[str, Any], peak_snapshot: Optional[Dict[str, Any]],
                        settled_snapshot: Dict[str, Any]) -> ClientResourceRow:
-        """Build and store a client resource row from before/peak/settled.
+        """
+        Build and store a client resource row from before/peak/settled.
 
         Returns (display_row, before_snapshot, peak_snapshot,
         settled_snapshot) so that delta calculations and JSON export
@@ -141,7 +142,8 @@ class ResourceReporter:
     METRIC_COLUMN_COUNT: int = 11
 
     def log_combined_analysis(self, total_client_requests: int, total_server_calls: int) -> None:
-        """Log one combined server-app + client-app resource table.
+        """
+        Log one combined server-app + client-app resource table.
 
         Server-app and client-app rows share a single table.  Columns
         that don't apply to a component — or a component that produced
@@ -233,7 +235,9 @@ class ResourceReporter:
         return row
 
     def _log_resource_deltas(self) -> None:
-        """Log overall resource deltas if enough data points."""
+        """
+        Log overall resource deltas if enough data points.
+        """
         if len(self._resource_rows) < 2:
             return
         first_before_snapshot: Dict[str, Any] = self._resource_rows[0][1]
@@ -250,7 +254,9 @@ class ResourceReporter:
         )
 
     def _log_client_deltas(self) -> None:
-        """Log overall client resource deltas if enough data points."""
+        """
+        Log overall client resource deltas if enough data points.
+        """
         if len(self._client_rows) < 2:
             return
         first_before_snapshot: Dict[str, Any] = self._client_rows[0][1]

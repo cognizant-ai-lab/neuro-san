@@ -14,20 +14,18 @@
 #
 # END COPYRIGHT
 
-"""Self-documenting metadata for raw_results.json.
-
-Provides field descriptions, health thresholds, analysis hints, and
-unit labels so that any LLM can interpret the JSON without external
-documentation.
-"""
-
 from typing import Dict
 from typing import List
 
 
 class JsonMetadata:
-    """Builds the _schema, _thresholds, _analysis_hints, and _units
-    sections embedded in raw_results.json."""
+    """
+    Builds the _schema, _thresholds, _analysis_hints, and _units
+    sections embedded in raw_results.json.
+
+    Field descriptions, health thresholds, analysis hints, and unit labels
+    let any LLM read the JSON without external documentation.
+    """
 
     @staticmethod
     def schema() -> Dict[str, str]:
