@@ -36,6 +36,8 @@ class TestResolveStatus(TestCase):
 
     def test_each_reported_status_is_preserved(self) -> None:
         """CREATED, FAILED, TIMEOUT and KILLED all survive a rebuild."""
+        status: str
+        # Each reported status comes back unchanged.
         for status in (STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
             with self.subTest(status=status):
                 self.assertEqual(ResultsRebuilder._resolve_status({"status": status}), status)

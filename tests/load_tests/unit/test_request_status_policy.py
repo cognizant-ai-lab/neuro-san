@@ -56,6 +56,8 @@ class TestRequestStatusPolicy(TestCase):
 
     def test_is_failure(self) -> None:
         """FAILED, TIMEOUT and KILLED are failures; CREATED is not."""
+        status: str
+        # Each failure status is a failure.
         for status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
             with self.subTest(status=status):
                 self.assertTrue(RequestStatusPolicy.is_failure(status))

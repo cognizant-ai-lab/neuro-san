@@ -43,6 +43,8 @@ class TestTimedStreamingChat(TestCase):
         :param _request_dict: The streaming_chat request, ignored
         :return: The messages
         """
+        index: int
+        # Sleep, then yield the next message.
         for index in range(message_count):
             time.sleep(message_interval_seconds)
             yield {"index": index}
@@ -71,7 +73,9 @@ class TestTimedStreamingChat(TestCase):
         """A message arriving after the cap raises RequestTimeoutError and stops the stream."""
         timed: TimedStreamingChat = self._wrap(timeout_seconds=0.05, message_count=20, message_interval_seconds=0.02)
         received: List[Dict[str, Any]] = []
+        message: Dict[str, Any]
         with self.assertRaises(RequestTimeoutError):
+            # Read messages until the cap raises.
             for message in timed.streaming_chat({}):
                 received.append(message)
         self.assertLess(len(received), 20)

@@ -46,6 +46,8 @@ class ResourceMonitor:
         :param keyword: Text to look for in each process command line
         :return: The first matching process, or None
         """
+        process: psutil.Process
+        # Return the first process whose command line has the keyword.
         for process in psutil.process_iter(["pid", "cmdline"]):
             try:
                 command_line: str = " ".join(process.info.get("cmdline") or [])
@@ -63,8 +65,12 @@ class ResourceMonitor:
         :param port: TCP port the process listens on
         :return: The first process listening on the port, or None
         """
+        process: psutil.Process
+        # Look for a process with a listening connection on the port.
         for process in psutil.process_iter(["pid"]):
             try:
+                connection: Any
+                # Check each connection of the process for a listen on the port.
                 for connection in process.net_connections():
                     if connection.status == "LISTEN" and connection.laddr.port == port:
                         return psutil.Process(process.info.get("pid"))

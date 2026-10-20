@@ -110,6 +110,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if not validation_events:
             return
         by_request_id = {e.get("request_id"): e for e in validation_events}
+        result: Dict[str, Any]
+        # Add the fix cycles of each result's validation event to its failure reason.
         for result in results:
             request_id = result.get("request_id", "")
             event = by_request_id.get(request_id)
@@ -138,6 +140,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         sorted_entries = sorted(token_data.values(), key=lambda e: key_fn(e.get("request_id", "")))
         sorted_results = sorted(results, key=lambda r: key_fn(r.get("request_id", "")))
 
+        result: Dict[str, Any]
+        entry: Dict[str, Any]
+        # Copy each entry's token counts to the result in the same sorted place.
         for result, entry in zip(sorted_results, sorted_entries):
             result.update({
                 "total_tokens": entry.get("total_tokens"),
@@ -198,12 +203,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         total_sent = 0
         test_start = time.time()
 
+        round_num: int
+        # Run every stage once per round.
         for round_num in range(1, self.args.num_rounds + 1):
             if self.args.num_rounds > 1:
                 logger.info("\n%s", "#" * 60)
                 logger.info("  ROUND %s of %s", round_num, self.args.num_rounds)
                 logger.info("#" * 60)
 
+            stage_idx: int
+            num_concurrent: int
+            # Run each stage, stopping at the request cap or the total timeout.
             for stage_idx, num_concurrent in enumerate(stages):
                 if total_sent >= total_cap:
                     total_planned = sum(stages) * self.args.num_rounds
@@ -744,6 +754,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             token_data = self.log_monitor.parse_token_accounting_since(log_position)
             stage_results = [r for r in results if r.get("request_id") != "request-0"]
             if token_data:
+                result: Dict[str, Any]
+                # Keep the client token counts of each request under client_* keys.
                 for result in stage_results:
                     result["client_total_tokens"] = result.get("total_tokens", 0)
                     result["client_prompt_tokens"] = result.get("prompt_tokens", 0)
@@ -1040,6 +1052,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         except (OSError, ValueError):
             return []
         primary = []
+        pair: Dict[str, object]
+        # Keep the pairs of the primary agent.
         for pair in pairs:
             agent = pair.get("agent", "")
             start_line = f"Start {agent}/streaming_chat"
@@ -1077,6 +1091,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if not printed:
             return
         model_counts: Dict[str, int] = {}
+        entry: Dict[str, Any]
+        # Count the requests of each known model.
         for entry in token_data.values():
             model = entry.get("model")
             if model and model != "unknown":
@@ -1654,6 +1670,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         result = {}
         try:
             with open("/proc/meminfo", "r", encoding="utf-8") as meminfo_file:
+                line: str
+                # Read each meminfo value in megabytes.
                 for line in meminfo_file:
                     parts = line.split()
                     if len(parts) < 2:
@@ -1667,6 +1685,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         tcp_mem_mb = 0.0
         try:
             with open("/proc/net/sockstat", "r", encoding="utf-8") as sockstat_file:
+                # Read the TCP memory pages from the TCP: line.
                 for line in sockstat_file:
                     if line.startswith("TCP:"):
                         parts = line.split()
@@ -1998,6 +2017,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         and swallowed so it never fails the test.
         """
         results = []
+        summary: Dict[str, Any]
+        # Collect the results of every stage.
         for summary in stage_summaries:
             results.extend(summary.get("results", []))
         if not results:
@@ -2008,6 +2029,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_duration = round(sum(durations) / completed, 2) if completed else 0.0
         first_responses: List[float] = []
         result: Dict[str, Any]
+        # Collect the time to first response of each successful request.
         for result in results:
             time_to_first_response: float = result.get("time_to_first_response", 0.0)
             if result.get("status") == STATUS_CREATED and time_to_first_response > 0:
@@ -2017,6 +2039,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             avg_first_response = round(sum(first_responses) / len(first_responses), 2)
         server_errors: List[Dict[str, str]] = []
         tool_warnings: List[Dict[str, str]] = []
+        # Collect the server errors and tool warnings of every stage.
         for summary in stage_summaries:
             server_errors.extend(summary.get("server_errors", []))
             tool_warnings.extend(summary.get("tool_warnings", []))
@@ -2038,6 +2061,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "server_errors": server_errors,
             "tool_warnings": tool_warnings,
         }
+        threshold: int
+        # Count the requests that completed within each threshold.
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             record[f"completed_within_{int(threshold)}s"] = sum(1 for d in durations if d <= threshold)
         successful = completed > 0 and record.get("neuro_san_version") != "unknown"
@@ -2132,6 +2157,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "server_errors": server_errors or [],
             "tool_warnings": tool_warnings or [],
         }
+        threshold: int
+        # Count the requests that completed within each threshold.
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             record[f"completed_within_{int(threshold)}s"] = sum(1 for d in durations if d <= threshold)
         successful = received > 0 and record.get("neuro_san_version") != "unknown"
@@ -2169,6 +2196,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _export_raw_json(self, stage_summaries, *, exit_code) -> None:
         """Save all test data as a single raw_results.json file."""
         all_results = []
+        s: Dict[str, Any]
+        # Collect the results of every stage.
         for s in stage_summaries:
             all_results.extend(s.get("results", []))
 
@@ -2274,6 +2303,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _check_results(self, stage_summaries) -> int:
         """Log pass/fail verdict and return appropriate exit code."""
         all_results = []
+        s: Dict[str, Any]
+        # Collect the results of every stage.
         for s in stage_summaries:
             all_results.extend(s.get("results", []))
         total = len(all_results)

@@ -222,8 +222,12 @@ class TrafficRunner:
         :param models_dict: Token Accounting "models" dict, provider -> model -> usage
         :return: First model name found, or "unknown"
         """
+        provider_models: Any
+        # Return the first model name of the first provider that has one.
         for provider_models in models_dict.values():
             if isinstance(provider_models, dict):
+                model_name: str
+                # Return the first model name of this provider.
                 for model_name in provider_models:
                     return model_name
         return "unknown"
@@ -240,6 +244,8 @@ class TrafficRunner:
         :return: All model names across all providers
         """
         all_models: List[str] = []
+        provider_models: Any
+        # Collect the model names of every provider.
         for provider_models in models_dict.values():
             if isinstance(provider_models, dict):
                 all_models.extend(provider_models.keys())
@@ -268,8 +274,11 @@ class TrafficRunner:
         if self._profile.get_failure_patterns():
             blocks.append({"text": {"not_keywords": self._profile.get_failure_patterns()}})
         reasons: List[str] = []
+        block: Dict[str, Any]
+        # Run the checks of each block: the prompt's checks, then the failure patterns.
         for block in blocks:
             extractor: DictionaryExtractor = DictionaryExtractor(block)
+            key: str
             # One test_response_keys call per top-level test key
             # (text, sly_data.<field>, ...) so each failure can be
             # labelled with the key it belongs to; the evaluators'
@@ -277,6 +286,8 @@ class TrafficRunner:
             for key in self._top_level_keys(block):
                 seen: int = len(asserts.get_asserts())
                 driver.test_response_keys(processor, extractor, [key], asserts, [])
+                failure: AssertionError
+                # One reason per new failure, labelled with its key.
                 for failure in asserts.get_asserts()[seen:]:
                     reasons.append(f"{key}: {self._first_line(str(failure))}")
         if not reasons:
@@ -293,11 +304,15 @@ class TrafficRunner:
                  for each field under sly_data
         """
         keys: List[str] = []
+        test_key: str
+        # Keep each test key the block has, with one key per sly_data field.
         for test_key in DataDrivenTestsDriver.TEST_KEYS:
             checks: Any = block.get(test_key)
             if checks is None:
                 continue
             if test_key == "sly_data" and isinstance(checks, dict):
+                field: str
+                # One sly_data.<field> key per field.
                 for field in checks:
                     keys.append(f"{test_key}.{field}")
             else:
@@ -313,6 +328,8 @@ class TrafficRunner:
         :return: Its first non-empty line, cut to FAILURE_REASON_LINE_LIMIT
         """
         line: str = message
+        part: str
+        # Find the first line that is not blank.
         for part in message.splitlines():
             if part.strip():
                 line = part
@@ -473,6 +490,8 @@ class TrafficRunner:
         :return: Keyword arguments for Heartbeat.progress_heartbeat(), keyed by its parameter names
         """
         heartbeat_kwargs: Dict[str, Any] = {}
+        event_name: str
+        # One new event per event argument of Heartbeat.progress_heartbeat().
         for event_name in ("stop_event", "ready_event", "fires_done_event", "server_dead_event"):
             heartbeat_kwargs[event_name] = threading.Event()
         return heartbeat_kwargs
@@ -505,6 +524,8 @@ class TrafficRunner:
         :param futures: Receives one future per request; the heartbeat reads it while requests run
         :param heartbeat: Counts the failed requests for the progress line
         """
+        index: int
+        # Submit one tracked request per planned request.
         for index in range(plan.get_num_requests()):
             future: Future = pool.submit(self._run_one_tracked, index + 1, plan.get_global_offset() + index,
                                          plan.get_output_dir(), heartbeat)
@@ -531,6 +552,7 @@ class TrafficRunner:
         elapsed_seconds: float = 0.0
         remaining_seconds: float = 0.0
         wait_slice_seconds: float = 0.0
+        future: Future
         while pending_futures:
             if cancel_event.is_set():
                 interrupted = True
@@ -544,6 +566,7 @@ class TrafficRunner:
             else:
                 wait_slice_seconds = 1.0
             try:
+                # Collect the requests that finish within this slice.
                 for future in as_completed(pending_futures, timeout=wait_slice_seconds):
                     results_list.append(future.result())
                     pending_futures.discard(future)
@@ -553,6 +576,7 @@ class TrafficRunner:
         reason: str = "Killed by --stage-timeout"
         if interrupted:
             reason = "Killed by Ctrl-C interrupt"
+        # Cancel every request that has not finished.
         for future in pending_futures:
             future.cancel()
         if interrupted:
@@ -578,6 +602,8 @@ class TrafficRunner:
         """
         grace_deadline_seconds: float = time.perf_counter() + INTERRUPT_GRACE_SECONDS
         remaining_seconds: float = 0.0
+        future: Future
+        # Wait for each pending request until the grace runs out.
         for future in list(pending_futures):
             remaining_seconds = max(0.0, grace_deadline_seconds - time.perf_counter())
             try:
@@ -601,6 +627,8 @@ class TrafficRunner:
         :return: Number of pending futures
         """
         killed: int = 0
+        future: Future
+        # Record each pending request, KILLED unless it finished meanwhile.
         for future in pending_futures:
             killed += 1
             if future.cancelled() or not future.done():
@@ -651,6 +679,9 @@ class TrafficRunner:
         sys.stdout.write("\n")
         sys.stdout.flush()
         logger.info("Request %s: %s (%s)", request_id, status, Formatters.fmt_duration(elapsed_seconds, precision=2))
+        field: str
+        value: str
+        # Log each parsed sly_data field.
         for field, value in parsed_fields.items():
             logger.info("  %s: %s", field, value or "")
         if failure_reason:
@@ -674,6 +705,9 @@ class TrafficRunner:
         """
         path: str = os.path.join(output_dir, PROGRESS_LOG_FILE_NAME)
         field_parts: List[str] = []
+        key: str
+        value: str
+        # One "key: value" part per parsed field.
         for key, value in parsed_fields.items():
             field_parts.append(f"{key}: {value or ''}")
         fields_text: str = "  ".join(field_parts)

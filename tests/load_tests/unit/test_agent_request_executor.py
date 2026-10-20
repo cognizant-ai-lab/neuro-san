@@ -53,6 +53,8 @@ class FakeSession:
         :param _request_dict: The streaming_chat request, ignored
         :return: One AI chat message per interval
         """
+        _: int
+        # Yield one message per interval, counting each one sent.
         for _ in range(self._message_count):
             time.sleep(self._message_interval_seconds)
             self.sent += 1
@@ -89,6 +91,8 @@ class FakeProcessor:
         :param state: The request state
         :return: A copy of the state with the answer filled in
         """
+        _: Dict[str, Any]
+        # Read the whole stream.
         for _ in self._session.streaming_chat({}):
             pass
         updated: Dict[str, Any] = dict(state)
