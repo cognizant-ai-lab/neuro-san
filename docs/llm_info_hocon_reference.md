@@ -300,6 +300,10 @@ The idea is to allow the data-driven defaults to inherit
 from previous definitions just like the Python implementations can, allowing overriding
 some values while also avoiding repetition.
 
+When both classes declare the same key in their [`args`](#args), the value of the class that extends wins, and two
+dictionary values are merged key by key the same way. So a sparse llm info file can change one inherited default,
+such as `max_tokens` for `anthropic-bedrock`, without repeating the others.
+
 ##### `args`
 
 A dictionary whose keys are names of fields in the BaseLanguageModel's constructor,
@@ -608,9 +612,10 @@ answers short. To raise the limit, do one of the following:
   `max_output_tokens`.
 - Leave `class` out and give a `model_name` that has an entry in the llm info file, such as
   `bedrock-claude-fable` or `global.anthropic.claude-fable-5-1`. neuro-san then sets `max_tokens` from that entry.
-
-A `max_tokens` default under `classes.anthropic-bedrock.args` in your own llm info file does not help: the `null`
-default of the `anthropic` class, which `anthropic-bedrock` extends, takes precedence.
+- Give the class a `max_tokens` default under `classes.anthropic-bedrock.args` in your own llm info file (see
+  [Extending LLM Info Specifications](#extending-llm-info-specifications)). It applies to every llm_config that
+  names the class and does not set `max_tokens` itself, so keep it within the `max_output_tokens` of every model
+  you use with the class.
 
 The second way needs an entry for the model id, and `default_llm_info.hocon` lists only `global.` Bedrock ids. To
 use a region-pinned id such as `us.anthropic.claude-fable-5-1` without `class`, add an entry for it to your own

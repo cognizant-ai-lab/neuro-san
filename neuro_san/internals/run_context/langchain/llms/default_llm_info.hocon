@@ -1812,8 +1812,6 @@
                 "openai_api_version": null,
                 "openai_api_type": null,
                 "model_version": null,
-                # streaming defaults to off; set "streaming": true in llm_config to enable.
-                "streaming": false,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
@@ -1902,11 +1900,10 @@
             # are inherited unchanged. We only declare the AWS-specific knobs here.
             # See https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock
             #
-            # An llm_config that names this class should also set "max_tokens".
+            # An llm_config that names this class should also set "max_tokens", unless
+            # your own llm info file gives this class a "max_tokens" default in its args.
             # neuro-san fills it in from "max_output_tokens" only when an llm_config
             # has no "class", and langchain's default for a Bedrock model id is 4096.
-            # A "max_tokens" default in this class's args has no effect: the null
-            # that the "anthropic" class declares for it takes precedence.
             "extends": "anthropic",
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
