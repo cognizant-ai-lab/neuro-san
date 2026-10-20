@@ -218,10 +218,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 if total_sent >= total_cap:
                     total_planned = sum(stages) * self.args.num_rounds
                     logger.warning(
-                        "\nWARNING: Reached --max-requests cap (%s). "
-                        "Only %s of %s total planned requests completed.\n"
-                        "         Use --max-requests %s to run all "
-                        "planned requests.",
+                        """
+WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests completed.
+         Use --max-requests %s to run all planned requests.""",
                         total_cap, total_sent, total_planned,
                         total_planned,
                     )
@@ -273,8 +272,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if elapsed < limit:
             return False
         logger.warning(
-            "\n  ABORT: --total-timeout (%ss) reached after %.0fs.\n"
-            "  Stopping test and reporting available results.",
+            """
+  ABORT: --total-timeout (%ss) reached after %.0fs.
+  Stopping test and reporting available results.""",
             limit, elapsed,
         )
         return True
@@ -845,9 +845,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             return
         scheme = "https" if getattr(self.args, "https", False) else "http"
         logger.error(
-            "ABORT: server %s:%s (%s) is unreachable — "
-            "not firing any requests.\n"
-            "  Check --host/--port/--https, or start the server.",
+            """ABORT: server %s:%s (%s) is unreachable — not firing any requests.
+  Check --host/--port/--https, or start the server.""",
             host, port, scheme,
         )
         raise SystemExit(1)
@@ -951,18 +950,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         if not server_log:
             logger.warning(
-                "No --server-log provided at %s level.\n"
-                "  The following will be unavailable:\n"
-                "    - Retry counts and amplification factor\n"
-                "    - Server-side request validation\n"
-                "    - Client disconnection detection\n"
-                "    - Per-agent-network token breakdown "
-                "(server log only)\n"
-                "  Resource monitoring (psutil) and aggregated "
-                "token accounting (--tokens) still work.\n"
-                "  To enable full analysis, add:\n"
-                "    --server-log  (auto-detect)\n"
-                "    --server-log logs/server.log",
+                """No --server-log provided at %s level.
+  The following will be unavailable:
+    - Retry counts and amplification factor
+    - Server-side request validation
+    - Client disconnection detection
+    - Per-agent-network token breakdown (server log only)
+  Resource monitoring (psutil) and aggregated token accounting (--tokens) still work.
+  To enable full analysis, add:
+    --server-log  (auto-detect)
+    --server-log logs/server.log""",
                 level,
             )
             return None
@@ -986,10 +983,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         --no-dry-run does not (it only bypasses the cost confirmation).
         """
         logger.warning(
-            "Server log not found for --level %s. Without it: "
-            "no retry, disconnection, or pool analysis.\n"
-            "  Set it with --server-log <path>, or use "
-            "--no-server-log to skip this prompt.",
+            """Server log not found for --level %s. Without it: no retry, disconnection, or pool analysis.
+  Set it with --server-log <path>, or use --no-server-log to skip this prompt.""",
             level,
         )
         if not Confirm.ask("Continue without server-log analysis?"):
@@ -1275,10 +1270,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         }
 
         logger.info(
-            "\nWaiting for %d request(s) in server"
-            " log...\n"
-            "  Start the client on the remote"
-            " machine now.",
+            """
+Waiting for %d request(s) in server log...
+  Start the client on the remote machine now.""",
             expected,
         )
 
