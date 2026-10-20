@@ -54,6 +54,8 @@ class SystemResources:
         :return: Total thread count, leaving out processes that exit or deny access
         """
         total: int = 0
+        process: psutil.Process
+        # Add up the thread count of each process that still exists and allows access.
         for process in psutil.process_iter(["num_threads"]):
             try:
                 total += process.info.get("num_threads") or 0

@@ -54,6 +54,9 @@ class SlyDataFlattener:
         """
         children: List[Any] = []
         if isinstance(node, dict):
+            key: str
+            value: Any
+            # Keep string values; queue the other values to search.
             for key, value in node.items():
                 if isinstance(value, str):
                     parsed_fields.setdefault(key, value)
@@ -61,6 +64,8 @@ class SlyDataFlattener:
                     children.append(value)
         elif isinstance(node, list):
             children = node
+        child: Any
+        # Search nested dicts and lists for more fields.
         for child in children:
             if isinstance(child, (dict, list)):
                 SlyDataFlattener._collect(child, parsed_fields)

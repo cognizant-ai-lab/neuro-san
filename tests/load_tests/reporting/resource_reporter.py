@@ -75,18 +75,23 @@ class ResourceReporter:
         :param after_snapshot: Server process snapshot taken after the stage
         :return: (display_row, before_snapshot, after_snapshot)
         """
-        rss_delta_megabytes: float = after_snapshot.get("rss") - before_snapshot.get("rss")
-        thread_delta: int = after_snapshot.get("threads") - before_snapshot.get("threads")
+        before_rss_megabytes: float = before_snapshot.get("rss")
+        after_rss_megabytes: float = after_snapshot.get("rss")
+        before_threads: int = before_snapshot.get("threads")
+        after_threads: int = after_snapshot.get("threads")
+        after_cpu_percent: float = after_snapshot.get("cpu")
+        rss_delta_megabytes: float = after_rss_megabytes - before_rss_megabytes
+        thread_delta: int = after_threads - before_threads
         display: Tuple[str, ...] = (
             str(stage_label),
-            f"{before_snapshot.get('rss'):.1f}M",
-            f"{after_snapshot.get('rss'):.1f}M",
+            f"{before_rss_megabytes:.1f}M",
+            f"{after_rss_megabytes:.1f}M",
             f"{rss_delta_megabytes:+.1f}M",
             str(after_snapshot.get("fds")),
-            f"{before_snapshot.get('threads')} -> {after_snapshot.get('threads')}",
+            f"{before_threads} -> {after_threads}",
             f"{thread_delta:+d}",
             str(after_snapshot.get("connections")),
-            f"{after_snapshot.get('cpu'):.1f}%",
+            f"{after_cpu_percent:.1f}%",
             str(after_snapshot.get("children")),
         )
         row: ServerResourceRow = (display, before_snapshot, after_snapshot)

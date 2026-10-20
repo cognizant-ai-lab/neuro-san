@@ -44,7 +44,12 @@ class DisconnectionReporter:
         Log aggregate client disconnection report.
         """
         all_disconnections: List[Dict[str, Any]] = []
+        index: int
+        stage: Dict[str, Any]
+        disconnection: Dict[str, Any]
+        # Collect the disconnections of every stage.
         for index, stage in enumerate(self._summaries):
+            # Copy each disconnection and add its batch number.
             for disconnection in stage.get("disconnections") or []:
                 disconnection_copy: Dict[str, Any] = dict(disconnection)
                 disconnection_copy.update({"batch": index + 1})
@@ -54,6 +59,7 @@ class DisconnectionReporter:
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  CLIENT DISCONNECTIONS (%s detected in server log)", len(all_disconnections))
         logger.info("=" * SEPARATOR_WIDTH)
+        # One log line per disconnection.
         for disconnection in all_disconnections:
             logger.info(
                 "  Batch %s: %s — %s still processing at disconnect",
