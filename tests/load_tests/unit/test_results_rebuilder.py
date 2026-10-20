@@ -45,7 +45,7 @@ from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import STDOUT_LOG_FILE_NAME
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
-from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
+from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
 
@@ -79,17 +79,17 @@ class TestResultsRebuilder(TestCase):
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
         original, rebuilt = self._run_and_rebuild([], {}, STDOUT_LOG_FILE_NAME)
-        self._assert_same_run(original, rebuilt, self.REQUEST_COUNT, 0)
+        self._assert_same_run(original, rebuilt, TestResultsRebuilder.REQUEST_COUNT, 0)
 
     def test_hocon_fixture_run_rebuilds_five_passed(self) -> None:
         """
         A HOCON-fixture run with 5 passed requests rebuilds as 5 passed, 0 failed.
         """
-        extra_args: List[str] = ["--fixtures-hocon-dir", self.FIXTURES_HOCON_DIR]
+        extra_args: List[str] = ["--fixtures-hocon-dir", TestResultsRebuilder.FIXTURES_HOCON_DIR]
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
         original, rebuilt = self._run_and_rebuild(extra_args, {}, STDOUT_LOG_FILE_NAME)
-        self._assert_same_run(original, rebuilt, self.REQUEST_COUNT, 0)
+        self._assert_same_run(original, rebuilt, TestResultsRebuilder.REQUEST_COUNT, 0)
 
     def test_legacy_run_log_name_still_rebuilds(self) -> None:
         """
@@ -98,7 +98,7 @@ class TestResultsRebuilder(TestCase):
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
         original, rebuilt = self._run_and_rebuild([], {}, LEGACY_RUN_LOG_FILE_NAME)
-        self._assert_same_run(original, rebuilt, self.REQUEST_COUNT, 0)
+        self._assert_same_run(original, rebuilt, TestResultsRebuilder.REQUEST_COUNT, 0)
 
     def test_failed_timeout_and_killed_stay_distinct(self) -> None:
         """
@@ -135,7 +135,8 @@ class TestResultsRebuilder(TestCase):
         :return: (raw_results.json the run wrote, raw_results.json the rebuild wrote)
         """
         argv: List[str] = [
-            "load_test_cli", "--agent", self.AGENT, "--num-requests", str(self.REQUEST_COUNT), "--client-only",
+            "load_test_cli", "--agent", TestResultsRebuilder.AGENT,
+            "--num-requests", str(TestResultsRebuilder.REQUEST_COUNT), "--client-only",
             "--level", LEVEL_MIN, "--no-dry-run", "--settle-time", "0",
         ]
         argv.extend(extra_args)
@@ -232,8 +233,8 @@ class TestResultsRebuilder(TestCase):
         """
         original_extractor = DictionaryExtractor(original)
         rebuilt_extractor = DictionaryExtractor(rebuilt)
-        self.assertEqual(self.AGENT, rebuilt_extractor.get("config.agent"))
-        self.assertEqual(self.REQUEST_COUNT, rebuilt_extractor.get("config.num_requests"))
+        self.assertEqual(TestResultsRebuilder.AGENT, rebuilt_extractor.get("config.agent"))
+        self.assertEqual(TestResultsRebuilder.REQUEST_COUNT, rebuilt_extractor.get("config.num_requests"))
         self.assertEqual(passed, original_extractor.get("aggregates.passed"))
         self.assertEqual(failed, original_extractor.get("aggregates.failed"))
         self.assertEqual(passed, rebuilt_extractor.get("aggregates.passed"))
@@ -243,7 +244,7 @@ class TestResultsRebuilder(TestCase):
         original_request_ids: List[str] = sorted(original_requests.keys())
         rebuilt_request_ids: List[str] = sorted(rebuilt_requests.keys())
         self.assertEqual(original_request_ids, rebuilt_request_ids)
-        shortest_seconds: float = self.ANSWER_SECONDS - self.DURATION_TOLERANCE_SECONDS
+        shortest_seconds: float = TestResultsRebuilder.ANSWER_SECONDS - TestResultsRebuilder.DURATION_TOLERANCE_SECONDS
         request_id: str
         result: Dict[str, Any]
         # Each rebuilt request keeps its status and its duration, to the precision of the run log.
@@ -251,5 +252,5 @@ class TestResultsRebuilder(TestCase):
             rebuilt_result: Dict[str, Any] = rebuilt_requests.get(request_id, {})
             self.assertEqual(result.get("status"), rebuilt_result.get("status"), request_id)
             self.assertAlmostEqual(result.get("elapsed"), rebuilt_result.get("elapsed"),
-                                   delta=self.DURATION_TOLERANCE_SECONDS, msg=request_id)
+                                   delta=TestResultsRebuilder.DURATION_TOLERANCE_SECONDS, msg=request_id)
             self.assertGreaterEqual(rebuilt_result.get("elapsed"), shortest_seconds, request_id)

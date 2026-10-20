@@ -89,12 +89,14 @@ class TestTokenLogWriter(TestCase):
                     network_tokens=network_tokens, validation_events=validation_events,
                 )
             self.assertEqual(
-                "request-1: 1,500 tokens, 2 LLM call(s), model=gpt-4o-mini  [1.2s CREATED]\n"
+                "request-1: 1,500 tokens (1,000 prompt + 500 completion), 2 LLM call(s), model=gpt-4o-mini"
+                "  [1.2s CREATED]\n"
                 "  Validation: 2 attempt(s), 1 fix cycle(s)\n"
                 "    - missing key\n"
                 "  music_nerd: 2 call(s)  1,500 tokens (1,000 prompt / 500 completion)\n"
                 "\n"
-                "request-2: 500 tokens, 1 LLM call(s), model=gpt-4o-mini, agent=hello_world  [2.0s CREATED]\n"
+                "request-2: 500 tokens (300 prompt + 200 completion), 1 LLM call(s), model=gpt-4o-mini"
+                ", agent=hello_world  [2.0s CREATED]\n"
                 "  hello_world: 1 call(s)  500 tokens (300 prompt / 200 completion)\n"
                 "\n",
                 self._read_token_file(output_dir),

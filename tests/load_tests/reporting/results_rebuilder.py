@@ -37,12 +37,6 @@ from tests.load_tests.traffic.output_parser import OutputParser
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-_TIMING_RE: re.Pattern = re.compile(r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s")
-
-_CONFIG_AGENT_RE: re.Pattern = re.compile(r"Config:.*agent=([^,]+)")
-
-_CONFIG_NUM_REQ_RE: re.Pattern = re.compile(r"Requests:\s*(\d+)")
-
 
 class ResultsRebuilder:
     """
@@ -55,6 +49,17 @@ class ResultsRebuilder:
 
     # Legacy name first, so a current stdout.log line wins for the same request.
     RUN_LOG_FILES: List[str] = [LEGACY_RUN_LOG_FILE_NAME, STDOUT_LOG_FILE_NAME]
+
+    # A request result line, e.g. "Request 3: CREATED (1.25s)".
+    # Groups: 1 request id, 2 status, 3 elapsed seconds.
+    TIMING_RE: re.Pattern = re.compile(r"Request\s+(\d+):\s+(\w+)\s+\(([0-9.]+)s")
+
+    # The run config line, e.g. "Config: agent=hello_world, mode=flat, ...". Group 1: agent name.
+    CONFIG_AGENT_RE: re.Pattern = re.compile(r"Config:.*agent=([^,]+)")
+
+    # A request count line, e.g. "Requests: 5 x 2 rounds = 10 total" or "Requests: 10".
+    # Group 1: the first number on the line.
+    CONFIG_NUM_REQ_RE: re.Pattern = re.compile(r"Requests:\s*(\d+)")
 
     def __init__(self, output_dir: str, force: bool = False) -> None:
         """
@@ -214,7 +219,7 @@ class ResultsRebuilder:
         :return: Request id to its status and elapsed seconds, from the run log and progress.log
         """
         timing: Dict[int, Dict[str, Any]] = {}
-        log_files: List[str] = list(self.RUN_LOG_FILES)
+        log_files: List[str] = list(ResultsRebuilder.RUN_LOG_FILES)
         log_files.append(PROGRESS_LOG_FILE_NAME)
         filename: str
         # Failed requests are in the run log, successful ones in progress.log.
@@ -226,7 +231,7 @@ class ResultsRebuilder:
                 line: str
                 # Keep the last status line seen for each request.
                 for line in file_handle:
-                    match: Optional[re.Match] = _TIMING_RE.search(line)
+                    match: Optional[re.Match] = ResultsRebuilder.TIMING_RE.search(line)
                     if match:
                         request_id: int = int(match.group(1))
                         status: str = match.group(2)
@@ -244,7 +249,7 @@ class ResultsRebuilder:
         request_count: int = 0
         filename: str
         # Read each run log name that exists in the run directory.
-        for filename in self.RUN_LOG_FILES:
+        for filename in ResultsRebuilder.RUN_LOG_FILES:
             log_path: str = os.path.join(self._output_dir, filename)
             if not os.path.isfile(log_path):
                 continue
@@ -252,10 +257,10 @@ class ResultsRebuilder:
                 line: str
                 # Keep the last agent and request count lines seen.
                 for line in file_handle:
-                    match: Optional[re.Match] = _CONFIG_AGENT_RE.search(line)
+                    match: Optional[re.Match] = ResultsRebuilder.CONFIG_AGENT_RE.search(line)
                     if match:
                         agent = match.group(1).strip()
-                    match = _CONFIG_NUM_REQ_RE.search(line)
+                    match = ResultsRebuilder.CONFIG_NUM_REQ_RE.search(line)
                     if match:
                         request_count = int(match.group(1))
         return agent, request_count

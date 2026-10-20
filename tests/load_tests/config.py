@@ -62,8 +62,8 @@ FAILURE_LOG_LIMIT: int = 10
 FAILURE_REASON_LINE_LIMIT: int = 200
 
 # Timeouts for short-lived operations (seconds)
-SOCKET_CHECK_TIMEOUT: int = 2
-THREAD_JOIN_TIMEOUT: int = 2
+SOCKET_CHECK_TIMEOUT_SECONDS: int = 2
+THREAD_JOIN_TIMEOUT_SECONDS: int = 2
 STALE_LOG_THRESHOLD_SECONDS: int = 300
 
 # Trend history: one append-only JSONL record per client run so

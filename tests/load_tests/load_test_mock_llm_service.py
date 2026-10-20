@@ -282,11 +282,11 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         provided them explicitly. Abort if the agent is unknown and --prompt
         is missing.
         """
-        preset: Optional[Dict[str, Optional[str]]] = self.AGENT_PRESETS.get(self.args.agent)
+        preset: Optional[Dict[str, Optional[str]]] = MockLlmLoadTest.AGENT_PRESETS.get(self.args.agent)
 
         if self.args.prompt is None:
             if preset is None:
-                known_agents: str = ", ".join(sorted(self.AGENT_PRESETS.keys()))
+                known_agents: str = ", ".join(sorted(MockLlmLoadTest.AGENT_PRESETS.keys()))
                 logger.error(
                     """No preset for agent '%s'. Please provide --prompt explicitly.
 Known presets: %s""",
@@ -427,9 +427,9 @@ Then:
         mock_port: str = str(self.args.mock_port)
         api_base: str = f"http://localhost:{mock_port}/v1"
 
-        logger.info("Auto-starting mock LLM server (log: %s)", self.MOCK_LOG_PATH)
+        logger.info("Auto-starting mock LLM server (log: %s)", MockLlmLoadTest.MOCK_LOG_PATH)
         # pylint: disable-next=consider-using-with
-        self._mock_log_file_handle = open(self.MOCK_LOG_PATH, "w", encoding="utf-8")
+        self._mock_log_file_handle = open(MockLlmLoadTest.MOCK_LOG_PATH, "w", encoding="utf-8")
         self._auto_mock_popen = Popen(  # pylint: disable=consider-using-with
             ["python", "-m", "tests.mock_llm_server.mock_llm_server",
              "--port", mock_port],
@@ -439,10 +439,10 @@ Then:
 
         # The overlay keeps openai-class models on Chat Completions, the only endpoint the mock serves.
         server_env: Dict[str, str] = {**os.environ, "OPENAI_API_BASE": api_base,
-                                      "AGENT_LLM_INFO_FILE": self.CHAT_COMPLETIONS_LLM_INFO_PATH}
-        logger.info("Auto-starting neuro-san server (log: %s)", self.SERVER_LOG_PATH)
+                                      "AGENT_LLM_INFO_FILE": MockLlmLoadTest.CHAT_COMPLETIONS_LLM_INFO_PATH}
+        logger.info("Auto-starting neuro-san server (log: %s)", MockLlmLoadTest.SERVER_LOG_PATH)
         # pylint: disable-next=consider-using-with
-        self._server_log_file_handle = open(self.SERVER_LOG_PATH, "w", encoding="utf-8")
+        self._server_log_file_handle = open(MockLlmLoadTest.SERVER_LOG_PATH, "w", encoding="utf-8")
         self._auto_server_popen = Popen(  # pylint: disable=consider-using-with
             ["python", "-m", "neuro_san.service.main_loop.server_main_loop"],
             stdout=self._server_log_file_handle,
@@ -450,15 +450,15 @@ Then:
             env=server_env,
         )
 
-        logger.info("Waiting %ss for servers to start...", self.STARTUP_WAIT_SECONDS)
-        time.sleep(self.STARTUP_WAIT_SECONDS)
+        logger.info("Waiting %ss for servers to start...", MockLlmLoadTest.STARTUP_WAIT_SECONDS)
+        time.sleep(MockLlmLoadTest.STARTUP_WAIT_SECONDS)
 
         if self._auto_mock_popen.poll() is not None:
-            logger.error("Mock LLM server exited unexpectedly. Check %s", self.MOCK_LOG_PATH)
+            logger.error("Mock LLM server exited unexpectedly. Check %s", MockLlmLoadTest.MOCK_LOG_PATH)
             sys.exit(1)
 
         if self._auto_server_popen.poll() is not None:
-            logger.error("Neuro-san server exited unexpectedly. Check %s", self.SERVER_LOG_PATH)
+            logger.error("Neuro-san server exited unexpectedly. Check %s", MockLlmLoadTest.SERVER_LOG_PATH)
             self._auto_mock_popen.terminate()
             sys.exit(1)
 
@@ -469,7 +469,7 @@ Then:
         logger.info("Mock LLM server ready (PID %s)", self.mock_process.pid)
         logger.info("Neuro-san server ready (PID %s)", self.server_process.pid)
         logger.info("  OPENAI_API_BASE=%s", self._api_base)
-        logger.info("  AGENT_LLM_INFO_FILE=%s", self.CHAT_COMPLETIONS_LLM_INFO_PATH)
+        logger.info("  AGENT_LLM_INFO_FILE=%s", MockLlmLoadTest.CHAT_COMPLETIONS_LLM_INFO_PATH)
 
     def _stop_servers(self) -> None:
         """
@@ -478,11 +478,11 @@ Then:
         if self._auto_server_popen is not None:
             logger.info("Stopping neuro-san server (PID %s)...", self._auto_server_popen.pid)
             self._auto_server_popen.terminate()
-            self._auto_server_popen.wait(timeout=self.PROCESS_WAIT_TIMEOUT_SECONDS)
+            self._auto_server_popen.wait(timeout=MockLlmLoadTest.PROCESS_WAIT_TIMEOUT_SECONDS)
         if self._auto_mock_popen is not None:
             logger.info("Stopping mock LLM server (PID %s)...", self._auto_mock_popen.pid)
             self._auto_mock_popen.terminate()
-            self._auto_mock_popen.wait(timeout=self.PROCESS_WAIT_TIMEOUT_SECONDS)
+            self._auto_mock_popen.wait(timeout=MockLlmLoadTest.PROCESS_WAIT_TIMEOUT_SECONDS)
         if self._server_log_file_handle is not None:
             self._server_log_file_handle.close()
         if self._mock_log_file_handle is not None:

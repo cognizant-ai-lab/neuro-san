@@ -19,6 +19,7 @@ import shutil
 import tempfile
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Union
@@ -29,18 +30,21 @@ from unittest.mock import patch
 from typing_extensions import override
 
 from tests.load_tests.config import RAW_RESULTS_FILE_NAME
+from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
+from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 
 # pylint: disable=protected-access
 
 
 class TestCrossRunComparison(TestCase):
     """
-    Unit tests for CrossRunComparison._extract_metrics().
+    Unit tests for CrossRunComparison._extract_metrics() and _parse_validation_loops().
 
     A missing, unreadable or malformed raw_results.json, or one that is not a JSON
     object, returns None (comparisons keep working) and reports the path and reason
-    through SensitiveLogger.
+    through SensitiveLogger. A server_tokens.log written by TokenLogWriter gives one
+    validation-loop entry per request with at least LOOP_THRESHOLD LLM calls.
     """
 
     @override
@@ -101,6 +105,56 @@ class TestCrossRunComparison(TestCase):
         with patch("builtins.open", side_effect=PermissionError("permission denied")):
             reason = self._assert_logged_none(path)
         self.assertIsInstance(reason, PermissionError)
+
+    def test_validation_loops_from_token_log_writer(self) -> None:
+        """
+        A server_tokens.log from TokenLogWriter gives one loop entry for a 12-call request and none for a 4-call one.
+        """
+        results: List[Dict[str, Any]] = [
+            {
+                "request_id": "request-1",
+                "status": "CREATED",
+                "elapsed": 30.0,
+                "total_tokens": 1500,
+                "prompt_tokens": 1000,
+                "completion_tokens": 500,
+                "llm_calls": 12,
+                "model": "gpt-4o-mini",
+                "reporting_agent": "hello_world",
+            },
+            {
+                "request_id": "request-2",
+                "status": "CREATED",
+                "elapsed": 5.0,
+                "total_tokens": 400,
+                "prompt_tokens": 300,
+                "completion_tokens": 100,
+                "llm_calls": 4,
+                "model": "gpt-4o-mini",
+                "reporting_agent": "hello_world",
+            },
+        ]
+        with self.assertLogs("tests.load_tests.reporting.token_log_writer", level="INFO"):
+            TokenLogWriter.log_token_summary(results, output_dir=self._dir)
+
+        log_path: str = os.path.join(self._dir, SERVER_TOKENS_LOG_FILE_NAME)
+        loops: List[Dict[str, Any]] = CrossRunComparison._parse_validation_loops(log_path)
+
+        self.assertEqual(1, len(loops), loops)
+        loop_entry: Dict[str, Any] = loops[0]
+        cost_dollars: float = loop_entry.get("cost_usd", -1.0)
+        expected: Dict[str, Any] = {
+            "request_id": "request-1",
+            "llm_calls": 12,
+            "retries": 8,
+            "prompt_tokens": 1000,
+            "completion_tokens": 500,
+            "total_tokens": 1500,
+            "model": "gpt-4o-mini",
+            "cost_usd": cost_dollars,
+        }
+        self.assertEqual(expected, loop_entry)
+        self.assertGreaterEqual(cost_dollars, 0.0)
 
     def _write(self, contents: str) -> str:
         """
