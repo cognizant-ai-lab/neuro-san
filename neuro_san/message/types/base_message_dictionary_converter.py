@@ -115,6 +115,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             "sly_data": "sly_data",
         }
         content_blocks: Optional[Dict[str, Any]] = None
+        src: str = None
+        dest: str = None
         for src, dest in optionals.items():
             value: Any = None
             try:

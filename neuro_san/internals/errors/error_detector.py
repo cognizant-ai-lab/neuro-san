@@ -59,6 +59,7 @@ class ErrorDetector:
         if output is None:
             return False
 
+        fragment: str = None
         for fragment in self.error_fragments:
             if fragment in output:
                 return True

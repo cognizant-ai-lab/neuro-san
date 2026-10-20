@@ -37,7 +37,7 @@ class FirstAvailableStructureParser(StructureParser):
         """
         super().__init__()
         self.structure_formats: List[str] = structure_formats
-        self.factory = StructureParserFactory()
+        self.factory: StructureParserFactory = StructureParserFactory()
 
     def parse_structure(self, content: str) -> Dict[str, Any]:
         """
@@ -49,6 +49,7 @@ class FirstAvailableStructureParser(StructureParser):
         """
         structure: Dict[str, Any] = None
 
+        structure_format: str = None
         for structure_format in self.structure_formats:
 
             structure_parser: StructureParser = self.factory.create_structure_parser(structure_format)

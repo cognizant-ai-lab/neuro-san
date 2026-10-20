@@ -49,7 +49,7 @@ class StreamingInputProcessor:
         """
         self.default_input: str = default_input
         self.session: AgentSession = session
-        self.processor = BasicMessageProcessor()
+        self.processor: BasicMessageProcessor = BasicMessageProcessor()
         # Log responses only for MCP sessions
         self.log_responses: bool = isinstance(session, McpServiceAgentSession)
         if thinking_dir is not None and thinking_file is not None:
@@ -93,6 +93,7 @@ class StreamingInputProcessor:
         return_state: Dict[str, Any] = copy(state)
         returned_sly_data: Optional[Dict[str, Any]] = None
         chat_responses: Generator[Dict[str, Any], None, None] = self.session.streaming_chat(chat_request)
+        chat_response: Dict[str, Any] = None
         for chat_response in chat_responses:
 
             if self.log_responses:
@@ -145,7 +146,7 @@ class StreamingInputProcessor:
         :param chat_filter: The ChatFilter to apply to the request.
         :return: A dictionary representing the chat request to send
         """
-        chat_request = {
+        chat_request: Dict[str, Any] = {
             "user_message": {
                 "type": ChatMessageTypeUtil.to_string(ChatMessageType.HUMAN),
                 "text": user_input

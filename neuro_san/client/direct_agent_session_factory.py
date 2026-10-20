@@ -55,13 +55,14 @@ class DirectAgentSessionFactory:
         Constructor
         """
         # Read the manifest once and pass that into the Util call below.
-        manifest_restorer = RegistryManifestRestorer()
+        manifest_restorer: RegistryManifestRestorer = RegistryManifestRestorer()
         manifest_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
 
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
             StorageClass.TEMP: ExpiringAgentNetworkStorage()
         }
 
+        storage_class: str = None
         for storage_class in StorageClass.ALL_PERMANENT:
             storage: AgentNetworkStorage = DirectAgentStorageUtil.create_network_storage(manifest_networks,
                                                                                          storage_type=storage_class)
@@ -90,18 +91,20 @@ class DirectAgentSessionFactory:
         llm_factory.load()
         toolbox_factory.load()
 
-        factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage_dict=self.network_storage_dict)
-        executors_pool = AsyncioExecutorPool()
+        factory: ExternalAgentSessionFactory = \
+            ExternalAgentSessionFactory(use_direct=use_direct, network_storage_dict=self.network_storage_dict)
+        executors_pool: AsyncioExecutorPool = AsyncioExecutorPool()
 
         # DEF - We could do max_lifetime here, but waiting until that seems necessary.
-        reservationist = DirectAgentReservationist(set([self.network_storage_dict.get(StorageClass.TEMP)]))
-        invocation_context = SessionInvocationContext(agent_name,
-                                                      factory,
-                                                      executors_pool,
-                                                      llm_factory,
-                                                      toolbox_factory,
-                                                      metadata,
-                                                      reservationist)
+        reservationist: DirectAgentReservationist = \
+            DirectAgentReservationist(set([self.network_storage_dict.get(StorageClass.TEMP)]))
+        invocation_context: SessionInvocationContext = SessionInvocationContext(agent_name,
+                                                                                factory,
+                                                                                executors_pool,
+                                                                                llm_factory,
+                                                                                toolbox_factory,
+                                                                                metadata,
+                                                                                reservationist)
         invocation_context.start()
         session: DirectAgentSession = DirectAgentSession(agent_network=agent_network,
                                                          invocation_context=invocation_context,
@@ -123,10 +126,11 @@ class DirectAgentSessionFactory:
         agent_network: AgentNetwork = None
         if agent_name.endswith(".hocon") or agent_name.endswith(".json"):
             # We got a specific file name
-            restorer = AgentNetworkRestorer()
+            restorer: AgentNetworkRestorer = AgentNetworkRestorer()
             agent_network = restorer.restore(file_reference=agent_name)
         else:
             # Use the standard stuff available via the manifest file.
+            storage_type: str = None
             for storage_type in StorageClass.ALL_PERMANENT:
                 storage: AgentNetworkStorage = self.network_storage_dict.get(storage_type)
                 agent_network_provider: AgentNetworkProvider = storage.get_agent_network_provider(agent_name)

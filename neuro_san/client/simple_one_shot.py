@@ -58,12 +58,13 @@ class SimpleOneShot:
                                                                      self.agent,
                                                                      hostname=self.host,
                                                                      port=self.port)
-        input_processor = StreamingInputProcessor(session=session)
+        input_processor: StreamingInputProcessor = StreamingInputProcessor(session=session)
         self.processor = input_processor.get_message_processor()
         request: Dict[str, Any] = input_processor.formulate_chat_request(text)
 
         # Call streaming_chat()
         empty: Dict[str, Any] = {}
+        chat_response: Dict[str, Any] = None
         for chat_response in session.streaming_chat(request):
             message: Dict[str, Any] = chat_response.get("response", empty)
             self.processor.process_message(message, chat_response.get("type"))

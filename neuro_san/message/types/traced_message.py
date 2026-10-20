@@ -85,7 +85,11 @@ class TracedMessage(BaseMessage):
 
         additional_kwargs: Dict[str, Any] = {}
 
+        key: str = None
+        value: Any = None
         for key, value in self.lc_kwargs.items():
+            new_key: str = None
+            new_value: Any = None
             new_key, new_value = self.translate_for_trace(key, value)
             if new_key is not None:
                 additional_kwargs[new_key] = new_value

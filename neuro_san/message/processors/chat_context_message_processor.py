@@ -34,7 +34,7 @@ class ChatContextMessageProcessor(MessageProcessor):
         """
         self.chat_context: Dict[str, Any] = {}
         self.sly_data: Dict[str, Any] = None
-        self.filter = ChatContextMessageFilter()
+        self.filter: ChatContextMessageFilter = ChatContextMessageFilter()
 
     def get_chat_context(self) -> Dict[str, Any]:
         """
