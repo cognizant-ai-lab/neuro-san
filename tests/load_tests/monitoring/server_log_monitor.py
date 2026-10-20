@@ -20,7 +20,6 @@ Interim implementation. May be replaced by neuro-san built-in
 monitoring and telemetry when those features become available.
 """
 
-import ast
 import json
 import logging
 import os
@@ -38,7 +37,6 @@ from typing import Tuple
 from typing import Union
 
 import psutil
-from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from tests.load_tests.load_test_constants import CLIENT_DISCONNECT_PATTERN
 from tests.load_tests.load_test_constants import DONE_STREAMING_PATTERN
@@ -51,6 +49,7 @@ from tests.load_tests.load_test_constants import RETRY_LOG_PATTERN
 from tests.load_tests.load_test_constants import SERVER_ERROR_PATTERN
 from tests.load_tests.load_test_constants import TASK_CANCELLED_PATTERN
 from tests.load_tests.load_test_constants import VALIDATION_ATTEMPT_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_ERROR_ITEM_PATTERN
 from tests.load_tests.load_test_constants import VALIDATION_ERROR_PATTERN
 from tests.load_tests.load_test_constants import VALIDATION_REINVOKE_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -421,21 +420,19 @@ class ServerLogMonitor:
         """
         Read the errors out of the list text the neuro-san-studio middleware logs with "Validation errors: %s".
         Python writes each error in single quotes, or in double quotes when it holds a single quote.
+        The text is only matched with VALIDATION_ERROR_ITEM_PATTERN, never evaluated.
 
         :param error_list_text: The list text with its brackets, e.g. "['Missing front man']"
-        :return: The errors, or the whole text as one error when it is not a Python list
+        :return: The errors, or the whole text as one error when no quoted error is found in a non-empty list
         """
-        errors: List[Any] = []
-        try:
-            errors = ast.literal_eval(error_list_text)
-        except (ValueError, TypeError, SyntaxError) as exc:
-            SensitiveLogger(logger).info("Could not read the validation errors %s: %s", error_list_text, exc)
-            return [error_list_text]
-        error_texts: List[str] = []
-        # str() keeps the report text the same if an error is ever logged as something other than a string.
-        for error in errors:
-            error_texts.append(str(error))
-        return error_texts
+        errors: List[str] = []
+        # Each match fills only the group of the quote Python chose for that error.
+        for single_quoted, double_quoted in VALIDATION_ERROR_ITEM_PATTERN.findall(error_list_text):
+            errors.append(single_quoted or double_quoted)
+        if not errors and error_list_text != "[]":
+            logger.info("Could not find a quoted error in the validation errors %s", error_list_text)
+            errors.append(error_list_text)
+        return errors
 
     def parse_streaming_chat_timing_since(self, position) -> List[Dict[str, object]]:
         """Parse Start/Finish streaming_chat entries for timing.

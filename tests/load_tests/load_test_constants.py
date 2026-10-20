@@ -112,6 +112,9 @@ VALIDATION_ATTEMPT_PATTERN: re.Pattern = re.compile(r'Validating toolbox agents'
 # neuro-san-studio AgentNetworkPersistenceMiddleware warning "Validation errors: %s" with a Python list of
 # strings, as the JSON "message" value. Group 1 is the list text with its brackets, e.g. "['Missing front man']".
 VALIDATION_ERROR_PATTERN: re.Pattern = re.compile(r'"Validation errors: (\[.*\])"')
+# One error in the VALIDATION_ERROR_PATTERN list text. Python writes each error in single quotes, or in double
+# quotes when it holds a single quote. Group 1 is a single-quoted error, group 2 a double-quoted one.
+VALIDATION_ERROR_ITEM_PATTERN: re.Pattern = re.compile(r"'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\"")
 # Agent network designer warning "Invoking agent network designer to fix the issues (attempt n/m)."
 # at each fix cycle. No groups.
 VALIDATION_REINVOKE_PATTERN: re.Pattern = re.compile(r'Invoking agent network designer to fix the issues')
