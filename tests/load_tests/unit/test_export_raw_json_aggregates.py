@@ -80,6 +80,9 @@ class TestExportRawJsonAggregates(TestCase):
         :return: Aggregates read back from raw_results.json
         """
         results: List[Dict[str, Any]] = []
+        index: int
+        elapsed_seconds: float
+        # One successful request per elapsed time, numbered from 1.
         for index, elapsed_seconds in enumerate(elapsed_values_seconds, start=1):
             results.append({"request_id": f"request-{index}", "status": STATUS_CREATED, "elapsed": elapsed_seconds})
         # One stage whose wall-clock time is the slowest request,

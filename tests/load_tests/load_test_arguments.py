@@ -465,10 +465,14 @@ class LoadTestArguments:
         """
         sentinel: object = object()
         sentinel_defaults: Dict[str, object] = {}
+        name: str
+        # Replace each default with the sentinel.
         for name in vars(args):
             sentinel_defaults[name] = sentinel
         parser.set_defaults(**sentinel_defaults)
         explicit: Set[str] = set()
+        value: object
+        # Keep each dest whose value is not the sentinel.
         for name, value in vars(parser.parse_args()).items():
             if value is not sentinel:
                 explicit.add(name)

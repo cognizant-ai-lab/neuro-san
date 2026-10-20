@@ -77,6 +77,8 @@ class TestScanRequests(TestCase):
             os.path.join(self._dir, "requests"), rebuilder._parse_timing(),
         )
         keyed: Dict[str, Dict[str, Any]] = {}
+        result: Dict[str, Any]
+        # Key each result by its request id.
         for result in results:
             keyed[result.get("request_id")] = result
         return keyed

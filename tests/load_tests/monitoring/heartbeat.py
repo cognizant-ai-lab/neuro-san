@@ -449,6 +449,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Number of futures that are done
         """
         done_count: int = 0
+        future: Future
+        # Count the futures that are done.
         for future in futures:
             if future.done():
                 done_count += 1
@@ -467,6 +469,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Durations in seconds of the finished requests
         """
         durations: List[float] = []
+        future: Future
+        # Read the elapsed time of each request that finished without an error.
         for future in futures:
             if not future.done() or future.cancelled():
                 continue
@@ -500,6 +504,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         except (OSError, ValueError):
             return []
         durations: List[float] = []
+        pair: Dict[str, object]
+        # Keep the duration of each primary agent Start/Finish pair.
         for pair in pairs:
             if self._primary_start_regex is not None:
                 agent: object = pair.get("agent", "")

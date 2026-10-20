@@ -39,6 +39,8 @@ class TestResolvePath(TestCase):
 
     def _remove_dir(self) -> None:
         """Remove the scratch directory and anything left in it."""
+        name: str
+        # Delete each file left in the directory.
         for name in os.listdir(self._dir):
             os.unlink(os.path.join(self._dir, name))
         os.rmdir(self._dir)

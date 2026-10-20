@@ -57,6 +57,8 @@ class OutputParser:
             return {}
         depth: int = 0
         json_end: int = json_start
+        char_index: int
+        # Find the brace that closes the first JSON object.
         for char_index in range(json_start, len(stdout)):
             if stdout[char_index] == "{":
                 depth += 1

@@ -50,6 +50,9 @@ class TestRebuiltAggregates(TestCase):
         :return: Aggregates read back from raw_results.json
         """
         lines: List[str] = []
+        request_id: int
+        elapsed_seconds: float
+        # Write the response file and the progress line of each request.
         for request_id, elapsed_seconds in elapsed_seconds_by_id.items():
             path: str = os.path.join(self._dir, "requests", f"request_{request_id}_stdout.txt")
             with open(path, "w", encoding="utf-8") as handle:
