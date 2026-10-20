@@ -336,7 +336,10 @@ class LangChainRunContext(RunContext):
         # middleware is a list of AgentMiddleware instances, perhaps empty.
         # checkpointer is an opaque object native to langchain.
         middleware, checkpointer = middleware_factory.create_agent_middleware(self.middleware_config, sly_data)
-        agent_tools: List[Any] = self.tools + (self.llm_config.get("provider_tools") or [])
+        agent_tools: List[Any] = self.tools
+        provider_tools: List[Any] = self.llm_config.get("provider_tools")
+        if provider_tools is not None:
+            agent_tools.extend(provider_tools)
 
         return create_agent(
             model=llm,

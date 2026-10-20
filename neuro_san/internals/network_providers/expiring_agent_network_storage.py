@@ -174,12 +174,13 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         with self.lock:
             for reservation, agent_spec in use_reservations.items():
 
-                agent_name: str = reservation.get_reservation_id()
+                use_reservation: Reservation = reservation
+                agent_name: str = use_reservation.get_reservation_id()
                 is_new: bool = self.agents_table.get(agent_name) is None
 
                 agent_network: AgentNetwork = AgentNetwork(agent_spec, agent_name)
                 self.agents_table[agent_name] = agent_network
-                self.reservations_table[agent_name] = reservation
+                self.reservations_table[agent_name] = use_reservation
                 self.access_times[agent_name] = now
                 self.sizes[agent_name] = agent_network.get_size_in_bytes()
 
