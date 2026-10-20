@@ -25,7 +25,7 @@ from unittest import TestCase
 
 from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
 from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
+from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 
 
 class TestRebuiltAggregates(TestCase):
