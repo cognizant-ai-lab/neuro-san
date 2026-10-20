@@ -17,10 +17,15 @@
 import argparse
 import os
 from typing import Dict
+from typing import List
 from typing import Set
 
 from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
+from tests.load_tests.load_test_constants import DEFAULT_HTTPS_PORT
 from tests.load_tests.load_test_constants import DEFAULT_IDLE_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import DEFAULT_SETTLE_TIME_SECONDS
+from tests.load_tests.load_test_constants import DEFAULT_STAGE_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import DEFAULT_STAGES
 from tests.load_tests.load_test_constants import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.load_test_constants import LEVEL_ADV
 from tests.load_tests.load_test_constants import LEVEL_MIN
@@ -46,6 +51,37 @@ class LoadTestArguments:
         :param epilog: Text shown at the end of --help
         :return: Parsed arguments, with explicit_args set to the dest names the user passed
         """
+        parser: argparse.ArgumentParser = LoadTestArguments._create_parser(epilog)
+        args: argparse.Namespace = parser.parse_args()
+        # Track which args the user explicitly provided so
+        # level-based defaults do not override them.
+        explicit: Set[str] = LoadTestArguments._explicit_args(parser, args)
+        args.explicit_args = explicit
+        # When targeting https and no explicit port was given,
+        # default to the standard TLS port.
+        if args.https and "port" not in explicit:
+            args.port = DEFAULT_HTTPS_PORT
+        return args
+
+    @staticmethod
+    def _create_parser(epilog: str) -> argparse.ArgumentParser:
+        """
+        Build the parser that holds every load-test flag.
+
+        :param epilog: Text shown at the end of --help
+        :return: The parser, ready to read the command line
+        """
+        stage_texts: List[str] = []
+        stage: int
+        # Turn each default stage into text for the --stages help, e.g. "10,30,50,100".
+        for stage in DEFAULT_STAGES:
+            stage_texts.append(str(stage))
+        default_stages_text: str = ",".join(stage_texts)
+        # Durations shown after %(default)s in the timeout help texts, e.g. "20m" for 1200 seconds.
+        request_timeout_text: str = DurationParser.format_seconds(DEFAULT_TIMEOUT_SECONDS)
+        idle_timeout_text: str = DurationParser.format_seconds(DEFAULT_IDLE_TIMEOUT_SECONDS)
+        stage_timeout_text: str = DurationParser.format_seconds(DEFAULT_STAGE_TIMEOUT_SECONDS)
+        settle_time_text: str = DurationParser.format_seconds(DEFAULT_SETTLE_TIME_SECONDS)
         parser: argparse.ArgumentParser = argparse.ArgumentParser(
             description="Load-test neuro-san agent networks with real LLM calls.",
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -57,7 +93,7 @@ class LoadTestArguments:
             type=str,
             default="hello_world",
             help="""
-            Agent network name to test (default: hello_world).
+            Agent network name to test (default: %(default)s).
             Must be registered in the server's AGENT_REGISTRY_PATH.
             """,
         )
@@ -128,7 +164,10 @@ class LoadTestArguments:
             "--stages",
             type=str,
             default=None,
-            help="Comma-separated concurrency levels for ramp-up mode (default: 10,30,50,100). Only used with --ramp.",
+            help=f"""
+            Comma-separated concurrency levels for ramp-up mode (default: {default_stages_text}).
+            Only used with --ramp.
+            """,
         )
         parser.add_argument(
             "--max-requests",
@@ -140,21 +179,28 @@ class LoadTestArguments:
             Default: sum(stages) * num_rounds.
             """,
         )
-        parser.add_argument("--host", type=str, default="localhost", help="Neuro-san server host (default: localhost)")
+        parser.add_argument(
+            "--host",
+            type=str,
+            default="localhost",
+            help="Neuro-san server host (default: %(default)s)",
+        )
         parser.add_argument(
             "--port",
             type=int,
             default=8080,
-            help="Neuro-san server port (default: %(default)s for http, 443 for https unless overridden)",
+            help=f"""
+            Neuro-san server port (default: %(default)s for http, {DEFAULT_HTTPS_PORT} for https unless overridden)
+            """,
         )
         parser.add_argument(
             "--https",
             action="store_true",
             default=False,
-            help="""
+            help=f"""
             Use HTTPS/TLS to reach the server.
             Default is plain HTTP.
-            When set and --port is not given, the port defaults to 443.
+            When set and --port is not given, the port defaults to {DEFAULT_HTTPS_PORT}.
             """,
         )
         parser.add_argument(
@@ -162,10 +208,10 @@ class LoadTestArguments:
             type=DurationParser.parse,
             metavar="DURATION",
             default=DEFAULT_TIMEOUT_SECONDS,
-            help="""
+            help=f"""
             Hard timeout per request.
             Bare number = seconds, or suffix s/m/h (e.g. 90s, 20m, 2h).
-            Default: %(default)s (20m).
+            Default: %(default)s ({request_timeout_text}).
             Safety net to prevent requests from running forever.
             """,
         )
@@ -174,10 +220,10 @@ class LoadTestArguments:
             type=DurationParser.parse,
             metavar="DURATION",
             default=DEFAULT_IDLE_TIMEOUT_SECONDS,
-            help="""
+            help=f"""
             Kill a request if no output for this long.
             Bare number = seconds, or suffix s/m/h (e.g. 90s, 15m).
-            Default: %(default)s (15m).
+            Default: %(default)s ({idle_timeout_text}).
             Detects hanging requests.
             """,
         )
@@ -185,11 +231,11 @@ class LoadTestArguments:
             "--stage-timeout",
             type=DurationParser.parse,
             metavar="DURATION",
-            default=1500,
-            help="""
+            default=DEFAULT_STAGE_TIMEOUT_SECONDS,
+            help=f"""
             Hard timeout for an entire stage/round.
             Bare number = seconds, or suffix s/m/h (e.g. 25m, 1h).
-            Default: %(default)s (25m).
+            Default: %(default)s ({stage_timeout_text}).
             Kills remaining in-flight requests when hit.
             """,
         )
@@ -209,11 +255,11 @@ class LoadTestArguments:
             "--settle-time",
             type=DurationParser.parse,
             metavar="DURATION",
-            default=15,
-            help="""
+            default=DEFAULT_SETTLE_TIME_SECONDS,
+            help=f"""
             Wait this long after each stage for cleanup.
             Bare number = seconds, or suffix s/m/h (e.g. 15s, 1m).
-            Default: %(default)s (15s).
+            Default: %(default)s ({settle_time_text}).
             """,
         )
         parser.add_argument(
@@ -310,7 +356,7 @@ class LoadTestArguments:
             choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
             default=LEVEL_NORM,
             help="""
-            Test depth level (default: norm).
+            Test depth level (default: %(default)s).
             min: traffic + validation only (only with --client-only/--server-only; not valid for an all-in-one run).
             norm: adds resource monitoring and server log analysis (if --server-log given).
             adv: adds pool analysis (defaults to 50 requests, 50 workers, 3 rounds unless overridden).
@@ -437,16 +483,7 @@ class LoadTestArguments:
             raw_results.json.
             """,
         )
-        args: argparse.Namespace = parser.parse_args()
-        # Track which args the user explicitly provided so
-        # level-based defaults do not override them.
-        explicit: Set[str] = LoadTestArguments._explicit_args(parser, args)
-        args.explicit_args = explicit
-        # When targeting https and no explicit port was given,
-        # default to the standard TLS port.
-        if args.https and "port" not in explicit:
-            args.port = 443
-        return args
+        return parser
 
     @staticmethod
     def _explicit_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Set[str]:
