@@ -73,6 +73,7 @@ class TrendHistory:
         if self._agent_filter:
             # Keep only the records for the agents in the filter.
             matching_records: List[Dict[str, Any]] = []
+            # Keep the records of the agents in the filter.
             for record in records:
                 if record.get("agent") in self._agent_filter:
                     matching_records.append(record)
@@ -86,6 +87,7 @@ class TrendHistory:
         logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
         # One table row per record, in file order.
         rows: List[List[str]] = []
+        # One table row per record.
         for record in records:
             rows.append(self._row(record))
         TableFormatter.log_table(self._header(), rows)
@@ -134,6 +136,8 @@ class TrendHistory:
         skipped: int = 0
         try:
             with open(history_path, "r", encoding="utf-8") as file_handle:
+                line: str
+                # Parse each non-empty line as one JSON record.
                 for line in file_handle:
                     line = line.strip()
                     if not line:
@@ -163,6 +167,7 @@ class TrendHistory:
         :return: Column names
         """
         header: List[str] = ["timestamp", "neuro-san", "agent", "mode", "via", "reqs", "done"]
+        threshold: int
         # One column per threshold, e.g. "<30s".
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             header.append(f"<{int(threshold)}s")
@@ -196,6 +201,7 @@ class TrendHistory:
             str(requests),
             str(completed),
         ]
+        threshold: int
         # One cell per threshold: requests completed within it, or "-".
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             threshold_key: str = f"completed_within_{int(threshold)}s"

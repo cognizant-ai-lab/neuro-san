@@ -45,6 +45,7 @@ class TableFormatter:
         value: Any
         # Widen each column to its longest value.
         for row in rows:
+            # Widen a column when this value is longer.
             for index, value in enumerate(row):
                 column_widths[index] = max(column_widths[index], len(str(value)))
         column_patterns: List[str] = []
