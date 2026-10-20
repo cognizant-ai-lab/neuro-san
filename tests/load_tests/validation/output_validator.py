@@ -56,15 +56,16 @@ class OutputValidator:
         # Count each result under its status.
         for result in results:
             status: str = result.get("status", STATUS_FAILED)
-            if status not in counts:
+            # pylint: disable=consider-iterating-dictionary
+            if status not in counts.keys():
                 status = STATUS_FAILED
             counts[status] = counts.get(status, 0) + 1
         return counts
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed_seconds: float, timeout: float,
-                          idle_timeout: float, show_counts: bool = True) -> None:
+    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed_seconds: float, timeout_seconds: float,
+                          idle_timeout_seconds: float, show_counts: bool = True) -> None:
         """
         Log per-stage summary of request results.
 
@@ -75,8 +76,8 @@ class OutputValidator:
         :param actual_requests: Requests sent in the stage
         :param counts: Count per status from count_results
         :param elapsed_seconds: Stage wall time in seconds
-        :param timeout: --request-timeout in seconds, shown in the timed-out line
-        :param idle_timeout: --idle-timeout in seconds, shown in the killed line
+        :param timeout_seconds: --request-timeout in seconds, shown in the timed-out line
+        :param idle_timeout_seconds: --idle-timeout in seconds, shown in the killed line
         :param show_counts: False to log only the Duration/Avg line
         """
         if show_counts:
@@ -87,8 +88,8 @@ class OutputValidator:
             logger.info("\n  Requests: %s", actual_requests)
             logger.info("    Created: %s  (success criteria met)", created_count)
             logger.info("    Failed:  %s  (error or crash)", failed_count)
-            logger.info("    Timed out: %s  (hit %ss hard cap)", timeout_count, timeout)
-            logger.info("    Killed:  %s  (no output for %ss, presumed hanging)", killed_count, idle_timeout)
+            logger.info("    Timed out: %s  (hit %ss hard cap)", timeout_count, timeout_seconds)
+            logger.info("    Killed:  %s  (no output for %ss, presumed hanging)", killed_count, idle_timeout_seconds)
         average_seconds_per_request: float = 0
         if actual_requests:
             average_seconds_per_request = elapsed_seconds / actual_requests

@@ -35,15 +35,6 @@ from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-_NORMAL_LLM_CALLS: int = 4
-_LOOP_THRESHOLD: int = 10
-_SERVER_TOKEN_RE: re.Pattern = re.compile(
-    r"(request-\d+):\s*([\d,]+)\s*tokens"
-    r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
-    r"\s*(\d+)\s*LLM call\(s\),"
-    r"\s*model=([^\s]+)",
-)
-
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -51,6 +42,20 @@ class CrossRunComparison:
     """
     Scans a base directory for raw_results.json files and logs a comparison table across runs.
     """
+
+    NORMAL_LLM_CALLS: int = 4
+    LOOP_THRESHOLD: int = 10
+    # A per-request line that TokenLogWriter writes to server_tokens.log, e.g.
+    # "request-3: 1,234 tokens (1,000 prompt + 234 completion), 4 LLM call(s), model=gpt-4o-mini, agent=hello_world
+    # [1.2s CREATED]".
+    # Groups: 1 request id, 2 total tokens, 3 prompt tokens, 4 completion tokens, 5 LLM calls, 6 model (up to the
+    # comma before "agent=").
+    SERVER_TOKEN_RE: re.Pattern = re.compile(
+        r"(request-\d+):\s*([\d,]+)\s*tokens"
+        r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
+        r"\s*(\d+)\s*LLM call\(s\),"
+        r"\s*model=([^\s,]+)",
+    )
 
     def __init__(self, base_dir: str, agent_filter: Optional[List[str]] = None, baseline_requests: int = 0,
                  run_filter: Optional[List[str]] = None) -> None:
@@ -167,13 +172,18 @@ class CrossRunComparison:
 
         aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
         stages: List[Dict[str, Any]] = raw_results.get("stage_summaries", [])
-        # Gather every stage's results, and each stage's peak server RSS.
+        # The run's peak RSS is the largest stage peak, starting from the first stage, or 0 with no stages.
+        peak_rss_megabytes: float = 0
+        if stages:
+            first_stage: Dict[str, Any] = stages[0]
+            peak_rss_megabytes = first_stage.get("peak_server_rss", 0)
+        # Gather every stage's results, and keep the largest stage peak server RSS.
         all_results: List[Dict[str, Any]] = []
-        peak_rss_values_megabytes: List[float] = []
         stage: Dict[str, Any]
         for stage in stages:
             all_results.extend(stage.get("results", []))
-            peak_rss_values_megabytes.append(stage.get("peak_server_rss", 0))
+            stage_peak_rss_megabytes: float = stage.get("peak_server_rss", 0)
+            peak_rss_megabytes = max(peak_rss_megabytes, stage_peak_rss_megabytes)
         created_results: List[Dict[str, Any]] = []
         result: Dict[str, Any]
         # Keep only the results of successful requests.
@@ -183,16 +193,14 @@ class CrossRunComparison:
 
         agent: str = raw_results.get("config", {}).get("agent", "unknown")
 
-        # The run's peak RSS is the largest stage peak, or 0 with no stages.
-        peak_rss_megabytes: float = max(peak_rss_values_megabytes, default=0)
         run_metrics: Dict[str, Any] = {
             "agent": agent,
             "folder": folder_name,
             "num_requests": raw_results.get("config", {}).get("num_requests", aggregates.get("total_requests", 0)),
-            "wall_time": aggregates.get("total_elapsed_seconds", 0),
-            "avg_success": CrossRunComparison._avg(created_results, "elapsed"),
-            "time_to_first_response_avg": CrossRunComparison._avg(created_results, "time_to_first_response"),
-            "peak_rss": peak_rss_megabytes,
+            "wall_time_seconds": aggregates.get("total_elapsed_seconds", 0),
+            "average_success_seconds": CrossRunComparison._avg(created_results, "elapsed"),
+            "average_first_response_seconds": CrossRunComparison._avg(created_results, "time_to_first_response"),
+            "peak_rss_megabytes": peak_rss_megabytes,
             "succeeded": aggregates.get("passed", 0),
             "failed": aggregates.get("failed", 0),
             "fail_breakdown": CrossRunComparison._classify_failures(all_results),
@@ -213,16 +221,15 @@ class CrossRunComparison:
                 continue
             reason: str = result.get("failure_reason", "") or ""
             if "empty LLM response" in reason:
-                counts["empty_llm"] += 1
+                counts["empty_llm"] = counts.get("empty_llm", 0) + 1
             elif "validation fix cycle" in reason:
-                counts["validation"] += 1
+                counts["validation"] = counts.get("validation", 0) + 1
             elif "incomplete response" in reason:
-                counts["incomplete"] += 1
+                counts["incomplete"] = counts.get("incomplete", 0) + 1
             elif "no token data" in reason:
-                counts["no_token_data"] += 1
+                counts["no_token_data"] = counts.get("no_token_data", 0) + 1
             else:
-                counts.setdefault("other", 0)
-                counts["other"] += 1
+                counts["other"] = counts.get("other", 0) + 1
         return counts
 
     @staticmethod
@@ -281,9 +288,9 @@ class CrossRunComparison:
         ]
         rows: List[List[str]] = []
         metric_keys: List[str] = [
-            "num_requests", "wall_time",
-            "avg_success",
-            "time_to_first_response_avg", "peak_rss",
+            "num_requests", "wall_time_seconds",
+            "average_success_seconds",
+            "average_first_response_seconds", "peak_rss_megabytes",
             "failed",
         ]
         baseline: Optional[Dict[str, Any]] = None
@@ -315,9 +322,9 @@ class CrossRunComparison:
         num_requests_text: str = str(num_requests)
         num_requests_delta: Optional[float] = deltas.get("num_requests")
         succeeded: int = run.get("succeeded", 0)
-        wall_time_seconds: float = run.get("wall_time", 0)
+        wall_time_seconds: float = run.get("wall_time_seconds", 0)
         wall_time_text: str = Formatters.fmt_duration(wall_time_seconds)
-        wall_time_delta: Optional[float] = deltas.get("wall_time")
+        wall_time_delta: Optional[float] = deltas.get("wall_time_seconds")
         cells: List[str] = [
             run.get("folder", ""),
             CrossRunComparison._val_with_delta(num_requests_text, num_requests_delta),
@@ -335,12 +342,12 @@ class CrossRunComparison:
         :param deltas: Change of each metric from the first run, in percent
         :return: The 4 cells, in table order
         """
-        average_success_seconds: float = run.get("avg_success", 0)
-        average_success_delta: Optional[float] = deltas.get("avg_success")
-        first_response_seconds: float = run.get("time_to_first_response_avg", 0)
-        first_response_delta: Optional[float] = deltas.get("time_to_first_response_avg")
-        peak_rss_megabytes: float = run.get("peak_rss", 0)
-        peak_rss_delta: Optional[float] = deltas.get("peak_rss")
+        average_success_seconds: float = run.get("average_success_seconds", 0)
+        average_success_delta: Optional[float] = deltas.get("average_success_seconds")
+        first_response_seconds: float = run.get("average_first_response_seconds", 0)
+        first_response_delta: Optional[float] = deltas.get("average_first_response_seconds")
+        peak_rss_megabytes: float = run.get("peak_rss_megabytes", 0)
+        peak_rss_delta: Optional[float] = deltas.get("peak_rss_megabytes")
         failed: int = run.get("failed", 0)
         num_requests: int = run.get("num_requests", 0)
         fail_breakdown: Dict[str, int] = run.get("fail_breakdown", {})
@@ -372,23 +379,25 @@ class CrossRunComparison:
         Parse server_tokens.log for validation loop requests.
 
         :param log_path: Path to a run's server_tokens.log
-        :return: One entry per request with at least _LOOP_THRESHOLD LLM calls; empty when the file is missing
+        :return: One entry per request with at least LOOP_THRESHOLD LLM calls; empty when the file is missing
         """
         if not os.path.isfile(log_path):
             return []
         loops: List[Dict[str, Any]] = []
         with open(log_path, "r", encoding="utf-8") as file_handle:
+            line: str
+            # Keep each request whose LLM call count reaches LOOP_THRESHOLD.
             for line in file_handle:
-                match: Optional[re.Match] = _SERVER_TOKEN_RE.search(line)
+                match: Optional[re.Match] = CrossRunComparison.SERVER_TOKEN_RE.search(line)
                 if not match:
                     continue
                 llm_calls: int = int(match.group(5))
-                if llm_calls < _LOOP_THRESHOLD:
+                if llm_calls < CrossRunComparison.LOOP_THRESHOLD:
                     continue
                 prompt_tokens: int = int(match.group(3).replace(",", ""))
                 completion_tokens: int = int(match.group(4).replace(",", ""))
                 model: str = match.group(6)
-                retries: int = llm_calls - _NORMAL_LLM_CALLS
+                retries: int = llm_calls - CrossRunComparison.NORMAL_LLM_CALLS
                 cost_dollars: float = CostEstimator.estimate(prompt_tokens, completion_tokens, model)
                 loop_entry: Dict[str, Any] = {
                     "request_id": match.group(1),

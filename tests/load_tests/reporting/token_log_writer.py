@@ -154,6 +154,37 @@ class TokenLogWriter:
         """
         request_id: str = result.get("request_id", "?")
         total_tokens: int = result.get("total_tokens", 0)
+        prompt_tokens: int = result.get("prompt_tokens", 0)
+        completion_tokens: int = result.get("completion_tokens", 0)
+        llm_calls: int = result.get("llm_calls", 0)
+        agent: str = result.get("reporting_agent", "")
+        request_line: str = TokenLogWriter._format_request_line(result)
+        file_handle.write(request_line)
+        TokenLogWriter._write_validation_detail(file_handle, request_id, by_validation)
+        server_request_id: str = result.get("server_request_id", request_id)
+        agents: List[Dict[str, Any]] = by_request.get(server_request_id) or by_request.get(request_id) or []
+        if not agents and agent:
+            split_text: str = f"({prompt_tokens:,} prompt / {completion_tokens:,} completion)"
+            file_handle.write(f"  {agent}: {llm_calls} call(s)  {total_tokens:,} tokens {split_text}\n")
+        elif not agents and not agent:
+            file_handle.write("  (agent data not found in server log)\n")
+        TokenLogWriter._write_agent_breakdown(file_handle, agents)
+        if agents or agent or request_id in by_validation.keys():
+            file_handle.write("\n")
+
+    @staticmethod
+    def _format_request_line(result: Dict[str, Any]) -> str:
+        """
+        Build one request's first server_tokens.log line, read by CrossRunComparison.SERVER_TOKEN_RE.
+
+        :param result: The request's result
+        :return: The line, e.g. "request-1: 1,500 tokens (1,000 prompt + 500 completion), 12 LLM call(s),
+            model=gpt-4o-mini, agent=hello_world  [1.2s CREATED]" plus a newline
+        """
+        request_id: str = result.get("request_id", "?")
+        total_tokens: int = result.get("total_tokens", 0)
+        prompt_tokens: int = result.get("prompt_tokens", 0)
+        completion_tokens: int = result.get("completion_tokens", 0)
         llm_calls: int = result.get("llm_calls", 0)
         model: str = result.get("model", "unknown")
         agent: str = result.get("reporting_agent", "")
@@ -162,23 +193,10 @@ class TokenLogWriter:
         agent_suffix: str = ""
         if agent:
             agent_suffix = f", agent={agent}"
-        file_handle.write(
-            f"{request_id}: {total_tokens:,} tokens, {llm_calls} LLM call(s), model={model}{agent_suffix}"
-            f"  [{elapsed_seconds:.1f}s {status}]\n"
-        )
-        TokenLogWriter._write_validation_detail(file_handle, request_id, by_validation)
-        server_request_id: str = result.get("server_request_id", request_id)
-        agents: List[Dict[str, Any]] = by_request.get(server_request_id) or by_request.get(request_id) or []
-        if not agents and agent:
-            file_handle.write(
-                f"  {agent}: {llm_calls} call(s)  {total_tokens:,} tokens ({result.get('prompt_tokens', 0):,} prompt"
-                f" / {result.get('completion_tokens', 0):,} completion)\n"
-            )
-        elif not agents and not agent:
-            file_handle.write("  (agent data not found in server log)\n")
-        TokenLogWriter._write_agent_breakdown(file_handle, agents)
-        if agents or agent or request_id in by_validation.keys():
-            file_handle.write("\n")
+        token_text: str = f"{total_tokens:,} tokens ({prompt_tokens:,} prompt + {completion_tokens:,} completion)"
+        call_text: str = f"{llm_calls} LLM call(s), model={model}{agent_suffix}"
+        timing_text: str = f"[{elapsed_seconds:.1f}s {status}]"
+        return f"{request_id}: {token_text}, {call_text}  {timing_text}\n"
 
     @staticmethod
     def _write_agent_breakdown(file_handle: TextIO, agents: List[Dict[str, Any]]) -> None:
@@ -194,10 +212,8 @@ class TokenLogWriter:
             agent_total_tokens: int = agent_entry.get("total_tokens", 0)
             agent_prompt_tokens: int = agent_entry.get("prompt_tokens", 0)
             agent_completion_tokens: int = agent_entry.get("completion_tokens", 0)
-            file_handle.write(
-                f"  {network_name}: {agent_calls} call(s)  {agent_total_tokens:,} tokens"
-                f" ({agent_prompt_tokens:,} prompt / {agent_completion_tokens:,} completion)\n"
-            )
+            split_text: str = f"({agent_prompt_tokens:,} prompt / {agent_completion_tokens:,} completion)"
+            file_handle.write(f"  {network_name}: {agent_calls} call(s)  {agent_total_tokens:,} tokens {split_text}\n")
 
     @staticmethod
     def _write_validation_detail(file_handle: TextIO, request_id: str,
