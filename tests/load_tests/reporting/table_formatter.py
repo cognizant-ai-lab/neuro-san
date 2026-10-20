@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Formats and logs aligned console tables."""
-
 import logging
 from typing import Any
 from typing import List
@@ -25,7 +23,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TableFormatter:
-    """Formats and logs aligned tables."""
+    """
+    Formats and logs aligned console tables.
+    """
 
     @staticmethod
     def log_table(header: List[str], rows: Sequence[Sequence[Any]]) -> None:
@@ -45,6 +45,7 @@ class TableFormatter:
         value: Any
         # Widen each column to its longest value.
         for row in rows:
+            # Widen a column when this value is longer.
             for index, value in enumerate(row):
                 column_widths[index] = max(column_widths[index], len(str(value)))
         column_patterns: List[str] = []

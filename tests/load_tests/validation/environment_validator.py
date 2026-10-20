@@ -22,7 +22,7 @@ from typing import Optional
 
 import psutil
 
-from tests.load_tests.config import SOCKET_CHECK_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import SOCKET_CHECK_TIMEOUT_SECONDS
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 

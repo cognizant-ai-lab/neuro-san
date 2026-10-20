@@ -118,6 +118,8 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
         interactions: List[Dict[str, Any]] = template.get("interactions", empty)
 
         # Now do late validation of cron_schedule string in each interaction
+        index: int = 0
+        interaction: Dict[str, Any] = None
         for index, interaction in enumerate(interactions):
 
             cron_schedule: str = interaction.get("cron_schedule")

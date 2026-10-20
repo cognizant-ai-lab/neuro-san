@@ -21,6 +21,7 @@ See tests/load_tests/load_tests.md for prerequisites, test levels, and
 usage examples.
 """
 
+import argparse
 import getpass
 import gzip
 import importlib.metadata as _pkg_meta
@@ -42,27 +43,30 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 import psutil
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from tests.load_tests.config import LEVEL_ADV
-from tests.load_tests.config import LEVEL_MIN
-from tests.load_tests.config import LOCAL_HOSTS
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import SOCKET_CHECK_TIMEOUT_SECONDS
-from tests.load_tests.config import STALE_LOG_THRESHOLD_SECONDS
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.config import STDOUT_LOG_FILE_NAME
-from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
-from tests.load_tests.config import HISTORY_FILE_NAME
-from tests.load_tests.config import HISTORY_UNKNOWN_FILE_NAME
-from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
-from tests.load_tests.config import THREAD_JOIN_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import ADV_NUM_REQUESTS
+from tests.load_tests.load_test_constants import ADV_NUM_ROUNDS
+from tests.load_tests.load_test_constants import LEVEL_ADV
+from tests.load_tests.load_test_constants import LEVEL_MIN
+from tests.load_tests.load_test_constants import LOCAL_HOSTS
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import SOCKET_CHECK_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import STALE_LOG_THRESHOLD_SECONDS
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import HEARTBEAT_INTERVAL_SECONDS
+from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
+from tests.load_tests.load_test_constants import HISTORY_UNKNOWN_FILE_NAME
+from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
+from tests.load_tests.load_test_constants import THREAD_JOIN_TIMEOUT_SECONDS
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.load_test_arguments import LoadTestArguments
@@ -110,6 +114,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if not validation_events:
             return
         by_request_id = {e.get("request_id"): e for e in validation_events}
+        result: Dict[str, Any]
+        # Add the fix cycles of each result's validation event to its failure reason.
         for result in results:
             request_id = result.get("request_id", "")
             event = by_request_id.get(request_id)
@@ -138,6 +144,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         sorted_entries = sorted(token_data.values(), key=lambda e: key_fn(e.get("request_id", "")))
         sorted_results = sorted(results, key=lambda r: key_fn(r.get("request_id", "")))
 
+        result: Dict[str, Any]
+        entry: Dict[str, Any]
+        # Copy each entry's token counts to the result in the same sorted place.
         for result, entry in zip(sorted_results, sorted_entries):
             result.update({
                 "total_tokens": entry.get("total_tokens"),
@@ -198,20 +207,24 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         total_sent = 0
         test_start = time.time()
 
+        round_num: int
+        # Run every stage once per round.
         for round_num in range(1, self.args.num_rounds + 1):
             if self.args.num_rounds > 1:
                 logger.info("\n%s", "#" * 60)
                 logger.info("  ROUND %s of %s", round_num, self.args.num_rounds)
                 logger.info("#" * 60)
 
+            stage_idx: int
+            num_concurrent: int
+            # Run each stage, stopping at the request cap or the total timeout.
             for stage_idx, num_concurrent in enumerate(stages):
                 if total_sent >= total_cap:
                     total_planned = sum(stages) * self.args.num_rounds
                     logger.warning(
-                        "\nWARNING: Reached --max-requests cap (%s). "
-                        "Only %s of %s total planned requests completed.\n"
-                        "         Use --max-requests %s to run all "
-                        "planned requests.",
+                        """
+WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests completed.
+         Use --max-requests %s to run all planned requests.""",
                         total_cap, total_sent, total_planned,
                         total_planned,
                     )
@@ -263,8 +276,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if elapsed < limit:
             return False
         logger.warning(
-            "\n  ABORT: --total-timeout (%ss) reached after %.0fs.\n"
-            "  Stopping test and reporting available results.",
+            """
+  ABORT: --total-timeout (%ss) reached after %.0fs.
+  Stopping test and reporting available results.""",
             limit, elapsed,
         )
         return True
@@ -744,6 +758,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             token_data = self.log_monitor.parse_token_accounting_since(log_position)
             stage_results = [r for r in results if r.get("request_id") != "request-0"]
             if token_data:
+                result: Dict[str, Any]
+                # Keep the client token counts of each request under client_* keys.
                 for result in stage_results:
                     result["client_total_tokens"] = result.get("total_tokens", 0)
                     result["client_prompt_tokens"] = result.get("prompt_tokens", 0)
@@ -833,9 +849,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             return
         scheme = "https" if getattr(self.args, "https", False) else "http"
         logger.error(
-            "ABORT: server %s:%s (%s) is unreachable — "
-            "not firing any requests.\n"
-            "  Check --host/--port/--https, or start the server.",
+            """ABORT: server %s:%s (%s) is unreachable — not firing any requests.
+  Check --host/--port/--https, or start the server.""",
             host, port, scheme,
         )
         raise SystemExit(1)
@@ -939,18 +954,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         if not server_log:
             logger.warning(
-                "No --server-log provided at %s level.\n"
-                "  The following will be unavailable:\n"
-                "    - Retry counts and amplification factor\n"
-                "    - Server-side request validation\n"
-                "    - Client disconnection detection\n"
-                "    - Per-agent-network token breakdown "
-                "(server log only)\n"
-                "  Resource monitoring (psutil) and aggregated "
-                "token accounting (--tokens) still work.\n"
-                "  To enable full analysis, add:\n"
-                "    --server-log  (auto-detect)\n"
-                "    --server-log logs/server.log",
+                """No --server-log provided at %s level.
+  The following will be unavailable:
+    - Retry counts and amplification factor
+    - Server-side request validation
+    - Client disconnection detection
+    - Per-agent-network token breakdown (server log only)
+  Resource monitoring (psutil) and aggregated token accounting (--tokens) still work.
+  To enable full analysis, add:
+    --server-log  (auto-detect)
+    --server-log logs/server.log""",
                 level,
             )
             return None
@@ -974,10 +987,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         --no-dry-run does not (it only bypasses the cost confirmation).
         """
         logger.warning(
-            "Server log not found for --level %s. Without it: "
-            "no retry, disconnection, or pool analysis.\n"
-            "  Set it with --server-log <path>, or use "
-            "--no-server-log to skip this prompt.",
+            """Server log not found for --level %s. Without it: no retry, disconnection, or pool analysis.
+  Set it with --server-log <path>, or use --no-server-log to skip this prompt.""",
             level,
         )
         if not Confirm.ask("Continue without server-log analysis?"):
@@ -986,22 +997,26 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("  Continuing without server-log analysis.")
 
     @staticmethod
-    def _apply_level_defaults(args, explicit_args) -> None:
-        """Override argparse defaults with level-specific values.
+    def _apply_level_defaults(args: argparse.Namespace, explicit_args: Set[str]) -> None:
+        """
+        Override argparse defaults with level-specific values.
 
         Only applies when the user did not explicitly set the flag.
-        adv: 50 requests, 3 rounds (stress test).
+        adv: ADV_NUM_REQUESTS requests, ADV_NUM_ROUNDS rounds (stress test).
 
         --full-concurrency matches workers to num-requests so every
         request fires at once.  Otherwise workers stay at the
-        conservative default of 3 and a warning is shown if
+        conservative --max-workers default and a warning is shown if
         max-workers < num-requests.
+
+        :param args: Parsed arguments, updated in place
+        :param explicit_args: Dest names the user passed on the command line
         """
         if args.level == LEVEL_ADV:
             if "num_requests" not in explicit_args:
-                args.num_requests = 50
+                args.num_requests = ADV_NUM_REQUESTS
             if "num_rounds" not in explicit_args:
-                args.num_rounds = 3
+                args.num_rounds = ADV_NUM_ROUNDS
 
         if "max_workers" not in explicit_args and args.full_concurrency:
             args.max_workers = args.num_requests
@@ -1040,6 +1055,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         except (OSError, ValueError):
             return []
         primary = []
+        pair: Dict[str, object]
+        # Keep the pairs of the primary agent.
         for pair in pairs:
             agent = pair.get("agent", "")
             start_line = f"Start {agent}/streaming_chat"
@@ -1077,6 +1094,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if not printed:
             return
         model_counts: Dict[str, int] = {}
+        entry: Dict[str, Any]
+        # Count the requests of each known model.
         for entry in token_data.values():
             model = entry.get("model")
             if model and model != "unknown":
@@ -1259,10 +1278,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         }
 
         logger.info(
-            "\nWaiting for %d request(s) in server"
-            " log...\n"
-            "  Start the client on the remote"
-            " machine now.",
+            """
+Waiting for %d request(s) in server log...
+  Start the client on the remote machine now.""",
             expected,
         )
 
@@ -1654,6 +1672,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         result = {}
         try:
             with open("/proc/meminfo", "r", encoding="utf-8") as meminfo_file:
+                line: str
+                # Read each meminfo value in megabytes.
                 for line in meminfo_file:
                     parts = line.split()
                     if len(parts) < 2:
@@ -1667,6 +1687,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         tcp_mem_mb = 0.0
         try:
             with open("/proc/net/sockstat", "r", encoding="utf-8") as sockstat_file:
+                # Read the TCP memory pages from the TCP: line.
                 for line in sockstat_file:
                     if line.startswith("TCP:"):
                         parts = line.split()
@@ -1997,9 +2018,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         tracked over time.  Best-effort: any write failure is logged
         and swallowed so it never fails the test.
         """
-        results = []
+        results: List[Dict[str, Any]] = []
+        server_errors: List[Dict[str, str]] = []
+        tool_warnings: List[Dict[str, str]] = []
+        summary: Dict[str, Any]
+        # Collect the results, server errors and tool warnings of every stage.
         for summary in stage_summaries:
-            results.extend(summary.get("results", []))
+            stage_results: List[Dict[str, Any]] = summary.get("results", [])
+            results.extend(stage_results)
+            stage_server_errors: List[Dict[str, str]] = summary.get("server_errors", [])
+            server_errors.extend(stage_server_errors)
+            stage_tool_warnings: List[Dict[str, str]] = summary.get("tool_warnings", [])
+            tool_warnings.extend(stage_tool_warnings)
         if not results:
             return
 
@@ -2008,6 +2038,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_duration = round(sum(durations) / completed, 2) if completed else 0.0
         first_responses: List[float] = []
         result: Dict[str, Any]
+        # Collect the time to first response of each successful request.
         for result in results:
             time_to_first_response: float = result.get("time_to_first_response", 0.0)
             if result.get("status") == STATUS_CREATED and time_to_first_response > 0:
@@ -2015,11 +2046,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_first_response: float = 0.0
         if first_responses:
             avg_first_response = round(sum(first_responses) / len(first_responses), 2)
-        server_errors: List[Dict[str, str]] = []
-        tool_warnings: List[Dict[str, str]] = []
-        for summary in stage_summaries:
-            server_errors.extend(summary.get("server_errors", []))
-            tool_warnings.extend(summary.get("tool_warnings", []))
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": self._server_ns_version or "unknown",
@@ -2038,6 +2064,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "server_errors": server_errors,
             "tool_warnings": tool_warnings,
         }
+        threshold: int
+        # Count the requests that completed within each threshold.
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             record[f"completed_within_{int(threshold)}s"] = sum(1 for d in durations if d <= threshold)
         successful = completed > 0 and record.get("neuro_san_version") != "unknown"
@@ -2132,6 +2160,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "server_errors": server_errors or [],
             "tool_warnings": tool_warnings or [],
         }
+        threshold: int
+        # Count the requests that completed within each threshold.
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             record[f"completed_within_{int(threshold)}s"] = sum(1 for d in durations if d <= threshold)
         successful = received > 0 and record.get("neuro_san_version") != "unknown"
@@ -2168,9 +2198,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     def _export_raw_json(self, stage_summaries, *, exit_code) -> None:
         """Save all test data as a single raw_results.json file."""
-        all_results = []
-        for s in stage_summaries:
-            all_results.extend(s.get("results", []))
+        all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
 
         total_tokens = sum(r.get("total_tokens", 0) for r in all_results)
         total_cost = sum(r.get("cost_usd", 0.0) for r in all_results)
@@ -2273,9 +2301,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     def _check_results(self, stage_summaries) -> int:
         """Log pass/fail verdict and return appropriate exit code."""
-        all_results = []
-        for s in stage_summaries:
-            all_results.extend(s.get("results", []))
+        all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
         total = len(all_results)
         passed = sum(1 for r in all_results if r.get("status") == STATUS_CREATED)
         failed = total - passed
@@ -2286,6 +2312,22 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         logger.info("\nLOAD TEST PASSED: all %s requests completed successfully", total)
         return 0
+
+    @staticmethod
+    def _collect_stage_results(stage_summaries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Collect the request results of every stage into one list.
+
+        :param stage_summaries: The summary dict of each stage, each with a "results" list
+        :return: The results of all stages, in stage order
+        """
+        all_results: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Collect the results of every stage.
+        for summary in stage_summaries:
+            stage_results: List[Dict[str, Any]] = summary.get("results", [])
+            all_results.extend(stage_results)
+        return all_results
 
     @staticmethod
     def _get_package_version(package_name) -> Optional[str]:

@@ -18,7 +18,7 @@ from argparse import Namespace
 from typing import Optional
 from unittest import TestCase
 
-from tests.load_tests.config import DEFAULT_STAGES
+from tests.load_tests.load_test_constants import DEFAULT_STAGES
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -44,25 +44,33 @@ class TestResolveStages(TestCase):
         return InputValidator(Namespace(ramp=ramp, stages=stages, num_requests=num_requests))
 
     def test_flat_mode_is_a_single_stage(self) -> None:
-        """Without --ramp the run is one stage of --num-requests."""
+        """
+        Without --ramp the run is one stage of --num-requests.
+        """
         validator: InputValidator = self._validator(num_requests=7)
 
         self.assertEqual(validator.resolve_stages(), [7])
 
     def test_ramp_without_stages_uses_defaults(self) -> None:
-        """--ramp alone falls back to the built-in stage list."""
+        """
+        --ramp alone falls back to the built-in stage list.
+        """
         validator: InputValidator = self._validator(ramp=True)
 
         self.assertEqual(validator.resolve_stages(), list(DEFAULT_STAGES))
 
     def test_stages_are_parsed_and_trailing_commas_ignored(self) -> None:
-        """Whitespace and a trailing comma are tolerated."""
+        """
+        Whitespace and a trailing comma are tolerated.
+        """
         validator: InputValidator = self._validator(ramp=True, stages=" 2, 4 ,8, ")
 
         self.assertEqual(validator.resolve_stages(), [2, 4, 8])
 
     def test_non_integer_stages_exit(self) -> None:
-        """Garbage in --stages exits instead of raising ValueError."""
+        """
+        Garbage in --stages exits instead of raising ValueError.
+        """
         validator: InputValidator = self._validator(ramp=True, stages="2,abc")
 
         with self.assertRaises(LoadTestAbortError) as caught:
@@ -71,7 +79,9 @@ class TestResolveStages(TestCase):
         self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_non_positive_stages_exit(self) -> None:
-        """A zero stage would run an empty stage, so it is rejected."""
+        """
+        A zero stage would run an empty stage, so it is rejected.
+        """
         validator: InputValidator = self._validator(ramp=True, stages="2,0,8")
 
         with self.assertRaises(LoadTestAbortError) as caught:
@@ -80,7 +90,9 @@ class TestResolveStages(TestCase):
         self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_zero_num_requests_exits(self) -> None:
-        """--num-requests 0 is rejected in flat mode."""
+        """
+        --num-requests 0 is rejected in flat mode.
+        """
         validator: InputValidator = self._validator(num_requests=0)
 
         with self.assertRaises(LoadTestAbortError) as caught:

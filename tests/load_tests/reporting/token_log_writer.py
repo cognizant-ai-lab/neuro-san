@@ -22,7 +22,7 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 
-from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -50,6 +50,8 @@ class TokenLogWriter:
         :param validation_events: Validation retry events parsed from the server log
         """
         has_tokens: bool = False
+        result: Dict[str, Any]
+        # Stop at the first result that has tokens.
         for result in results:
             if result.get("total_tokens"):
                 has_tokens = True
@@ -73,6 +75,8 @@ class TokenLogWriter:
 
         :param results: Results of every request in the run
         """
+        result: Dict[str, Any]
+        # One log line per request that used tokens.
         for result in results:
             total_tokens: int = result.get("total_tokens", 0)
             if not total_tokens:
@@ -106,6 +110,8 @@ class TokenLogWriter:
         by_validation: Dict[str, Dict[str, Any]] = TokenLogWriter._group_validation_events(validation_events)
         path: str = os.path.join(output_dir, SERVER_TOKENS_LOG_FILE_NAME)
         with open(path, "w", encoding="utf-8") as file_handle:
+            result: Dict[str, Any]
+            # One file section per request that used tokens.
             for result in results:
                 total_tokens: int = result.get("total_tokens", 0)
                 if not total_tokens:
@@ -122,6 +128,8 @@ class TokenLogWriter:
         :return: request_id -> its token entries
         """
         by_request: Dict[str, List[Dict[str, Any]]] = {}
+        entry: Dict[str, Any]
+        # Group the token entries by request id.
         for entry in (network_tokens or []):
             request_id: str = entry.get("request_id", "")
             by_request.setdefault(request_id, []).append(entry)
@@ -136,6 +144,8 @@ class TokenLogWriter:
         :return: request_id -> its validation event
         """
         by_request: Dict[str, Dict[str, Any]] = {}
+        event: Dict[str, Any]
+        # Index the validation events by request id.
         for event in (validation_events or []):
             request_id: str = event.get("request_id", "")
             by_request[request_id] = event
@@ -169,7 +179,9 @@ class TokenLogWriter:
         elif not agents and not agent:
             file_handle.write("  (agent data not found in server log)\n")
         TokenLogWriter._write_agent_breakdown(file_handle, agents)
-        if agents or agent or request_id in by_validation.keys():
+        if (agents
+                or agent
+                or request_id in by_validation.keys()):
             file_handle.write("\n")
 
     @staticmethod
@@ -206,6 +218,8 @@ class TokenLogWriter:
         :param file_handle: Open server_tokens.log
         :param agents: Per-agent token entries of the request
         """
+        agent_entry: Dict[str, Any]
+        # One line per agent of the request.
         for agent_entry in agents:
             network_name: str = agent_entry.get("network", "?")
             agent_calls: int = agent_entry.get("llm_calls", 0)
@@ -232,6 +246,8 @@ class TokenLogWriter:
         fix_cycles: int = event.get("fix_cycles", 0)
         file_handle.write(f"  Validation: {attempts} attempt(s), {fix_cycles} fix cycle(s)\n")
         errors: List[str] = event.get("errors", [])
+        error: str
+        # One line per validation error.
         for error in errors:
             file_handle.write(f"    - {error}\n")
 

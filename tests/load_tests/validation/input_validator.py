@@ -25,9 +25,9 @@ from typing import Tuple
 
 import psutil
 
-from tests.load_tests.config import DEFAULT_STAGES
-from tests.load_tests.config import LEVEL_ADV
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import DEFAULT_STAGES
+from tests.load_tests.load_test_constants import LEVEL_ADV
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.project_paths import ProjectPaths

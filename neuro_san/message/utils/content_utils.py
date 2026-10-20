@@ -135,6 +135,7 @@ class ContentUtils:
 
         if isinstance(content, list):
             list_content: List[Any] = content
+            item: Any = None
             for item in list_content:
                 if not ContentUtils._is_blank_block(item):
                     return False
@@ -543,11 +544,14 @@ class ContentUtils:
             return DecodeUtils.decode(encoded, "ascii")
         if isinstance(value, dict):
             safe_dict: Dict[str, Any] = {}
+            key: Any = None
+            item: Any = None
             for key, item in value.items():
                 safe_dict[str(key)] = ContentUtils.to_json_safe(item)
             return safe_dict
         if isinstance(value, (list, tuple, set)):
             safe_list: List[Any] = []
+            item: Any = None
             for item in value:
                 safe_list.append(ContentUtils.to_json_safe(item))
             return safe_list

@@ -27,10 +27,10 @@ from typing import Set
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import SEPARATOR_WIDTH
-from tests.load_tests.config import SERVER_TOKENS_LOG_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
@@ -122,6 +122,8 @@ class CrossRunComparison:
         :return: Metrics for each run folder that has a readable raw_results.json
         """
         runs: List[Dict[str, Any]] = []
+        entry: str
+        # Collect the metrics of each run folder that has a raw results file.
         for entry in os.listdir(self._base_dir):
             if self._run_filter and entry not in self._run_filter:
                 continue
@@ -142,6 +144,8 @@ class CrossRunComparison:
         :return: One run per num_requests, the one whose folder name sorts last
         """
         by_count: Dict[int, Dict[str, Any]] = {}
+        run: Dict[str, Any]
+        # Keep the newest run folder for each request count.
         for run in runs:
             count: int = run.get("num_requests", 0)
             existing: Optional[Dict[str, Any]] = by_count.get(count)
@@ -180,6 +184,7 @@ class CrossRunComparison:
         # Gather every stage's results, and keep the largest stage peak server RSS.
         all_results: List[Dict[str, Any]] = []
         stage: Dict[str, Any]
+        # Gather the results of every stage and track the largest server RSS.
         for stage in stages:
             all_results.extend(stage.get("results", []))
             stage_peak_rss_megabytes: float = stage.get("peak_server_rss", 0)
@@ -216,6 +221,8 @@ class CrossRunComparison:
         :return: Failure category to count; "other" is added only when a reason matches no category
         """
         counts: Dict[str, int] = {"empty_llm": 0, "validation": 0, "incomplete": 0, "no_token_data": 0}
+        result: Dict[str, Any]
+        # Count the failed requests by failure kind.
         for result in all_results:
             if result.get("status") == STATUS_CREATED:
                 continue
@@ -243,6 +250,8 @@ class CrossRunComparison:
         """
         # Keep only the values above 0.
         values: List[float] = []
+        result: Dict[str, Any]
+        # Collect the positive values of the field.
         for result in results:
             field_value: float = result.get(key, 0)
             if field_value > 0:
@@ -260,6 +269,8 @@ class CrossRunComparison:
         :return: Agent name to its runs, limited to agent_filter when set
         """
         groups: Dict[str, List[Dict[str, Any]]] = {}
+        run: Dict[str, Any]
+        # Group the runs by agent, leaving out agents the filter excludes.
         for run in runs:
             agent: str = run.get("agent", "unknown")
             if self._agent_filter and agent not in self._agent_filter:
@@ -365,6 +376,8 @@ class CrossRunComparison:
 
         :param runs: Runs whose server_tokens.log is checked
         """
+        run: Dict[str, Any]
+        # Log the validation loops of each run folder.
         for run in runs:
             folder: str = run.get("folder", "")
             log_path: str = os.path.join(self._base_dir, folder, SERVER_TOKENS_LOG_FILE_NAME)
@@ -425,6 +438,7 @@ class CrossRunComparison:
         total_tokens: int = 0
         total_cost_dollars: float = 0.0
         loop_entry: Dict[str, Any]
+        # Add up the retries, tokens and cost of all loop entries.
         for loop_entry in loops:
             total_retries += loop_entry.get("retries", 0)
             total_tokens += loop_entry.get("total_tokens", 0)
@@ -466,6 +480,8 @@ class CrossRunComparison:
         if previous_metrics is None:
             return {}
         deltas: Dict[str, float] = {}
+        key: str
+        # Percent change of each metric that has a previous value.
         for key in keys:
             previous_value: float = previous_metrics.get(key, 0)
             current_value: float = current_metrics.get(key, 0)

@@ -34,15 +34,15 @@ from typing_extensions import override
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
-from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
-from tests.load_tests.config import LEVEL_MIN
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.config import STDOUT_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
+from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LEVEL_MIN
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
 from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder

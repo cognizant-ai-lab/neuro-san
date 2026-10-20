@@ -92,7 +92,7 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         else:
             # AgentFramework messages carry the final answer, but don't have an origin.
             # Have them get their origin for reporting here (only!) from the chat history.
-            extractor = DictionaryExtractor(chat_message_dict)
+            extractor: DictionaryExtractor = DictionaryExtractor(chat_message_dict)
             histories: List[Dict[str, Any]] = extractor.get("chat_context.chat_histories")
             if histories is not None and len(histories) > 0:
                 origin = histories[0].get("origin")

@@ -62,7 +62,7 @@ class AgentReservation(Reservation):
         # Get uuid part without possible prefix:
         uuid_part: str = agent_name[-36:]
         try:
-            u = UUID(uuid_part)
+            u: UUID = UUID(uuid_part)
             if u.version == 4:
                 return True
             return False

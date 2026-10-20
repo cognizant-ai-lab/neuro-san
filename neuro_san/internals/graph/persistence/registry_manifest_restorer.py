@@ -106,9 +106,10 @@ class RegistryManifestRestorer(Restorer):
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
         all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
-        overlayer = DictionaryOverlay()
+        overlayer: DictionaryOverlay = DictionaryOverlay()
 
         # Loop through all the manifest files in the list to make a composite
+        manifest_file: str = None
         for manifest_file in file_references:
             agents_from_one_manifest: Dict[str, Dict[str, AgentNetwork]] = self.restore_one_manifest(manifest_file)
             # Do a deep update() with the overlayer.
@@ -119,6 +120,8 @@ class RegistryManifestRestorer(Restorer):
         config_filter: ConfigFilter = ServedManifestConfigFilter(manifest_file=None,
                                                                  warn_on_skip=False,
                                                                  entry_for_skipped=False)
+        storage_type: str = None
+        storage_dict: Dict[str, AgentNetwork] = None
         for storage_type, storage_dict in all_agent_networks.items():
             all_agent_networks[storage_type] = config_filter.filter_config(storage_dict)
 
@@ -160,6 +163,7 @@ class RegistryManifestRestorer(Restorer):
 
         # Sorted so the outcome does not depend on manifest or dict ordering
         # between server restarts.
+        network_name: str = None
         for network_name in sorted(public_networks.keys()):
             agent_network: AgentNetwork = public_networks.get(network_name)
             # ServedManifestConfigFilter has already dropped None entries, but this
@@ -180,6 +184,7 @@ class RegistryManifestRestorer(Restorer):
                 if tool_name != network_name:
                     claims.append(tool_name)
 
+            claim: str = None
             for claim in claims:
                 if claim not in owners:
                     owners[claim] = network_name
@@ -233,10 +238,11 @@ class RegistryManifestRestorer(Restorer):
         start: float = perf_counter()
 
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
+        storage_class: str = None
         for storage_class in StorageClass.ALL_PERMANENT:
             agent_networks[storage_class] = {}
 
-        raw_restorer = RawManifestRestorer()
+        raw_restorer: RawManifestRestorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = raw_restorer.restore(file_reference=manifest_file)
 
         if not raw_manifest:
@@ -245,10 +251,10 @@ class RegistryManifestRestorer(Restorer):
             return agent_networks
 
         # By the end of the filter chain, only served entries will be included.
-        manifest_filter = ManifestFilterChain(manifest_file)
+        manifest_filter: ManifestFilterChain = ManifestFilterChain(manifest_file)
         one_manifest: Dict[str, Dict[str, Any]] = manifest_filter.filter_config(raw_manifest)
 
-        file_of_class = FileOfClass(manifest_file)
+        file_of_class: FileOfClass = FileOfClass(manifest_file)
         manifest_dir: str = file_of_class.get_basis()
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
@@ -266,7 +272,7 @@ class RegistryManifestRestorer(Restorer):
         concurrency_context: str = Env.getenv("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread")
 
         try:
-            executor_factory = self.find_executory_factory(concurrency_context, max_workers)
+            executor_factory: Any = self.find_executory_factory(concurrency_context, max_workers)
             with executor_factory() as executor:
 
                 read_one: Any = partial(self.read_one_agent_network,
@@ -283,7 +289,7 @@ class RegistryManifestRestorer(Restorer):
                 for result in results:
                     self.maybe_store_agent_network(result[0], result[1], result[2], agent_networks)
         except Exception:     # pylint: disable=broad-except
-            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.exception("Manifest file %s could not be restored.", manifest_file)
 
         stop: float = perf_counter()
@@ -300,8 +306,8 @@ class RegistryManifestRestorer(Restorer):
         :param max_workers: The maximum number of workers to use.
         :return: The executor factory to use as a no-args constructor.
         """
-        executor_factory = None
-        lower_concurrency_context = concurrency_context.strip().lower()
+        executor_factory: Any = None
+        lower_concurrency_context: str = concurrency_context.strip().lower()
 
         if lower_concurrency_context in ("spawn", "fork", "forkserver"):
             # Use a ProcessPoolExecutor for "spawn" and "fork".
@@ -359,7 +365,8 @@ class RegistryManifestRestorer(Restorer):
         # We'll need to use an agent mapper to get to this agent definition file.
         agent_filepath: str = agent_mapper.agent_name_to_filepath(manifest_key)
         network_name: str = agent_mapper.filepath_to_agent_network_name(agent_filepath)
-        validator = ManifestNetworkValidator(external_network_names, network_name=network_name)
+        validator: ManifestNetworkValidator = \
+            ManifestNetworkValidator(external_network_names, network_name=network_name)
 
         agent_network: AgentNetwork = None
 
@@ -378,7 +385,7 @@ class RegistryManifestRestorer(Restorer):
             # None-out the agent_network.
             # This will mean that the failed read will skip the network without blowing anything else up.
             agent_network = None
-            sensitive_logger = SensitiveLogger(getLogger(__name__))
+            sensitive_logger: SensitiveLogger = SensitiveLogger(getLogger(__name__))
             sensitive_logger.error("Failed to restore agent_network %s from %s. Skipping. - %s",
                                    manifest_key, manifest_file, str(ex))
 
@@ -541,12 +548,13 @@ class RegistryManifestRestorer(Restorer):
         """
 
         agent_network: AgentNetwork = None
-        registry_restorer = AgentNetworkRestorer(registry_dir=manifest_dir, agent_mapper=agent_mapper)
+        registry_restorer: AgentNetworkRestorer = \
+            AgentNetworkRestorer(registry_dir=manifest_dir, agent_mapper=agent_mapper)
         try:
             agent_network = registry_restorer.restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            sensitive_logger = SensitiveLogger(getLogger(__name__))
+            sensitive_logger: SensitiveLogger = SensitiveLogger(getLogger(__name__))
             sensitive_logger.error(message)
             agent_network = None
         except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
@@ -562,7 +570,7 @@ class RegistryManifestRestorer(Restorer):
                 use_exception = exception.__cause__
 
             message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            sensitive_logger = SensitiveLogger(getLogger(__name__))
+            sensitive_logger: SensitiveLogger = SensitiveLogger(getLogger(__name__))
             sensitive_logger.error(message)
             agent_network = None
 
@@ -599,6 +607,7 @@ class RegistryManifestRestorer(Restorer):
         """
 
         external_network_names: List[str] = []
+        manifest_key: str = None
         for manifest_key in manifest_entries.keys():
 
             # We'll need to use an agent mapper to get to this agent definition file.
