@@ -24,8 +24,8 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.config import RAW_RESULTS_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.resource_reporter import ResourceReporter

@@ -23,7 +23,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)

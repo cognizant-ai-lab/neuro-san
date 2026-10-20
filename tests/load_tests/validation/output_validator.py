@@ -21,12 +21,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.config import RETRY_ERROR_TYPES
-from tests.load_tests.config import RETRY_LABELS
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import RETRY_ERROR_TYPES
+from tests.load_tests.load_test_constants import RETRY_LABELS
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)

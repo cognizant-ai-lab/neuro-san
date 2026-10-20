@@ -85,20 +85,37 @@ LEGACY_RUN_LOG_FILE_NAME: str = "load_test.log"
 HEARTBEAT_INTERVAL_SECONDS: int = 30
 
 # Server log regex patterns
+# neuro-san retry warning "retrying from <ErrorType>" or "retrying from RateLimit error <ErrorType>".
+# Group 1 is "RateLimit error " or empty; group 2 is the error type. No neuro-san code writes this
+# line today: RunContextRunnable logs "Retrying: <reason> (<ErrorType>) - <error>".
 RETRY_LOG_PATTERN: re.Pattern = re.compile(r"retrying from (RateLimit error |)(\w+)")
 # Retries performed inside the LLM provider SDK (e.g. openai's
 # "Retrying request to /chat/completions in 0.45 seconds"), which
 # neuro-san never sees and so never logs as "retrying from ...".
 PROVIDER_RETRY_PATTERN: re.Pattern = re.compile(r"Retrying request to (\S+) in ")
+# HttpServerApp "[<instance>] Start <agent>/streaming_chat" when a streaming chat request starts. No groups.
 REQUEST_START_PATTERN: re.Pattern = re.compile(r"Start .*/streaming_chat")
+# HttpServerApp "[<instance>] Finish <agent>/streaming_chat" when that request ends. No groups.
 REQUEST_FINISH_PATTERN: re.Pattern = re.compile(r"Finish .*/streaming_chat")
+# StreamingChatHandler "Request handler stream closed." when the client stream closes. No groups.
 CLIENT_DISCONNECT_PATTERN: re.Pattern = re.compile(r"Request handler stream closed")
+# The "request_id" field of a JSON server log line. Group 1 is the request id, e.g. "request-3".
 STREAM_CLOSED_REQUEST_PATTERN: re.Pattern = re.compile(r'"request_id":\s*"(request-\d+)"')
+# leaf-common AsyncioExecutor "Task from <submitter_id>:<function> was cancelled". Group 1 is the
+# submitter id; for a session's streaming_chat task that is its request id.
 TASK_CANCELLED_PATTERN: re.Pattern = re.compile(r"Task from ([^:]+):.*was cancelled")
+# AsyncAgentService "Done with <agent>.StreamingChat request for ...". Group 1 is the agent name.
 DONE_STREAMING_PATTERN: re.Pattern = re.compile(r'Done with (\S+)\.StreamingChat')
+# ToolboxNetworkValidator "Validating toolbox agents..." at each validation attempt. No groups.
 VALIDATION_ATTEMPT_PATTERN: re.Pattern = re.compile(r'Validating toolbox agents')
+# Agent network designer warning "Validation errors: [<errors>]" as the JSON "message" value.
+# Group 1 is the error list text between the brackets.
 VALIDATION_ERROR_PATTERN: re.Pattern = re.compile(r'"Validation errors: \[(.+?)\]"')
+# Agent network designer warning "Invoking agent network designer to fix the issues (attempt n/m)."
+# at each fix cycle. No groups.
 VALIDATION_REINVOKE_PATTERN: re.Pattern = re.compile(r'Invoking agent network designer to fix the issues')
+# The "request_id" field of a JSON server log line, to group validation lines by request.
+# Group 1 is the request id, e.g. "request-3".
 VALIDATION_REQUEST_ID_PATTERN: re.Pattern = re.compile(r'"request_id":\s*"(request-\d+)"')
 # Server "Errors detected:" event.  Logged as JSON whose "message"
 # value starts with "Errors detected:" and spans literal newlines,

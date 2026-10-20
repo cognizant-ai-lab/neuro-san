@@ -38,20 +38,20 @@ from typing import Union
 
 import psutil
 
-from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
-from tests.load_tests.config import DONE_STREAMING_PATTERN
-from tests.load_tests.config import NETWORK_LOOKAHEAD_LINES
-from tests.load_tests.config import PROVIDER_RETRY_PATTERN
-from tests.load_tests.config import REQUEST_FINISH_PATTERN
-from tests.load_tests.config import REQUEST_START_PATTERN
-from tests.load_tests.config import RETRY_LOG_PATTERN
-from tests.load_tests.config import SERVER_ERROR_PATTERN
-from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
-from tests.load_tests.config import TASK_CANCELLED_PATTERN
-from tests.load_tests.config import VALIDATION_ATTEMPT_PATTERN
-from tests.load_tests.config import VALIDATION_ERROR_PATTERN
-from tests.load_tests.config import VALIDATION_REINVOKE_PATTERN
-from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
+from tests.load_tests.load_test_constants import CLIENT_DISCONNECT_PATTERN
+from tests.load_tests.load_test_constants import DONE_STREAMING_PATTERN
+from tests.load_tests.load_test_constants import NETWORK_LOOKAHEAD_LINES
+from tests.load_tests.load_test_constants import PROVIDER_RETRY_PATTERN
+from tests.load_tests.load_test_constants import REQUEST_FINISH_PATTERN
+from tests.load_tests.load_test_constants import REQUEST_START_PATTERN
+from tests.load_tests.load_test_constants import RETRY_LOG_PATTERN
+from tests.load_tests.load_test_constants import SERVER_ERROR_PATTERN
+from tests.load_tests.load_test_constants import STREAM_CLOSED_REQUEST_PATTERN
+from tests.load_tests.load_test_constants import TASK_CANCELLED_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_ATTEMPT_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_ERROR_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_REINVOKE_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger: logging.Logger = logging.getLogger(__name__)

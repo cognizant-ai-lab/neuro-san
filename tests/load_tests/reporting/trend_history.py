@@ -32,8 +32,8 @@ from typing import List
 from typing import Optional
 from typing import Set
 
-from tests.load_tests.config import HISTORY_FILE_NAME
-from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
+from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
+from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger: logging.Logger = logging.getLogger(__name__)
