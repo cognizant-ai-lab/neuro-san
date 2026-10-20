@@ -56,6 +56,8 @@ class ServedManifestConfigFilter(ConfigFilter):
 
         filtered: Dict[str, Dict[str, Any]] = {}
 
+        key: str = None
+        value: Dict[str, Any] = None
         for key, value in basis_config.items():
 
             skip: bool = False
