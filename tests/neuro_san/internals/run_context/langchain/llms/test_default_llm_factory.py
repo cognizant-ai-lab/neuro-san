@@ -483,6 +483,62 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
         self.assertIs(self.factory.get_chat_class_args("azure-openai").get("streaming"), False)
         self.assertIs(factory.get_chat_class_args("azure-openai").get("streaming"), True)
 
+    def test_extending_class_dictionary_args_merge_key_by_key(self) -> None:
+        """
+        When a class and the class it extends both give a dictionary for the same arg, the two are merged:
+        the extending class's keys win and the parent's other keys are kept.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "my-bedrock": {
+                        "extends": "bedrock",
+                        "args": {
+                            "guardrails": {
+                                "guardrailIdentifier": "my-guardrail"
+                            }
+                        }
+                    }
+                }
+            }
+            """)
+        bedrock_guardrails: Dict[str, Any] = factory.get_chat_class_args("bedrock").get("guardrails")
+        # The baseline shows the parent has other keys for the merge to keep.
+        self.assertIn("guardrailVersion", bedrock_guardrails)
+        expected_guardrails: Dict[str, Any] = dict(bedrock_guardrails)
+        expected_guardrails["guardrailIdentifier"] = "my-guardrail"
+
+        guardrails: Dict[str, Any] = factory.get_chat_class_args("my-bedrock").get("guardrails")
+
+        self.assertEqual(expected_guardrails, guardrails)
+        # The parent class keeps its own dictionary.
+        self.assertIsNone(bedrock_guardrails.get("guardrailIdentifier"))
+
+    def test_extending_class_null_clears_the_parent_value(self) -> None:
+        """
+        A class that declares an arg as null clears the value that the class it extends gives that arg.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "azure-openai": {
+                        "args": {
+                            "store": null
+                        }
+                    }
+                }
+            }
+            """)
+
+        # The stock file gives "openai" a store of false, which "azure-openai" inherits.
+        self.assertIs(self.factory.get_chat_class_args("azure-openai").get("store"), False)
+        args: Dict[str, Any] = factory.get_chat_class_args("azure-openai")
+
+        self.assertIn("store", args)
+        self.assertIsNone(args.get("store"))
+        # The parent class keeps its own value.
+        self.assertIs(factory.get_chat_class_args("openai").get("store"), False)
+
     # ---- Importing the module: the openai packages stay optional ---------------------------------
 
     def test_factory_module_imports_without_the_openai_packages(self) -> None:
