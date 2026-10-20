@@ -47,10 +47,10 @@ class TestCountResults(TestCase):
             {"status": STATUS_KILLED},
         ])
 
-        self.assertEqual(counts[STATUS_CREATED], 2)
-        self.assertEqual(counts[STATUS_FAILED], 1)
-        self.assertEqual(counts[STATUS_TIMEOUT], 1)
-        self.assertEqual(counts[STATUS_KILLED], 1)
+        self.assertEqual(counts.get(STATUS_CREATED), 2)
+        self.assertEqual(counts.get(STATUS_FAILED), 1)
+        self.assertEqual(counts.get(STATUS_TIMEOUT), 1)
+        self.assertEqual(counts.get(STATUS_KILLED), 1)
 
     def test_no_results_counts_zero_not_empty(self) -> None:
         """
@@ -69,8 +69,8 @@ class TestCountResults(TestCase):
         """
         counts: Dict[str, Any] = OutputValidator.count_results([{"status": "WEIRD"}])
 
-        self.assertEqual(counts[STATUS_FAILED], 1)
-        self.assertEqual(counts[STATUS_CREATED], 0)
+        self.assertEqual(counts.get(STATUS_FAILED), 1)
+        self.assertEqual(counts.get(STATUS_CREATED), 0)
 
     def test_missing_status_counts_as_failed(self) -> None:
         """
@@ -78,7 +78,7 @@ class TestCountResults(TestCase):
         """
         counts: Dict[str, Any] = OutputValidator.count_results([{}])
 
-        self.assertEqual(counts[STATUS_FAILED], 1)
+        self.assertEqual(counts.get(STATUS_FAILED), 1)
 
     def test_totals_match_the_number_of_results(self) -> None:
         """

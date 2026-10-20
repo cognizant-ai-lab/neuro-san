@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Parse agent response text: sly_data fields, token accounting, error lines."""
-
 import json
 import re
 from typing import Any
@@ -24,7 +22,9 @@ from typing import Optional
 
 
 class OutputParser:
-    """Parses agent response fields and token accounting."""
+    """
+    Parses agent response text: sly_data fields, token accounting, and error lines.
+    """
 
     @staticmethod
     def parse_stdout_field(stdout: str, field_name: str) -> Optional[str]:

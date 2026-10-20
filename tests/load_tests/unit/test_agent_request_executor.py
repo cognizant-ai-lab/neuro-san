@@ -144,9 +144,9 @@ class TestAgentRequestExecutor(TestCase):
         """
         A stream that outruns the cap reports TIMEOUT.
         """
-        execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
-                                                                          message_interval_seconds=0.05)
-        result: AgentRequestResult = execution[0]
+        result: Optional[AgentRequestResult] = None
+        unused_session: Optional[FakeSession] = None
+        result, unused_session = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
 
         self.assertEqual(result.get_status(), STATUS_TIMEOUT)
 
@@ -159,9 +159,9 @@ class TestAgentRequestExecutor(TestCase):
         until the stream ends.
         """
         start_seconds: float = time.perf_counter()
-        execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
-                                                                          message_interval_seconds=0.05)
-        session: FakeSession = execution[1]
+        unused_result: Optional[AgentRequestResult] = None
+        session: Optional[FakeSession] = None
+        unused_result, session = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
         elapsed_seconds: float = time.perf_counter() - start_seconds
 
         self.assertLess(session.sent, 20)

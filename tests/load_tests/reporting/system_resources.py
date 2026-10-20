@@ -14,14 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Shared whole-system resource snapshots and reporting.
-
-Centralizes the whole-machine (not per-process) memory, CPU, and
-thread readings so the PRE-RUN SUMMARY and the OVERALL SYSTEM
-RESOURCES section render from a single source instead of duplicated
-copies across the input validator, load test, and summary reporter.
-"""
-
 import logging
 from typing import Dict
 from typing import List
@@ -44,7 +36,14 @@ SysSnapshot = Dict[str, float]
 
 
 class SystemResources:
-    """Whole-system (not per-process) resource readings and reporting."""
+    """
+    Whole-system (not per-process) resource readings and reporting.
+
+    Centralizes the whole-machine memory, CPU, and thread readings so the
+    PRE-RUN SUMMARY and the OVERALL SYSTEM RESOURCES section render from a
+    single source instead of duplicated copies across the input validator,
+    load test, and summary reporter.
+    """
 
     @staticmethod
     def total_threads() -> int:
@@ -110,7 +109,9 @@ class SystemResources:
 
     @classmethod
     def log_prerun(cls) -> None:
-        """Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads)."""
+        """
+        Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads).
+        """
         memory_stats = psutil.virtual_memory()
         total_gigabytes: float = memory_stats.total / (1024 ** 3)
         available_gigabytes: float = memory_stats.available / (1024 ** 3)

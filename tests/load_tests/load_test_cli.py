@@ -21,6 +21,7 @@ See tests/load_tests/load_tests.md for prerequisites, test levels, and
 usage examples.
 """
 
+import argparse
 import getpass
 import gzip
 import importlib.metadata as _pkg_meta
@@ -42,11 +43,14 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 import psutil
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
+from tests.load_tests.load_test_constants import ADV_NUM_REQUESTS
+from tests.load_tests.load_test_constants import ADV_NUM_ROUNDS
 from tests.load_tests.load_test_constants import LEVEL_ADV
 from tests.load_tests.load_test_constants import LEVEL_MIN
 from tests.load_tests.load_test_constants import LOCAL_HOSTS
@@ -993,22 +997,26 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         logger.info("  Continuing without server-log analysis.")
 
     @staticmethod
-    def _apply_level_defaults(args, explicit_args) -> None:
-        """Override argparse defaults with level-specific values.
+    def _apply_level_defaults(args: argparse.Namespace, explicit_args: Set[str]) -> None:
+        """
+        Override argparse defaults with level-specific values.
 
         Only applies when the user did not explicitly set the flag.
-        adv: 50 requests, 3 rounds (stress test).
+        adv: ADV_NUM_REQUESTS requests, ADV_NUM_ROUNDS rounds (stress test).
 
         --full-concurrency matches workers to num-requests so every
         request fires at once.  Otherwise workers stay at the
-        conservative default of 3 and a warning is shown if
+        conservative --max-workers default and a warning is shown if
         max-workers < num-requests.
+
+        :param args: Parsed arguments, updated in place
+        :param explicit_args: Dest names the user passed on the command line
         """
         if args.level == LEVEL_ADV:
             if "num_requests" not in explicit_args:
-                args.num_requests = 50
+                args.num_requests = ADV_NUM_REQUESTS
             if "num_rounds" not in explicit_args:
-                args.num_rounds = 3
+                args.num_rounds = ADV_NUM_ROUNDS
 
         if "max_workers" not in explicit_args and args.full_concurrency:
             args.max_workers = args.num_requests

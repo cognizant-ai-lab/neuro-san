@@ -14,12 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Progress heartbeat — periodic logging while requests are in-flight.
-
-Interim implementation. May be replaced by neuro-san built-in
-monitoring and telemetry when those features become available.
-"""
-
 import logging
 import os
 import re
@@ -51,13 +45,17 @@ OUT_OF_MEMORY_WARNING_THRESHOLD: float = 0.80
 
 
 class Heartbeat:  # pylint: disable=too-many-instance-attributes
-    """Logs periodic progress while requests are in-flight.
+    """
+    Logs periodic progress while requests are in-flight.
 
     Holds the server process handle so the heartbeat thread can
     read thread counts without the caller passing it each time.
 
     Also keeps the stage's peak readings. The heartbeat thread writes
     them; read them with the get_peak_*() methods after join().
+
+    Interim implementation. May be replaced by neuro-san built-in
+    monitoring and telemetry when those features become available.
     """
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments

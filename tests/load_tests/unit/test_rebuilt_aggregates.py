@@ -37,7 +37,9 @@ class TestRebuiltAggregates(TestCase):
     """
 
     def setUp(self) -> None:
-        """Create a run directory removed again after each test."""
+        """
+        Create a run directory removed again after each test.
+        """
         self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
@@ -69,7 +71,8 @@ class TestRebuiltAggregates(TestCase):
             return json.load(handle).get("aggregates", {})
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
-        """Latency averages the requests, not the run.
+        """
+        Latency averages the requests, not the run.
 
         Requests overlap, so dividing the slowest request by the
         request count would shrink the average by the concurrency
@@ -80,13 +83,17 @@ class TestRebuiltAggregates(TestCase):
         self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
-        """The mean is taken over every request's own elapsed time."""
+        """
+        The mean is taken over every request's own elapsed time.
+        """
         aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
         self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
 
     def test_total_elapsed_is_the_slowest_request(self) -> None:
-        """Total elapsed still stands in for the run's wall clock."""
+        """
+        Total elapsed still stands in for the run's wall clock.
+        """
         aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
         self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)
