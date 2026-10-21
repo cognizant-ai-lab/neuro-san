@@ -76,6 +76,10 @@
         # region, use the full prefixed id directly (e.g.
         # "us.anthropic.claude-opus-4-8") and also set "class": "anthropic-bedrock"
         # so the policy lookup succeeds without a matching llm_info entry.
+        # With "class" set, also set "max_tokens" (e.g. 64000) unless your llm
+        # info file gives the class a default: neuro-san fills it in only for an
+        # llm_config without "class", and otherwise each request asks for at
+        # most 4096 output tokens.
         "model_name": "bedrock-claude-sonnet",
     },
     "tools": [

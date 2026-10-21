@@ -39,7 +39,7 @@ class DirectAgentReservationist(AbstractAgentReservationist):
 
     async def deploy(self,
                      deployment_dict: Map[Reservation,
-                                          Map[Union[str, Event],
+                                          Map[Union[Event, str],
                                               Map[AgentReservation,
                                                   Dict[str, Any]]]],
                      confirmation: bool = False) -> Event:
@@ -75,8 +75,8 @@ class DirectAgentReservationist(AbstractAgentReservationist):
 
             use_reservation: AgentReservation = reservation
 
-            to_deploy: Map[Union[str, Event], Map[AgentReservation, Dict[str, Any]]] = value
-            key: Union[str, Event] = None
+            to_deploy: Map[Union[Event, str], Map[AgentReservation, Dict[str, Any]]] = value
+            key: Union[Event, str] = None
             for key, value in to_deploy.items():
 
                 # Prepare basic information

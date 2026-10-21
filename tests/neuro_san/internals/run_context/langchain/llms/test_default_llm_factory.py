@@ -43,6 +43,7 @@ class TestDefaultLlmFactory(TestCase):
 
     The focus is how "use_model_name" aliases in llm_info are followed, with and without a
     "class" key in the llm_config. See https://github.com/cognizant-ai-lab/neuro-san/issues/1298.
+    The "extends" tests check that a class's own args win over the ones it inherits.
 
     Nothing here makes a network call. Most tests only inspect the fully specified config that
     create_full_llm_config() produces; the tool_strict tests also build the chat model to see the
@@ -82,6 +83,24 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
     # A user-defined alias pointing at a name that has no entry of its own.
     DANGLING_ALIAS: str = "my-claude"
     DANGLING_TARGET: str = "claude-not-yet-released"
+
+    # A Bedrock model id whose stock entry has "class": "anthropic-bedrock".
+    BEDROCK_MODEL: str = "global.anthropic.claude-fable-5-1"
+
+    # A sparse llm info file that gives "anthropic-bedrock" two defaults of its own.
+    # The "anthropic" class it extends declares both keys as null.
+    BEDROCK_CLASS_DEFAULTS_HOCON: str = """
+{
+    "classes": {
+        "anthropic-bedrock": {
+            "args": {
+                "max_tokens": 64000,
+                "temperature": 0.2
+            }
+        }
+    }
+}
+"""
 
     @override
     def setUp(self) -> None:
@@ -333,6 +352,192 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
 
         self.assertIn("tool_strict", full_config)
         self.assertIsNone(full_config.get("tool_strict"))
+
+    # ---- "extends": a class's own args win over the ones it inherits ----------------------------
+
+    def test_extending_class_args_override_the_parent(self) -> None:
+        """
+        Defaults that a sparse llm info file gives "anthropic-bedrock" win over the nulls that the
+        "anthropic" class it extends declares for the same keys.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            TestDefaultLlmFactory.BEDROCK_CLASS_DEFAULTS_HOCON)
+
+        args: Dict[str, Any] = factory.get_chat_class_args("anthropic-bedrock")
+
+        self.assertEqual(64000, args.get("max_tokens"))
+        self.assertEqual(0.2, args.get("temperature"))
+        # The parent class keeps its own nulls.
+        self.assertIsNone(factory.get_chat_class_args("anthropic").get("max_tokens"))
+
+    def test_extending_class_default_reaches_an_llm_config_that_names_the_class(self) -> None:
+        """
+        An llm_config that names "anthropic-bedrock" gets the class defaults from a sparse llm info
+        file, and a "max_tokens" of its own still wins over the default.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            TestDefaultLlmFactory.BEDROCK_CLASS_DEFAULTS_HOCON)
+        config: Dict[str, Any] = {
+            "class": "anthropic-bedrock",
+            "model_name": TestDefaultLlmFactory.BEDROCK_MODEL,
+        }
+        own_config: Dict[str, Any] = dict(config)
+        own_config["max_tokens"] = 32000
+
+        full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
+        own_full_config: Dict[str, Any] = factory.create_full_llm_config(own_config, None)
+
+        self.assertEqual(64000, full_config.get("max_tokens"))
+        self.assertEqual(0.2, full_config.get("temperature"))
+        self.assertEqual(32000, own_full_config.get("max_tokens"))
+
+    def test_extending_class_default_reaches_an_llm_config_without_class(self) -> None:
+        """
+        Without "class", the model's entry selects "anthropic-bedrock" and the class defaults apply,
+        except "max_tokens", which still comes from the entry's max_output_tokens.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            TestDefaultLlmFactory.BEDROCK_CLASS_DEFAULTS_HOCON)
+        config: Dict[str, Any] = {"model_name": TestDefaultLlmFactory.BEDROCK_MODEL}
+
+        full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
+        stock_full_config: Dict[str, Any] = self.factory.create_full_llm_config(config, None)
+
+        self.assertEqual("anthropic-bedrock", full_config.get("class"))
+        self.assertEqual(0.2, full_config.get("temperature"))
+        # The stock file computes max_tokens from max_output_tokens, and the class default does not change it.
+        self.assertIsNotNone(stock_full_config.get("max_tokens"))
+        self.assertEqual(stock_full_config.get("max_tokens"), full_config.get("max_tokens"))
+
+    def test_extends_chain_takes_each_key_from_the_most_derived_class(self) -> None:
+        """
+        In a chain of classes that extend each other, a key takes its value from the most derived class
+        that declares it, and a key that only an ancestor declares is still inherited.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "anthropic-bedrock": {
+                        "args": {
+                            "max_tokens": 64000,
+                            "temperature": 0.2
+                        }
+                    },
+                    "my-bedrock": {
+                        "extends": "anthropic-bedrock",
+                        "args": {
+                            "temperature": 0.5
+                        }
+                    }
+                }
+            }
+            """)
+        anthropic_args: Dict[str, Any] = factory.get_chat_class_args("anthropic")
+
+        args: Dict[str, Any] = factory.get_chat_class_args("my-bedrock")
+
+        # Declared by my-bedrock and by both of its ancestors.
+        self.assertEqual(0.5, args.get("temperature"))
+        # Declared by anthropic-bedrock and by anthropic.
+        self.assertEqual(64000, args.get("max_tokens"))
+        # Declared only by anthropic-bedrock.
+        self.assertIn("region_name", args)
+        # Declared only by anthropic.
+        self.assertIn("max_retries", args)
+        self.assertEqual(anthropic_args.get("max_retries"), args.get("max_retries"))
+
+    def test_extending_class_without_args_inherits_the_parent_args(self) -> None:
+        """
+        A class that names only the class it extends, with no "args" of its own, gets the parent's args.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "my-anthropic": {
+                        "extends": "anthropic"
+                    }
+                }
+            }
+            """)
+
+        self.assertEqual(factory.get_chat_class_args("anthropic"), factory.get_chat_class_args("my-anthropic"))
+
+    def test_extending_class_inherits_a_parent_default_it_does_not_declare(self) -> None:
+        """
+        A sparse llm info file that changes an "openai" default also changes it for "azure-openai",
+        which extends "openai" and does not declare that key itself.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "openai": {
+                        "args": {
+                            "streaming": true
+                        }
+                    }
+                }
+            }
+            """)
+
+        # The stock file leaves streaming off for both classes.
+        self.assertIs(self.factory.get_chat_class_args("azure-openai").get("streaming"), False)
+        self.assertIs(factory.get_chat_class_args("azure-openai").get("streaming"), True)
+
+    def test_extending_class_dictionary_args_merge_key_by_key(self) -> None:
+        """
+        When a class and the class it extends both give a dictionary for the same arg, the two are merged:
+        the extending class's keys win and the parent's other keys are kept.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "my-bedrock": {
+                        "extends": "bedrock",
+                        "args": {
+                            "guardrails": {
+                                "guardrailIdentifier": "my-guardrail"
+                            }
+                        }
+                    }
+                }
+            }
+            """)
+        bedrock_guardrails: Dict[str, Any] = factory.get_chat_class_args("bedrock").get("guardrails")
+        # The baseline shows the parent has other keys for the merge to keep.
+        self.assertIn("guardrailVersion", bedrock_guardrails)
+        expected_guardrails: Dict[str, Any] = dict(bedrock_guardrails)
+        expected_guardrails["guardrailIdentifier"] = "my-guardrail"
+
+        guardrails: Dict[str, Any] = factory.get_chat_class_args("my-bedrock").get("guardrails")
+
+        self.assertEqual(expected_guardrails, guardrails)
+        # The parent class keeps its own dictionary.
+        self.assertIsNone(bedrock_guardrails.get("guardrailIdentifier"))
+
+    def test_extending_class_null_clears_the_parent_value(self) -> None:
+        """
+        A class that declares an arg as null clears the value that the class it extends gives that arg.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "azure-openai": {
+                        "args": {
+                            "store": null
+                        }
+                    }
+                }
+            }
+            """)
+
+        # The stock file gives "openai" a store of false, which "azure-openai" inherits.
+        self.assertIs(self.factory.get_chat_class_args("azure-openai").get("store"), False)
+        args: Dict[str, Any] = factory.get_chat_class_args("azure-openai")
+
+        self.assertIn("store", args)
+        self.assertIsNone(args.get("store"))
+        # The parent class keeps its own value.
+        self.assertIs(factory.get_chat_class_args("openai").get("store"), False)
 
     # ---- Importing the module: the openai packages stay optional ---------------------------------
 

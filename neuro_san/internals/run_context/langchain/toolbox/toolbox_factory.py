@@ -376,7 +376,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                 just like create_tool_from_toolbox().
         """
         tool_info: Dict[str, Any] = self._require_tool_info(tool_name)
-        return tool_info.get("class")
+        found_class: str = tool_info.get("class")
+        return found_class
 
     def get_tool_info(self, tool_name: str) -> Dict[str, Any]:
         """
