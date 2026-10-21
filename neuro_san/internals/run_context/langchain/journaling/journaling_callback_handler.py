@@ -237,10 +237,14 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
 
         if "langchain_tool" in tags:
 
+            # Get a string version of the run_id
+            run_id_str: str = str(run_id)
+
             # Build the origin path
             origin: List[Dict[str, Any]] = self.origination.add_spec_name_to_origin(self.parent_origin, agent_name)
+
             # Store the origin for this run_id
-            self._tool_origins[run_id] = origin
+            self._tool_origins[run_id_str] = origin
 
             # Re-build the tool start dictionary we will report with tool origin information
             # for the langchain tool's journal.
@@ -249,7 +253,7 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             # Create a journal entry for this invocation and log the combined inputs
             langchain_tool_journal = OriginatingJournal(self.base_journal, origin)
             # Store the journal for this run_id
-            self._tool_journals[run_id] = langchain_tool_journal
+            self._tool_journals[run_id_str] = langchain_tool_journal
             message = AgentMessage(content="Received arguments:", structure=tool_start_dict)
             await langchain_tool_journal.write_message(message)
 
@@ -277,9 +281,12 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             if isinstance(output, ToolMessage):
                 output = output.content
 
+            # Get a string version of the run_id
+            run_id_str: str = str(run_id)
+
             # Retrieve the correct journal and origin for this run_id
-            origin: List[Dict[str, Any]] = self._tool_origins.get(run_id)
-            langchain_tool_journal: OriginatingJournal = self._tool_journals.get(run_id)
+            origin: List[Dict[str, Any]] = self._tool_origins.get(run_id_str)
+            langchain_tool_journal: OriginatingJournal = self._tool_journals.get(run_id_str)
 
             # A tool can return a list of standard content blocks (text plus
             # image/file data): toolbox tools that return blocks do, and so
