@@ -26,6 +26,7 @@ from copy import deepcopy
 from logging import getLogger
 from logging import Logger
 from os import environ
+from os import pathsep
 from time import perf_counter
 import traceback
 
@@ -204,18 +205,20 @@ class AbstractClassActivation(AbstractCallableActivation):
     # pylint: disable=too-many-locals
     def resolve_class(self, class_name: str, module_name: str):
         """
-        Resolve the class by trying progressively higher levels in the agent network hierarchy.
+        Resolve the class by trying progressively higher levels in the agent network hierarchy
+        under each AGENT_TOOL_PATH root in turn.
 
         :param class_name: The name of the class to resolve
         :param module_name: The module name containing the class
         :return: The resolved Python class
+        :raises ValueError: If no AGENT_TOOL_PATH root has the class
         """
-        # "this_agent_tool_path" is the root path from AGENT_TOOL_PATH plus the agent network name.
-        this_agent_tool_path: str = self.factory.get_agent_tool_path()
+        # Each agent tool path is one root from AGENT_TOOL_PATH plus the agent network name,
+        # in the order the roots are listed.
+        agent_tool_paths: List[str] = self.factory.get_agent_tool_paths()
         inspector: AgentNetworkInspector = self.factory.get_agent_network()
         agent_network_name: str = inspector.get_network_name()
         agent_network_name_parts: List[str] = agent_network_name.split("/")
-        this_agent_tool_path_parts: List[str] = this_agent_tool_path.split(".")
 
         python_class: Type[Any] = None
         last_exception: Union[ValueError, AttributeError] = None
@@ -223,29 +226,36 @@ class AbstractClassActivation(AbstractCallableActivation):
         self.logger.debug("Attempting to resolve class `%s` in module `%s`", class_name, module_name)
 
         try:
-            python_class = self._attempt_resolve(
-                class_name, module_name, this_agent_tool_path, this_agent_tool_path_parts, agent_network_name_parts
-            )
+            python_class = self._attempt_resolve(class_name, module_name, agent_tool_paths, agent_network_name_parts)
         except (ValueError, AttributeError) as exception:
-            last_exception: Union[ValueError, AttributeError] = exception
+            last_exception = exception
 
         if python_class is not None:
             self.logger.debug("Successfully resolved class `%s` in module `%s`", class_name, module_name)
             return python_class
 
-        # If we exhausted all levels without success, warn and raise an error
+        # If we exhausted all roots and levels without success, warn and raise an error
         agent_name: str = self.factory.get_name_from_spec(self.agent_tool_spec)
-        use_tool_path_parts: List[str] = this_agent_tool_path_parts[:-len(agent_network_name_parts)]
-        agent_tool_path: str = ".".join(use_tool_path_parts)
+
+        # Report the roots on one line, in the order listed, without the agent network name
+        # each agent tool path ends with. Tools that summarize this message keep its first lines only.
+        agent_tool_roots: List[str] = []
+        one_agent_tool_path: str = None
+        for one_agent_tool_path in agent_tool_paths:
+            tool_path_parts: List[str] = one_agent_tool_path.split(".")
+            use_tool_path_parts: List[str] = tool_path_parts[:-len(agent_network_name_parts)]
+            agent_tool_roots.append(".".join(use_tool_path_parts))
+        agent_tool_path: str = pathsep.join(agent_tool_roots)
+
         strict_note: str = ""
         if self.is_agent_tool_path_only():
             strict_note = """
 Note: AGENT_TOOL_PATH_ONLY is enabled, so fully-qualified class references are
 not resolved at all — even ones that point inside AGENT_TOOL_PATH. Reference the
 class as "<module>.<ClassName>" relative to AGENT_TOOL_PATH, not by its full
-package path: resolution searches the agent network's own directory first and
-then walks up to the shared AGENT_TOOL_PATH root, so the agent network name does
-not belong in the reference.
+package path: under each AGENT_TOOL_PATH root in turn, resolution searches the
+agent network's own directory first and then walks up to the shared root, so the
+agent network name does not belong in the reference.
 """
         message = f"""
 Could not find class "{class_name}"
@@ -269,24 +279,26 @@ Check these things:
     e)  If an agent network contains both specific and global CodedTools,
         the global module must not have the same name as the agent network.
 3. Is AGENT_TOOL_PATH findable from what is set for your PYTHONPATH?
+4. If AGENT_TOOL_PATH lists several roots, they are searched in the order listed.
+   Each root is a directory under the PYTHONPATH or a Python module path.
 {strict_note}"""
         self.logger.error(message)
         raise ValueError(message) from last_exception
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _attempt_resolve(self, class_name: str, module_name: str,
-                         this_agent_tool_path: str,
-                         this_agent_tool_path_parts: List[str],
+                         agent_tool_paths: List[str],
                          agent_network_name_parts: List[str]) -> Type[Any]:
         """
         Try to resolve the class through progressive resolution strategies.
 
         :param class_name: The name of the class to resolve
         :param module_name: The module name containing the class
-        :param this_agent_tool_path: The root path from AGENT_TOOL_PATH plus the agent network name
-        :param this_agent_tool_path_parts: The agent tool path split into parts
+        :param agent_tool_paths: The agent tool paths to search, one per AGENT_TOOL_PATH root
+                                 plus the agent network name, in the order the roots are listed
         :param agent_network_name_parts: The agent network name split into parts
         :return: The resolved Python class
+        :raises ValueError: If the last root searched had no such module
+        :raises AttributeError: If the last root searched found the module but not the class
         """
         # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path.
         # This is skipped when AGENT_TOOL_PATH_ONLY is set: importing a module executes its
@@ -302,10 +314,51 @@ Check these things:
             if phase1_class is not None:
                 return phase1_class
 
-        # Phase 2 - Try resolving from most specific to most general (root level)
+        # Phase 2 - Try each AGENT_TOOL_PATH root in the order listed. The first root that
+        # resolves the class wins, so an earlier root shadows a later one even when the
+        # later one has the module at a more specific (agent network) level.
+        last_exception: Union[ValueError, AttributeError] = None
+        one_agent_tool_path: str = None
+        for one_agent_tool_path in agent_tool_paths:
+            try:
+                python_class: Type[Any] = self._attempt_resolve_under_root(
+                    class_name, module_name, one_agent_tool_path, agent_network_name_parts)
+                if python_class is not None:
+                    return python_class
+            except (ValueError, AttributeError) as exception:
+                # Move on to the next root, but keep a trace of why this one failed,
+                # as only the last root's exception reaches the caller.
+                self.logger.debug("Class `%s` in module `%s` not found under `%s`: %s",
+                                  class_name, module_name, one_agent_tool_path, exception)
+                last_exception = exception
+
+        # Re-raise the last exception so the caller knows resolution failed
+        if last_exception is not None:
+            raise last_exception
+
+        raise ValueError(f'Could not resolve class "{class_name}" in module "{module_name}".')
+
+    def _attempt_resolve_under_root(self, class_name: str, module_name: str,
+                                    this_agent_tool_path: str,
+                                    agent_network_name_parts: List[str]) -> Type[Any]:
+        """
+        Try to resolve the class under one AGENT_TOOL_PATH root, from most specific
+        to most general (root level).
+
+        :param class_name: The name of the class to resolve
+        :param module_name: The module name containing the class
+        :param this_agent_tool_path: The root path from AGENT_TOOL_PATH plus the agent network name
+        :param agent_network_name_parts: The agent network name split into parts
+        :return: The resolved Python class, or None if no level under the root resolves it
+        :raises ValueError: If the last level searched had no such module
+        :raises AttributeError: If the last level searched found the module but not the class
+        """
+        this_agent_tool_path_parts: List[str] = this_agent_tool_path.split(".")
         python_class: Type[Any] = None
         packages: List[str] = []
         last_exception: Union[ValueError, AttributeError] = None
+        # Each pass drops one trailing level, so the agent network's own package
+        # is tried first and the root itself last.
         for i in range(len(agent_network_name_parts) + 1):
             if i == 0:
                 # First attempt: try the most specific path
@@ -330,11 +383,11 @@ Check these things:
             except (ValueError, AttributeError) as exception:
                 last_exception = exception
 
-        # Re-raise the last exception so the caller knows resolution failed
+        # Re-raise the last exception so the caller knows resolution failed under this root
         if last_exception is not None:
             raise last_exception
 
-        raise ValueError(f'Could not resolve class "{class_name}" in module "{module_name}".')
+        return None
 
     @staticmethod
     def is_agent_tool_path_only() -> bool:

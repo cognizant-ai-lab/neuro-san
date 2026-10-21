@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 from neuro_san.internals.graph.registry.activation_factory import ActivationFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -78,11 +79,13 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         """
         return self.factory.create_front_man(sly_data, parent_run_context, self)
 
-    def get_agent_tool_path(self) -> str:
+    def get_agent_tool_paths(self) -> List[str]:
         """
-        :return: The path under which tools for this registry should be looked for.
+        :return: The paths under which tools for this registry should be looked for,
+                 one per AGENT_TOOL_PATH root, in the order the roots are listed.
+                 Each path is a dotted module path ending with the agent network name.
         """
-        return self.factory.get_agent_tool_path()
+        return self.factory.get_agent_tool_paths()
 
     def get_config(self) -> Dict[str, Any]:
         """
