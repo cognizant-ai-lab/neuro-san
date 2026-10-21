@@ -95,12 +95,12 @@ class StreamingInputProcessor:
         chat_responses: Generator[Dict[str, Any], None, None] = self.session.streaming_chat(chat_request)
         chat_response: Dict[str, Any] = None
         for chat_response in chat_responses:
-
+            use_chat_response: Dict[str, Any] = chat_response
             if self.log_responses:
-                mcp_response: Dict[str, Any] = chat_response.get("mcp_response", empty)
+                mcp_response: Dict[str, Any] = use_chat_response.get("mcp_response", empty)
                 print(f"DEBUG: MCP chat response: {json.dumps(mcp_response, indent=4)}")
 
-            response: Dict[str, Any] = chat_response.get("response", empty)
+            response: Dict[str, Any] = use_chat_response.get("response", empty)
             self.processor.process_message(response)
 
             # Update the state if there is something to update it with

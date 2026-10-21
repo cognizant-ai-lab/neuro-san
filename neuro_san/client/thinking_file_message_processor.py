@@ -197,7 +197,8 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         # Maybe add some context as to where the tool result came from if we have info for that.
         tool_result_origin: List[Dict[str, Any]] = response.get("tool_result_origin")
         if tool_result_origin is not None:
-            last_origin_only: List[Dict[str, Any]] = [tool_result_origin[-1]]
+            last_origin: Dict[str, Any] = tool_result_origin[-1]
+            last_origin_only: List[Dict[str, Any]] = [last_origin]
             origin_str = Origination.get_full_name_from_origin(last_origin_only)
             use_origin += f" (result from {origin_str})"
 
