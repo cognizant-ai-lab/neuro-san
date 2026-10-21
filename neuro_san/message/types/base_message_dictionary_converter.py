@@ -365,7 +365,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                 tool_calls.append(tool_call)
             else:
                 # The arguments are not logged: a client's call can carry secrets.
-                logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+                logger: Logger = getLogger(self.__class__.__name__)
                 logger.warning("Ignoring a tool call in chat_context (id %r, name %r): a call needs a string id "
                                "and name and a dictionary of args", self.call_field(raw_call, "id"),
                                self.call_field(raw_call, "name"))
