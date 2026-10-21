@@ -172,10 +172,10 @@ ENV AGENT_TOOLBOX_INFO_FILE=""
 
 # Where to find the classes for CodedTool class implementations
 # that are used by specific agent networks.  To list several tool roots, separate
-# them with the OS path separator (':' on Linux, ';' on Windows).  Each root is
-# either a directory under the PYTHONPATH (any root that contains a path separator)
-# or a Python module path (for example neuro_san.coded_tools), and the roots are
-# searched in the order listed.
+# them with the OS path separator (':' on Linux and macOS, ';' on Windows).  Each
+# root is either a directory under the PYTHONPATH (any root that contains a path
+# separator) or a Python module path (for example neuro_san.coded_tools), and the
+# roots are searched in the order listed.
 ENV AGENT_TOOL_PATH="${APP_SOURCE}/coded_tools"
 
 # Where to find the configuration file for Python logging.
