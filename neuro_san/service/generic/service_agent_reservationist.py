@@ -66,7 +66,7 @@ class ServiceAgentReservationist(Reservationist, LingeringResource):
 
     async def deploy(self,
                      deployment_dict: Map[Reservation,
-                                          Map[Union[str, Event],
+                                          Map[Union[Event, str],
                                               Map[AgentReservation,
                                                   Dict[str, Any]]]],
                      confirmation: bool = False) -> Event:

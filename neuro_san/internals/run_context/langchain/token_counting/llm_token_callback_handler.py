@@ -316,7 +316,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         :param kwargs: The run's callback arguments; "run_id" is read here
         """
         _ = error
-        self.price_model_names.pop(kwargs.get("run_id"), None)
+        run_id: str = kwargs.get("run_id")
+        self.price_model_names.pop(run_id, None)
 
     def calculate_token_costs(self, model_name: str, completion_tokens: int, prompt_tokens: int) -> float:
         """
