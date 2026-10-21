@@ -21,7 +21,8 @@ from typing import List
 from typing import Optional
 from typing import Union
 
-import logging
+from logging import getLogger
+from logging import Logger
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
@@ -115,6 +116,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             "sly_data": "sly_data",
         }
         content_blocks: Optional[Dict[str, Any]] = None
+        src: str = None
+        dest: str = None
         for src, dest in optionals.items():
             value: Any = None
             try:
@@ -200,7 +203,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         :return: The wrapper dictionary, or None when the content is only text
                  or could not be standardized without losing text
         """
-        logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+        logger: Logger = getLogger(self.__class__.__name__)
         normalized: Union[str, List[Dict[str, Any]]] = None
         try:
             normalized = ContentUtils.normalize_content(message)
@@ -249,7 +252,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if chat_message is None:
             return base_message
 
-        content: Any = chat_message.get("text")
+        content: str | List[Dict[str, Any]] = chat_message.get("text")
         message_type: str = chat_message.get("type")
         content_blocks: Optional[Dict[str, Any]] = chat_message.get("content_blocks")
         blocks_format: Optional[ContentBlocksFormat] = ContentUtils.content_blocks_format(content_blocks)
@@ -262,7 +265,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if content is None and chat_message_type in self.CHAT_HISTORY_TYPES:
             # Message constructors reject None content, so a message with no
             # text and no block content to restore gets empty text.
-            logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+            logger: Logger = getLogger(self.__class__.__name__)
             logger.warning("A %s ChatMessage has no text and no block content to restore; using empty content",
                            chat_message.get("type"))
             content = ""
@@ -295,7 +298,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
 
     @staticmethod
     def agent_message_from_dict(chat_message: Dict[str, Any], chat_message_type: ChatMessageType,
-                                content: Any) -> Optional[BaseMessage]:
+                                content: str | List[Dict[str, Any]]) -> Optional[BaseMessage]:
         """
         Rebuild one of neuro-san's own message types from a ChatMessage dictionary.
 
@@ -304,7 +307,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         :param content: The content for the message: its text, or restored blocks
         :return: The message, or None for a type that is never rebuilt
         """
-        use_content: Any = content
+        use_content: str | List[Dict[str, Any]] = content
         if use_content is None:
             use_content = ""
 

@@ -21,7 +21,8 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-import logging
+from logging import getLogger
+from logging import Logger
 import time
 
 from leaf_common.config.config_filter import ConfigFilter
@@ -67,7 +68,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         self.items_overflow_threshold: int = 0
 
         self.base_storage: ReservationsStorage = None
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def set_base_storage(self, base_storage: ReservationsStorage):
         """
@@ -107,7 +108,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None:
                 self.base_storage.start()
         except Exception as exc:  # pylint: disable=broad-except
-            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.error("%s: Failed to start base storage: %s", self._name, exc)
             super().stop()
             raise
@@ -121,7 +122,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None and isinstance(self.base_storage, Startable):
                 self.base_storage.stop()
         except Exception as exc:  # pylint: disable=broad-except
-            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.error("%s: Failed to stop base storage: %s", self._name, exc)
             raise
 
@@ -132,6 +133,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         return time.time() > reservation.get_expiration_time_in_seconds()
 
+    # pylint: disable=too-many-locals
     async def add_reservations(self, reservations_dict: Map[Reservation, Dict[str, Any]],
                                source: str = None):
         """
@@ -173,12 +175,13 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         with self.lock:
             for reservation, agent_spec in use_reservations.items():
 
-                agent_name: str = reservation.get_reservation_id()
-                is_new = self.agents_table.get(agent_name) is None
+                use_reservation: Reservation = reservation
+                agent_name: str = use_reservation.get_reservation_id()
+                is_new: bool = self.agents_table.get(agent_name) is None
 
-                agent_network = AgentNetwork(agent_spec, agent_name)
+                agent_network: AgentNetwork = AgentNetwork(agent_spec, agent_name)
                 self.agents_table[agent_name] = agent_network
-                self.reservations_table[agent_name] = reservation
+                self.reservations_table[agent_name] = use_reservation
                 self.access_times[agent_name] = now
                 self.sizes[agent_name] = agent_network.get_size_in_bytes()
 

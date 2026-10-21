@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Builds and logs server and client resource delta tables."""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -23,7 +21,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)
@@ -36,7 +34,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResourceReporter:
-    """Builds and logs server and client resource delta tables.
+    """
+    Builds and logs server and client resource delta tables.
 
     Accumulates resource rows during the test run, then logs
     the complete analysis tables at the end.
@@ -64,7 +63,8 @@ class ResourceReporter:
 
     def add_resource_row(self, stage_label: str, before_snapshot: Dict[str, Any],
                          after_snapshot: Dict[str, Any]) -> ServerResourceRow:
-        """Build and store a server resource row from before/after snapshots.
+        """
+        Build and store a server resource row from before/after snapshots.
 
         Returns (display_row, before_snapshot, after_snapshot) so that
         delta calculations can use raw numeric values instead of
@@ -75,18 +75,23 @@ class ResourceReporter:
         :param after_snapshot: Server process snapshot taken after the stage
         :return: (display_row, before_snapshot, after_snapshot)
         """
-        rss_delta_megabytes: float = after_snapshot.get("rss") - before_snapshot.get("rss")
-        thread_delta: int = after_snapshot.get("threads") - before_snapshot.get("threads")
+        before_rss_megabytes: float = before_snapshot.get("rss")
+        after_rss_megabytes: float = after_snapshot.get("rss")
+        before_threads: int = before_snapshot.get("threads")
+        after_threads: int = after_snapshot.get("threads")
+        after_cpu_percent: float = after_snapshot.get("cpu")
+        rss_delta_megabytes: float = after_rss_megabytes - before_rss_megabytes
+        thread_delta: int = after_threads - before_threads
         display: Tuple[str, ...] = (
             str(stage_label),
-            f"{before_snapshot.get('rss'):.1f}M",
-            f"{after_snapshot.get('rss'):.1f}M",
+            f"{before_rss_megabytes:.1f}M",
+            f"{after_rss_megabytes:.1f}M",
             f"{rss_delta_megabytes:+.1f}M",
             str(after_snapshot.get("fds")),
-            f"{before_snapshot.get('threads')} -> {after_snapshot.get('threads')}",
+            f"{before_threads} -> {after_threads}",
             f"{thread_delta:+d}",
             str(after_snapshot.get("connections")),
-            f"{after_snapshot.get('cpu'):.1f}%",
+            f"{after_cpu_percent:.1f}%",
             str(after_snapshot.get("children")),
         )
         row: ServerResourceRow = (display, before_snapshot, after_snapshot)
@@ -95,7 +100,8 @@ class ResourceReporter:
 
     def add_client_row(self, stage_label: str, before_snapshot: Dict[str, Any], peak_snapshot: Optional[Dict[str, Any]],
                        settled_snapshot: Dict[str, Any]) -> ClientResourceRow:
-        """Build and store a client resource row from before/peak/settled.
+        """
+        Build and store a client resource row from before/peak/settled.
 
         Returns (display_row, before_snapshot, peak_snapshot,
         settled_snapshot) so that delta calculations and JSON export
@@ -136,7 +142,8 @@ class ResourceReporter:
     METRIC_COLUMN_COUNT: int = 11
 
     def log_combined_analysis(self, total_client_requests: int, total_server_calls: int) -> None:
-        """Log one combined server-app + client-app resource table.
+        """
+        Log one combined server-app + client-app resource table.
 
         Server-app and client-app rows share a single table.  Columns
         that don't apply to a component — or a component that produced
@@ -228,7 +235,9 @@ class ResourceReporter:
         return row
 
     def _log_resource_deltas(self) -> None:
-        """Log overall resource deltas if enough data points."""
+        """
+        Log overall resource deltas if enough data points.
+        """
         if len(self._resource_rows) < 2:
             return
         first_before_snapshot: Dict[str, Any] = self._resource_rows[0][1]
@@ -245,7 +254,9 @@ class ResourceReporter:
         )
 
     def _log_client_deltas(self) -> None:
-        """Log overall client resource deltas if enough data points."""
+        """
+        Log overall client resource deltas if enough data points.
+        """
         if len(self._client_rows) < 2:
             return
         first_before_snapshot: Dict[str, Any] = self._client_rows[0][1]

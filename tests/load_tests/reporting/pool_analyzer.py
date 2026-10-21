@@ -14,22 +14,21 @@
 #
 # END COPYRIGHT
 
-"""Analyzes executor thread pool reuse across load test stages."""
-
 import logging
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class PoolAnalyzer:
-    """Analyzes executor thread pool reuse across load test stages.
+    """
+    Analyzes executor thread pool reuse across load test stages.
 
     Holds the collected stage summaries for analysis.
     """
@@ -44,7 +43,9 @@ class PoolAnalyzer:
 
     # pylint: disable=too-many-locals
     def log_pool_reuse_analysis(self) -> None:
-        """Log executor pool reuse analysis across stages."""
+        """
+        Log executor pool reuse analysis across stages.
+        """
         stages_with_data: List[Dict[str, Any]] = []
         stage_summary: Dict[str, Any]
         # Keep the stages that have both thread counts and at least one server call.

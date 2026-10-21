@@ -51,6 +51,8 @@ class ManifestKeyConfigFilter(ConfigFilter):
 
         filtered: Dict[str, Any] = {}
 
+        key: str = None
+        value: Any = None
         for key, value in basis_config.items():
 
             # Key here is an agent name in a form that we choose.

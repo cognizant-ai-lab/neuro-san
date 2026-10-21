@@ -58,12 +58,12 @@ class AbstractAgentReservationist(Reservationist):
         :return: A new Reservation object corresponding to the request.
         """
         actual_lifetime: float = min(lifetime_in_seconds, self.max_lifetime_in_seconds)
-        reservation = AgentReservation(actual_lifetime, prefix=prefix)
+        reservation: AgentReservation = AgentReservation(actual_lifetime, prefix=prefix)
         return reservation
 
     async def deploy(self,
                      deployment_dict: Map[Reservation,
-                                          Map[Union[str, Event],
+                                          Map[Union[Event, str],
                                               Map[AgentReservation,
                                                   Dict[str, Any]]]],
                      confirmation: bool = False) -> Event:
@@ -107,6 +107,8 @@ class AbstractAgentReservationist(Reservationist):
         use_now: float = time()
 
         reservations_dict: Map[Reservation, Dict[str, Any]] = {}
+        reservation: AgentReservation = None
+        agent_spec: Dict[str, Any] = None
         for reservation, agent_spec in deployment_dict.items():
 
             use_reservation: AgentReservation = reservation
@@ -118,6 +120,7 @@ class AbstractAgentReservationist(Reservationist):
             reservations_dict[reservation] = agent_spec
 
         # Deploy locally.
+        storage: ReservationsStorage = None
         for storage in self.reservations_storage:
             # This can synchronously lock
             await storage.add_reservations(reservations_dict, source)

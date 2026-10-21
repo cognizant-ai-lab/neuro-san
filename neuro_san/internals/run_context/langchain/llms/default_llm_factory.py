@@ -322,7 +322,9 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         # The two-key limit is what lets a sparse user overlay such as
         # {"claude-fable": {"model_info_url": ...}} keep behaving as an alias.
         is_alias: bool = len(llm_entry.keys()) <= 2 and use_model_name is not None
-        resolved_entry: Dict[str, Any] = self.llm_infos.get(use_model_name) if is_alias else llm_entry
+        resolved_entry: Dict[str, Any] = llm_entry
+        if is_alias:
+            resolved_entry = self.llm_infos.get(use_model_name)
         return resolved_entry, use_model_name
 
     def _resolve_llm_entry(self, model_name: str) -> Tuple[Dict[str, Any], str]:
@@ -369,7 +371,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
 
         # Full entries can carry a "use_model_name" of their own (e.g. azure-gpt-4o -> gpt-4o-2024-08-06).
         # This mirrors how create_full_llm_config() fills in model_name when no class is given.
-        return llm_entry.get("use_model_name", use_model_name)
+        resolved: str = llm_entry.get("use_model_name", use_model_name)
+        return resolved
 
     def get_chat_class_args(self, chat_class_name: str, use_model_name: str = None) -> Dict[str, Any]:
         """
@@ -397,8 +400,9 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         extends: str = chat_class.get("extends")
         if extends is not None:
             # If this class extends another, get its args too.
+            # The overlay wins, so this class's own args override the inherited ones.
             extends_args: Dict[str, Any] = self.get_chat_class_args(extends, use_model_name)
-            args = self.overlayer.overlay(args, extends_args)
+            args = self.overlayer.overlay(extends_args, args)
 
         return args
 

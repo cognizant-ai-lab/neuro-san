@@ -14,12 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Server log monitoring — retry counting, request tracking, and disconnection scanning.
-
-Interim implementation. May be replaced by neuro-san built-in
-monitoring and telemetry when those features become available.
-"""
-
 import json
 import logging
 import os
@@ -28,6 +22,7 @@ import sys
 import threading
 import time
 
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
@@ -38,20 +33,20 @@ from typing import Union
 
 import psutil
 
-from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
-from tests.load_tests.config import DONE_STREAMING_PATTERN
-from tests.load_tests.config import NETWORK_LOOKAHEAD_LINES
-from tests.load_tests.config import PROVIDER_RETRY_PATTERN
-from tests.load_tests.config import REQUEST_FINISH_PATTERN
-from tests.load_tests.config import REQUEST_START_PATTERN
-from tests.load_tests.config import RETRY_LOG_PATTERN
-from tests.load_tests.config import SERVER_ERROR_PATTERN
-from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
-from tests.load_tests.config import TASK_CANCELLED_PATTERN
-from tests.load_tests.config import VALIDATION_ATTEMPT_PATTERN
-from tests.load_tests.config import VALIDATION_ERROR_PATTERN
-from tests.load_tests.config import VALIDATION_REINVOKE_PATTERN
-from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
+from tests.load_tests.load_test_constants import CLIENT_DISCONNECT_PATTERN
+from tests.load_tests.load_test_constants import DONE_STREAMING_PATTERN
+from tests.load_tests.load_test_constants import NETWORK_LOOKAHEAD_LINES
+from tests.load_tests.load_test_constants import PROVIDER_RETRY_PATTERN
+from tests.load_tests.load_test_constants import REQUEST_FINISH_PATTERN
+from tests.load_tests.load_test_constants import REQUEST_ID_PATTERN
+from tests.load_tests.load_test_constants import REQUEST_START_PATTERN
+from tests.load_tests.load_test_constants import RETRY_LOG_PATTERN
+from tests.load_tests.load_test_constants import SERVER_ERROR_PATTERN
+from tests.load_tests.load_test_constants import TASK_CANCELLED_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_ATTEMPT_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_ERROR_ITEM_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_ERROR_PATTERN
+from tests.load_tests.load_test_constants import VALIDATION_REINVOKE_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -81,10 +76,15 @@ class _NullFile:
 
 
 class ServerLogMonitor:
-    """Parses a neuro-san server log for retries, tokens, and disconnections.
+    """
+    Parses a neuro-san server log for retries, tokens, and disconnections.
 
+    Covers retry counting, request tracking, and disconnection scanning.
     Holds the server log path so that callers do not need to pass it
     to every method.
+
+    Interim implementation. May be replaced by neuro-san built-in
+    monitoring and telemetry when those features become available.
     """
 
     def __init__(self, server_log: Optional[str]) -> None:
@@ -115,11 +115,11 @@ class ServerLogMonitor:
             logger.info("Could not read server log for %s: %s", label, exc)
             return []
 
-    def count_retries_since(self, position) -> Dict[str, int]:
+    def count_retries_since(self, position: Optional[int]) -> Dict[str, int]:
         """Count retry log entries since the given position.
 
-        Covers both neuro-san's own max_attempts retries ("retrying
-        from <ErrorType>") and retries the LLM provider SDK performs
+        Covers both neuro-san's own max_attempts retries ("Retrying:
+        <reason> (<ErrorType>) - <error>") and retries the LLM provider SDK performs
         internally ("Retrying request to ... in ... seconds"), counted
         under the "ProviderRetry" key.  The latter are invisible to
         neuro-san but are still extra LLM attempts, so they belong in
@@ -131,10 +131,12 @@ class ServerLogMonitor:
             return {}
         lines: List[str] = self._read_lines_since(position, "retries")
         retry_counts: Dict[str, int] = {}
+        line: str
+        # Count each retry line by its error type.
         for line in lines:
             match: Optional[re.Match] = RETRY_LOG_PATTERN.search(line)
             if match:
-                error_type: str = match.group(2)
+                error_type: str = match.group(1)
                 retry_counts[error_type] = retry_counts.get(error_type, 0) + 1
             elif PROVIDER_RETRY_PATTERN.search(line):
                 retry_counts["ProviderRetry"] = retry_counts.get("ProviderRetry", 0) + 1
@@ -156,6 +158,8 @@ class ServerLogMonitor:
             return []
         text: str = "".join(lines)
         errors: List[Dict[str, str]] = []
+        match: re.Match
+        # One error entry per server error block in the new text.
         for match in SERVER_ERROR_PATTERN.finditer(text):
             message: str = " ".join(match.group(1).split())
             errors.append({"request_id": match.group(2), "message": message})
@@ -216,6 +220,8 @@ class ServerLogMonitor:
         total_finished: int = 0
         primary_start_re: re.Pattern = re.compile(primary_start_pattern)
         primary_finish_re: re.Pattern = re.compile(primary_finish_pattern)
+        line: str
+        # Count the request start and finish lines, for all requests and for primary requests.
         for line in lines:
             if REQUEST_START_PATTERN.search(line):
                 total_started += 1
@@ -245,6 +251,8 @@ class ServerLogMonitor:
         if not lines:
             return {}
         results: Dict[str, Dict[str, Any]] = {}
+        block: Dict[str, object]
+        # Keep the token entry of each reporting block, with the network named after it.
         for block in self._collect_reporting_blocks(lines):
             entry: Optional[Dict[str, Any]] = self._extract_token_entry(block.get("text", ""))
             if entry:
@@ -315,6 +323,9 @@ class ServerLogMonitor:
         blocks: List[Dict[str, object]] = []
         in_block: bool = False
         block_lines: List[str] = []
+        index: int
+        line: str
+        # Gather the lines from each "Request reporting" line to its "request_id" line.
         for index, line in enumerate(lines):
             if "Request reporting" in line and not in_block:
                 in_block = True
@@ -331,6 +342,8 @@ class ServerLogMonitor:
     def _resolve_network_names(blocks, lines) -> List[Dict[str, Any]]:
         """Match each block to its network via Done-with log lines."""
         results: List[Dict[str, Any]] = []
+        block: Dict[str, object]
+        # Keep each block's token entry with the network named after it.
         for block in blocks:
             block_text: str = block.get("text", "")
             entry: Optional[Dict[str, Any]] = ServerLogMonitor._extract_token_entry(block_text)
@@ -364,6 +377,8 @@ class ServerLogMonitor:
     def _find_network_after(lines, end_idx, lookahead=NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
         """Find the network name from Done-with lines after a block."""
         limit: int = min(end_idx + lookahead, len(lines))
+        index: int
+        # Look for a Done-with line in the lines after the block.
         for index in range(end_idx + 1, limit):
             match: Optional[re.Match] = DONE_STREAMING_PATTERN.search(lines[index])
             if match:
@@ -386,36 +401,61 @@ class ServerLogMonitor:
         return self._collect_validation_events(lines)
 
     @staticmethod
-    def _collect_validation_events(lines) -> List[Dict[str, Any]]:
+    def _collect_validation_events(lines: List[str]) -> List[Dict[str, Any]]:
         """Group validation log lines by request_id."""
         by_request: Dict[str, Dict[str, object]] = {}
+        line: str
+        # Count validation attempts, fix cycles and errors per request_id.
         for line in lines:
-            request_id_match: Optional[re.Match] = VALIDATION_REQUEST_ID_PATTERN.search(line)
+            request_id_match: Optional[re.Match] = REQUEST_ID_PATTERN.search(line)
             if not request_id_match:
                 continue
             request_id: str = request_id_match.group(1)
-            if request_id not in by_request:
+            # pylint: disable=consider-iterating-dictionary
+            if request_id not in by_request.keys():
                 by_request[request_id] = {"attempts": 0, "fix_cycles": 0, "errors": []}
-            entry: Dict[str, object] = by_request[request_id]
+            entry: Dict[str, object] = by_request.get(request_id)
             if VALIDATION_ATTEMPT_PATTERN.search(line):
-                entry["attempts"] += 1
+                entry["attempts"] = entry.get("attempts", 0) + 1
             if VALIDATION_REINVOKE_PATTERN.search(line):
-                entry["fix_cycles"] += 1
+                entry["fix_cycles"] = entry.get("fix_cycles", 0) + 1
             error_match: Optional[re.Match] = VALIDATION_ERROR_PATTERN.search(line)
             if error_match:
-                raw_errors: str = error_match.group(1)
-                for error in re.findall(r'"([^"]+)"', raw_errors):
-                    entry["errors"].append(error)
+                entry.get("errors").extend(ServerLogMonitor._parse_validation_errors(error_match.group(1)))
         results: List[Dict[str, Any]] = []
-        for request_id, data in sorted(by_request.items()):
-            if data.get("fix_cycles", 0) > 0:
+        validation_entry: Dict[str, object]
+        # Keep only the requests that needed a fix cycle, sorted by request_id.
+        for request_id, validation_entry in sorted(by_request.items()):
+            fix_cycles: int = validation_entry.get("fix_cycles", 0)
+            if fix_cycles > 0:
                 results.append({
                     "request_id": request_id,
-                    "attempts": data.get("attempts", 0),
-                    "fix_cycles": data.get("fix_cycles", 0),
-                    "errors": data.get("errors", []),
+                    "attempts": validation_entry.get("attempts", 0),
+                    "fix_cycles": fix_cycles,
+                    "errors": validation_entry.get("errors", []),
                 })
         return results
+
+    @staticmethod
+    def _parse_validation_errors(error_list_text: str) -> List[str]:
+        """
+        Read the errors out of the list text the neuro-san-studio middleware logs with "Validation errors: %s".
+        Python writes each error in single quotes, or in double quotes when it holds a single quote.
+        The text is only matched with VALIDATION_ERROR_ITEM_PATTERN, never evaluated.
+
+        :param error_list_text: The list text with its brackets, e.g. "['Missing front man']"
+        :return: The errors, or the whole text as one error when no quoted error is found in a non-empty list
+        """
+        errors: List[str] = []
+        single_quoted: str
+        double_quoted: str
+        # Each match fills only the group of the quote Python chose for that error.
+        for single_quoted, double_quoted in VALIDATION_ERROR_ITEM_PATTERN.findall(error_list_text):
+            errors.append(single_quoted or double_quoted)
+        if not errors and error_list_text != "[]":
+            logger.info("Could not find a quoted error in the validation errors %s", error_list_text)
+            errors.append(error_list_text)
+        return errors
 
     def parse_streaming_chat_timing_since(self, position) -> List[Dict[str, object]]:
         """Parse Start/Finish streaming_chat entries for timing.
@@ -433,10 +473,10 @@ class ServerLogMonitor:
     @staticmethod
     def _match_streaming_chat_pairs(lines) -> List[Dict[str, object]]:
         """Match Start/Finish pairs from server log lines."""
-        from datetime import datetime  # pylint: disable=import-outside-toplevel
-
         starts: Dict[Tuple[str, str], float] = {}
         results: List[Dict[str, object]] = []
+        line: str
+        # Pair each streaming_chat Start record with its Finish record.
         for line in lines:
             entry: Any = None
             try:
@@ -475,11 +515,14 @@ class ServerLogMonitor:
                     })
         return results
 
-    def scan_disconnections_since(self, position, primary_start_pattern=None) -> List[Dict[str, str]]:
+    def scan_disconnections_since(self, position: Optional[int],
+                                  primary_start_pattern: Optional[str] = None) -> List[Dict[str, str]]:
         """Scan server log for client disconnections since the given position.
 
-        Returns a list of dicts with request_id, agent, and
-        client_request (the originating client request ordinal).
+        Returns a list of dicts with request_id, agent (from the
+        request's "Start <agent>/streaming_chat" line, once its task
+        is cancelled), and client_request (the originating client
+        request ordinal).
         """
         if self._server_log is None or position is None:
             return []
@@ -493,27 +536,49 @@ class ServerLogMonitor:
         primary_request_ids: List[str] = []
         disconnections: Dict[str, Dict[str, str]] = {}
         context_request_id: Optional[str] = None
+        agent_by_request_id: Dict[str, str] = {}
 
+        line: str
+        # Track the current request_id and record primary requests, disconnections and cancels.
         for line in lines:
-            request_match: Optional[re.Match] = STREAM_CLOSED_REQUEST_PATTERN.search(line)
+            request_match: Optional[re.Match] = REQUEST_ID_PATTERN.search(line)
             if request_match:
                 context_request_id = request_match.group(1)
-            if primary_start_re and primary_start_re.search(line) and context_request_id:
+            start_match: Optional[re.Match] = REQUEST_START_PATTERN.search(line)
+            if start_match and request_match:
+                agent_by_request_id[request_match.group(1)] = start_match.group(1)
+            if (primary_start_re
+                    and primary_start_re.search(line)
+                    and context_request_id):
                 if context_request_id not in primary_request_ids:
                     primary_request_ids.append(context_request_id)
             if CLIENT_DISCONNECT_PATTERN.search(line):
                 request_id: str = context_request_id or "unknown"
-                if request_id not in disconnections:
+                # pylint: disable=consider-iterating-dictionary
+                if request_id not in disconnections.keys():
                     disconnections[request_id] = {"request_id": request_id, "agent": "unknown"}
             cancel_match: Optional[re.Match] = TASK_CANCELLED_PATTERN.search(line)
-            if cancel_match and context_request_id:
-                agent: str = cancel_match.group(1)
-                disconnection: Optional[Dict[str, str]] = disconnections.get(context_request_id)
-                if disconnection is not None:
-                    disconnection.update({"agent": agent})
+            if cancel_match:
+                ServerLogMonitor._set_cancelled_agent(cancel_match, disconnections, agent_by_request_id)
 
         self._map_to_client_requests(disconnections, primary_request_ids)
         return list(disconnections.values())
+
+    @staticmethod
+    def _set_cancelled_agent(cancel_match: re.Match, disconnections: Dict[str, Dict[str, str]],
+                             agent_by_request_id: Dict[str, str]) -> None:
+        """
+        Put the agent of a cancelled streaming_chat task on its disconnection, if that request disconnected.
+        The task is submitted under its request id, so group 1 of the cancel line names the request.
+
+        :param cancel_match: The TASK_CANCELLED_PATTERN match of the cancel line
+        :param disconnections: The disconnections found so far, by request id
+        :param agent_by_request_id: The agent of each request, from its "Start <agent>/streaming_chat" line
+        """
+        cancelled_request_id: str = cancel_match.group(1)
+        disconnection: Optional[Dict[str, str]] = disconnections.get(cancelled_request_id)
+        if disconnection is not None:
+            disconnection.update({"agent": agent_by_request_id.get(cancelled_request_id, "unknown")})
 
     @staticmethod
     def _map_to_client_requests(disconnections, primary_request_ids):
@@ -526,13 +591,20 @@ class ServerLogMonitor:
             return
 
         primary_numbers: List[int] = []
+        primary_request_id: str
+        # Get the request number of each primary request.
         for primary_request_id in primary_request_ids:
             primary_numbers.append(ServerLogMonitor._request_number(primary_request_id))
 
+        disconnection: Dict[str, str]
+        # Find the client request that each disconnection belongs to.
         for disconnection in disconnections.values():
             request_id: str = disconnection.get("request_id", "")
             request_number: int = ServerLogMonitor._request_number(request_id)
             parent_index: Optional[int] = None
+            index: int
+            primary_number: int
+            # The parent is the last primary request at or before this request number.
             for index, primary_number in enumerate(primary_numbers):
                 if primary_number <= request_number:
                     parent_index = index

@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Tests for the PlaybackDelay per-response delay policy.
-"""
+
 from tests.record_playback_llm_server.playback_delay import PlaybackDelay
 
 

@@ -157,7 +157,9 @@ class ExternalAgentToolCreator(ToolCreator):
             # Let verify_function_json() report it as invalid.
             return function_json
 
-        parameters: Dict[str, Any] = raw_parameters or {}
+        parameters: Dict[str, Any] = {}
+        if raw_parameters is not None:
+            parameters = raw_parameters
         properties: Dict[str, Any] = parameters.get("properties") or {}
         if properties:
             # The network declares its own parameters. Re-arm the synthesis

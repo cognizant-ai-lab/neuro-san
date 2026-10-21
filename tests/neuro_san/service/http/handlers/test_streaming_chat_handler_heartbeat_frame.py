@@ -14,15 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Unit tests for StreamingChatHandler._build_heartbeat_frame().
-
-The heartbeat payload is no longer user-configurable: only the heartbeat
-interval is. The handler calls _build_heartbeat_frame() once at
-initialize() time and writes that frame verbatim for every tick. These
-tests pin the frame's wire shape so future refactors of how it is built
-do not silently change what clients see.
-"""
 
 import json
 
@@ -38,9 +29,16 @@ from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChat
 # pylint: disable=protected-access
 class TestStreamingChatHandlerHeartbeatFrame(TestCase):
     """
-    Pins the wire-format invariants of the constant heartbeat frame:
-    it must be a ChatResponse-shaped JSON line carrying an empty
-    AGENT_PROGRESS ChatMessage and terminated with a newline.
+    Pins the wire-format invariants of the constant heartbeat frame built by
+    StreamingChatHandler._build_heartbeat_frame(): it must be a ChatResponse-shaped
+    JSON line carrying an empty AGENT_PROGRESS ChatMessage and terminated with a
+    newline.
+
+    The heartbeat payload is not user-configurable: only the heartbeat interval
+    is. The handler calls _build_heartbeat_frame() once at initialize() time and
+    writes that frame verbatim for every tick. These tests pin the frame's wire
+    shape so future refactors of how it is built do not silently change what
+    clients see.
     """
 
     def test_frame_ends_with_newline(self):

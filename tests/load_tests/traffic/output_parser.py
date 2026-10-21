@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Parse agent response text: sly_data fields, token accounting, error lines."""
-
 import json
 import re
 from typing import Any
@@ -24,7 +22,9 @@ from typing import Optional
 
 
 class OutputParser:
-    """Parses agent response fields and token accounting."""
+    """
+    Parses agent response text: sly_data fields, token accounting, and error lines.
+    """
 
     @staticmethod
     def parse_stdout_field(stdout: str, field_name: str) -> Optional[str]:
@@ -57,6 +57,8 @@ class OutputParser:
             return {}
         depth: int = 0
         json_end: int = json_start
+        char_index: int
+        # Find the brace that closes the first JSON object.
         for char_index in range(json_start, len(stdout)):
             if stdout[char_index] == "{":
                 depth += 1

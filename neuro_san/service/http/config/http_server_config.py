@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
+
 # Env var: dedicated port for the isolated health-probe server. 0 disables it,
 # in which case k8s/LB probes must hit the main server port's handlers (which
 # remain registered for backward compatibility).

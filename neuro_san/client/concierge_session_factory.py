@@ -65,7 +65,7 @@ class ConciergeSessionFactory:
         elif session_type in ("http", "https"):
 
             # If there is no port really specified, use the default port
-            use_port = port
+            use_port: int = port
             if port is None:
                 use_port = ConciergeSession.DEFAULT_PORT
 

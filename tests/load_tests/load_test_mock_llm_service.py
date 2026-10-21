@@ -15,51 +15,6 @@
 #
 # END COPYRIGHT
 
-"""
-Load-test script for neuro-san server using the mock LLM service.
-
-Fires concurrent requests via agent_cli subprocesses, monitors the
-neuro-san server and mock LLM server processes for resource leaks
-(RSS, FDs, threads, connections), and prints a per-round summary
-with an overall leak analysis.
-
-Prerequisites:
-    1. Mock LLM server running (Terminal 1):
-       python -m tests.mock_llm_server.mock_llm_server --port 8888
-
-    2. Neuro-san server running with OPENAI_API_BASE and the Chat Completions
-       llm_info overlay (Terminal 2). The openai class defaults to the Responses
-       API, which the mock does not serve, so the overlay pins Chat Completions:
-       export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon
-       export OPENAI_API_BASE=http://localhost:8888/v1
-       python -m neuro_san.service.main_loop.server_main_loop
-
-Usage examples:
-    # Defaults: math_guy with preset prompt/sly-data, 5 rounds, 10 requests, 10 workers
-    python tests/load_tests/load_test_mock_llm_service.py
-
-    # 100 concurrent requests over 3 rounds
-    python tests/load_tests/load_test_mock_llm_service.py --num-requests 100 --max-workers 100 --num-rounds 3
-
-    # Different agent network (preset auto-fills prompt, no sly-data)
-    python tests/load_tests/load_test_mock_llm_service.py --agent hello_world
-
-    # Override preset prompt for a known agent
-    python tests/load_tests/load_test_mock_llm_service.py --agent hello_world --prompt "Say hi to the moon"
-
-    # Unknown agent requires explicit --prompt
-    python tests/load_tests/load_test_mock_llm_service.py --agent my_custom_agent --prompt "test input" --no-sly-data
-
-    # Remote neuro-san server (psutil monitoring auto-disabled)
-    python tests/load_tests/load_test_mock_llm_service.py --host 172.31.11.243 --port 8080
-
-    # Auto-start servers (no manual setup needed)
-    python tests/load_tests/load_test_mock_llm_service.py --auto-start
-
-    # Auto-start with custom mock port
-    python tests/load_tests/load_test_mock_llm_service.py --auto-start --mock-port 9999
-"""
-
 import logging
 import os
 import subprocess
@@ -83,7 +38,7 @@ from typing import Tuple
 
 import psutil
 
-from tests.load_tests.config import LOCAL_HOSTS
+from tests.load_tests.load_test_constants import LOCAL_HOSTS
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -93,7 +48,49 @@ logger: Logger = logging.getLogger(__name__)
 
 class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     """
-    Load test runner for the neuro-san server using mock LLM service.
+    Load test runner for the neuro-san server using the mock LLM service.
+
+    Fires concurrent requests via agent_cli subprocesses, monitors the
+    neuro-san server and mock LLM server processes for resource leaks
+    (RSS, FDs, threads, connections), and prints a per-round summary
+    with an overall leak analysis.
+
+    Prerequisites:
+        1. Mock LLM server running (Terminal 1):
+           python -m tests.mock_llm_server.mock_llm_server --port 8888
+
+        2. Neuro-san server running with OPENAI_API_BASE and the Chat Completions
+           llm_info overlay (Terminal 2). The openai class defaults to the Responses
+           API, which the mock does not serve, so the overlay pins Chat Completions:
+           export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon
+           export OPENAI_API_BASE=http://localhost:8888/v1
+           python -m neuro_san.service.main_loop.server_main_loop
+
+    Usage examples:
+        # Defaults: math_guy with preset prompt/sly-data, 5 rounds, 10 requests, 10 workers
+        python tests/load_tests/load_test_mock_llm_service.py
+
+        # 100 concurrent requests over 3 rounds
+        python tests/load_tests/load_test_mock_llm_service.py --num-requests 100 --max-workers 100 --num-rounds 3
+
+        # Different agent network (preset auto-fills prompt, no sly-data)
+        python tests/load_tests/load_test_mock_llm_service.py --agent hello_world
+
+        # Override preset prompt for a known agent
+        python tests/load_tests/load_test_mock_llm_service.py --agent hello_world --prompt "Say hi to the moon"
+
+        # Unknown agent requires explicit --prompt
+        python tests/load_tests/load_test_mock_llm_service.py --agent my_custom_agent \
+            --prompt "test input" --no-sly-data
+
+        # Remote neuro-san server (psutil monitoring auto-disabled)
+        python tests/load_tests/load_test_mock_llm_service.py --host 172.31.11.243 --port 8080
+
+        # Auto-start servers (no manual setup needed)
+        python tests/load_tests/load_test_mock_llm_service.py --auto-start
+
+        # Auto-start with custom mock port
+        python tests/load_tests/load_test_mock_llm_service.py --auto-start --mock-port 9999
     """
 
     MOCK_REQUEST_TIMEOUT_SECONDS: int = 120
@@ -282,11 +279,11 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         provided them explicitly. Abort if the agent is unknown and --prompt
         is missing.
         """
-        preset: Optional[Dict[str, Optional[str]]] = self.AGENT_PRESETS.get(self.args.agent)
+        preset: Optional[Dict[str, Optional[str]]] = MockLlmLoadTest.AGENT_PRESETS.get(self.args.agent)
 
         if self.args.prompt is None:
             if preset is None:
-                known_agents: str = ", ".join(sorted(self.AGENT_PRESETS.keys()))
+                known_agents: str = ", ".join(sorted(MockLlmLoadTest.AGENT_PRESETS.keys()))
                 logger.error(
                     """No preset for agent '%s'. Please provide --prompt explicitly.
 Known presets: %s""",
@@ -427,9 +424,9 @@ Then:
         mock_port: str = str(self.args.mock_port)
         api_base: str = f"http://localhost:{mock_port}/v1"
 
-        logger.info("Auto-starting mock LLM server (log: %s)", self.MOCK_LOG_PATH)
+        logger.info("Auto-starting mock LLM server (log: %s)", MockLlmLoadTest.MOCK_LOG_PATH)
         # pylint: disable-next=consider-using-with
-        self._mock_log_file_handle = open(self.MOCK_LOG_PATH, "w", encoding="utf-8")
+        self._mock_log_file_handle = open(MockLlmLoadTest.MOCK_LOG_PATH, "w", encoding="utf-8")
         self._auto_mock_popen = Popen(  # pylint: disable=consider-using-with
             ["python", "-m", "tests.mock_llm_server.mock_llm_server",
              "--port", mock_port],
@@ -439,10 +436,10 @@ Then:
 
         # The overlay keeps openai-class models on Chat Completions, the only endpoint the mock serves.
         server_env: Dict[str, str] = {**os.environ, "OPENAI_API_BASE": api_base,
-                                      "AGENT_LLM_INFO_FILE": self.CHAT_COMPLETIONS_LLM_INFO_PATH}
-        logger.info("Auto-starting neuro-san server (log: %s)", self.SERVER_LOG_PATH)
+                                      "AGENT_LLM_INFO_FILE": MockLlmLoadTest.CHAT_COMPLETIONS_LLM_INFO_PATH}
+        logger.info("Auto-starting neuro-san server (log: %s)", MockLlmLoadTest.SERVER_LOG_PATH)
         # pylint: disable-next=consider-using-with
-        self._server_log_file_handle = open(self.SERVER_LOG_PATH, "w", encoding="utf-8")
+        self._server_log_file_handle = open(MockLlmLoadTest.SERVER_LOG_PATH, "w", encoding="utf-8")
         self._auto_server_popen = Popen(  # pylint: disable=consider-using-with
             ["python", "-m", "neuro_san.service.main_loop.server_main_loop"],
             stdout=self._server_log_file_handle,
@@ -450,15 +447,15 @@ Then:
             env=server_env,
         )
 
-        logger.info("Waiting %ss for servers to start...", self.STARTUP_WAIT_SECONDS)
-        time.sleep(self.STARTUP_WAIT_SECONDS)
+        logger.info("Waiting %ss for servers to start...", MockLlmLoadTest.STARTUP_WAIT_SECONDS)
+        time.sleep(MockLlmLoadTest.STARTUP_WAIT_SECONDS)
 
         if self._auto_mock_popen.poll() is not None:
-            logger.error("Mock LLM server exited unexpectedly. Check %s", self.MOCK_LOG_PATH)
+            logger.error("Mock LLM server exited unexpectedly. Check %s", MockLlmLoadTest.MOCK_LOG_PATH)
             sys.exit(1)
 
         if self._auto_server_popen.poll() is not None:
-            logger.error("Neuro-san server exited unexpectedly. Check %s", self.SERVER_LOG_PATH)
+            logger.error("Neuro-san server exited unexpectedly. Check %s", MockLlmLoadTest.SERVER_LOG_PATH)
             self._auto_mock_popen.terminate()
             sys.exit(1)
 
@@ -469,7 +466,7 @@ Then:
         logger.info("Mock LLM server ready (PID %s)", self.mock_process.pid)
         logger.info("Neuro-san server ready (PID %s)", self.server_process.pid)
         logger.info("  OPENAI_API_BASE=%s", self._api_base)
-        logger.info("  AGENT_LLM_INFO_FILE=%s", self.CHAT_COMPLETIONS_LLM_INFO_PATH)
+        logger.info("  AGENT_LLM_INFO_FILE=%s", MockLlmLoadTest.CHAT_COMPLETIONS_LLM_INFO_PATH)
 
     def _stop_servers(self) -> None:
         """
@@ -478,11 +475,11 @@ Then:
         if self._auto_server_popen is not None:
             logger.info("Stopping neuro-san server (PID %s)...", self._auto_server_popen.pid)
             self._auto_server_popen.terminate()
-            self._auto_server_popen.wait(timeout=self.PROCESS_WAIT_TIMEOUT_SECONDS)
+            self._auto_server_popen.wait(timeout=MockLlmLoadTest.PROCESS_WAIT_TIMEOUT_SECONDS)
         if self._auto_mock_popen is not None:
             logger.info("Stopping mock LLM server (PID %s)...", self._auto_mock_popen.pid)
             self._auto_mock_popen.terminate()
-            self._auto_mock_popen.wait(timeout=self.PROCESS_WAIT_TIMEOUT_SECONDS)
+            self._auto_mock_popen.wait(timeout=MockLlmLoadTest.PROCESS_WAIT_TIMEOUT_SECONDS)
         if self._server_log_file_handle is not None:
             self._server_log_file_handle.close()
         if self._mock_log_file_handle is not None:

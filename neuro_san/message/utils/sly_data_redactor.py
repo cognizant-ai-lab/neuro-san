@@ -116,10 +116,11 @@ class SlyDataRedactor(ConfigFilter):
         """
         empty: Dict[str, Any] = {}
 
-        extractor = DictionaryExtractor(self.agent_tool_spec)
+        extractor: DictionaryExtractor = DictionaryExtractor(self.agent_tool_spec)
 
         # Find the right dictionary given the configured config_keys.
         allow_dict: Dict[str, Any] = empty
+        config_key: str = None
         for config_key in self.config_keys:
             allow_dict = extractor.get(config_key, allow_dict)
 

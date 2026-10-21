@@ -63,13 +63,13 @@ class AgentSessionFactory:
         #   Reason: This is the place where the session_type enforced-string argument is
         #           actually checked for positive use.
         if session_type == "direct":
-            factory = DirectAgentSessionFactory()
+            factory: DirectAgentSessionFactory = DirectAgentSessionFactory()
             session = factory.create_session(agent_name, use_direct=use_direct,
                                              metadata=metadata, umbrella_timeout=umbrella_timeout)
         elif session_type in ("http", "https"):
 
             # If there is no port really specified, use the default port
-            use_port = port
+            use_port: int = port
             if port is None:
                 use_port = AgentSession.DEFAULT_PORT
 
@@ -82,7 +82,7 @@ class AgentSessionFactory:
                                               timeout_in_seconds=connect_timeout_in_seconds)
         elif session_type == "mcp":
             # If there is no port really specified, use the default port
-            use_port = port
+            use_port: int = port
             if port is None:
                 use_port = AgentSession.DEFAULT_PORT
 

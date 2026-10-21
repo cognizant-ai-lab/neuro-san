@@ -16,11 +16,11 @@
 # END COPYRIGHT
 from unittest import TestCase
 
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 
 
 # These tests call deliberately-internal helpers directly; suppress
@@ -35,13 +35,18 @@ class TestResolveStatus(TestCase):
     """
 
     def test_each_reported_status_is_preserved(self) -> None:
-        """CREATED, FAILED, TIMEOUT and KILLED all survive a rebuild."""
-        for status in (STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
+        """
+        CREATED, FAILED, TIMEOUT and KILLED all survive a rebuild.
+        """
+        status: str
+        # Each reported status comes back unchanged.
+        for status in [STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED]:
             with self.subTest(status=status):
                 self.assertEqual(ResultsRebuilder._resolve_status({"status": status}), status)
 
     def test_missing_log_line_counts_as_failed(self) -> None:
-        """A request never seen to finish is a failure, not a success.
+        """
+        A request never seen to finish is a failure, not a success.
 
         Failures past FAILURE_LOG_LIMIT are never printed, so an absent
         log line is the normal case for a heavily failing run.
@@ -49,5 +54,7 @@ class TestResolveStatus(TestCase):
         self.assertEqual(ResultsRebuilder._resolve_status({}), STATUS_FAILED)
 
     def test_unrecognized_status_counts_as_failed(self) -> None:
-        """An unknown status word is never promoted to success."""
+        """
+        An unknown status word is never promoted to success.
+        """
         self.assertEqual(ResultsRebuilder._resolve_status({"status": "WEIRD"}), STATUS_FAILED)

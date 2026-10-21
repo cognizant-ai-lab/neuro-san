@@ -128,6 +128,8 @@ class AgentFrameworkMessage(TracedMessage):
 
             # Shallow copy the original sly_data dictionary
             new_value = copy(value)
+            sly_data_key: str = None
+            sly_data_value: Any = None
             for sly_data_key, sly_data_value in new_value.items():
                 if sly_data_key in allow_sly_data_keys:
                     # Keep the keys and values

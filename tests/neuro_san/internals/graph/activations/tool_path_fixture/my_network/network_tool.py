@@ -14,11 +14,12 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Network-specific fixture module living under the test AGENT_TOOL_PATH hierarchy,
-used by AGENT_TOOL_PATH_ONLY resolution tests.
-"""
 
 
 class NetworkTool:
-    """A fixture class resolvable at the network-specific level of the tool path."""
+    """
+    A fixture class resolvable at the network-specific level of the tool path.
+
+    Network-specific fixture living under the test AGENT_TOOL_PATH hierarchy,
+    used by AGENT_TOOL_PATH_ONLY resolution tests.
+    """

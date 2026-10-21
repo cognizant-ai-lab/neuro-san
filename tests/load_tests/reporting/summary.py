@@ -25,11 +25,11 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.config import SEPARATOR_WIDTH
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SysSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
@@ -200,6 +200,8 @@ class SummaryReporter:
         token_counts: List[int] = []
         prompt_total: int = 0
         completion_total: int = 0
+        entry: Dict[str, Any]
+        # Add up the token fields of each entry that has tokens.
         for entry in entries:
             token_count: int = entry.get("total_tokens", 0) or 0
             if not token_count:
@@ -232,18 +234,18 @@ class SummaryReporter:
         if first_response_stats is not None:
             logger.info(
                 "  Time to first response: %s min / %s avg / %s max",
-                Formatters.fmt_duration(first_response_stats.get("min", 0)),
-                Formatters.fmt_duration(first_response_stats.get("avg", 0)),
-                Formatters.fmt_duration(first_response_stats.get("max", 0)),
+                Formatters.fmt_duration(first_response_stats.get("min_seconds", 0)),
+                Formatters.fmt_duration(first_response_stats.get("avg_seconds", 0)),
+                Formatters.fmt_duration(first_response_stats.get("max_seconds", 0)),
             )
 
         request_duration_stats: Optional[Dict[str, float]] = self._request_duration_stats()
         if request_duration_stats is not None:
             logger.info(
                 "  Request duration: %s min / %s avg / %s max",
-                Formatters.fmt_duration(request_duration_stats.get("min", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("avg", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("max", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("min_seconds", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("avg_seconds", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("max_seconds", 0)),
             )
 
         self._log_validation_summary()
@@ -319,7 +321,11 @@ class SummaryReporter:
 
         :return: True if any result has client_total_tokens
         """
+        summary: Dict[str, Any]
+        # Look for any result that carries a client token copy.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # Stop at the first result with client tokens.
             for result in summary.get("results", []):
                 if "client_total_tokens" in result:
                     return True
@@ -333,7 +339,11 @@ class SummaryReporter:
         :return: Token stats from aggregate_token_entries, or None when no result has tokens
         """
         entries: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # One token entry per request of every stage.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # Read the token fields with the given prefix.
             for result in summary.get("results", []):
                 entries.append({
                     "total_tokens": result.get(
@@ -374,6 +384,8 @@ class SummaryReporter:
         """
         prefix: str = f"{edge}_sys_"
         chosen_snapshot: Optional[SysSnapshot] = None
+        summary: Dict[str, Any]
+        # Find the first ("before") or last ("after") stage with system data.
         for summary in self._summaries:
             memory_percentage: Optional[float] = summary.get(prefix + "mem_pct")
             if memory_percentage is None:
@@ -399,19 +411,28 @@ class SummaryReporter:
         peak_available_gigabytes: Optional[float] = None
         peak_cpu_percentage: Optional[float] = None
         peak_threads: Optional[int] = None
+        summary: Dict[str, Any]
+        # Keep the largest value of each system metric.
         for summary in self._summaries:
             memory_percentage: Optional[float] = summary.get("peak_sys_mem_pct")
             if (memory_percentage is not None
-                    and (peak_memory_percentage is None or memory_percentage > peak_memory_percentage)):
+                    and (peak_memory_percentage is None
+                         or memory_percentage > peak_memory_percentage)):
                 peak_memory_percentage = memory_percentage
                 peak_available_gigabytes = summary.get("peak_sys_mem_avail_gb")
             cpu_percentage: Optional[float] = summary.get("peak_sys_cpu")
-            if cpu_percentage is not None and (peak_cpu_percentage is None or cpu_percentage > peak_cpu_percentage):
+            if (cpu_percentage is not None
+                    and (peak_cpu_percentage is None
+                         or cpu_percentage > peak_cpu_percentage)):
                 peak_cpu_percentage = cpu_percentage
             threads: Optional[int] = summary.get("peak_sys_threads")
-            if threads is not None and (peak_threads is None or threads > peak_threads):
+            if (threads is not None
+                    and (peak_threads is None
+                         or threads > peak_threads)):
                 peak_threads = threads
-        if peak_memory_percentage is None and peak_cpu_percentage is None and peak_threads is None:
+        if (peak_memory_percentage is None
+                and peak_cpu_percentage is None
+                and peak_threads is None):
             return None
         return {
             "mem_pct": peak_memory_percentage,
@@ -424,18 +445,22 @@ class SummaryReporter:
         """
         Compute min/avg/max elapsed time across requests.
 
-        :return: min, avg and max elapsed seconds; None when there are no results
+        :return: "min_seconds", "avg_seconds" and "max_seconds" of the elapsed time; None when there are no results
         """
         durations_seconds: List[float] = []
+        summary: Dict[str, Any]
+        # Collect the elapsed time of every request.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # One duration per request of the stage.
             for result in summary.get("results", []):
                 durations_seconds.append(result.get("elapsed", 0))
         if not durations_seconds:
             return None
         return {
-            "min": min(durations_seconds),
-            "avg": sum(durations_seconds) / len(durations_seconds),
-            "max": max(durations_seconds),
+            "min_seconds": min(durations_seconds),
+            "avg_seconds": sum(durations_seconds) / len(durations_seconds),
+            "max_seconds": max(durations_seconds),
         }
 
     def _log_model_distribution(self) -> None:
@@ -454,16 +479,18 @@ class SummaryReporter:
         model_name: str
         # Count the models of every request in every stage.
         for summary in self._summaries:
+            # Count the models each request of the stage used.
             for result in summary.get("results", []):
                 all_models: List[str] = result.get("all_models", [])
                 model: Optional[str] = result.get("model")
                 if all_models:
+                    # Count every model the request used, fallbacks included.
                     for model_name in all_models:
-                        model_counts[model_name] += 1
+                        model_counts[model_name] = model_counts.get(model_name, 0) + 1
                     if len(all_models) > 1:
                         fallback_requests += 1
                 elif model and model != "unknown":
-                    model_counts[model] += 1
+                    model_counts[model] = model_counts.get(model, 0) + 1
         if not model_counts:
             return
         model_parts: List[str] = []
@@ -479,13 +506,15 @@ class SummaryReporter:
         """
         Compute min/avg/max time-to-first-response.
 
-        :return: Dictionary with "min", "avg" and "max" in seconds over the
+        :return: Dictionary with "min_seconds", "avg_seconds" and "max_seconds" over the
                  requests that received a first response; None when none did
         """
         first_response_seconds: List[float] = []
         summary: Dict[str, Any]
+        # Collect the time to first response of every request.
         for summary in self._summaries:
             result: Dict[str, Any]
+            # Keep only the requests that got a first response.
             for result in summary.get("results", []):
                 time_to_first_response_seconds: float = result.get("time_to_first_response", 0)
                 if time_to_first_response_seconds > 0:
@@ -493,9 +522,9 @@ class SummaryReporter:
         if not first_response_seconds:
             return None
         return {
-            "min": min(first_response_seconds),
-            "avg": sum(first_response_seconds) / len(first_response_seconds),
-            "max": max(first_response_seconds),
+            "min_seconds": min(first_response_seconds),
+            "avg_seconds": sum(first_response_seconds) / len(first_response_seconds),
+            "max_seconds": max(first_response_seconds),
         }
 
     def _log_validation_summary(self) -> None:
@@ -543,6 +572,7 @@ class SummaryReporter:
         result: Dict[str, Any]
         # Split the request durations into requests with and without fixes.
         for summary in self._summaries:
+            # One duration per request of the stage.
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")
                 elapsed_seconds: float = result.get("elapsed", 0)
@@ -585,6 +615,8 @@ class SummaryReporter:
         :return: Validation events from every stage, in stage order
         """
         events: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Gather the validation events of every stage.
         for summary in self._summaries:
             events.extend(summary.get("validation_events", []))
         return events

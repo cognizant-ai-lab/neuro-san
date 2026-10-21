@@ -14,12 +14,6 @@
 #
 # END COPYRIGHT
 
-"""
-Agent profile — agent-specific prompts and response checks.
-
-Built by AgentProfileFactory; this class only carries the data.
-"""
-
 import logging
 from typing import Any
 from typing import Dict

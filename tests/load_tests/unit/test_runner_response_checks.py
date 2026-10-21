@@ -13,9 +13,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Unit tests for TrafficRunner response checks via the data-driven evaluators.
-"""
 
 import threading
 import time
@@ -29,10 +26,10 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
@@ -51,34 +48,6 @@ class TestRunnerResponseChecks(TestCase):
     Also covers the failure reason run_one_http() gives each request status,
     and how run_stage() collects results and kills requests past --stage-timeout.
     """
-
-    @staticmethod
-    def _processor(answer: str, sly_data: Optional[Dict[str, Any]] = None) -> BasicMessageProcessor:
-        """
-        Return a BasicMessageProcessor that has seen an AI answer, then the
-        final AGENT_FRAMEWORK message that carries chat_context and sly_data
-        (the shape a streaming_chat stream ends with).
-
-        :param answer: Text of the AI message
-        :param sly_data: sly_data of the final AGENT_FRAMEWORK message, or None to send no such message
-        :return: The processor
-        """
-        processor: BasicMessageProcessor = BasicMessageProcessor()
-        processor.process_message({"type": "AI", "text": answer})
-        if sly_data is not None:
-            processor.process_message({"type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data})
-        return processor
-
-    @staticmethod
-    def _runner(failure_patterns: Optional[List[str]] = None) -> TrafficRunner:
-        """
-        Return a runner over a one-prompt profile.
-
-        :param failure_patterns: failure_patterns of the profile, or None for none
-        :return: The runner
-        """
-        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
-        return TrafficRunner(Namespace(same_prompt=False), profile, threading.Event())
 
     def test_no_checks_passes(self) -> None:
         """
@@ -127,51 +96,6 @@ class TestRunnerResponseChecks(TestCase):
         reason: Optional[str] = self._runner().check_response(self._processor("ok", {}), checks)
         self.assertIn("sly_data.a", reason)
         self.assertIn("sly_data.b", reason)
-
-    @staticmethod
-    def _stage_runner(stage_timeout_seconds: Optional[float] = None) -> TrafficRunner:
-        """
-        Return a runner over a one-prompt profile with every argument run_one_http() and run_stage() read.
-
-        :param stage_timeout_seconds: Seconds after which run_stage() kills unfinished requests, or None
-        :return: The runner
-        """
-        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
-        args: Namespace = Namespace(
-            same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
-            chat_filter="maximal",
-            request_timeout=5.0, idle_timeout=5.0, include_tokens=False, stage_timeout=stage_timeout_seconds,
-        )
-        return TrafficRunner(args, profile, threading.Event())
-
-    def _run_one_http(self, request_result: AgentRequestResult) -> Dict[str, Any]:
-        """
-        Run one request whose AgentRequestExecutor returns request_result.
-
-        :param request_result: What the patched AgentRequestExecutor.execute_request() returns
-        :return: The request result from run_one_http()
-        """
-        with patch.object(AgentRequestExecutor, "execute_request", return_value=request_result):
-            return self._stage_runner().run_one_http(1, 0)
-
-    @staticmethod
-    def _fake_request(delay_seconds: float, request_id: int, global_request_id: int,
-                      output_dir: Optional[str]) -> Dict[str, Any]:
-        """
-        Stand in for run_one_http(), echoing its request numbers after a delay.
-
-        :param delay_seconds: Seconds to sleep before returning
-        :param request_id: Request number within the current stage
-        :param global_request_id: Request number across the whole run
-        :param output_dir: Directory for per-request output files, or None
-        :return: A CREATED request result
-        """
-        time.sleep(delay_seconds)
-        fake_result: Dict[str, Any] = {
-            "request_id": f"request-{request_id}", "status": STATUS_CREATED,
-            "global_request_id": global_request_id, "output_dir": output_dir,
-        }
-        return fake_result
 
     def test_created_request_keeps_timing_and_timestamps(self) -> None:
         """
@@ -285,9 +209,82 @@ class TestRunnerResponseChecks(TestCase):
 
     def test_peaks_ignore_zero_and_lower_readings(self) -> None:
         """
-        A peak is only kept for a reading above zero and above the peak so far, the rule used before.
+        A peak is only kept for a reading above zero and above the peak so far.
         """
         self.assertFalse(Heartbeat.is_new_peak(0, None))
         self.assertTrue(Heartbeat.is_new_peak(5, None))
         self.assertFalse(Heartbeat.is_new_peak(5, 5))
         self.assertTrue(Heartbeat.is_new_peak(6.5, 5))
+
+    @staticmethod
+    def _processor(answer: str, sly_data: Optional[Dict[str, Any]] = None) -> BasicMessageProcessor:
+        """
+        Return a BasicMessageProcessor that has seen an AI answer, then the
+        final AGENT_FRAMEWORK message that carries chat_context and sly_data
+        (the shape a streaming_chat stream ends with).
+
+        :param answer: Text of the AI message
+        :param sly_data: sly_data of the final AGENT_FRAMEWORK message, or None to send no such message
+        :return: The processor
+        """
+        processor: BasicMessageProcessor = BasicMessageProcessor()
+        processor.process_message({"type": "AI", "text": answer})
+        if sly_data is not None:
+            processor.process_message({"type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data})
+        return processor
+
+    @staticmethod
+    def _runner(failure_patterns: Optional[List[str]] = None) -> TrafficRunner:
+        """
+        Return a runner over a one-prompt profile.
+
+        :param failure_patterns: failure_patterns of the profile, or None for none
+        :return: The runner
+        """
+        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
+        return TrafficRunner(Namespace(same_prompt=False), profile, threading.Event())
+
+    @staticmethod
+    def _stage_runner(stage_timeout_seconds: Optional[float] = None) -> TrafficRunner:
+        """
+        Return a runner over a one-prompt profile with every argument run_one_http() and run_stage() read.
+
+        :param stage_timeout_seconds: Seconds after which run_stage() kills unfinished requests, or None
+        :return: The runner
+        """
+        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
+        args: Namespace = Namespace(
+            same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
+            chat_filter="maximal",
+            request_timeout=5.0, idle_timeout=5.0, include_tokens=False, stage_timeout=stage_timeout_seconds,
+        )
+        return TrafficRunner(args, profile, threading.Event())
+
+    def _run_one_http(self, request_result: AgentRequestResult) -> Dict[str, Any]:
+        """
+        Run one request whose AgentRequestExecutor returns request_result.
+
+        :param request_result: What the patched AgentRequestExecutor.execute_request() returns
+        :return: The request result from run_one_http()
+        """
+        with patch.object(AgentRequestExecutor, "execute_request", return_value=request_result):
+            return self._stage_runner().run_one_http(1, 0)
+
+    @staticmethod
+    def _fake_request(delay_seconds: float, request_id: int, global_request_id: int,
+                      output_dir: Optional[str]) -> Dict[str, Any]:
+        """
+        Stand in for run_one_http(), echoing its request numbers after a delay.
+
+        :param delay_seconds: Seconds to sleep before returning
+        :param request_id: Request number within the current stage
+        :param global_request_id: Request number across the whole run
+        :param output_dir: Directory for per-request output files, or None
+        :return: A CREATED request result
+        """
+        time.sleep(delay_seconds)
+        fake_result: Dict[str, Any] = {
+            "request_id": f"request-{request_id}", "status": STATUS_CREATED,
+            "global_request_id": global_request_id, "output_dir": output_dir,
+        }
+        return fake_result

@@ -22,12 +22,12 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.config import LEGACY_RUN_LOG_FILE_NAME
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
+from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 
 
 # pylint: disable=protected-access
@@ -41,7 +41,9 @@ class TestScanRequests(TestCase):
     """
 
     def setUp(self) -> None:
-        """Create a run directory removed again after each test."""
+        """
+        Create a run directory removed again after each test.
+        """
         self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
@@ -77,12 +79,16 @@ class TestScanRequests(TestCase):
             os.path.join(self._dir, "requests"), rebuilder._parse_timing(),
         )
         keyed: Dict[str, Dict[str, Any]] = {}
+        result: Dict[str, Any]
+        # Key each result by its request id.
         for result in results:
             keyed[result.get("request_id")] = result
         return keyed
 
     def test_partial_output_does_not_promote_a_timeout(self) -> None:
-        """A TIMEOUT with a reservation_id stays a TIMEOUT."""
+        """
+        A TIMEOUT with a reservation_id stays a TIMEOUT.
+        """
         self._write_request(1)
         self._write_log("Request 1: TIMEOUT (61.00s (1m))\n")
 
@@ -90,7 +96,9 @@ class TestScanRequests(TestCase):
         self.assertEqual(result.get("status", ""), STATUS_TIMEOUT)
 
     def test_partial_output_does_not_promote_a_kill(self) -> None:
-        """A KILLED request with a reservation_id stays KILLED."""
+        """
+        A KILLED request with a reservation_id stays KILLED.
+        """
         self._write_request(1)
         self._write_log("Request 1: KILLED (5.00s)\n")
 
@@ -98,7 +106,9 @@ class TestScanRequests(TestCase):
         self.assertEqual(result.get("status", ""), STATUS_KILLED)
 
     def test_partial_output_alone_is_not_success(self) -> None:
-        """With no log line, partial output is not counted as passing."""
+        """
+        With no log line, partial output is not counted as passing.
+        """
         self._write_request(1)
         self._write_log("")
 
@@ -106,7 +116,9 @@ class TestScanRequests(TestCase):
         self.assertEqual(result.get("status", ""), STATUS_FAILED)
 
     def test_successful_request_is_still_rebuilt_as_created(self) -> None:
-        """The normal case is unaffected."""
+        """
+        The normal case is unaffected.
+        """
         self._write_request(1)
         self._write_log("Request 1: CREATED (3.00s)\n")
 
