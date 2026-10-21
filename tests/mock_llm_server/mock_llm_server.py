@@ -14,27 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Standalone HTTP service that mimics the OpenAI Chat Completions API for
-load-testing neuro-san without incurring real LLM token costs.
 
-Exposes:
-    POST /v1/chat/completions   (OpenAI-compatible; honors stream=true via SSE)
-    GET  /v1/models             (lists the configured mock model)
-    GET  /healthz               (liveness probe)
-
-Wire it into a `.hocon` agent network exactly like a real OpenAI endpoint. The
-`openai` class defaults to the Responses API and this server only implements
-`/v1/chat/completions`, so pin Chat Completions with use_responses_api = false:
-
-    llm_config {
-        class = "openai"
-        model_name = "mock-model"
-        openai_api_base = "http://localhost:8888/v1"
-        openai_api_key = "not-needed"
-        use_responses_api = false
-    }
-"""
 from __future__ import annotations
 
 import argparse
@@ -54,9 +34,27 @@ from tests.mock_llm_server.models_handler import ModelsHandler
 
 class MockLlmServer:
     """
-    Entry point that wires the mock LLM HTTP service together: parses CLI
-    flags, constructs the shared MockState, builds the Tornado application
-    with the three handlers, and runs the asyncio event loop.
+    Entry point for a standalone HTTP service that mimics the OpenAI Chat
+    Completions API for load-testing neuro-san without incurring real LLM token
+    costs. It parses CLI flags, constructs the shared MockState, builds the Tornado
+    application with the three handlers, and runs the asyncio event loop.
+
+    Exposes:
+        POST /v1/chat/completions   (OpenAI-compatible; honors stream=true via SSE)
+        GET  /v1/models             (lists the configured mock model)
+        GET  /healthz               (liveness probe)
+
+    Wire it into a `.hocon` agent network exactly like a real OpenAI endpoint. The
+    `openai` class defaults to the Responses API and this server only implements
+    `/v1/chat/completions`, so pin Chat Completions with use_responses_api = false:
+
+        llm_config {
+            class = "openai"
+            model_name = "mock-model"
+            openai_api_base = "http://localhost:8888/v1"
+            openai_api_key = "not-needed"
+            use_responses_api = false
+        }
     """
 
     @staticmethod

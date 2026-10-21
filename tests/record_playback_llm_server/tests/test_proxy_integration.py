@@ -14,13 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-In-process record/playback/hybrid integration tests for the proxy.
 
-Each test spins up a fake "upstream" Tornado app plus the real proxy application
-on ephemeral loopback ports (via the start_app fixture), so it needs neither a
-real LLM host nor a running neuro-san server.
-"""
 # Fixture parameters intentionally share the fixture's name (standard pytest).
 # pylint: disable=redefined-outer-name
 import json
@@ -40,7 +34,13 @@ from tests.record_playback_llm_server.tests.stream_upstream import StreamUpstrea
 
 
 class TestProxyIntegration:
-    """In-process record/playback/hybrid behavior against a fake upstream."""
+    """
+    In-process record/playback/hybrid behavior against a fake upstream.
+
+    Each test spins up a fake "upstream" Tornado app plus the real proxy application
+    on ephemeral loopback ports (via the start_app fixture), so it needs neither a
+    real LLM host nor a running neuro-san server.
+    """
 
     @pytest.mark.asyncio
     async def test_record_then_playback_json(self, start_app, tmp_path):

@@ -14,12 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Server log monitoring — retry counting, request tracking, and disconnection scanning.
-
-Interim implementation. May be replaced by neuro-san built-in
-monitoring and telemetry when those features become available.
-"""
-
 import json
 import logging
 import os
@@ -82,10 +76,15 @@ class _NullFile:
 
 
 class ServerLogMonitor:
-    """Parses a neuro-san server log for retries, tokens, and disconnections.
+    """
+    Parses a neuro-san server log for retries, tokens, and disconnections.
 
+    Covers retry counting, request tracking, and disconnection scanning.
     Holds the server log path so that callers do not need to pass it
     to every method.
+
+    Interim implementation. May be replaced by neuro-san built-in
+    monitoring and telemetry when those features become available.
     """
 
     def __init__(self, server_log: Optional[str]) -> None:

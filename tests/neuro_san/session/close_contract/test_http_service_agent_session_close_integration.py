@@ -14,22 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Transport-level test that HttpServiceAgentSession.close() aborts a streaming read
-in the data-flowing post-header case.
 
-Uses a real in-process server (streaming_cancel_server fixture) in "drip" mode:
-it flushes headers + messages continuously, so a worker thread iterating
-streaming_chat() is reading a live stream (response tracked). The main thread then
-calls the synchronous close() and asserts the generator raises
-AgentSessionClosedError (the cross-thread response-close path), rather than
-surfacing a connectivity ValueError.
-
-Note: this deliberately exercises the data-flowing case. The synchronous
-`requests` client cannot reliably interrupt a read blocked on a fully SILENT
-stream from another thread (see HttpServiceAgentSession.close()); close() is
-therefore non-blocking (closes on a daemon thread) and best-effort for that case.
-"""
 from typing import Any
 from typing import Dict
 
@@ -41,7 +26,24 @@ from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
 
 class TestHttpServiceAgentSessionCloseIntegration:
-    """close() interrupts a data-flowing post-header streaming read from another thread."""
+    """
+    close() interrupts a data-flowing post-header streaming read from another thread.
+
+    Transport-level test that HttpServiceAgentSession.close() aborts a streaming
+    read in the data-flowing post-header case.
+
+    Uses a real in-process server (streaming_cancel_server fixture) in "drip" mode:
+    it flushes headers + messages continuously, so a worker thread iterating
+    streaming_chat() is reading a live stream (response tracked). The main thread
+    then calls the synchronous close() and asserts the generator raises
+    AgentSessionClosedError (the cross-thread response-close path), rather than
+    surfacing a connectivity ValueError.
+
+    Note: this deliberately exercises the data-flowing case. The synchronous
+    `requests` client cannot reliably interrupt a read blocked on a fully SILENT
+    stream from another thread (see HttpServiceAgentSession.close()); close() is
+    therefore non-blocking (closes on a daemon thread) and best-effort for that case.
+    """
 
     # pylint: disable=redefined-outer-name
     def test_close_aborts_streaming_read(self, streaming_cancel_server):

@@ -14,10 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Real (unmocked) langchain tool classes resolved by toolbox factory tests
-through the same class paths an operator's toolbox info file would use.
-"""
 
 from typing import Any
 from typing import Optional
@@ -33,7 +29,12 @@ class RealApiWrapper(BaseModel):
 
 
 class RealTool(BaseTool):
-    """A real BaseTool subclass, standing in for an integration's tool class."""
+    """
+    A real BaseTool subclass, standing in for an integration's tool class.
+
+    Unmocked: toolbox factory tests resolve it through the same class paths an
+    operator's toolbox info file would use.
+    """
 
     name: str = "real_tool"
     description: str = "A tool used to test unmocked toolbox instantiation."

@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Tests for UpstreamClient base-URL normalization.
-"""
+
 from tests.record_playback_llm_server.upstream_client import UpstreamClient
 
 

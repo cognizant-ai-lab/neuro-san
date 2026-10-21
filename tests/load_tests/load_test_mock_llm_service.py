@@ -15,51 +15,6 @@
 #
 # END COPYRIGHT
 
-"""
-Load-test script for neuro-san server using the mock LLM service.
-
-Fires concurrent requests via agent_cli subprocesses, monitors the
-neuro-san server and mock LLM server processes for resource leaks
-(RSS, FDs, threads, connections), and prints a per-round summary
-with an overall leak analysis.
-
-Prerequisites:
-    1. Mock LLM server running (Terminal 1):
-       python -m tests.mock_llm_server.mock_llm_server --port 8888
-
-    2. Neuro-san server running with OPENAI_API_BASE and the Chat Completions
-       llm_info overlay (Terminal 2). The openai class defaults to the Responses
-       API, which the mock does not serve, so the overlay pins Chat Completions:
-       export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon
-       export OPENAI_API_BASE=http://localhost:8888/v1
-       python -m neuro_san.service.main_loop.server_main_loop
-
-Usage examples:
-    # Defaults: math_guy with preset prompt/sly-data, 5 rounds, 10 requests, 10 workers
-    python tests/load_tests/load_test_mock_llm_service.py
-
-    # 100 concurrent requests over 3 rounds
-    python tests/load_tests/load_test_mock_llm_service.py --num-requests 100 --max-workers 100 --num-rounds 3
-
-    # Different agent network (preset auto-fills prompt, no sly-data)
-    python tests/load_tests/load_test_mock_llm_service.py --agent hello_world
-
-    # Override preset prompt for a known agent
-    python tests/load_tests/load_test_mock_llm_service.py --agent hello_world --prompt "Say hi to the moon"
-
-    # Unknown agent requires explicit --prompt
-    python tests/load_tests/load_test_mock_llm_service.py --agent my_custom_agent --prompt "test input" --no-sly-data
-
-    # Remote neuro-san server (psutil monitoring auto-disabled)
-    python tests/load_tests/load_test_mock_llm_service.py --host 172.31.11.243 --port 8080
-
-    # Auto-start servers (no manual setup needed)
-    python tests/load_tests/load_test_mock_llm_service.py --auto-start
-
-    # Auto-start with custom mock port
-    python tests/load_tests/load_test_mock_llm_service.py --auto-start --mock-port 9999
-"""
-
 import logging
 import os
 import subprocess
@@ -93,7 +48,49 @@ logger: Logger = logging.getLogger(__name__)
 
 class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     """
-    Load test runner for the neuro-san server using mock LLM service.
+    Load test runner for the neuro-san server using the mock LLM service.
+
+    Fires concurrent requests via agent_cli subprocesses, monitors the
+    neuro-san server and mock LLM server processes for resource leaks
+    (RSS, FDs, threads, connections), and prints a per-round summary
+    with an overall leak analysis.
+
+    Prerequisites:
+        1. Mock LLM server running (Terminal 1):
+           python -m tests.mock_llm_server.mock_llm_server --port 8888
+
+        2. Neuro-san server running with OPENAI_API_BASE and the Chat Completions
+           llm_info overlay (Terminal 2). The openai class defaults to the Responses
+           API, which the mock does not serve, so the overlay pins Chat Completions:
+           export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon
+           export OPENAI_API_BASE=http://localhost:8888/v1
+           python -m neuro_san.service.main_loop.server_main_loop
+
+    Usage examples:
+        # Defaults: math_guy with preset prompt/sly-data, 5 rounds, 10 requests, 10 workers
+        python tests/load_tests/load_test_mock_llm_service.py
+
+        # 100 concurrent requests over 3 rounds
+        python tests/load_tests/load_test_mock_llm_service.py --num-requests 100 --max-workers 100 --num-rounds 3
+
+        # Different agent network (preset auto-fills prompt, no sly-data)
+        python tests/load_tests/load_test_mock_llm_service.py --agent hello_world
+
+        # Override preset prompt for a known agent
+        python tests/load_tests/load_test_mock_llm_service.py --agent hello_world --prompt "Say hi to the moon"
+
+        # Unknown agent requires explicit --prompt
+        python tests/load_tests/load_test_mock_llm_service.py --agent my_custom_agent \
+            --prompt "test input" --no-sly-data
+
+        # Remote neuro-san server (psutil monitoring auto-disabled)
+        python tests/load_tests/load_test_mock_llm_service.py --host 172.31.11.243 --port 8080
+
+        # Auto-start servers (no manual setup needed)
+        python tests/load_tests/load_test_mock_llm_service.py --auto-start
+
+        # Auto-start with custom mock port
+        python tests/load_tests/load_test_mock_llm_service.py --auto-start --mock-port 9999
     """
 
     MOCK_REQUEST_TIMEOUT_SECONDS: int = 120
