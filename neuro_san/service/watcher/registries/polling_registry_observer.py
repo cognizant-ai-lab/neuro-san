@@ -19,6 +19,7 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 from typing import Union
+from typing import override
 
 from logging import getLogger
 from logging import Logger
@@ -55,6 +56,7 @@ class PollingRegistryObserver(RegistryObserver):
                 # One observer per unique registry path
                 self.registry_observers[registry_path] = PollingObserver(timeout=self.poll_seconds)
 
+    @override
     def start(self):
         """
         Start running observer
@@ -64,6 +66,13 @@ class PollingRegistryObserver(RegistryObserver):
             observer.start()
             self.logger.info("Registry polling watchdog started on: %s for manifest %s with polling every %d sec",
                              registry_path, self.manifest_path, self.poll_seconds)
+
+    @override
+    def stop(self):
+        """
+        Perform steps to stop/shut-down
+        By default this does nothing
+        """
 
     def reset_event_counters(self) -> Tuple[int, int, int]:
         """

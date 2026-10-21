@@ -30,6 +30,7 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
+from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -53,6 +54,15 @@ class ActivationCapsule(LingeringResource):
         self.factory: AgentToolFactory = agent_tool_factory
         self.lingerers: List[LingeringResource] = []
 
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        # Do nothing by default for easier implementation inheritance
+
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
@@ -60,6 +70,7 @@ class ActivationCapsule(LingeringResource):
 
         :param parent_resource: parent resource, if any
         """
+        lingering_resource: LingeringResource = None
         for lingering_resource in self.lingerers:
             await lingering_resource.close_of_work(self)
 
@@ -129,21 +140,23 @@ flag to your invocation.
         invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
         llm_factory: ContextTypeLlmFactory = invocation_context.get_llm_factory()
 
-        llm_resources = llm_factory.create_llm_with_fallbacks(llm_config, sly_data, num_fallbacks)
+        llm_resources: Any = llm_factory.create_llm_with_fallbacks(llm_config, sly_data, num_fallbacks)
         if llm_resources is None:
             raise ValueError("Unable to create LLM from llm_config (missing required configuration and/or sly_data).")
         if isinstance(llm_resources, dict):
+            llm_resources_dict: Dict[str, Any] = llm_resources
             # For now, do not worry about the "construction_errors" or "api_key_errors" keys.
             # These are very likely to already be handled by the front man.
-            required_sly_data: List[str] = llm_resources.get("required_sly_data_errors", [])
-            required = "\n".join(sorted(required_sly_data))
+            required_sly_data: List[str] = llm_resources_dict.get("required_sly_data_errors", [])
+            required: str = "\n".join(sorted(required_sly_data))
             raise ValueError(
                 "LLM operation for this agent requires at least one of the following set in sly_data.llm_config:\n"
                 f"{required}\n"
             )
 
-        self.lingerers.append(llm_resources)
+        typed_llm_resources: LlmResources = llm_resources
+        self.lingerers.append(typed_llm_resources)
 
-        model: Any = llm_resources.get_model()
+        model: Any = typed_llm_resources.get_model()
 
         return model

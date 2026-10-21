@@ -40,6 +40,8 @@ from httpx import Response
 from langchain_core.load.dump import dumpd
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableBinding
+from langchain_core.tools import StructuredTool
 from langchain_openai.chat_models.base import ChatOpenAI
 from openai import DEFAULT_MAX_RETRIES
 from openai import OpenAIError
@@ -47,6 +49,7 @@ from openai.resources.responses import AsyncResponses
 
 from neuro_san.internals.run_context.langchain.llms.azure_llm_policy import AzureLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
+from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
@@ -108,6 +111,17 @@ class TestAzureLlmPolicy(TestCase):
                     "content": [{"type": "output_text", "text": "hello", "annotations": []}]}],
         "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2,
                   "input_tokens_details": {"cached_tokens": 0}, "output_tokens_details": {"reasoning_tokens": 0}},
+    }
+
+    # The argument schema of a tool with one required and one optional argument, the shape an MCP
+    # server's tool arrives in (a StructuredTool whose args_schema is the server's inputSchema dict).
+    SEARCH_SCHEMA: Dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "What to search for."},
+            "extraction": {"type": "string", "description": "How much of each page to extract."},
+        },
+        "required": ["query"],
     }
 
     @override
@@ -518,6 +532,58 @@ class TestAzureLlmPolicy(TestCase):
         self.assertEqual(payload.get("seed"), 7)
         self.assertEqual(payload.get("stop"), ["END"])
 
+    @staticmethod
+    def _run_search(**kwargs: Any) -> str:
+        """
+        Stands in for the search tool's implementation; the tests never call it.
+
+        :param kwargs: The tool arguments
+        :return: A fixed answer
+        """
+        _ = kwargs
+        return "no results"
+
+    def _search_tool(self) -> StructuredTool:
+        """
+        Builds the search tool the way coded tools and MCP tools reach bind_tools(): as a StructuredTool.
+
+        :return: The tool
+        """
+        return StructuredTool.from_function(func=self._run_search,
+                                            name="you_search",
+                                            description="Searches the web.",
+                                            args_schema=self.SEARCH_SCHEMA)
+
+    def test_tool_strict_is_forwarded_to_every_tool(self) -> None:
+        """
+        The strict default for function tools reaches Azure requests exactly as it does for the "openai" class:
+        false and an absent key both put "strict": false on each tool, and an explicit null leaves strict out.
+        """
+        _, relaxed = self._build_policy({"use_responses_api": True, "tool_strict": False})
+        _, absent = self._build_policy({"use_responses_api": True})
+        # _make_config() treats None as "remove the key", so the explicit null is set afterwards.
+        nulled_config: Dict[str, Any] = self._make_config({"use_responses_api": True})
+        nulled_config["tool_strict"] = None
+        nulled_policy: AzureLlmPolicy = AzureLlmPolicy()
+        self.policies.append(nulled_policy)
+        nulled: ChatOpenAI = nulled_policy.create_llm(nulled_config, self.MODEL_NAME,
+                                                      nulled_policy.create_client(nulled_config))
+
+        relaxed_bound: RunnableBinding = relaxed.bind_tools([self._search_tool()])
+        relaxed_payload: Dict[str, Any] = relaxed._get_request_payload([HumanMessage("hi")], **relaxed_bound.kwargs)
+        absent_bound: RunnableBinding = absent.bind_tools([self._search_tool()])
+        absent_payload: Dict[str, Any] = absent._get_request_payload([HumanMessage("hi")], **absent_bound.kwargs)
+        nulled_bound: RunnableBinding = nulled.bind_tools([self._search_tool()])
+        nulled_payload: Dict[str, Any] = nulled._get_request_payload([HumanMessage("hi")], **nulled_bound.kwargs)
+
+        self.assertIs(relaxed.tool_strict, False)
+        self.assertIs(relaxed_payload.get("tools")[0].get("strict"), False)
+        self._assert_binds_to_responses_create(relaxed_payload)
+        self.assertIs(absent.tool_strict, False)
+        self.assertIs(absent_payload.get("tools")[0].get("strict"), False)
+        self.assertIsNone(nulled.tool_strict)
+        self.assertNotIn("strict", nulled_payload.get("tools")[0])
+
     # ---- On the wire ----------------------------------------------------------------------------
 
     def test_chat_completions_request_hits_v1_with_a_bearer_key_and_no_api_version(self) -> None:
@@ -569,17 +635,19 @@ class TestAzureLlmPolicy(TestCase):
 
     # ---- Class and bucket -----------------------------------------------------------------------
 
-    def test_chat_model_is_plain_chat_openai_with_accounting_metadata(self) -> None:
+    def test_chat_model_is_the_openai_subclass_with_accounting_metadata(self) -> None:
         """
-        The chat model is the stock ChatOpenAI. Its metadata tells token accounting to book the usage under
-        "azure-openai" and to price it by the OpenAI model, since Azure's Responses API names the deployment
-        as the response model. A deployment-only llm_config gets the bucket but no price model.
+        The chat model is the ChatOpenAI subclass of the "openai" class, not an Azure-specific one. Its
+        metadata tells token accounting to book the usage under "azure-openai" and to price it by the OpenAI
+        model, since Azure's Responses API names the deployment as the response model. A deployment-only
+        llm_config gets the bucket but no price model.
         """
         _, llm = self._build_policy({})
         _, deployment_only = self._build_policy({}, model_name=None)
 
+        self.assertIsInstance(llm, ToolStrictChatOpenAI)
         self.assertIsInstance(llm, ChatOpenAI)
-        self.assertEqual(dumpd(llm).get("id")[-1], "ChatOpenAI")
+        self.assertEqual(dumpd(llm).get("id")[-1], "ToolStrictChatOpenAI")
         self.assertEqual(llm.metadata.get(PROVIDER_METADATA_KEY), "azure-openai")
         self.assertEqual(llm.metadata.get(PRICE_MODEL_METADATA_KEY), self.MODEL_NAME)
         self.assertEqual(deployment_only.metadata.get(PROVIDER_METADATA_KEY), "azure-openai")

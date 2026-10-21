@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Parse agent response text: sly_data fields, token accounting, error lines."""
-
 import json
 import re
 from typing import Any
@@ -24,7 +22,9 @@ from typing import Optional
 
 
 class OutputParser:
-    """Parses agent response fields and token accounting."""
+    """
+    Parses agent response text: sly_data fields, token accounting, and error lines.
+    """
 
     @staticmethod
     def parse_stdout_field(stdout: str, field_name: str) -> Optional[str]:
@@ -49,21 +49,23 @@ class OutputParser:
         :return: The parsed Token Accounting block, or {} when it is missing or invalid
         """
         marker: str = "Token Accounting:"
-        idx: int = stdout.find(marker)
-        if idx < 0:
+        marker_index: int = stdout.find(marker)
+        if marker_index < 0:
             return {}
-        json_start: int = stdout.find("{", idx)
+        json_start: int = stdout.find("{", marker_index)
         if json_start < 0:
             return {}
         depth: int = 0
         json_end: int = json_start
-        for i in range(json_start, len(stdout)):
-            if stdout[i] == "{":
+        char_index: int
+        # Find the brace that closes the first JSON object.
+        for char_index in range(json_start, len(stdout)):
+            if stdout[char_index] == "{":
                 depth += 1
-            elif stdout[i] == "}":
+            elif stdout[char_index] == "}":
                 depth -= 1
                 if depth == 0:
-                    json_end = i + 1
+                    json_end = char_index + 1
                     break
         try:
             return json.loads(stdout[json_start:json_end])
@@ -78,7 +80,9 @@ class OutputParser:
         :param stderr: Captured stderr, or None
         :return: Last line of stderr, or "" when it is empty
         """
-        stripped: str = stderr.strip() if stderr else ""
+        stripped: str = ""
+        if stderr:
+            stripped = stderr.strip()
         if not stripped:
             return ""
         return stripped.rsplit("\n", maxsplit=1)[-1]

@@ -46,7 +46,7 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
         concern, not a keyword concern), and is not handled by this class.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self.keywords: Set[str] = set(keywords) if keywords is not None else self.ALL_KEYWORDS
+        self.keywords: Set[str] = set(keywords) if keywords is not None else KeywordNetworkValidator.ALL_KEYWORDS
         self.network_name: str = network_name
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:

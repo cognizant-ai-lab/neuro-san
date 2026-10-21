@@ -14,12 +14,10 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
 
 from typing import Any
 from typing import Dict
+from typing import override
 import json
 import tornado
 
@@ -68,8 +66,16 @@ class ResourcesUsageLogger(Startable):
         loop = tornado.ioloop.IOLoop.current()
         return await loop.run_in_executor(None, self.log_resources_usage)
 
+    @override
     def start(self):
         """
         Start periodic logging of resource usage.
         """
         self.periodic_callback.start()
+
+    @override
+    def stop(self):
+        """
+        Perform steps to stop/shut-down
+        By default this does nothing
+        """

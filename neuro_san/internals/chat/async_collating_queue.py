@@ -115,7 +115,7 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
         if self.last_item_sent:
             return
         self.last_item_sent = True
-        await self.put(self.END_MESSAGE, synchronous, check_last_item_sent=False)
+        await self.put(AsyncCollatingQueue.END_MESSAGE, synchronous, check_last_item_sent=False)
 
     def is_final_item(self, item: Any) -> bool:
         """
@@ -123,7 +123,7 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
         :return: True if this item is considered the marker for the
                  end of data. False otherwise.
         """
-        return isinstance(item, Dict) and item.get(self.END_KEY) is not None
+        return isinstance(item, Dict) and item.get(AsyncCollatingQueue.END_KEY) is not None
 
     def close(self):
         """

@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Builds and logs server and client resource delta tables."""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -23,22 +21,21 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)
 ServerResourceRow = Tuple[tuple, Dict[str, Any], Dict[str, Any]]
 
 # (display_row, before_snapshot, peak_snapshot, settled_snapshot)
-ClientResourceRow = Tuple[
-    tuple, Dict[str, Any], Dict[str, Any], Dict[str, Any],
-]
+ClientResourceRow = Tuple[tuple, Dict[str, Any], Dict[str, Any], Dict[str, Any]]
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResourceReporter:
-    """Builds and logs server and client resource delta tables.
+    """
+    Builds and logs server and client resource delta tables.
 
     Accumulates resource rows during the test run, then logs
     the complete analysis tables at the end.
@@ -48,8 +45,7 @@ class ResourceReporter:
         self._resource_rows: List[ServerResourceRow] = []
         self._client_rows: List[ClientResourceRow] = []
 
-    @property
-    def resource_rows(self) -> List[ServerResourceRow]:
+    def get_resource_rows(self) -> List[ServerResourceRow]:
         """
         Return the accumulated server resource rows.
 
@@ -57,8 +53,7 @@ class ResourceReporter:
         """
         return list(self._resource_rows)
 
-    @property
-    def client_rows(self) -> List[ClientResourceRow]:
+    def get_client_rows(self) -> List[ClientResourceRow]:
         """
         Return the accumulated client resource rows.
 
@@ -66,79 +61,96 @@ class ResourceReporter:
         """
         return list(self._client_rows)
 
-    def add_resource_row(self, stage_label: str, before: Dict[str, Any], after: Dict[str, Any]) -> ServerResourceRow:
-        """Build and store a server resource row from before/after snapshots.
+    def add_resource_row(self, stage_label: str, before_snapshot: Dict[str, Any],
+                         after_snapshot: Dict[str, Any]) -> ServerResourceRow:
+        """
+        Build and store a server resource row from before/after snapshots.
 
         Returns (display_row, before_snapshot, after_snapshot) so that
         delta calculations can use raw numeric values instead of
         reverse-parsing formatted strings.
 
         :param stage_label: Label shown in the first column
-        :param before: Server process snapshot taken before the stage
-        :param after: Server process snapshot taken after the stage
-        :return: (display_row, before, after)
+        :param before_snapshot: Server process snapshot taken before the stage
+        :param after_snapshot: Server process snapshot taken after the stage
+        :return: (display_row, before_snapshot, after_snapshot)
         """
-        rss_delta: float = after.get("rss") - before.get("rss")
-        thread_delta: int = after.get("threads") - before.get("threads")
+        before_rss_megabytes: float = before_snapshot.get("rss")
+        after_rss_megabytes: float = after_snapshot.get("rss")
+        before_threads: int = before_snapshot.get("threads")
+        after_threads: int = after_snapshot.get("threads")
+        after_cpu_percent: float = after_snapshot.get("cpu")
+        rss_delta_megabytes: float = after_rss_megabytes - before_rss_megabytes
+        thread_delta: int = after_threads - before_threads
         display: Tuple[str, ...] = (
             str(stage_label),
-            f"{before.get('rss'):.1f}M",
-            f"{after.get('rss'):.1f}M",
-            f"{rss_delta:+.1f}M",
-            str(after.get("fds")),
-            f"{before.get('threads')} -> {after.get('threads')}",
+            f"{before_rss_megabytes:.1f}M",
+            f"{after_rss_megabytes:.1f}M",
+            f"{rss_delta_megabytes:+.1f}M",
+            str(after_snapshot.get("fds")),
+            f"{before_threads} -> {after_threads}",
             f"{thread_delta:+d}",
-            str(after.get("connections")),
-            f"{after.get('cpu'):.1f}%",
-            str(after.get("children")),
+            str(after_snapshot.get("connections")),
+            f"{after_cpu_percent:.1f}%",
+            str(after_snapshot.get("children")),
         )
-        row: ServerResourceRow = (display, before, after)
+        row: ServerResourceRow = (display, before_snapshot, after_snapshot)
         self._resource_rows.append(row)
         return row
 
-    def add_client_row(self, stage_label: str, before: Dict[str, Any], peak: Optional[Dict[str, Any]],
-                       settled: Dict[str, Any]) -> ClientResourceRow:
-        """Build and store a client resource row from before/peak/settled.
+    def add_client_row(self, stage_label: str, before_snapshot: Dict[str, Any], peak_snapshot: Optional[Dict[str, Any]],
+                       settled_snapshot: Dict[str, Any]) -> ClientResourceRow:
+        """
+        Build and store a client resource row from before/peak/settled.
 
         Returns (display_row, before_snapshot, peak_snapshot,
         settled_snapshot) so that delta calculations and JSON export
         can use raw numeric values.
 
         :param stage_label: Label shown in the first column
-        :param before: Client process snapshot taken before the stage
-        :param peak: Client process snapshot at peak RSS during the stage, or None
-        :param settled: Client process snapshot taken after the stage settled
-        :return: (display_row, before, peak or {}, settled)
+        :param before_snapshot: Client process snapshot taken before the stage
+        :param peak_snapshot: Client process snapshot at peak RSS during the stage, or None
+        :param settled_snapshot: Client process snapshot taken after the stage settled
+        :return: (display_row, before_snapshot, peak_snapshot or {}, settled_snapshot)
         """
-        rss_delta: float = settled.get("rss") - before.get("rss")
-        peak_rss: str = f"{peak.get('rss'):.1f}M" if peak else "-"
+        before_rss_megabytes: float = before_snapshot.get("rss")
+        settled_rss_megabytes: float = settled_snapshot.get("rss")
+        rss_delta_megabytes: float = settled_rss_megabytes - before_rss_megabytes
+        # Memory cells: megabytes with 1 decimal place, e.g. 123.5M.
+        peak_rss_text: str = "-"
+        if peak_snapshot:
+            peak_rss_megabytes: float = peak_snapshot.get("rss")
+            peak_rss_text = f"{peak_rss_megabytes:.1f}M"
+        settled_cpu_percent: float = settled_snapshot.get("cpu")
+        settled_fds: Optional[int] = settled_snapshot.get("fds")
+        settled_threads: Optional[int] = settled_snapshot.get("threads")
         display: Tuple[str, ...] = (
             str(stage_label),
-            f"{before.get('rss'):.1f}M",
-            peak_rss,
-            f"{settled.get('rss'):.1f}M",
-            f"{rss_delta:+.1f}M",
-            f"{settled.get('cpu'):.1f}%",
-            str(settled.get("fds")),
-            str(settled.get("threads")),
+            f"{before_rss_megabytes:.1f}M",
+            peak_rss_text,
+            f"{settled_rss_megabytes:.1f}M",
+            f"{rss_delta_megabytes:+.1f}M",
+            f"{settled_cpu_percent:.1f}%",
+            str(settled_fds),
+            str(settled_threads),
         )
-        row: ClientResourceRow = (display, before, peak or {}, settled)
+        row: ClientResourceRow = (display, before_snapshot, peak_snapshot or {}, settled_snapshot)
         self._client_rows.append(row)
         return row
 
-    # Placeholder row (Component + 11 metric columns) shown when a
-    # component produced no data at all.
-    _NA_METRICS = ("na",) * 11
+    # Metric columns after "Component" in the combined table.
+    METRIC_COLUMN_COUNT: int = 11
 
-    def log_combined_analysis(self, total_client_reqs: int, total_server_calls: int) -> None:
-        """Log one combined server-app + client-app resource table.
+    def log_combined_analysis(self, total_client_requests: int, total_server_calls: int) -> None:
+        """
+        Log one combined server-app + client-app resource table.
 
         Server-app and client-app rows share a single table.  Columns
         that don't apply to a component — or a component that produced
         no data (no local server, or the server-only mode's absent
         client) — show ``na``.
 
-        :param total_client_reqs: Client requests sent across all stages
+        :param total_client_requests: Client requests sent across all stages
         :param total_server_calls: Server calls across all stages; 0 leaves it out of the title
         """
         if not self._resource_rows and not self._client_rows:
@@ -148,116 +160,142 @@ class ResourceReporter:
             "Settled RSS", "RSS Delta", "CPU%", "FDs",
             "Threads", "Thread Delta", "Conns", "Children",
         ]
-        rows: List[tuple] = self._combined_server_rows() + self._combined_client_rows()
+        rows: List[List[str]] = self._combined_server_rows() + self._combined_client_rows()
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         if total_server_calls > 0:
             logger.info(
-                "  RESOURCE ANALYSIS"
-                " (%s client requests, %s server calls)",
-                total_client_reqs, total_server_calls,
+                "  RESOURCE ANALYSIS (%s client requests, %s server calls)",
+                total_client_requests, total_server_calls,
             )
         else:
-            logger.info(
-                "  RESOURCE ANALYSIS (%s total requests)",
-                total_client_reqs,
-            )
+            logger.info("  RESOURCE ANALYSIS (%s total requests)", total_client_requests)
         logger.info("=" * SEPARATOR_WIDTH)
         TableFormatter.log_table(header, rows)
         self._log_resource_deltas()
         self._log_client_deltas()
 
-    def _combined_server_rows(self) -> List[tuple]:
+    def _combined_server_rows(self) -> List[List[str]]:
         """
         Server-app rows for the combined table (na when absent).
 
         :return: One row per stage, or one row of na when there is no server data
         """
         if not self._resource_rows:
-            return [("Server app",) + self._NA_METRICS]
-        rows: List[tuple] = []
-        for display, _before, _after in self._resource_rows:
+            return [ResourceReporter._na_row("Server app")]
+        rows: List[List[str]] = []
+        display: Tuple[str, ...]
+        unused_before_snapshot: Dict[str, Any]
+        unused_after_snapshot: Dict[str, Any]
+        # One table row per server stage.
+        for display, unused_before_snapshot, unused_after_snapshot in self._resource_rows:
             # display: (concurrent, before_rss, settled_rss, rss_delta,
             #   fds, threads, thread_delta, conns, cpu, children)
-            rows.append((
+            rows.append([
                 "Server app", display[0], display[1], "na",
                 display[2], display[3], display[8], display[4],
                 display[5], display[6], display[7], display[9],
-            ))
+            ])
         return rows
 
-    def _combined_client_rows(self) -> List[tuple]:
+    def _combined_client_rows(self) -> List[List[str]]:
         """
         Client-app rows for the combined table (na when absent).
 
         :return: One row per stage, or one row of na when there is no client data
         """
         if not self._client_rows:
-            return [("Client app",) + self._NA_METRICS]
-        rows: List[tuple] = []
+            return [ResourceReporter._na_row("Client app")]
+        rows: List[List[str]] = []
+        row: ClientResourceRow
+        # One table row per client stage.
         for row in self._client_rows:
             display: Tuple[str, ...] = row[0]
             # display: (concurrent, before_rss, peak_rss, settled_rss,
             #   rss_delta, cpu, fds, threads)
-            rows.append((
+            rows.append([
                 "Client app", display[0], display[1], display[2],
                 display[3], display[4], display[5], display[6],
                 display[7], "na", "na", "na",
-            ))
+            ])
         return rows
 
+    @staticmethod
+    def _na_row(component: str) -> List[str]:
+        """
+        Build a combined-table row for a component with no data.
+
+        :param component: Component name for the first column
+        :return: The component name, then "na" for each metric column
+        """
+        row: List[str] = [component]
+        unused_index: int
+        # One "na" cell per metric column.
+        for unused_index in range(ResourceReporter.METRIC_COLUMN_COUNT):
+            row.append("na")
+        return row
+
     def _log_resource_deltas(self) -> None:
-        """Log overall resource deltas if enough data points."""
+        """
+        Log overall resource deltas if enough data points.
+        """
         if len(self._resource_rows) < 2:
             return
-        first_before: Dict[str, Any] = self._resource_rows[0][1]
-        last_after: Dict[str, Any] = self._resource_rows[-1][2]
+        first_before_snapshot: Dict[str, Any] = self._resource_rows[0][1]
+        last_after_snapshot: Dict[str, Any] = self._resource_rows[-1][2]
         self._log_snapshot_deltas(
-            "Server", first_before, last_after,
+            "Server", first_before_snapshot, last_after_snapshot,
             fields=[
-                ("RSS", "rss", "%.1f MB"),
-                ("FDs", "fds", "%s"),
-                ("Threads", "threads", "%s"),
-                ("Connections", "connections", "%s"),
-                ("Children", "children", "%s"),
+                ["RSS", "rss", "%.1f MB"],
+                ["FDs", "fds", "%s"],
+                ["Threads", "threads", "%s"],
+                ["Connections", "connections", "%s"],
+                ["Children", "children", "%s"],
             ],
         )
 
     def _log_client_deltas(self) -> None:
-        """Log overall client resource deltas if enough data points."""
+        """
+        Log overall client resource deltas if enough data points.
+        """
         if len(self._client_rows) < 2:
             return
-        first_before: Dict[str, Any] = self._client_rows[0][1]
-        last_settled: Dict[str, Any] = self._client_rows[-1][3]
+        first_before_snapshot: Dict[str, Any] = self._client_rows[0][1]
+        last_settled_snapshot: Dict[str, Any] = self._client_rows[-1][3]
         self._log_snapshot_deltas(
-            "Client", first_before, last_settled,
+            "Client", first_before_snapshot, last_settled_snapshot,
             fields=[
-                ("RSS", "rss", "%.1f MB"),
-                ("FDs", "fds", "%s"),
-                ("Threads", "threads", "%s"),
+                ["RSS", "rss", "%.1f MB"],
+                ["FDs", "fds", "%s"],
+                ["Threads", "threads", "%s"],
             ],
         )
 
     @staticmethod
-    def _log_snapshot_deltas(label: str, before: Dict[str, Any], after: Dict[str, Any],
-                             fields: List[Tuple[str, str, str]]) -> None:
+    def _log_snapshot_deltas(label: str, before_snapshot: Dict[str, Any], after_snapshot: Dict[str, Any],
+                             fields: List[List[str]]) -> None:
         """
         Log deltas between two ResourceSnapshots.
 
         :param label: Component name shown in the heading
-        :param before: Snapshot from the first stage
-        :param after: Snapshot from the last stage
-        :param fields: (display name, snapshot key, % format) of each field to log
+        :param before_snapshot: Snapshot from the first stage
+        :param after_snapshot: Snapshot from the last stage
+        :param fields: [display name, snapshot key, % format] of each field to log
         """
-        max_name: int = max(len(name) for name, _, _ in fields)
-        logger.info(
-            "\n  %s overall deltas (first stage vs last stage):",
-            label,
-        )
-        for name, key, fmt in fields:
-            delta: float = after.get(key) - before.get(key)
-            padded: str = f"{name}:".ljust(max_name + 1)
-            formatted: str = fmt % abs(delta)
-            sign: str = "+" if delta >= 0 else "-"
-            logger.info(
-                "    %s %s%s", padded, sign, formatted,
-            )
+        maximum_name_length: int = 0
+        name: str
+        key: str
+        format_pattern: str
+        # Find the longest display name.
+        for name, key, format_pattern in fields:
+            name_length: int = len(name)
+            maximum_name_length = max(maximum_name_length, name_length)
+        logger.info("\n  %s overall deltas (first stage vs last stage):", label)
+        # One delta line per field.
+        for name, key, format_pattern in fields:
+            delta: float = after_snapshot.get(key) - before_snapshot.get(key)
+            padded: str = f"{name}:".ljust(maximum_name_length + 1)
+            formatted: str = format_pattern % abs(delta)
+            sign: str = "-"
+            if delta >= 0:
+                sign = "+"
+            logger.info("    %s %s%s", padded, sign, formatted)

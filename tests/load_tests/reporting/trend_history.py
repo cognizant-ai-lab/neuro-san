@@ -14,14 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Trend history — read the append-only history file and log a table.
-
-Complements the cross-run comparison, which answers a different
-question: that one groups runs by request count to show how the system
-scales, while this one keeps runs in the order they happened so a
-regression between neuro-san versions is visible.
-"""
-
 import json
 import logging
 import os
@@ -30,16 +22,24 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
-from tests.load_tests.config import HISTORY_FILE_NAME
-from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
+from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
+from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TrendHistory:
-    """Reads history JSONL records and logs them in run order."""
+    """
+    Reads history JSONL records and logs them in run order.
+
+    Complements the cross-run comparison, which answers a different
+    question: that one groups runs by request count to show how the system
+    scales, while this one keeps runs in the order they happened so a
+    regression between neuro-san versions is visible.
+    """
 
     def __init__(self, path: str, agent_filter: Optional[List[str]] = None) -> None:
         """
@@ -48,18 +48,19 @@ class TrendHistory:
         :param path: History JSONL file, or a directory holding it
         :param agent_filter: Agent names to include; None or empty includes every agent
         """
-        self._path = path
-        self._agent_filter: set = (
-            set(agent_filter) if agent_filter else set()
-        )
+        self._path: str = path
+        self._agent_filter: Set[str] = set()
+        if agent_filter:
+            self._agent_filter = set(agent_filter)
 
     def run(self) -> None:
-        """Read the history file and log one row per recorded run."""
+        """
+        Read the history file and log one row per recorded run.
+        """
         history_path: Optional[str] = self._resolve_path()
         if history_path is None:
             logger.info(
-                "No history file found at %s. Runs append one record "
-                "each, so this file appears after the first run.",
+                "No history file found at %s. Runs append one record each, so this file appears after the first run.",
                 self._path,
             )
             return
@@ -67,31 +68,43 @@ class TrendHistory:
         if not records:
             logger.info("No usable records in %s", history_path)
             return
+        record: Dict[str, Any]
         if self._agent_filter:
-            records = [
-                record for record in records
-                if record.get("agent") in self._agent_filter
-            ]
+            # Keep only the records for the agents in the filter.
+            matching_records: List[Dict[str, Any]] = []
+            # Keep the records of the agents in the filter.
+            for record in records:
+                if record.get("agent") in self._agent_filter:
+                    matching_records.append(record)
+            records = matching_records
             if not records:
-                logger.info(
-                    "No records for agent(s) %s in %s",
-                    ", ".join(sorted(self._agent_filter)),
-                    history_path,
-                )
+                agent_names: str = ", ".join(sorted(self._agent_filter))
+                logger.info("No records for agent(s) %s in %s", agent_names, history_path)
                 return
-        records.sort(key=lambda record: record.get("timestamp", ""))
+        records.sort(key=self._timestamp_of)
         logger.info("")
-        logger.info(
-            "TREND HISTORY (%s, %s run(s))",
-            history_path, len(records),
-        )
-        TableFormatter.log_table(
-            self._header(), [self._row(record) for record in records],
-        )
+        logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
+        # One table row per record, in file order.
+        rows: List[List[str]] = []
+        # One table row per record.
+        for record in records:
+            rows.append(self._row(record))
+        TableFormatter.log_table(self._header(), rows)
         logger.info("")
 
+    @staticmethod
+    def _timestamp_of(record: Dict[str, Any]) -> str:
+        """
+        Sort key: the timestamp of a history record.
+
+        :param record: One history record
+        :return: The record's "timestamp", "" if missing
+        """
+        return record.get("timestamp", "")
+
     def _resolve_path(self) -> Optional[str]:
-        """Return the history file to read, or None when absent.
+        """
+        Return the history file to read, or None when absent.
 
         Accepts either the file itself or a directory holding the
         default-named history file, so the path printed at the end of a
@@ -108,7 +121,8 @@ class TrendHistory:
 
     @staticmethod
     def _read_records(history_path: str) -> List[Dict[str, Any]]:
-        """Parse the JSONL file, skipping unreadable lines.
+        """
+        Parse the JSONL file, skipping unreadable lines.
 
         A partially written final line is expected when a run is
         interrupted, so a bad line is reported and skipped rather than
@@ -120,8 +134,10 @@ class TrendHistory:
         records: List[Dict[str, Any]] = []
         skipped: int = 0
         try:
-            with open(history_path, "r", encoding="utf-8") as handle:
-                for line in handle:
+            with open(history_path, "r", encoding="utf-8") as file_handle:
+                line: str
+                # Parse each non-empty line as one JSON record.
+                for line in file_handle:
                     line = line.strip()
                     if not line:
                         continue
@@ -136,15 +152,10 @@ class TrendHistory:
                     else:
                         skipped += 1
         except OSError as exc:
-            logger.warning(
-                "Could not read history file %s: %s", history_path, exc,
-            )
+            logger.warning("Could not read history file %s: %s", history_path, exc)
             return []
         if skipped:
-            logger.warning(
-                "  Skipped %s unreadable line(s) in %s",
-                skipped, history_path,
-            )
+            logger.warning("  Skipped %s unreadable line(s) in %s", skipped, history_path)
         return records
 
     @staticmethod
@@ -154,20 +165,18 @@ class TrendHistory:
 
         :return: Column names
         """
-        header: List[str] = [
-            "timestamp", "neuro-san", "agent", "mode", "via",
-            "reqs", "done",
-        ]
-        header.extend(
-            f"<{int(threshold)}s"
-            for threshold in HISTORY_THRESHOLDS_SECONDS
-        )
+        header: List[str] = ["timestamp", "neuro-san", "agent", "mode", "via", "reqs", "done"]
+        threshold: int
+        # One column per threshold, e.g. "<30s".
+        for threshold in HISTORY_THRESHOLDS_SECONDS:
+            header.append(f"<{int(threshold)}s")
         header.extend(["first_resp", "avg", "wall", "err", "warn"])
         return header
 
     @staticmethod
     def _row(record: Dict[str, Any]) -> List[str]:
-        """Format one history record as a table row.
+        """
+        Format one history record as a table row.
 
         Client and server-only records count requests under different
         keys, and a server log cannot measure the client's time to
@@ -180,12 +189,8 @@ class TrendHistory:
         :return: Cell values in _header order
         """
         mode: str = record.get("mode", "client")
-        requests: int = record.get(
-            "total_requests", record.get("expected_requests", 0),
-        )
-        completed: int = record.get(
-            "completed", record.get("received_requests", 0),
-        )
+        requests: int = record.get("total_requests", record.get("expected_requests", 0))
+        completed: int = record.get("completed", record.get("received_requests", 0))
         row: List[str] = [
             TrendHistory._fmt_timestamp(record.get("timestamp", "")),
             record.get("neuro_san_version", "unknown"),
@@ -195,21 +200,15 @@ class TrendHistory:
             str(requests),
             str(completed),
         ]
-        row.extend(
-            str(record.get(f"completed_within_{int(threshold)}s", "-"))
-            for threshold in HISTORY_THRESHOLDS_SECONDS
-        )
-        row.append(
-            TrendHistory._fmt_seconds(
-                record.get("avg_first_response_s"),
-            ),
-        )
-        row.append(
-            TrendHistory._fmt_seconds(record.get("avg_duration_s")),
-        )
-        row.append(
-            TrendHistory._fmt_seconds(record.get("wall_time_s")),
-        )
+        threshold: int
+        # One cell per threshold: requests completed within it, or "-".
+        for threshold in HISTORY_THRESHOLDS_SECONDS:
+            threshold_key: str = f"completed_within_{int(threshold)}s"
+            completed_count: Any = record.get(threshold_key, "-")
+            row.append(str(completed_count))
+        row.append(TrendHistory._fmt_seconds(record.get("avg_first_response_s")))
+        row.append(TrendHistory._fmt_seconds(record.get("avg_duration_s")))
+        row.append(TrendHistory._fmt_seconds(record.get("wall_time_s")))
         row.append(str(record.get("server_error_count", "-")))
         row.append(str(record.get("tool_warning_count", "-")))
         return row
@@ -228,13 +227,13 @@ class TrendHistory:
         return text[:16]
 
     @staticmethod
-    def _fmt_seconds(value: Optional[float]) -> str:
+    def _fmt_seconds(duration_seconds: Optional[float]) -> str:
         """
         Format a seconds value, rendering absent or zero as "-".
 
-        :param value: Seconds, or None
+        :param duration_seconds: Seconds, or None
         :return: e.g. '12.3s', or '-' when absent or 0
         """
-        if not isinstance(value, (int, float)) or value <= 0:
+        if not isinstance(duration_seconds, (int, float)) or duration_seconds <= 0:
             return "-"
-        return f"{value:.1f}s"
+        return f"{duration_seconds:.1f}s"

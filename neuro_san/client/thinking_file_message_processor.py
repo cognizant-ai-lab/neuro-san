@@ -45,8 +45,8 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         Constructor
 
         :param thinking_file: A string representing the path to a single file where
-                              all agent output is combined.  We no longer recommmend this
-                              now that we have ...
+                              all agent output is combined.  We recommend thinking_dir
+                              instead.
         :param thinking_dir: A string representing the path to a single directory where
                              each agent in the network gets its own history file according
                              to its agent network origin name.  This is much easier to
@@ -92,7 +92,7 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         else:
             # AgentFramework messages carry the final answer, but don't have an origin.
             # Have them get their origin for reporting here (only!) from the chat history.
-            extractor = DictionaryExtractor(chat_message_dict)
+            extractor: DictionaryExtractor = DictionaryExtractor(chat_message_dict)
             histories: List[Dict[str, Any]] = extractor.get("chat_context.chat_histories")
             if histories is not None and len(histories) > 0:
                 origin = histories[0].get("origin")
@@ -137,8 +137,8 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         use_origin: str = self._determine_origin_reporting(response, origin_str)
 
         # Determine the filename to use given the origin_str.
-        # Previously we might have used a uuid as a filename, but by default
-        # we want the filenames to match the full origin_str.
+        # By default we want the filenames to match the full origin_str,
+        # not a uuid.
         origin_filename: str = self.origins.get(origin_str, origin_str)
 
         try:
@@ -197,7 +197,8 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         # Maybe add some context as to where the tool result came from if we have info for that.
         tool_result_origin: List[Dict[str, Any]] = response.get("tool_result_origin")
         if tool_result_origin is not None:
-            last_origin_only: List[Dict[str, Any]] = [tool_result_origin[-1]]
+            last_origin: Dict[str, Any] = tool_result_origin[-1]
+            last_origin_only: List[Dict[str, Any]] = [last_origin]
             origin_str = Origination.get_full_name_from_origin(last_origin_only)
             use_origin += f" (result from {origin_str})"
 

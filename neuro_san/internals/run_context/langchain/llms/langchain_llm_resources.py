@@ -22,12 +22,13 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.runnables.base import RunnableSerializable
 
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
+from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
-class LangChainLlmResources(LingeringResource):
+class LangChainLlmResources(LlmResources):
     """
-    LingeringResource implemenation representing a LangChain model paired
+    LlmResources implemenation representing a LangChain model paired
     together with run-time policy necessary for model usage by the service.
     """
 
@@ -73,9 +74,19 @@ class LangChainLlmResources(LingeringResource):
         # Add the fallback models
         if self.model:
             fallback_models: List[BaseLanguageModel] = []
+            one_resource: LangChainLlmResources = None
             for one_resource in llm_resources:
                 fallback_models.append(one_resource.get_model())
             self.model = self.model.with_fallbacks(fallback_models)
+
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        # Do nothing by default for easier implementation inheritance
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
@@ -91,5 +102,6 @@ class LangChainLlmResources(LingeringResource):
             await self.llm_policy.delete_resources()
 
         # Close any child resources
+        child_resource: LingeringResource = None
         for child_resource in self.child_resources:
             await child_resource.close_of_work(self)

@@ -16,7 +16,6 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import Dict
 
 from json import dumps
 from logging import getLogger
@@ -28,7 +27,8 @@ from azure.core.exceptions import AzureError
 from azure.identity.aio import DefaultAzureCredential
 from azure.storage.blob.aio import ContainerClient
 
-# pylint: disable=wrong-import-order
+from leaf_common.utils.map import Map
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
@@ -86,7 +86,7 @@ class AzureBlobReservationsWriter:
                 self.container_client = ContainerClient(account_url, self.container_name, credential)
         return self.container_client
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any], source: str = None):
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         # pylint: disable=unused-argument
         """
         Add/update reservations in Azure Blob Storage.

@@ -14,13 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Post-run result counting and server-side request verification.
-
-Counts results by status (CREATED, FAILED, TIMEOUT, KILLED), logs
-per-stage summaries, retry activity from the server log, server-side
-request validation (sent vs received), and client disconnections.
-"""
-
 import logging
 
 from typing import Any
@@ -28,19 +21,27 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.config import RETRY_ERROR_TYPES
-from tests.load_tests.config import RETRY_LABELS
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import RETRY_ERROR_TYPES
+from tests.load_tests.load_test_constants import RETRY_LABELS
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.reporting.formatters import Formatters
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class OutputValidator:
-    """Counts results and logs server-side request verification."""
+    """
+    Counts post-run results, logs per-stage reports and decides when to abort.
+
+    Counts results by status (CREATED, FAILED, TIMEOUT, KILLED), logs
+    per-stage summaries, retry activity from the server log, server-side
+    request validation (sent vs received), client disconnections, server
+    errors and tool-creation warnings, and checks whether the test
+    should abort (all requests failed on permissions, or any timed out or was killed).
+    """
 
     @staticmethod
     def count_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -50,24 +51,23 @@ class OutputValidator:
         :param results: Request results of the stage
         :return: Count per status; unknown statuses count as failed
         """
-        counts: Dict[str, Any] = {
-            STATUS_CREATED: 0,
-            STATUS_FAILED: 0,
-            STATUS_TIMEOUT: 0,
-            STATUS_KILLED: 0,
-        }
+        counts: Dict[str, Any] = {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0}
+        result: Dict[str, Any]
+        # Count each result under its status.
         for result in results:
             status: str = result.get("status", STATUS_FAILED)
-            if status not in counts:
+            # pylint: disable=consider-iterating-dictionary
+            if status not in counts.keys():
                 status = STATUS_FAILED
             counts[status] = counts.get(status, 0) + 1
         return counts
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed: float, timeout: float,
-                          idle_timeout: float, show_counts: bool = True) -> None:
-        """Log per-stage summary of request results.
+    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed_seconds: float, timeout_seconds: float,
+                          idle_timeout_seconds: float, show_counts: bool = True) -> None:
+        """
+        Log per-stage summary of request results.
 
         When ``show_counts`` is False (single-stage runs, where the
         counts are repeated verbatim in OVERALL RESULTS), only the
@@ -75,38 +75,27 @@ class OutputValidator:
 
         :param actual_requests: Requests sent in the stage
         :param counts: Count per status from count_results
-        :param elapsed: Stage wall time in seconds
-        :param timeout: --request-timeout in seconds, shown in the timed-out line
-        :param idle_timeout: --idle-timeout in seconds, shown in the killed line
+        :param elapsed_seconds: Stage wall time in seconds
+        :param timeout_seconds: --request-timeout in seconds, shown in the timed-out line
+        :param idle_timeout_seconds: --idle-timeout in seconds, shown in the killed line
         :param show_counts: False to log only the Duration/Avg line
         """
         if show_counts:
+            created_count: int = counts.get(STATUS_CREATED, 0)
+            failed_count: int = counts.get(STATUS_FAILED, 0)
+            timeout_count: int = counts.get(STATUS_TIMEOUT, 0)
+            killed_count: int = counts.get(STATUS_KILLED, 0)
             logger.info("\n  Requests: %s", actual_requests)
-            logger.info(
-                "    Created: %s  (success criteria met)",
-                counts.get(STATUS_CREATED, 0),
-            )
-            logger.info(
-                "    Failed:  %s  (error or crash)",
-                counts.get(STATUS_FAILED, 0),
-            )
-            logger.info(
-                "    Timed out: %s  (hit %ss hard cap)",
-                counts.get(STATUS_TIMEOUT, 0), timeout,
-            )
-            logger.info(
-                "    Killed:  %s  (no output for %ss, presumed hanging)",
-                counts.get(STATUS_KILLED, 0), idle_timeout,
-            )
-        avg_per: float = (
-            elapsed / actual_requests
-            if actual_requests else 0
-        )
-        logger.info(
-            "  Duration: %s | Avg: %s per request",
-            Formatters.fmt_duration(elapsed, precision=2),
-            Formatters.fmt_duration(avg_per, precision=2),
-        )
+            logger.info("    Created: %s  (success criteria met)", created_count)
+            logger.info("    Failed:  %s  (error or crash)", failed_count)
+            logger.info("    Timed out: %s  (hit %ss hard cap)", timeout_count, timeout_seconds)
+            logger.info("    Killed:  %s  (no output for %ss, presumed hanging)", killed_count, idle_timeout_seconds)
+        average_seconds_per_request: float = 0
+        if actual_requests:
+            average_seconds_per_request = elapsed_seconds / actual_requests
+        elapsed_text: str = Formatters.fmt_duration(elapsed_seconds, precision=2)
+        average_text: str = Formatters.fmt_duration(average_seconds_per_request, precision=2)
+        logger.info("  Duration: %s | Avg: %s per request", elapsed_text, average_text)
 
     @staticmethod
     def log_retry_activity(retries: Dict[str, int], total_retries: int, actual_requests: int) -> None:
@@ -117,20 +106,17 @@ class OutputValidator:
         :param total_retries: Retries of every type
         :param actual_requests: Requests sent in the stage, used for the amplification
         """
-        logger.info(
-            "\n  Retry activity (from server log):",
-        )
+        logger.info("\n  Retry activity (from server log):")
+        error_type: str
+        # Log the retry count for each error type.
         for error_type in RETRY_ERROR_TYPES:
             count: int = retries.get(error_type, 0)
             label: str = RETRY_LABELS.get(error_type, f"{error_type} retries")
             logger.info("    %s: %s", label, count)
         logger.info("    Total retries:  %s", total_retries)
-        amplification: float = Formatters.compute_amplification(
-            actual_requests, total_retries,
-        )
+        amplification: float = Formatters.compute_amplification(actual_requests, total_retries)
         logger.info(
-            "    Amplification:  %.2fx "
-            "(%s total LLM attempts for %s requests)",
+            "    Amplification:  %.2fx (%s total LLM attempts for %s requests)",
             amplification,
             actual_requests + total_retries,
             actual_requests,
@@ -138,7 +124,8 @@ class OutputValidator:
 
     @staticmethod
     def log_server_validation(server_counts: Dict[str, Any], actual_requests: int, agent_name: str) -> None:
-        """Log server-side request validation from log counts.
+        """
+        Log server-side request validation from log counts.
 
         Compares the number of requests the server received (from the
         server log) against the number the client sent, flagging only
@@ -153,40 +140,24 @@ class OutputValidator:
         """
         if server_counts.get("primary_started") is None:
             return
-        pri_started: int = server_counts.get("primary_started")
-        pri_finished: int = server_counts.get("primary_finished")
+        primary_started: int = server_counts.get("primary_started")
+        primary_finished: int = server_counts.get("primary_finished")
         total_started: int = server_counts.get("total_started")
         total_finished: int = server_counts.get("total_finished")
-        internal_calls: int = total_started - pri_started
-        match_label: str = (
-            "OK" if pri_started >= actual_requests else "MISMATCH"
-        )
-        logger.info(
-            "\n  Server-side validation (from server log):",
-        )
-        logger.info(
-            "    %s received:  %s/%s  (%s)",
-            agent_name, pri_started, actual_requests, match_label,
-        )
-        logger.info(
-            "    %s completed: %s/%s",
-            agent_name, pri_finished, actual_requests,
-        )
+        internal_calls: int = total_started - primary_started
+        match_label: str = "MISMATCH"
+        if primary_started >= actual_requests:
+            match_label = "OK"
+        logger.info("\n  Server-side validation (from server log):")
+        logger.info("    %s received:  %s/%s  (%s)", agent_name, primary_started, actual_requests, match_label)
+        logger.info("    %s completed: %s/%s", agent_name, primary_finished, actual_requests)
         if internal_calls > 0:
-            logger.info(
-                "    Internal calls: %s additional "
-                "streaming_chat calls (recursive)",
-                internal_calls,
-            )
-        logger.info(
-            "    Total server calls: %s started, %s finished",
-            total_started, total_finished,
-        )
-        if pri_started < actual_requests:
+            logger.info("    Internal calls: %s additional streaming_chat calls (recursive)", internal_calls)
+        logger.info("    Total server calls: %s started, %s finished", total_started, total_finished)
+        if primary_started < actual_requests:
             logger.warning(
-                "    WARNING: Server received %s %s requests "
-                "but %s were sent",
-                pri_started, agent_name, actual_requests,
+                "    WARNING: Server received %s %s requests but %s were sent",
+                primary_started, agent_name, actual_requests,
             )
 
     @staticmethod
@@ -198,22 +169,18 @@ class OutputValidator:
         """
         if not disconnections:
             return
-        logger.warning(
-            "\n  Client disconnections detected: %s",
-            len(disconnections),
-        )
-        for disc in disconnections:
-            agent: str = disc.get("agent", "unknown")
-            req_id: str = disc.get("request_id", "unknown")
-            client_req: Optional[str] = disc.get("client_request")
-            label: str = (
-                f"{client_req}/{req_id}" if client_req
-                else req_id
-            )
-            logger.warning(
-                "    %s: %s still running at disconnect",
-                label, agent,
-            )
+        disconnection_count: int = len(disconnections)
+        logger.warning("\n  Client disconnections detected: %s", disconnection_count)
+        disconnection: Dict[str, str]
+        # Log one line for each disconnected request.
+        for disconnection in disconnections:
+            agent: str = disconnection.get("agent", "unknown")
+            request_id: str = disconnection.get("request_id", "unknown")
+            client_request: Optional[str] = disconnection.get("client_request")
+            label: str = request_id
+            if client_request:
+                label = f"{client_request}/{request_id}"
+            logger.warning("    %s: %s still running at disconnect", label, agent)
 
     @staticmethod
     def log_server_errors(server_errors: List[Dict[str, str]]) -> None:
@@ -224,18 +191,18 @@ class OutputValidator:
         """
         if not server_errors:
             return
-        logger.warning(
-            "\n  Server errors detected: %s",
-            len(server_errors),
-        )
-        for err in server_errors:
-            req_id: str = err.get("request_id", "unknown")
-            message: str = err.get("message", "")
-            logger.warning("    %s: %s", req_id, message)
+        logger.warning("\n  Server errors detected: %s", len(server_errors))
+        server_error: Dict[str, str]
+        # Log each server error with its request id.
+        for server_error in server_errors:
+            request_id: str = server_error.get("request_id", "unknown")
+            message: str = server_error.get("message", "")
+            logger.warning("    %s: %s", request_id, message)
 
     @staticmethod
     def log_tool_warnings(tool_warnings: List[Dict[str, str]]) -> None:
-        """Log server-side tool-creation warnings for the stage.
+        """
+        Log server-side tool-creation warnings for the stage.
 
         These mean a requested tool was unavailable to an agent; they
         don't affect the created network, but a high count under load
@@ -245,18 +212,18 @@ class OutputValidator:
         """
         if not tool_warnings:
             return
-        logger.warning(
-            "\n  Tool-creation warnings: %s",
-            len(tool_warnings),
-        )
-        for warn in tool_warnings:
-            req_id: str = warn.get("request_id", "unknown")
-            message: str = warn.get("message", "")
-            logger.warning("    %s: %s", req_id, message)
+        logger.warning("\n  Tool-creation warnings: %s", len(tool_warnings))
+        tool_warning: Dict[str, str]
+        # Log each tool-creation warning with its request id.
+        for tool_warning in tool_warnings:
+            request_id: str = tool_warning.get("request_id", "unknown")
+            message: str = tool_warning.get("message", "")
+            logger.warning("    %s: %s", request_id, message)
 
     @staticmethod
     def check_permission_failures(results: List[Dict[str, Any]], agent_name: str) -> bool:
-        """Check if all requests failed with a permissions error.
+        """
+        Check if all requests failed with a permissions error.
 
         When neuro-san-studio organizes agents under subdirectories
         (e.g. registries/basic/hello_world), the --agent value must
@@ -271,48 +238,58 @@ class OutputValidator:
         """
         if not results:
             return False
-        all_failed: bool = all(
-            r.get("status") == STATUS_FAILED for r in results
-        )
+        all_failed: bool = True
+        result: Dict[str, Any]
+        # Look for a request that did not fail.
+        for result in results:
+            if result.get("status") != STATUS_FAILED:
+                all_failed = False
+                break
         if not all_failed:
             return False
         permission_keywords: List[str] = ["permissions", "permission", "not found"]
-        has_perm_error: bool = any(
-            any(
-                kw in (r.get("error") or "").lower()
-                for kw in permission_keywords
-            )
-            for r in results
-        )
-        if not has_perm_error:
+        has_permission_error: bool = False
+        keyword: str
+        # Look for a permissions keyword in the error of any request.
+        for result in results:
+            error_text: str = (result.get("error") or "").lower()
+            # Check each keyword against the error text.
+            for keyword in permission_keywords:
+                if keyword in error_text:
+                    has_permission_error = True
+                    break
+            if has_permission_error:
+                break
+        if not has_permission_error:
             return False
         if "/" in agent_name:
             logger.error(
-                "\n  ERROR: All requests failed with a permissions "
-                "error for agent '%s'.\n"
-                "  Verify that the agent is registered in the "
-                "server's AGENT_REGISTRY_PATH and that your user\n"
-                "  has the correct permissions for the network.\n\n"
-                "  Aborting test.",
+                """
+  ERROR: All requests failed with a permissions error for agent '%s'.
+  Verify that the agent is registered in the server's AGENT_REGISTRY_PATH and that your user
+  has the correct permissions for the network.
+
+  Aborting test.""",
                 agent_name,
             )
         else:
             logger.error(
-                "\n  ERROR: All requests failed with a permissions "
-                "error.\n"
-                "  The --agent value '%s' may need a registry "
-                "subdirectory prefix.\n"
-                "  For example, if the agent is registered under\n"
-                "  registries/basic/, use:\n"
-                "    --agent basic/%s\n\n"
-                "  Aborting test.",
+                """
+  ERROR: All requests failed with a permissions error.
+  The --agent value '%s' may need a registry subdirectory prefix.
+  For example, if the agent is registered under
+  registries/basic/, use:
+    --agent basic/%s
+
+  Aborting test.""",
                 agent_name, agent_name,
             )
         return True
 
     @staticmethod
     def check_timeout_abort(counts: Dict[str, Any]) -> bool:
-        """Check if any requests hit a timeout or were killed.
+        """
+        Check if any requests hit a timeout or were killed.
 
         Returns True if the test should abort because at least one
         request exceeded its idle-timeout, request-timeout, or was
@@ -323,21 +300,18 @@ class OutputValidator:
         """
         timed_out: int = counts.get(STATUS_TIMEOUT, 0)
         killed: int = counts.get(STATUS_KILLED, 0)
-        total_bad: int = timed_out + killed
-        if total_bad == 0:
+        timed_out_or_killed: int = timed_out + killed
+        if timed_out_or_killed == 0:
             return False
-        parts: List[str] = []
+        abort_reasons: List[str] = []
         if timed_out:
-            parts.append(
-                f"{timed_out} timed out"
-            )
+            abort_reasons.append(f"{timed_out} timed out")
         if killed:
-            parts.append(
-                f"{killed} killed by stage-timeout"
-            )
+            abort_reasons.append(f"{killed} killed by stage-timeout")
         logger.warning(
-            "\n  ABORT: %s — %s.\n"
-            "  Stopping test and reporting available results.",
-            ", ".join(parts), f"{total_bad} request(s) failed",
+            """
+  ABORT: %s — %s.
+  Stopping test and reporting available results.""",
+            ", ".join(abort_reasons), f"{timed_out_or_killed} request(s) failed",
         )
         return True

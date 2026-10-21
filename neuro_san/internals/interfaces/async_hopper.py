@@ -16,12 +16,18 @@
 # END COPYRIGHT
 from typing import Any
 
+from abc import abstractmethod
 
+from leaf_common.utils.interface import interface
+
+
+@interface
 class AsyncHopper:
     """
     An interface whose clients store things for later use.
     """
 
+    @abstractmethod
     async def put(self, item: Any, synchronous: bool = False, check_last_item_sent: bool = True):
         """
         Fulfills AsyncHopper interface

@@ -88,3 +88,12 @@ class InterceptingJournal(Journal):
         :return: the intercepted messages
         """
         return self.messages
+
+    async def write_message_if_next_not_dupe(self, message: BaseMessage):
+        """
+        Writes a BaseMessage entry into the wrapped_journal
+        and appends to the chat history as long as the next message does not have the same content.
+
+        :param message: The BaseMessage instance to write to the wrapped_journal
+        """
+        raise NotImplementedError

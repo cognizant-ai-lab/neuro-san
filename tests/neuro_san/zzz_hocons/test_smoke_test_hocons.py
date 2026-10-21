@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+from typing import Dict
+
 from unittest import TestCase
 
 import pytest
@@ -33,7 +35,7 @@ class TestSmokeTestHocons(TestCase):
     # We pass it our source file location and a relative path to the common
     # root of the test hocon files listed in the @parameterized.expand()
     # annotation below so the instance can find the hocon test cases listed.
-    DYNAMIC = DynamicHoconUnitTests(__file__, path_to_basis="../../fixtures")
+    DYNAMIC: DynamicHoconUnitTests = DynamicHoconUnitTests(__file__, path_to_basis="../../fixtures")
 
     # Hocon test cases that are temporarily disabled at runtime via pytest.skip().
     # We deliberately keep these listed in the @parameterized.expand() blocks
@@ -41,7 +43,7 @@ class TestSmokeTestHocons(TestCase):
     # rather than being silently commented out. To disable a new hocon, append
     # an entry to this dict. Remove an entry once its underlying blocker is
     # resolved.
-    DISABLED_HOCONS = {
+    DISABLED_HOCONS: Dict[str, str] = {
         "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon":
             "Off in manifest.hocon and needs an Azure deployment named gpt-5-2; see issues #910 and #909.",
         "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon":

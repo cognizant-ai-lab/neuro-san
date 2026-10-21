@@ -78,11 +78,12 @@ class McpManifestDictConfigFilter(ConfigFilter):
         :return: A config dictionary, potentially modified as per the
                 policy encapsulated by the implementation
         """
-        mcp_settings: Dict[str, Any] = self.normalize_mcp_settings(basis_config.get(self.MCP_KEY))
-        basis_config[self.MCP_KEY] = mcp_settings
+        value: Any = basis_config.get(McpManifestDictConfigFilter.MCP_KEY)
+        mcp_settings: Dict[str, Any] = self.normalize_mcp_settings(value)
+        basis_config[McpManifestDictConfigFilter.MCP_KEY] = mcp_settings
 
         # MCP designated entries are considered public by default.
-        if mcp_settings.get(self.ENABLE_KEY):
+        if mcp_settings.get(McpManifestDictConfigFilter.ENABLE_KEY):
             basis_config[StorageClass.PUBLIC] = True
 
         return basis_config
@@ -96,15 +97,15 @@ class McpManifestDictConfigFilter(ConfigFilter):
         :return: A new dictionary with at least the "enable" and "name" keys
         """
         settings: Dict[str, Any] = {
-            self.ENABLE_KEY: False,
-            self.NAME_KEY: None
+            McpManifestDictConfigFilter.ENABLE_KEY: False,
+            McpManifestDictConfigFilter.NAME_KEY: None
         }
         if value is None:
             # Absent: dictionary entries are not MCP tools unless they say so.
             return settings
 
         if isinstance(value, bool):
-            settings[self.ENABLE_KEY] = value
+            settings[McpManifestDictConfigFilter.ENABLE_KEY] = value
             return settings
 
         if not isinstance(value, dict):
@@ -116,21 +117,21 @@ class McpManifestDictConfigFilter(ConfigFilter):
         # Writing the dictionary out is itself a request to serve the tool,
         # so "enable" defaults to True here. Shallow-merge so that unknown
         # keys survive, the same way "periodic" settings are merged.
-        settings[self.ENABLE_KEY] = True
+        settings[McpManifestDictConfigFilter.ENABLE_KEY] = True
         settings.update(value)
 
-        enable: Any = settings.get(self.ENABLE_KEY)
+        enable: Any = settings.get(McpManifestDictConfigFilter.ENABLE_KEY)
         if not isinstance(enable, bool):
             self.logger.warning("Manifest entry for %s in file %s has an \"mcp\" \"enable\" value that is " +
                                 "not a boolean (%s). Reading it as %s.",
                                 self.agent_network, self.manifest_file, repr(enable), bool(enable))
-            settings[self.ENABLE_KEY] = bool(enable)
+            settings[McpManifestDictConfigFilter.ENABLE_KEY] = bool(enable)
 
         # Only a name the author actually wrote is judged; a missing key is the
         # normal "derive it" case and gets no warning. An explicit null, an empty
         # string or a non-string are all mistakes worth pointing out.
-        name: Any = settings.get(self.NAME_KEY)
-        if self.NAME_KEY in value and not (isinstance(name, str) and name):
+        name: Any = settings.get(McpManifestDictConfigFilter.NAME_KEY)
+        if McpManifestDictConfigFilter.NAME_KEY in value and not (isinstance(name, str) and name):
             # Drop the bad value rather than keep it: downstream code treats any
             # present name as the name to advertise, and a non-string there would
             # surface as a confusing failure much later, at tools/list time.
@@ -138,6 +139,6 @@ class McpManifestDictConfigFilter(ConfigFilter):
                                 "non-empty string (%s). Ignoring it; if the entry is an MCP tool, its " +
                                 "tool name will be derived from the network name.",
                                 self.agent_network, self.manifest_file, repr(name))
-            settings[self.NAME_KEY] = None
+            settings[McpManifestDictConfigFilter.NAME_KEY] = None
 
         return settings

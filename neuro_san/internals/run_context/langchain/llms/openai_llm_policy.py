@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 from httpx import AsyncClient
@@ -36,6 +37,9 @@ class OpenAILlmPolicy(LlmPolicy):
     as an argument, so this implementation takes advantage of the create_client()
     method to do that. Worth noting that where many other implementations might care about
     the llm reference, because of our create_client() implementation, we do not.
+
+    The chat model built is ToolStrictChatOpenAI, a ChatOpenAI subclass that adds the
+    "tool_strict" default for function tools; see resolve_chat_model_class().
     """
 
     # None means no limit
@@ -73,9 +77,10 @@ class OpenAILlmPolicy(LlmPolicy):
         # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
 
         # pylint: disable=invalid-name
-        AsyncOpenAI = self.resolver.resolve_class_in_module("AsyncOpenAI",
-                                                            module_name="openai",
-                                                            install_if_missing="langchain-openai")
+        AsyncOpenAI: Type[Any] = self.resolver.resolve_class_in_module(
+            "AsyncOpenAI",
+            module_name="openai",
+            install_if_missing="langchain-openai")
 
         self.create_http_client(config)
 
@@ -101,7 +106,7 @@ class OpenAILlmPolicy(LlmPolicy):
         # Our run-time model resource here is httpx client which we need to control directly:
         openai_proxy: str = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
         request_timeout: int = config.get("request_timeout")
-        self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout, limits=self.LIMITS)
+        self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout, limits=OpenAILlmPolicy.LIMITS)
 
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
@@ -116,15 +121,12 @@ class OpenAILlmPolicy(LlmPolicy):
         """
         # OpenAI is the one chat class that we do not require any extra installs.
         # This is what we want to work out of the box.
-        # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
-
-        # pylint: disable=invalid-name
-        ChatOpenAI = self.resolver.resolve_class_in_module("ChatOpenAI",
-                                                           module_name="langchain_openai.chat_models.base",
-                                                           install_if_missing="langchain-openai")
+        # Even so, the chat model class is loaded through the same lazy resolver as the other providers,
+        # so that the openai packages stay optional for installs that only use other providers.
+        chat_model_class: Type[BaseLanguageModel] = self.resolve_chat_model_class()
 
         # Now construct LLM chat model we will be using:
-        llm = ChatOpenAI(
+        llm: BaseLanguageModel = chat_model_class(
             async_client=client,
             root_async_client=self.async_openai_client,
             model_name=model_name,
@@ -225,6 +227,14 @@ class OpenAILlmPolicy(LlmPolicy):
             # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
             include=config.get("include"),
 
+            # tool_strict is the default strict value for function tools (bool or null). The class
+            # default in default_llm_info.hocon is false, and false is the fallback here too when the
+            # key is absent. It is not a ChatOpenAI constructor argument: ToolStrictChatOpenAI applies
+            # it in bind_tools(), which is where langchain writes strict into each tool and which
+            # create_agent() calls without a strict value. An explicit null still reaches the chat
+            # model as None (send no strict, the endpoint decides), unlike false (send "strict": false).
+            tool_strict=config.get("tool_strict", False),
+
             # If omitted, this defaults to the global verbose value,
             # accessible via langchain_core.globals.get_verbose():
             # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
@@ -245,6 +255,28 @@ class OpenAILlmPolicy(LlmPolicy):
         )
 
         return llm
+
+    def resolve_chat_model_class(self) -> Type[BaseLanguageModel]:
+        """
+        Resolves the chat model class this policy and its subclasses construct.
+
+        That is ToolStrictChatOpenAI, the ChatOpenAI subclass with the "tool_strict" default for
+        function tools. It is resolved by name at call time rather than imported at module level,
+        so that importing this policy does not import langchain-openai and the openai packages stay
+        optional for installs that only use other providers.
+
+        :return: The ToolStrictChatOpenAI class
+        """
+        # Resolving ChatOpenAI first keeps the helpful error: when langchain-openai is missing, the
+        # Resolver then names the package to pip install instead of blaming the subclass module.
+        self.resolver.resolve_class_in_module("ChatOpenAI",
+                                              module_name="langchain_openai.chat_models.base",
+                                              install_if_missing="langchain-openai")
+
+        chat_model_class: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ToolStrictChatOpenAI",
+            module_name="neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai")
+        return chat_model_class
 
     async def delete_resources(self):
         """

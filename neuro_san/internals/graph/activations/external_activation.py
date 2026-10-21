@@ -40,6 +40,7 @@ from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
+from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -109,7 +110,8 @@ class ExternalActivation(AbstractCallableActivation):
         # Should we be reporting external messages?
         self.report: bool = self.bool_from_multi_value(raw_reporting, self.agent_url)
         if self.report:
-            self.processor.add_processor(ExternalMessageProcessor(self.journal))
+            originating_journal: OriginatingJournal = self.journal
+            self.processor.add_processor(ExternalMessageProcessor(originating_journal))
 
     @staticmethod
     def bool_from_multi_value(source: Union[bool, str, List[str], Dict[str, Any]], value: str) -> bool:
@@ -128,7 +130,8 @@ class ExternalActivation(AbstractCallableActivation):
         elif isinstance(source, List):
             bool_value = value in source
         elif isinstance(source, Dict):
-            bool_value = bool(source.get(value))
+            source_dict: Dict[str, Any] = source
+            bool_value = bool(source_dict.get(value))
 
         return bool_value
 

@@ -1,3 +1,4 @@
+
 # Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,20 +14,29 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from abc import abstractmethod
 
-from typing import Optional
+from leaf_common.utils.interface import interface
 
 
-class SharedRef:
+@interface
+class CloseableClient:
     """
-    Mutable container for passing a value between threads.
-
-    Replaces the bare-dict pattern (e.g., ``result = {}`` /
-    ``result.update(...)``), making the intent explicit and the
-    expected type visible.
+    Interface for a client that can be closed.
+    This is not generally inherited from, but instead used as a contract
+    that nebulously typed clients can be duck-typed to.
     """
 
-    __slots__ = ("value",)
+    @abstractmethod
+    def close(self):
+        """
+        Close the asynchronous client.
+        """
+        raise NotImplementedError
 
-    def __init__(self) -> None:
-        self.value: Optional[object] = None
+    @abstractmethod
+    async def aclose(self):
+        """
+        Close the asynchronous client.
+        """
+        raise NotImplementedError

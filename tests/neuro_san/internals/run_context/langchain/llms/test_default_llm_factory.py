@@ -13,19 +13,28 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+# One test class per source class is the repo convention, so the test count grows with the class.
+# pylint: disable=too-many-public-methods
 
+import asyncio
 import os
+import subprocess
+import sys
 import tempfile
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Set
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
 from typing_extensions import override
 
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 
 
 class TestDefaultLlmFactory(TestCase):
@@ -34,12 +43,30 @@ class TestDefaultLlmFactory(TestCase):
 
     The focus is how "use_model_name" aliases in llm_info are followed, with and without a
     "class" key in the llm_config. See https://github.com/cognizant-ai-lab/neuro-san/issues/1298.
+    The "extends" tests check that a class's own args win over the ones it inherits.
 
-    Nothing here builds a chat model or makes a network call: only the fully specified config
-    that create_full_llm_config() produces is inspected. Expected alias targets are read from
-    the loaded llm_info rather than hard-coded, so the tests keep passing when an alias is
-    moved to a newer model version.
+    Nothing here makes a network call. Most tests only inspect the fully specified config that
+    create_full_llm_config() produces; the tool_strict tests also build the chat model to see the
+    class default land on it. One test imports the factory module in a child interpreter with the
+    openai packages blocked, to check that the openai chat model class loads only when a model is
+    built. Expected alias targets are read from the loaded llm_info rather than hard-coded, so the
+    tests keep passing when an alias is moved to a newer model version.
     """
+
+    # Runs in a child interpreter. A None entry in sys.modules makes an import fail the way a missing
+    # package does, so this imports the factory module with the openai packages blocked. The check
+    # afterwards makes the script fail, rather than pass by accident, if either package got imported.
+    IMPORT_WITHOUT_OPENAI_SCRIPT: str = """
+import importlib
+import sys
+
+sys.modules["openai"] = None
+sys.modules["langchain_openai"] = None
+importlib.import_module("neuro_san.internals.run_context.langchain.llms.default_llm_factory")
+if sys.modules.get("openai") is not None or sys.modules.get("langchain_openai") is not None:
+    raise SystemExit("an openai package was imported")
+print("FACTORY_IMPORTED_WITHOUT_OPENAI")
+"""
 
     # A one-key alias whose target is a full entry without a "use_model_name" of its own.
     ANTHROPIC_ALIAS: str = "claude-fable"
@@ -56,6 +83,24 @@ class TestDefaultLlmFactory(TestCase):
     # A user-defined alias pointing at a name that has no entry of its own.
     DANGLING_ALIAS: str = "my-claude"
     DANGLING_TARGET: str = "claude-not-yet-released"
+
+    # A Bedrock model id whose stock entry has "class": "anthropic-bedrock".
+    BEDROCK_MODEL: str = "global.anthropic.claude-fable-5-1"
+
+    # A sparse llm info file that gives "anthropic-bedrock" two defaults of its own.
+    # The "anthropic" class it extends declares both keys as null.
+    BEDROCK_CLASS_DEFAULTS_HOCON: str = """
+{
+    "classes": {
+        "anthropic-bedrock": {
+            "args": {
+                "max_tokens": 64000,
+                "temperature": 0.2
+            }
+        }
+    }
+}
+"""
 
     @override
     def setUp(self) -> None:
@@ -229,6 +274,289 @@ class TestDefaultLlmFactory(TestCase):
         full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
 
         self.assertEqual(self.DANGLING_TARGET, full_config["model_name"])
+
+    # ---- "class" given: the strict default for OpenAI function tools --------------------------
+
+    @staticmethod
+    def _close_llm_resources(llm_resources: LangChainLlmResources) -> None:
+        """
+        Releases the web client a chat model built by the factory holds.
+
+        :param llm_resources: The resources create_llm() returned
+        """
+        asyncio.run(llm_resources.close_of_work())
+
+    def test_openai_classes_build_the_chat_model_with_tool_strict_false(self) -> None:
+        """
+        The hocon default reaches the chat model itself: a model built through the factory for the
+        "openai" class, for "azure-openai" and for a bare OpenAI model name carries tool_strict False.
+        """
+        configs: List[Dict[str, Any]] = [
+            {"class": "openai", "model_name": self.OPENAI_ALIAS},
+            # The credential falls back to the pinned OPENAI_API_KEY; the endpoint never gets called.
+            {"class": "azure-openai", "deployment_name": "my-deployment",
+             "azure_endpoint": "https://unit-test.openai.azure.com"},
+            {"model_name": self.OPENAI_ALIAS},
+        ]
+        for config in configs:
+            # The label is a string so that the subtest stays picklable under xdist.
+            with self.subTest(config=str(config)):
+                llm_resources: LangChainLlmResources = self.factory.create_llm(config, None)
+                self.addCleanup(self._close_llm_resources, llm_resources)
+
+                llm: Any = llm_resources.get_model()
+                self.assertIsInstance(llm, ToolStrictChatOpenAI)
+                self.assertIs(llm.tool_strict, False)
+
+    def test_openai_classes_default_tool_strict_to_false(self) -> None:
+        """
+        The "openai" class defaults tool_strict to false, and "azure-openai" inherits that default.
+        """
+        openai_config: Dict[str, Any] = {"class": "openai", "model_name": self.OPENAI_ALIAS}
+        azure_config: Dict[str, Any] = {"class": "azure-openai", "deployment_name": "my-deployment"}
+
+        openai_full_config: Dict[str, Any] = self.factory.create_full_llm_config(openai_config, None)
+        azure_full_config: Dict[str, Any] = self.factory.create_full_llm_config(azure_config, None)
+
+        self.assertIs(openai_full_config.get("tool_strict"), False)
+        self.assertIs(azure_full_config.get("tool_strict"), False)
+
+    def test_tool_strict_null_in_llm_config_survives_the_overlay(self) -> None:
+        """
+        An agent that sets "tool_strict": null gets None in its full config, not the class default of
+        false, so the chat model sends no strict value at all for it.
+        """
+        config: Dict[str, Any] = {"class": "openai", "model_name": self.OPENAI_ALIAS}
+        null_config: Dict[str, Any] = dict(config)
+        null_config["tool_strict"] = None
+
+        # The baseline shows there is a non-null default for the null to override.
+        self.assertIs(self.factory.create_full_llm_config(config, None).get("tool_strict"), False)
+        full_config: Dict[str, Any] = self.factory.create_full_llm_config(null_config, None)
+
+        self.assertIn("tool_strict", full_config)
+        self.assertIsNone(full_config.get("tool_strict"))
+
+    def test_tool_strict_null_in_a_sparse_llm_info_file_overrides_the_default(self) -> None:
+        """
+        A sparse llm info file that deep-merges over the default can set the class default to null, the
+        server-wide override the reference documents for the "openai" class arguments.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            '{ "classes": { "openai": { "args": { "tool_strict": null } } } }')
+        config: Dict[str, Any] = {"class": "openai", "model_name": self.OPENAI_ALIAS}
+
+        # The stock factory gives the default, so the None below really comes from the sparse file.
+        self.assertIs(self.factory.create_full_llm_config(config, None).get("tool_strict"), False)
+        full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
+
+        self.assertIn("tool_strict", full_config)
+        self.assertIsNone(full_config.get("tool_strict"))
+
+    # ---- "extends": a class's own args win over the ones it inherits ----------------------------
+
+    def test_extending_class_args_override_the_parent(self) -> None:
+        """
+        Defaults that a sparse llm info file gives "anthropic-bedrock" win over the nulls that the
+        "anthropic" class it extends declares for the same keys.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            TestDefaultLlmFactory.BEDROCK_CLASS_DEFAULTS_HOCON)
+
+        args: Dict[str, Any] = factory.get_chat_class_args("anthropic-bedrock")
+
+        self.assertEqual(64000, args.get("max_tokens"))
+        self.assertEqual(0.2, args.get("temperature"))
+        # The parent class keeps its own nulls.
+        self.assertIsNone(factory.get_chat_class_args("anthropic").get("max_tokens"))
+
+    def test_extending_class_default_reaches_an_llm_config_that_names_the_class(self) -> None:
+        """
+        An llm_config that names "anthropic-bedrock" gets the class defaults from a sparse llm info
+        file, and a "max_tokens" of its own still wins over the default.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            TestDefaultLlmFactory.BEDROCK_CLASS_DEFAULTS_HOCON)
+        config: Dict[str, Any] = {
+            "class": "anthropic-bedrock",
+            "model_name": TestDefaultLlmFactory.BEDROCK_MODEL,
+        }
+        own_config: Dict[str, Any] = dict(config)
+        own_config["max_tokens"] = 32000
+
+        full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
+        own_full_config: Dict[str, Any] = factory.create_full_llm_config(own_config, None)
+
+        self.assertEqual(64000, full_config.get("max_tokens"))
+        self.assertEqual(0.2, full_config.get("temperature"))
+        self.assertEqual(32000, own_full_config.get("max_tokens"))
+
+    def test_extending_class_default_reaches_an_llm_config_without_class(self) -> None:
+        """
+        Without "class", the model's entry selects "anthropic-bedrock" and the class defaults apply,
+        except "max_tokens", which still comes from the entry's max_output_tokens.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(
+            TestDefaultLlmFactory.BEDROCK_CLASS_DEFAULTS_HOCON)
+        config: Dict[str, Any] = {"model_name": TestDefaultLlmFactory.BEDROCK_MODEL}
+
+        full_config: Dict[str, Any] = factory.create_full_llm_config(config, None)
+        stock_full_config: Dict[str, Any] = self.factory.create_full_llm_config(config, None)
+
+        self.assertEqual("anthropic-bedrock", full_config.get("class"))
+        self.assertEqual(0.2, full_config.get("temperature"))
+        # The stock file computes max_tokens from max_output_tokens, and the class default does not change it.
+        self.assertIsNotNone(stock_full_config.get("max_tokens"))
+        self.assertEqual(stock_full_config.get("max_tokens"), full_config.get("max_tokens"))
+
+    def test_extends_chain_takes_each_key_from_the_most_derived_class(self) -> None:
+        """
+        In a chain of classes that extend each other, a key takes its value from the most derived class
+        that declares it, and a key that only an ancestor declares is still inherited.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "anthropic-bedrock": {
+                        "args": {
+                            "max_tokens": 64000,
+                            "temperature": 0.2
+                        }
+                    },
+                    "my-bedrock": {
+                        "extends": "anthropic-bedrock",
+                        "args": {
+                            "temperature": 0.5
+                        }
+                    }
+                }
+            }
+            """)
+        anthropic_args: Dict[str, Any] = factory.get_chat_class_args("anthropic")
+
+        args: Dict[str, Any] = factory.get_chat_class_args("my-bedrock")
+
+        # Declared by my-bedrock and by both of its ancestors.
+        self.assertEqual(0.5, args.get("temperature"))
+        # Declared by anthropic-bedrock and by anthropic.
+        self.assertEqual(64000, args.get("max_tokens"))
+        # Declared only by anthropic-bedrock.
+        self.assertIn("region_name", args)
+        # Declared only by anthropic.
+        self.assertIn("max_retries", args)
+        self.assertEqual(anthropic_args.get("max_retries"), args.get("max_retries"))
+
+    def test_extending_class_without_args_inherits_the_parent_args(self) -> None:
+        """
+        A class that names only the class it extends, with no "args" of its own, gets the parent's args.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "my-anthropic": {
+                        "extends": "anthropic"
+                    }
+                }
+            }
+            """)
+
+        self.assertEqual(factory.get_chat_class_args("anthropic"), factory.get_chat_class_args("my-anthropic"))
+
+    def test_extending_class_inherits_a_parent_default_it_does_not_declare(self) -> None:
+        """
+        A sparse llm info file that changes an "openai" default also changes it for "azure-openai",
+        which extends "openai" and does not declare that key itself.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "openai": {
+                        "args": {
+                            "streaming": true
+                        }
+                    }
+                }
+            }
+            """)
+
+        # The stock file leaves streaming off for both classes.
+        self.assertIs(self.factory.get_chat_class_args("azure-openai").get("streaming"), False)
+        self.assertIs(factory.get_chat_class_args("azure-openai").get("streaming"), True)
+
+    def test_extending_class_dictionary_args_merge_key_by_key(self) -> None:
+        """
+        When a class and the class it extends both give a dictionary for the same arg, the two are merged:
+        the extending class's keys win and the parent's other keys are kept.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "my-bedrock": {
+                        "extends": "bedrock",
+                        "args": {
+                            "guardrails": {
+                                "guardrailIdentifier": "my-guardrail"
+                            }
+                        }
+                    }
+                }
+            }
+            """)
+        bedrock_guardrails: Dict[str, Any] = factory.get_chat_class_args("bedrock").get("guardrails")
+        # The baseline shows the parent has other keys for the merge to keep.
+        self.assertIn("guardrailVersion", bedrock_guardrails)
+        expected_guardrails: Dict[str, Any] = dict(bedrock_guardrails)
+        expected_guardrails["guardrailIdentifier"] = "my-guardrail"
+
+        guardrails: Dict[str, Any] = factory.get_chat_class_args("my-bedrock").get("guardrails")
+
+        self.assertEqual(expected_guardrails, guardrails)
+        # The parent class keeps its own dictionary.
+        self.assertIsNone(bedrock_guardrails.get("guardrailIdentifier"))
+
+    def test_extending_class_null_clears_the_parent_value(self) -> None:
+        """
+        A class that declares an arg as null clears the value that the class it extends gives that arg.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info("""
+            {
+                "classes": {
+                    "azure-openai": {
+                        "args": {
+                            "store": null
+                        }
+                    }
+                }
+            }
+            """)
+
+        # The stock file gives "openai" a store of false, which "azure-openai" inherits.
+        self.assertIs(self.factory.get_chat_class_args("azure-openai").get("store"), False)
+        args: Dict[str, Any] = factory.get_chat_class_args("azure-openai")
+
+        self.assertIn("store", args)
+        self.assertIsNone(args.get("store"))
+        # The parent class keeps its own value.
+        self.assertIs(factory.get_chat_class_args("openai").get("store"), False)
+
+    # ---- Importing the module: the openai packages stay optional ---------------------------------
+
+    def test_factory_module_imports_without_the_openai_packages(self) -> None:
+        """
+        The factory module imports even when the openai packages are not installed. The openai policies
+        resolve their chat model class by name when a model is built, so an install that only uses other
+        providers can leave those packages out. A child interpreter blocks them and imports the module.
+        """
+        repo_root: Path = Path(__file__).resolve().parents[6]
+        env: Dict[str, str] = dict(os.environ)
+        env["PYTHONPATH"] = str(repo_root) + os.pathsep + env.get("PYTHONPATH", "")
+
+        command: List[str] = [sys.executable, "-c", self.IMPORT_WITHOUT_OPENAI_SCRIPT]
+        result: subprocess.CompletedProcess = subprocess.run(
+            command, env=env, capture_output=True, text=True, check=False, timeout=120)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("FACTORY_IMPORTED_WITHOUT_OPENAI", result.stdout)
 
     # ---- "class" given: full langchain class path ----------------------------------------------
 

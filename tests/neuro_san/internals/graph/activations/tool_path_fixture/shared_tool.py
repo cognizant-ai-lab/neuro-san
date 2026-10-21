@@ -14,11 +14,12 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Shared (network-agnostic) fixture module living at the root of the test
-AGENT_TOOL_PATH hierarchy, used by AGENT_TOOL_PATH_ONLY resolution tests.
-"""
 
 
 class SharedTool:
-    """A fixture class resolvable at the root level of the tool path."""
+    """
+    A fixture class resolvable at the root level of the tool path.
+
+    Shared (network-agnostic) fixture living at the root of the test
+    AGENT_TOOL_PATH hierarchy, used by AGENT_TOOL_PATH_ONLY resolution tests.
+    """

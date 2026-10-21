@@ -21,12 +21,14 @@ import tempfile
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from unittest import TestCase
 
 from neuro_san import TOP_LEVEL_DIR
-from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
+from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 # Real fixtures, not mocks: tests/fixtures/load_tests/<agent>/*.hocon
 PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
@@ -72,9 +74,7 @@ class TestAgentProfileHoconPrompts(TestCase):
         :param hocon_files: Test-case hocon paths to read prompts from
         :return: Profile built from those hocons
         """
-        return AgentProfileFactory().create(
-            agent, project_root=PROJECT_ROOT, hocon_files=hocon_files,
-        )
+        return AgentProfileFactory().create(agent, project_root=PROJECT_ROOT, hocon_files=hocon_files)
 
     @staticmethod
     def _write_hocon(folder: str, name: str, agent: str, texts: List[str], **extra: Any) -> str:
@@ -89,24 +89,33 @@ class TestAgentProfileHoconPrompts(TestCase):
         :return: Path of the written file
         """
         path: str = os.path.join(folder, name)
+        interactions: List[Dict[str, str]] = []
+        text: str
+        # One interaction per text.
+        for text in texts:
+            interactions.append({"text": text})
         test_case: Dict[str, Any] = {
             "agent": agent,
-            "interactions": [{"text": text} for text in texts],
-            **extra,
+            "interactions": interactions,
         }
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(test_case, fh)
+        test_case.update(extra)
+        with open(path, "w", encoding="utf-8") as file_handle:
+            json.dump(test_case, file_handle)
         return path
 
     def test_prompts_come_from_hocon_files(self) -> None:
-        """Each fixture's interactions[].text becomes a prompt."""
+        """
+        Each fixture's interactions[].text becomes a prompt.
+        """
         profile: AgentProfile = self._load_fixtures("hello_world")
         # One interaction per fixture
         self.assertEqual(len(profile.get_prompts()), len(self._fixture_hocons("hello_world")))
         self.assertIn("Hello, how are you today?", profile.get_prompts())
 
     def test_agent_settings_come_from_hocons(self) -> None:
-        """failure_patterns are read from the hocons, not the JSON."""
+        """
+        failure_patterns are read from the hocons, not the JSON.
+        """
         profile: AgentProfile = self._load_fixtures("hello_world")
         self.assertIsNone(profile.get_estimated_tokens_per_request())
         self.assertEqual(profile.get_success_fields(), [])
@@ -131,13 +140,14 @@ class TestAgentProfileHoconPrompts(TestCase):
         """
         get_response() picks the same pool entry as get_prompt().
         """
-        with tempfile.TemporaryDirectory() as tmp:
+        profile: Optional[AgentProfile] = None
+        with tempfile.TemporaryDirectory() as temporary_directory:
             first: str = self._write_hocon(
-                tmp, "a.hocon", "x", [],
+                temporary_directory, "a.hocon", "x", [],
                 interactions=[{"text": "one", "response": {"text": {"keywords": ["1"]}}}],
             )
-            second: str = self._write_hocon(tmp, "b.hocon", "x", ["two"])
-            profile: AgentProfile = self._load("x", [first, second])
+            second: str = self._write_hocon(temporary_directory, "b.hocon", "x", ["two"])
+            profile = self._load("x", [first, second])
         self.assertEqual(profile.get_prompt(1, allow_caching=True), "two")
         self.assertEqual(profile.get_response(1), {})
         self.assertEqual(profile.get_response(2), {"text": {"keywords": ["1"]}})
@@ -147,88 +157,99 @@ class TestAgentProfileHoconPrompts(TestCase):
         """
         A JSON profile's success_fields turn into sly_data not_value checks.
         """
-        profile: AgentProfile = AgentProfileFactory().create(
-            "agent_network_designer", project_root=PROJECT_ROOT,
-        )
+        profile: AgentProfile = AgentProfileFactory().create("agent_network_designer", project_root=PROJECT_ROOT)
         self.assertEqual(
             profile.get_response(0),
             {"sly_data": {"agent_reservations": {"not_value": ""}, "agent_network_name": {"not_value": ""}}},
         )
 
-    def test_json_profile_not_an_object_exits_1(self) -> None:
-        """A JSON profile that is a list, not an object, aborts the run."""
-        with tempfile.TemporaryDirectory() as tmp:
-            with open(os.path.join(tmp, "hello_world.json"), "w", encoding="utf-8") as fh:
-                json.dump(["Hello"], fh)
-            with self.assertRaises(SystemExit) as ctx:
-                AgentProfileFactory().create("hello_world", profile_path=tmp)
-        self.assertEqual(ctx.exception.code, 1)
+    def test_json_profile_not_an_object_aborts_with_code_1(self) -> None:
+        """
+        A JSON profile that is a list, not an object, aborts the run.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with open(os.path.join(temporary_directory, "hello_world.json"), "w", encoding="utf-8") as file_handle:
+                json.dump(["Hello"], file_handle)
+            with self.assertRaises(LoadTestAbortError) as caught:
+                AgentProfileFactory().create("hello_world", profile_path=temporary_directory)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_json_profile_not_needed_with_hocons(self) -> None:
-        """An agent with no JSON profile loads fine from hocons alone."""
-        with tempfile.TemporaryDirectory() as tmp:
+        """
+        An agent with no JSON profile loads fine from hocons alone.
+        """
+        profile: Optional[AgentProfile] = None
+        with tempfile.TemporaryDirectory() as temporary_directory:
             path: str = self._write_hocon(
-                tmp, "only.hocon", "no_such_agent", ["hi"],
+                temporary_directory, "only.hocon", "no_such_agent", ["hi"],
                 failure_patterns=["oops"], estimated_tokens_per_request=42,
             )
-            profile: AgentProfile = self._load("no_such_agent", [path])
+            profile = self._load("no_such_agent", [path])
         self.assertEqual(profile.get_prompts(), ["hi"])
         self.assertEqual(profile.get_failure_patterns(), ["oops"])
         self.assertEqual(profile.get_success_fields(), [])
         self.assertEqual(profile.get_estimated_tokens_per_request(), 42)
 
-    def test_sly_data_list_exits_1(self) -> None:
-        """response.sly_data must be a field -> check map, not a bare list."""
-        with tempfile.TemporaryDirectory() as tmp:
+    def test_sly_data_list_aborts_with_code_1(self) -> None:
+        """
+        response.sly_data must be a field -> check map, not a bare list.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
             path: str = self._write_hocon(
-                tmp, "bad.hocon", "hello_world", [],
+                temporary_directory, "bad.hocon", "hello_world", [],
                 interactions=[{"text": "hi", "response": {"sly_data": ["reservation_id"]}}],
             )
-            with self.assertRaises(SystemExit) as ctx:
+            with self.assertRaises(LoadTestAbortError) as caught:
                 self._load("hello_world", [path])
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
-    def test_response_not_a_map_exits_1(self) -> None:
-        """response itself must be a map, not a string or list."""
-        with tempfile.TemporaryDirectory() as tmp:
+    def test_response_not_a_map_aborts_with_code_1(self) -> None:
+        """
+        response itself must be a map, not a string or list.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
             path: str = self._write_hocon(
-                tmp, "bad.hocon", "hello_world", [],
+                temporary_directory, "bad.hocon", "hello_world", [],
                 interactions=[{"text": "hi", "response": "reservation_id"}],
             )
-            with self.assertRaises(SystemExit) as ctx:
+            with self.assertRaises(LoadTestAbortError) as caught:
                 self._load("hello_world", [path])
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_prefixed_agent_accepts_base_name_in_hocon(self) -> None:
-        """--agent basic/hello_world matches hocons whose agent is hello_world."""
+        """
+        --agent basic/hello_world matches hocons whose agent is hello_world.
+        """
         profile: AgentProfile = self._load("basic/hello_world", self._fixture_hocons("hello_world"))
         self.assertEqual(profile.agent_name, "basic/hello_world")
         self.assertEqual(len(profile.get_prompts()), len(self._fixture_hocons("hello_world")))
 
-    def test_multiple_interactions_exits_1(self) -> None:
-        """A multi-turn hocon is not a load-test prompt; abort."""
-        with tempfile.TemporaryDirectory() as tmp:
-            path: str = self._write_hocon(
-                tmp, "multi.hocon", "hello_world", ["first", "second"],
-            )
-            with self.assertRaises(SystemExit) as ctx:
+    def test_multiple_interactions_aborts_with_code_1(self) -> None:
+        """
+        A multi-turn hocon is not a load-test prompt; abort.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path: str = self._write_hocon(temporary_directory, "multi.hocon", "hello_world", ["first", "second"])
+            with self.assertRaises(LoadTestAbortError) as caught:
                 self._load("hello_world", [path])
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
-    def test_agent_mismatch_exits_1(self) -> None:
-        """A hocon for a different agent aborts the run."""
-        with tempfile.TemporaryDirectory() as tmp:
-            path: str = self._write_hocon(
-                tmp, "other.hocon", "music_nerd", ["hi"],
-            )
-            with self.assertRaises(SystemExit) as ctx:
+    def test_agent_mismatch_aborts_with_code_1(self) -> None:
+        """
+        A hocon for a different agent aborts the run.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path: str = self._write_hocon(temporary_directory, "other.hocon", "music_nerd", ["hi"])
+            with self.assertRaises(LoadTestAbortError) as caught:
                 self._load("hello_world", [path])
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
-    def test_no_text_anywhere_exits_1(self) -> None:
-        """No prompts at all aborts the run."""
-        with tempfile.TemporaryDirectory() as tmp:
-            path: str = self._write_hocon(tmp, "empty.hocon", "hello_world", [])
-            with self.assertRaises(SystemExit) as ctx:
+    def test_no_text_anywhere_aborts_with_code_1(self) -> None:
+        """
+        No prompts at all aborts the run.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path: str = self._write_hocon(temporary_directory, "empty.hocon", "hello_world", [])
+            with self.assertRaises(LoadTestAbortError) as caught:
                 self._load("hello_world", [path])
-        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)

@@ -108,7 +108,7 @@ class DefaultsConfigFilter(ConfigFilter):
             # Loop through all the keys in the defaults mapping.
             basis_source_key: str = None
             tool_dest_dict: Dict[str, Any] = None
-            for basis_source_key, tool_dest_dict in self.DEFAULTS_MAPPING.items():
+            for basis_source_key, tool_dest_dict in DefaultsConfigFilter.DEFAULTS_MAPPING.items():
 
                 basis_value: Any = basis_extractor.get(basis_source_key, None)
                 if basis_value is None:

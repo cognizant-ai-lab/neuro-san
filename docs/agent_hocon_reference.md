@@ -229,61 +229,6 @@ to use LLMs from various providers.
 | OpenAI                     | OPENAI_API_KEY                                                     |
 | OpenRouter                 | OPENROUTER_API_KEY                                                 |
 
-Azure OpenAI also needs the deployment to call: give it as `deployment_name` in the llm_config or set the
-`AZURE_OPENAI_DEPLOYMENT_NAME` environment variable. How the deployment, the OpenAI `model_name` and token
-pricing relate is covered under [Azure OpenAI](./llm_info_hocon_reference.md#azure-openai) in the llm info
-reference.
-
-For the Bedrock-based entries you can either set explicit credentials via
-`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`
-for temporary credentials), or point at a named profile in `~/.aws/credentials`
-via `AWS_PROFILE`. Both classes resolve credentials through the standard AWS
-credential chain, so SSO, EC2 instance roles, IMDS, and `AWS_DEFAULT_REGION` /
-`AWS_REGION` env vars all work the same way they do for any boto3 / anthropic-SDK
-call.
-
-**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
-are aliases that automatically reference the latest versions of their respective Anthropic model lines.
-This aliasing is recommended because Anthropic frequently deprecates older model versions. The aliases
-resolve whether or not you also set `"class": "anthropic"`. For information
-on current models and deprecation schedules, see the
-[Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
-
-**OpenRouter Model Names:** [OpenRouter](https://openrouter.ai/) is a unified API gateway that fronts
-hundreds of models from many providers (OpenAI, Anthropic, Google, Meta, etc.) behind a single endpoint.
-With the `openrouter` class, the `model_name` follows OpenRouter's `provider/model` convention, e.g.
-`anthropic/claude-sonnet-4-5` or `openai/gpt-4o`. OpenRouter also exposes "meta-router" models such as
-`openrouter/free` and `openrouter/auto` that select an underlying model at request time based on the
-capabilities the request needs (image understanding, tool calling, structured outputs, etc.). Because
-the underlying model is not known ahead of time for these routers, their `max_output_tokens` is left
-unset in `default_llm_info.hocon` — see the
-[llm_info_hocon_reference](./llm_info_hocon_reference.md#max_output_tokens) for what that means in practice.
-This integration requires the [`langchain-openrouter`](https://docs.langchain.com/oss/python/integrations/chat/openrouter)
-package, which neuro-san lazy-installs on first use.
-
-**Anthropic Claude on Bedrock — pick the right class:** AWS Bedrock can host Anthropic Claude models
-under two different langchain classes, and neuro-san wires up both:
-
-- `anthropic-bedrock` (recommended for Claude) — built on the `anthropic` SDK's
-  `AnthropicBedrock` / `AsyncAnthropicBedrock` clients. Fully async, and exposes
-  `ChatAnthropic`'s full parameter surface (`thinking`, `effort`, `mcp_servers`,
-  `context_management`, …).
-- `bedrock` — the legacy boto3-based `ChatBedrock`. Synchronous and serializes concurrent
-  calls inside a worker, and does not expose the Anthropic-specific knobs above. Reach for it
-  only when you need a non-Anthropic Bedrock model (Amazon Nova, Mistral, Meta Llama, AI21,
-  Cohere, etc.).
-
-Bedrock addresses Claude models by cross-region inference profile id with a region prefix
-(`global.`, `us.`, `eu.`, `apac.`), e.g. `global.anthropic.claude-opus-4-8` or
-`us.anthropic.claude-opus-4-8`. The short aliases in `default_llm_info.hocon`
-(`bedrock-claude-opus`, `bedrock-claude-sonnet`, `bedrock-claude-haiku`) all resolve to the
-`global.` profile; swap the prefix on both the alias's `use_model_name` and the target entry
-key to pin to a geographic region. See
-[AWS cross-region inference docs](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html)
-for the trade-offs. The `anthropic-bedrock` class is provided by the
-[`langchain-aws[anthropic]`](https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock)
-extra, which neuro-san lazy-installs on first use.
-
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
@@ -332,11 +277,12 @@ As long as a parameter is a scalar listed in the args section for your LLM's cla
 file (or the list-valued `provider_tools` key, below), you can set that parameter in any llm_config within its
 own technical limits however you like.
 
-A few of those parameters decide which endpoint a request goes to, or are rejected by some models.
-They are described per provider in the
+A few of those parameters decide which endpoint a request goes to, how function tools are bound, or are
+rejected by some models. They are described per provider in the
 [Provider-Specific Arguments](./llm_info_hocon_reference.md#provider-specific-arguments) section of the
 llm_info reference: which OpenAI endpoint is used and why the Responses API is now the default, how to switch
-back to Chat Completions (also behind gateways such as LiteLLM), Anthropic thinking and effort, and Gemini thinking.
+back to Chat Completions (also behind gateways such as LiteLLM), how OpenAI binds function tools (`tool_strict`),
+Anthropic thinking and effort, and Gemini thinking.
 
 Note: _We strongly recommend to **not** set secrets as values within any source file, including hocon files._
 These files tend to creep into source control repos, and it is **very** bad practice

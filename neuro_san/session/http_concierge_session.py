@@ -46,7 +46,7 @@ class HttpConciergeSession(AbstractHttpServiceAgentSession, ConciergeSession):
         try:
             response = http_get(path, json=request_dict, headers=self.get_headers(),
                                 timeout=self.timeout_in_seconds)
-            result_dict = loads(response.text)
+            result_dict: Dict[str, Any] = loads(response.text)
 
             # Potentially limit the number of agents to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER env var
             empty_list: List[Dict[str, Any]] = []

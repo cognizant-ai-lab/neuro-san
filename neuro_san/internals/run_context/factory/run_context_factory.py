@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.tracing_context import TracingContext
@@ -81,16 +82,17 @@ class RunContextFactory:
         if context_type.startswith("openai"):
             raise ValueError("OpenAI Assistants implementation is no longer supported by OpenAI.")
 
+        middleware_config: List[Dict[str, Any]] = use_config.get("middleware_config")
         if context_type.startswith("langchain"):
             run_context = LangChainRunContext(use_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context, use_config.get("middleware_config"),
+                                              chat_context, middleware_config,
                                               tracing_context=tracing_context)
         else:
             # Default case
             run_context = LangChainRunContext(use_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context, use_config.get("middleware_config"),
+                                              chat_context, middleware_config,
                                               tracing_context=tracing_context)
 
         return run_context

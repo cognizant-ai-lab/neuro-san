@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from contextlib import suppress
 
@@ -24,6 +25,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
+from neuro_san.internals.run_context.langchain.llms.closeable_client import CloseableClient
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -48,11 +50,12 @@ class AnthropicLlmPolicy(LlmPolicy):
         """
         # Use lazy loading to prevent installing the world
         # pylint: disable=invalid-name
-        ChatAnthropic = self.resolver.resolve_class_in_module("ChatAnthropic",
-                                                              module_name="langchain_anthropic.chat_models",
-                                                              install_if_missing="langchain-anthropic")
+        ChatAnthropic: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatAnthropic",
+            module_name="langchain_anthropic.chat_models",
+            install_if_missing="langchain-anthropic")
 
-        llm = ChatAnthropic(
+        llm: BaseLanguageModel = ChatAnthropic(
             model_name=model_name,
             max_tokens=config.get("max_tokens"),  # This is always for output
             temperature=config.get("temperature"),
@@ -114,7 +117,9 @@ class AnthropicLlmPolicy(LlmPolicy):
 
         if anthropic_async_client is not None:
             with suppress(Exception):
-                await anthropic_async_client.aclose()
+                # Use something that has an aclose
+                closeable_client: CloseableClient = anthropic_async_client
+                await closeable_client.aclose()
 
         # Let's not do this again, shall we?
         self.llm = None

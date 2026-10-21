@@ -22,6 +22,7 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
+from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 
 LOGGER_NAME: str = "tests.load_tests.reporting.token_log_writer"
@@ -58,8 +59,8 @@ class TestTokenLogWriter(TestCase):
         :param output_dir: Directory that holds server_tokens.log
         :return: Contents of server_tokens.log
         """
-        with open(os.path.join(output_dir, "server_tokens.log"), encoding="utf-8") as fh:
-            return fh.read()
+        with open(os.path.join(output_dir, SERVER_TOKENS_LOG_FILE_NAME), encoding="utf-8") as file_handle:
+            return file_handle.read()
 
     def test_no_tokens_writes_and_logs_nothing(self) -> None:
         """
@@ -68,7 +69,7 @@ class TestTokenLogWriter(TestCase):
         with TemporaryDirectory() as output_dir:
             with self.assertNoLogs(LOGGER_NAME):
                 TokenLogWriter.log_token_summary([{"request_id": "request-1"}], output_dir=output_dir)
-            self.assertFalse(os.path.exists(os.path.join(output_dir, "server_tokens.log")))
+            self.assertFalse(os.path.exists(os.path.join(output_dir, SERVER_TOKENS_LOG_FILE_NAME)))
 
     def test_output_dir_gets_detail_and_console_gets_totals(self) -> None:
         """
@@ -88,14 +89,16 @@ class TestTokenLogWriter(TestCase):
                     network_tokens=network_tokens, validation_events=validation_events,
                 )
             self.assertEqual(
-                "request-1: 1,500 tokens, 2 LLM call(s), model=gpt-4o-mini  [1.2s CREATED]\n"
-                "  Validation: 2 attempt(s), 1 fix cycle(s)\n"
-                "    - missing key\n"
-                "  music_nerd: 2 call(s)  1,500 tokens (1,000 prompt / 500 completion)\n"
-                "\n"
-                "request-2: 500 tokens, 1 LLM call(s), model=gpt-4o-mini, agent=hello_world  [2.0s CREATED]\n"
-                "  hello_world: 1 call(s)  500 tokens (300 prompt / 200 completion)\n"
-                "\n",
+                """\
+request-1: 1,500 tokens (1,000 prompt + 500 completion), 2 LLM call(s), model=gpt-4o-mini  [1.2s CREATED]
+  Validation: 2 attempt(s), 1 fix cycle(s)
+    - missing key
+  music_nerd: 2 call(s)  1,500 tokens (1,000 prompt / 500 completion)
+
+request-2: 500 tokens (300 prompt + 200 completion), 1 LLM call(s), model=gpt-4o-mini, agent=hello_world  [2.0s CREATED]
+  hello_world: 1 call(s)  500 tokens (300 prompt / 200 completion)
+
+""",
                 self._read_token_file(output_dir),
             )
         output: str = "\n".join(logs.output)

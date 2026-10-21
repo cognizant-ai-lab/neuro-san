@@ -62,6 +62,8 @@ CLASS_TABLE = {
     "ChatNVIDIA": "nvidia",
     "ChatOllama": "ollama",
     "ChatOpenAI": "openai",
+    # The ChatOpenAI subclass the "openai" policies build; langchain serializes it under its own name.
+    "ToolStrictChatOpenAI": "openai",
 }
 
 # Keys an LlmPolicy can put in a chat model's "metadata" to steer how that model's usage is booked.
@@ -228,7 +230,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         is_empty_response: bool = False
         if isinstance(generation, ChatGeneration):
             try:
-                message = generation.message
+                message: BaseMessage = generation.message
                 if isinstance(message, AIMessage):
                     # Token info is in an attribute of AIMessage called "usage_metadata".
                     usage_metadata = message.usage_metadata
@@ -268,7 +270,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         usage_metadata, response_model_name, is_empty_response = self._extract_usage(response)
         # A policy may have said which llm_info entry prices this run (see PRICE_MODEL_METADATA_KEY);
         # otherwise the model the response names is priced.
-        model_name: str = self.price_model_names.pop(kwargs.get("run_id"), None) or response_model_name
+        run_id: Optional[UUID] = kwargs.get("run_id")
+        model_name: str = self.price_model_names.pop(run_id, None) or response_model_name
 
         if usage_metadata:
             total_tokens: int = usage_metadata.get("total_tokens", 0)
@@ -313,7 +316,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         :param kwargs: The run's callback arguments; "run_id" is read here
         """
         _ = error
-        self.price_model_names.pop(kwargs.get("run_id"), None)
+        run_id: str = kwargs.get("run_id")
+        self.price_model_names.pop(run_id, None)
 
     def calculate_token_costs(self, model_name: str, completion_tokens: int, prompt_tokens: int) -> float:
         """
@@ -407,3 +411,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         else:
             has_content = bool(content)
         return not has_content and not getattr(message, "tool_calls", None)
+
+    def close(self):
+        """
+        Allow the instance to be closed within a python context manager.
+        Doesn't do anything.
+        """

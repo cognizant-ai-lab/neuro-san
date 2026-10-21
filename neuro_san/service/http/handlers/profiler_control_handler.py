@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
+
 from typing import Any, Dict, Optional
 import os
 import json

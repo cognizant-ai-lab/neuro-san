@@ -19,7 +19,6 @@ from typing import Dict
 from typing import List
 
 from copy import copy as shallow_copy
-from os import environ
 from os import pathsep as os_path_separator
 from os import sep as os_separator
 from pathlib import Path
@@ -37,6 +36,7 @@ from neuro_san.internals.graph.preppers.front_man_activation_prepper import Fron
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -77,7 +77,7 @@ class ActivationFactory(AgentToolFactory):
         :return: the agent tool path to use for source resolution.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = environ.get("AGENT_TOOL_PATH")
+        agent_tool_path: str = Env.getenv("AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
@@ -89,7 +89,7 @@ class ActivationFactory(AgentToolFactory):
             # Find the best of many resolution paths in the PYTHONPATH
             resolved_tool_path: str = str(Path(agent_tool_path).resolve())
             best_path = ""
-            pythonpath: str = environ.get("PYTHONPATH")
+            pythonpath: str = Env.getenv("PYTHONPATH")
             if pythonpath is None:
                 # Trust what we have already
                 best_path = agent_tool_path
@@ -138,13 +138,13 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
         :return: A list of ActivationPrepper instances
         """
-        preppers: List[ActivationPrepper] = shallow_copy(self.BASE_PREPPERS)
+        preppers: List[ActivationPrepper] = shallow_copy(ActivationFactory.BASE_PREPPERS)
 
         # Then read the agent network's prepper list
         external_preppers: List[ActivationPrepper] = []
 
         prepper_class_name: str = None
-        agent_prepper_classes: str = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        agent_prepper_classes: str = Env.getenv("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
         for prepper_class_name in agent_prepper_classes.split():
             use_prepper_class_name = prepper_class_name.strip()
             prepper: ActivationPrepper = ResolverUtil.create_instance(use_prepper_class_name,
@@ -257,3 +257,33 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :return: The agent network inspector associated with the instance
         """
         return self.agent_network
+
+    def get_agent_tool_spec(self, name: str) -> Dict[str, Any]:
+        """
+        :param name: The name of the agent tool to get out of the registry
+        :return: The dictionary representing the spec registered agent
+        """
+        return self.agent_network.get_agent_tool_spec(name)
+
+    def get_network_name(self) -> str:
+        """
+        :return: The name of the agent network these specs belong to, as it is
+                 registered in the manifest (for example "deep/math_guy"), which
+                 is also how its hocon file is found. Messages use it to tell the
+                 reader where a problem has to be fixed.
+        """
+        return self.agent_network.get_network_name()
+
+    def find_front_man(self) -> str:
+        """
+        :return: A single tool name to use as the root of the chat agent.
+                 This guy will be user facing.  If there are none or > 1,
+                 an exception will be raised.
+        """
+        return self.agent_network.find_front_man()
+
+    def get_size_in_bytes(self) -> int:
+        """
+        :return: The size in bytes of this AgentNetwork
+        """
+        return self.agent_network.get_size_in_bytes()

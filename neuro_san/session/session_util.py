@@ -20,7 +20,8 @@ from typing import Optional
 
 from logging import getLogger
 from logging import Logger
-from os import environ
+
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class SessionUtil:
@@ -38,7 +39,7 @@ class SessionUtil:
 
         :return: The limit, or 0 for no limit
         """
-        max_agents_str: Optional[str] = environ.get(SessionUtil.MAX_AGENTS_ENV_VAR)
+        max_agents_str: Optional[str] = Env.getenv(SessionUtil.MAX_AGENTS_ENV_VAR)
         if max_agents_str is None or max_agents_str.strip() == "":
             return 0
 

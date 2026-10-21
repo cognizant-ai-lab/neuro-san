@@ -115,6 +115,7 @@ class ToolboxToolCreator(ToolCreator):
         """
         if not isinstance(value, list):
             return False
+        tool: Any = None
         for tool in value:
             if not isinstance(tool, BaseTool):
                 return False

@@ -19,7 +19,6 @@ from typing import Any
 from typing import Awaitable
 from typing import Dict
 from typing import List
-from typing import Union
 
 from asyncio import Task
 from asyncio import TimeoutError as AsyncTimeout
@@ -29,8 +28,6 @@ from contextvars import ContextVar
 from contextvars import copy_context
 from time import time
 
-from langchain_core.callbacks import AsyncCallbackHandler
-from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 
@@ -41,6 +38,8 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.langchain.token_counting.get_llm_token_callback import get_llm_token_callback
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import llm_token_callback_var
+from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler \
+    import LlmTokenCallbackHandler
 from neuro_san.message.types.agent_message import AgentMessage
 
 # Keep a ContextVar for the origin info.  We do this because the
@@ -126,7 +125,7 @@ class LangChainTokenCounter:
 
         retval: Any = None
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
-        llm_infos: Dict[str, Any] = llm_factory.llm_infos
+        llm_infos: Dict[str, Any] = llm_factory.get_llm_infos()
         # Take a time stamp so we measure another thing people care about - latency.
         start_time: float = time()
 
@@ -210,12 +209,12 @@ class LangChainTokenCounter:
 
         if self.debug:
             # Print to be sure we have a different callback object.
-            oai_call = llm_token_callback_var.get()
+            oai_call: LlmTokenCallbackHandler = llm_token_callback_var.get()
             print(f"origin is {origin_str} callback var is {id(oai_call)}")
 
         return task
 
-    async def report(self, callback: AsyncCallbackHandler, time_taken_in_seconds: float):
+    async def report(self, callback: LlmTokenCallbackHandler, time_taken_in_seconds: float):
         """
         Report on the token accounting results of the callback
 
@@ -331,7 +330,7 @@ class LangChainTokenCounter:
 
     def _generate_agent_token_dict(
             self,
-            callback: Union[AsyncCallbackHandler, BaseCallbackHandler],
+            callback: LlmTokenCallbackHandler,
             time_taken_in_seconds: float,
     ) -> Dict[str, Any]:
         """
@@ -345,7 +344,7 @@ class LangChainTokenCounter:
         """
 
         # Organize the token dict for each agent to be the same format
-        agent_token_dict = {
+        agent_token_dict: Dict[str, Any] = {
             "total_tokens": callback.total_tokens,
             "prompt_tokens": callback.prompt_tokens,
             "completion_tokens": callback.completion_tokens,
@@ -372,8 +371,12 @@ class LangChainTokenCounter:
                 nothing to aggregate) so downstream consumers can rely on them.
         """
         aggregated: Dict[str, Any] = dict(ZERO_TOKEN_STATS)
+        models: Dict[str, Any] = None
         for models in token_dict.values():
+            model_stats: Dict[str, Any] = None
             for model_stats in models.values():
+                metric: str = None
+                value: Any = None
                 for metric, value in model_stats.items():
                     if metric != "time_taken_in_seconds":
                         aggregated[metric] = aggregated.get(metric, 0) + value
@@ -382,7 +385,7 @@ class LangChainTokenCounter:
 
         return aggregated
 
-    def merge_dicts(self, dict_1, dict_2):
+    def merge_dicts(self, dict_1: Dict[str, Any], dict_2: Dict[str, Any]) -> Dict[str, Any]:
         """
         Recursively merge two dictionaries.
 
@@ -397,6 +400,8 @@ class LangChainTokenCounter:
         :return: A new dictionary containing the merged result.
         """
         result: Dict[str, Any] = dict(dict_1)  # start with dict_1
+        key: str = None
+        value: Any = None
         for key, value in dict_2.items():
             if key in result:
                 if isinstance(result[key], dict) and isinstance(value, dict):

@@ -14,20 +14,19 @@
 #
 # END COPYRIGHT
 
-"""Parse human-friendly timeout durations into whole seconds."""
-
 import argparse
+from typing import Dict
 
 
 class DurationParser:
-    """Parse human-friendly durations into whole seconds.
+    """
+    Parse human-friendly durations into whole seconds, and format whole seconds back into that form.
 
-    A bare number is seconds (so existing commands are unchanged); an
-    optional ``s``/``m``/``h`` suffix scales it, e.g. ``90s``, ``20m``,
-    ``2h``, ``0.5h``.  Designed to be used as an argparse ``type``.
+    A bare number is seconds; an optional ``s``/``m``/``h`` suffix scales it,
+    e.g. ``90s``, ``20m``, ``2h``, ``0.5h``.  parse() is designed to be used as an argparse ``type``.
     """
 
-    _UNITS = {"s": 1, "m": 60, "h": 3600}
+    _UNITS: Dict[str, int] = {"s": 1, "m": 60, "h": 3600}
 
     @staticmethod
     def parse(value: str) -> int:
@@ -53,7 +52,24 @@ class DurationParser:
                 "suffix, e.g. 90s, 20m, 2h"
             ) from exc
         if seconds < 0:
-            raise argparse.ArgumentTypeError(
-                f"duration must be non-negative: '{value}'"
-            )
+            raise argparse.ArgumentTypeError(f"duration must be non-negative: '{value}'")
         return int(round(seconds))
+
+    @staticmethod
+    def format_seconds(seconds: int) -> str:
+        """
+        Return seconds in the s/m/h form that parse() reads, using the largest unit that divides them evenly.
+
+        :param seconds: Whole seconds, e.g. 1200
+        :return: The duration text, e.g. "20m" for 1200, "15s" for 15 and "0s" for 0
+        """
+        duration_text: str = f"{seconds}s"
+        whole_units: int = 0
+        suffix: str
+        unit_seconds: int
+        # Keep the last (largest) unit that divides the seconds evenly; _UNITS runs from s to h.
+        for suffix, unit_seconds in DurationParser._UNITS.items():
+            whole_units = int(seconds / unit_seconds)
+            if whole_units > 0 and whole_units * unit_seconds == seconds:
+                duration_text = f"{whole_units}{suffix}"
+        return duration_text

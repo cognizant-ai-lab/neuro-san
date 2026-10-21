@@ -22,6 +22,7 @@ from typing import Dict
 from typing import Optional
 
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
@@ -31,8 +32,8 @@ from tests.load_tests.traffic.timed_streaming_chat import TimedStreamingChat
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# Timeout for the initial TCP connection (seconds).
-_CONNECT_TIMEOUT: int = 30
+# Timeout for the initial TCP connection.
+CONNECT_TIMEOUT_SECONDS: int = 30
 
 
 class AgentRequestExecutor:
@@ -45,8 +46,9 @@ class AgentRequestExecutor:
     """
 
     @staticmethod
-    def execute_request(host: str, port: int, agent: str, prompt: str, timeout: float, idle_timeout: float,
-                        use_https: bool = False, chat_filter_type: str = "MAXIMAL") -> AgentRequestResult:
+    def execute_request(host: str, port: int, agent: str, prompt: str, timeout_seconds: float,
+                        idle_timeout_seconds: float, use_https: bool = False,
+                        chat_filter_type: str = "MAXIMAL") -> AgentRequestResult:
         """
         Send one streaming_chat request in-thread.
 
@@ -59,8 +61,8 @@ class AgentRequestExecutor:
         :param port: Server port
         :param agent: Name of the agent network to call
         :param prompt: User text to send
-        :param timeout: Cap in seconds on the whole request (--request-timeout)
-        :param idle_timeout: Cap in seconds between streamed messages (--idle-timeout)
+        :param timeout_seconds: Cap in seconds on the whole request (--request-timeout)
+        :param idle_timeout_seconds: Cap in seconds between streamed messages (--idle-timeout)
         :param use_https: When True connect over HTTPS/TLS
         :param chat_filter_type: chat_filter_type to send with the request
         :return: The AgentRequestResult; its processor is the
@@ -70,22 +72,25 @@ class AgentRequestExecutor:
         """
         # The argument list tracks the streaming_chat request surface.
         # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-        start: float = time.perf_counter()
-        policy: RequestStatusPolicy = RequestStatusPolicy(timeout)
+        start_seconds: float = time.perf_counter()
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds)
 
-        security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
+        security_cfg: Optional[Dict[str, Any]] = None
+        if use_https:
+            security_cfg = {}
+        port_text: str = str(port)
         session: HttpServiceAgentSession = HttpServiceAgentSession(
             host=host,
-            port=str(port),
+            port=port_text,
             agent_name=agent,
             security_cfg=security_cfg,
-            timeout_in_seconds=_CONNECT_TIMEOUT,
-            streaming_timeout_in_seconds=idle_timeout,
+            timeout_in_seconds=CONNECT_TIMEOUT_SECONDS,
+            streaming_timeout_in_seconds=idle_timeout_seconds,
         )
 
         # process_once() iterates session.streaming_chat internally, so the
         # timing wrapper is installed on the session.
-        timed_chat: TimedStreamingChat = TimedStreamingChat(session.streaming_chat, start, timeout)
+        timed_chat: TimedStreamingChat = TimedStreamingChat(session.streaming_chat, start_seconds, timeout_seconds)
         session.streaming_chat = timed_chat.streaming_chat
 
         processor: StreamingInputProcessor = StreamingInputProcessor(
@@ -105,7 +110,6 @@ class AgentRequestExecutor:
             },
         }
 
-        elapsed: float
         error_text: str = ""
         try:
             state = processor.process_once(state)
@@ -125,16 +129,18 @@ class AgentRequestExecutor:
             error_text = traceback.format_exc()
             logger.debug("HTTP request failed:\n%s", error_text)
 
-        elapsed = time.perf_counter() - start
+        elapsed_seconds: float = time.perf_counter() - start_seconds
         answer_text: str = state.get("last_chat_response") or ""
-        status: str = policy.status_for(elapsed, answer_text, error_text)
-        if policy.is_timed_out(elapsed):
+        status: str = policy.status_for(elapsed_seconds, answer_text, error_text)
+        if policy.is_timed_out(elapsed_seconds):
             return AgentRequestResult(status, None, "", 0.0, {})
         if error_text:
             return AgentRequestResult(status, None, error_text, 0.0, {})
 
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
+        message_processor: BasicMessageProcessor = processor.get_message_processor()
+        time_to_first_response_seconds: float = timed_chat.get_time_to_first_response_seconds()
         return AgentRequestResult(
-            status, processor.get_message_processor(), answer_text,
-            timed_chat.get_time_to_first_response(), token_accounting,
+            status, message_processor, answer_text,
+            time_to_first_response_seconds, token_accounting,
         )

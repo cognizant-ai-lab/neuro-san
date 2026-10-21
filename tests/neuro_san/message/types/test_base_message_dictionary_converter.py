@@ -18,13 +18,18 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from unittest import TestCase
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
 
+from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
@@ -38,18 +43,17 @@ from tests.neuro_san.message.content_fixtures import ContentFixtures
 # pylint: disable=too-many-public-methods
 class TestBaseMessageDictionaryConverter(TestCase):
     """
-    Golden-parity tests for the wire converter, plus the corrected
-    projection of list-form (block) content.
+    Golden-parity tests for the wire converter, plus the text projection
+    of list-form (block) content.
 
     The plain-string tests lock down the EXACT ChatMessage dictionaries
     produced for text-only traffic - the shapes every deployed client sees.
-    The content-block work (see issue #1222) must keep every one of them
-    green untouched: byte-identical wire output for text-only messages
-    is the backward-compatibility guarantee of that whole effort.
+    Every one of them must stay green untouched: byte-identical wire
+    output for text-only messages is the backward-compatibility guarantee.
 
-    The list-content tests cover the wire-flatten fix: the full text
-    projection replaces the old first-block-only flatten that produced ""
-    for thinking-first content and crashed on list-of-str.
+    The list-content tests cover the full text projection of block content:
+    thinking-first content gives the answer text and list-of-str content
+    gives its joined strings.
 
     The content_blocks tests cover the outbound content_blocks mapping:
     block content that says more than its text also rides in the
@@ -57,131 +61,112 @@ class TestBaseMessageDictionaryConverter(TestCase):
     text block included, emits no such key.
     """
 
-    ORIGIN = [{"tool": "front_man", "instantiation_index": 0}]
+    ORIGIN: List[Dict[str, Any]] = [{"tool": "front_man", "instantiation_index": 0}]
 
-    @staticmethod
-    def block_types(chat_message: Dict[str, Any]) -> List[str]:
-        """
-        List the block types a wire dictionary carries.
-
-        :param chat_message: A ChatMessage dictionary produced by to_dict
-        :return: The "type" of each block inside its content_blocks wrapper
-        """
-        types: List[str] = []
-        block: Dict[str, Any] = None
-        for block in chat_message.get("content_blocks", {}).get("blocks", []):
-            types.append(block.get("type"))
-        return types
-
-    def assert_wrapped_blocks(self, chat_message: Dict[str, Any]) -> None:
-        """
-        Asserts the content_blocks wrapper shape: the langchain_v1 format tag,
-        a non-empty block list, and text equal to the blocks' flattened text.
-
-        :param chat_message: A ChatMessage dictionary produced by to_dict
-        """
-        wrapper: Dict[str, Any] = chat_message.get("content_blocks")
-        self.assertEqual(sorted(wrapper.keys()), ["blocks", "format"])
-        self.assertEqual(wrapper.get("format"), ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1)
-        self.assertGreater(len(wrapper.get("blocks")), 0)
-        self.assertEqual(ContentUtils.flatten_to_text(wrapper.get("blocks")), chat_message.get("text"))
-
-    def test_to_dict_human_message_exact_shape(self):
+    def test_to_dict_human_message_exact_shape(self) -> None:
         """
         The wire dict for a HumanMessage is exactly type + origin + text.
         """
         converter = BaseMessageDictionaryConverter(origin=self.ORIGIN)
-        result = converter.to_dict(HumanMessage(content="hello"))
-        assert result == {
+        result: Dict[str, Any] = converter.to_dict(HumanMessage(content="hello"))
+        self.assertEqual(result, {
             "type": ChatMessageType.HUMAN,
             "origin": self.ORIGIN,
             "text": "hello",
-        }
+        })
 
-    def test_to_dict_ai_message_exact_shape(self):
+    def test_to_dict_ai_message_exact_shape(self) -> None:
         """
         The wire dict for a plain-string AIMessage is exactly type + origin + text.
         """
         converter = BaseMessageDictionaryConverter(origin=self.ORIGIN)
-        result = converter.to_dict(AIMessage(content="the answer"))
-        assert result == {
+        result: Dict[str, Any] = converter.to_dict(AIMessage(content="the answer"))
+        self.assertEqual(result, {
             "type": ChatMessageType.AI,
             "origin": self.ORIGIN,
             "text": "the answer",
-        }
+        })
 
-    def test_to_dict_system_message_without_origin(self):
+    def test_to_dict_system_message_without_origin(self) -> None:
         """
         With no origin configured, the origin key is absent entirely.
         """
         converter = BaseMessageDictionaryConverter()
-        result = converter.to_dict(SystemMessage(content="instructions"))
-        assert result == {
+        result: Dict[str, Any] = converter.to_dict(SystemMessage(content="instructions"))
+        self.assertEqual(result, {
             "type": ChatMessageType.SYSTEM,
             "text": "instructions",
-        }
+        })
 
-    def test_to_dict_agent_tool_result_carries_tool_result_origin(self):
+    def test_to_dict_agent_tool_result_carries_tool_result_origin(self) -> None:
         """
         AgentToolResultMessage adds its tool_result_origin as a sibling key.
         """
         converter = BaseMessageDictionaryConverter(origin=self.ORIGIN)
         message = AgentToolResultMessage(content="tool says", tool_result_origin=self.ORIGIN)
-        result = converter.to_dict(message)
-        assert result == {
+        result: Dict[str, Any] = converter.to_dict(message)
+        self.assertEqual(result, {
             "type": ChatMessageType.AGENT_TOOL_RESULT,
             "origin": self.ORIGIN,
             "text": "tool says",
             "tool_result_origin": self.ORIGIN,
-        }
+        })
 
-    def test_to_dict_preserves_whitespace_and_empty_string(self):
+    def test_to_dict_preserves_whitespace_and_empty_string(self) -> None:
         """
         String content is never stripped, and an empty string still produces
         a text key (only None omits it).
         """
         converter = BaseMessageDictionaryConverter()
-        assert converter.to_dict(AIMessage(content="  padded  "))["text"] == "  padded  "
-        assert converter.to_dict(AIMessage(content=""))["text"] == ""
+        padded_result: Dict[str, Any] = converter.to_dict(AIMessage(content="  padded  "))
+        self.assertEqual(padded_result.get("text"), "  padded  ")
+        empty_result: Dict[str, Any] = converter.to_dict(AIMessage(content=""))
+        self.assertEqual(empty_result.get("text"), "")
 
-    def test_from_dict_round_trips_plain_text_messages(self):
+    def test_from_dict_round_trips_plain_text_messages(self) -> None:
         """
         to_dict -> from_dict round-trips type and text for the langchain
         message types that populate chat history.
         """
         converter = BaseMessageDictionaryConverter()
-        for original in [SystemMessage(content="s"), HumanMessage(content="h"), AIMessage(content="a")]:
-            restored = converter.from_dict(converter.to_dict(original))
-            assert type(restored) is type(original)
-            assert restored.content == original.content
+        originals: List[BaseMessage] = [SystemMessage(content="s"), HumanMessage(content="h"), AIMessage(content="a")]
+        original: Optional[BaseMessage] = None
+        wire_dict: Optional[Dict[str, Any]] = None
+        restored: Optional[BaseMessage] = None
+        for original in originals:
+            wire_dict = converter.to_dict(original)
+            restored = converter.from_dict(wire_dict)
+            self.assertIs(type(restored), type(original))
+            self.assertEqual(restored.content, original.content)
 
-    def test_from_dict_round_trips_agent_tool_result(self):
+    def test_from_dict_round_trips_agent_tool_result(self) -> None:
         """
         AgentToolResultMessage round-trips content and tool_result_origin.
         """
         converter = BaseMessageDictionaryConverter()
         original = AgentToolResultMessage(content="tool says", tool_result_origin=self.ORIGIN)
-        restored = converter.from_dict(converter.to_dict(original))
-        assert isinstance(restored, AgentToolResultMessage)
-        assert restored.content == "tool says"
-        assert restored.tool_result_origin == self.ORIGIN
+        wire_dict: Dict[str, Any] = converter.to_dict(original)
+        restored: BaseMessage = converter.from_dict(wire_dict)
+        self.assertIsInstance(restored, AgentToolResultMessage)
+        self.assertEqual(restored.content, "tool says")
+        self.assertEqual(restored.tool_result_origin, self.ORIGIN)
 
-    def test_from_dict_unknown_type_yields_none_when_langchain_only(self):
+    def test_from_dict_unknown_type_yields_none_when_langchain_only(self) -> None:
         """
         Non-langchain message types are not restored under the default
         langchain_only=True (they must not enter langchain chat history).
         """
         converter = BaseMessageDictionaryConverter(langchain_only=True)
-        assert converter.from_dict({"type": ChatMessageType.AGENT, "text": "internal"}) is None
+        self.assertIsNone(converter.from_dict({"type": ChatMessageType.AGENT, "text": "internal"}))
 
     def test_to_dict_thinking_first_content_yields_answer_text(self) -> None:
         """
-        THE headline fix: an Anthropic thinking-first response must produce
-        the answer text on the wire. The old first-block flatten produced ""
-        because the first block is the thinking block, which has no "text".
+        An Anthropic thinking-first response produces the answer text on
+        the wire, even though its first block is the thinking block, which
+        has no "text".
         """
         converter = BaseMessageDictionaryConverter(origin=self.ORIGIN)
-        result = converter.to_dict(ContentFixtures.anthropic_thinking_first())
+        result: Dict[str, Any] = converter.to_dict(ContentFixtures.anthropic_thinking_first())
         self.assertEqual(sorted(result.keys()), ["content_blocks", "origin", "text", "type"])
         self.assertEqual(result.get("type"), ChatMessageType.AI)
         self.assertEqual(result.get("origin"), self.ORIGIN)
@@ -190,18 +175,19 @@ class TestBaseMessageDictionaryConverter(TestCase):
         self.assert_wrapped_blocks(result)
         self.assertEqual(self.block_types(result), ["reasoning", "text"])
 
-    def test_to_dict_concatenates_all_text_blocks(self) -> None:
+    def test_to_dict_text_survives_reasoning_first_block(self) -> None:
         """
-        Text blocks after the first must not be dropped, and a reasoning-only
-        message still emits text="" exactly as the old flatten did.
+        The text comes from the text block even when a reasoning block is
+        first, and a reasoning-only message emits text="".
         """
         converter = BaseMessageDictionaryConverter()
-        result = converter.to_dict(ContentFixtures.openai_responses_reasoning())
+        result: Dict[str, Any] = converter.to_dict(ContentFixtures.openai_responses_reasoning())
         self.assertEqual(result.get("type"), ChatMessageType.AI)
         self.assertEqual(result.get("text"), "the answer")
         self.assert_wrapped_blocks(result)
-        self.assertEqual(self.block_types(result)[-1], "text")
-        self.assertIn("reasoning", self.block_types(result))
+        result_block_types: List[str] = self.block_types(result)
+        self.assertEqual(result_block_types[-1], "text")
+        self.assertIn("reasoning", result_block_types)
 
         reasoning_only = AIMessage(content=[{"type": "reasoning", "reasoning": "hidden"}])
         self.assertEqual(converter.to_dict(reasoning_only), {
@@ -213,68 +199,68 @@ class TestBaseMessageDictionaryConverter(TestCase):
             },
         })
 
-    def test_to_dict_list_of_str_content_does_not_crash(self) -> None:
+    def test_to_dict_list_of_str_content_joins_strings(self) -> None:
         """
-        List-of-strings content is legal per the pydantic annotation and
-        raised AttributeError in the old flatten.
+        List-of-strings content, legal per the pydantic annotation, converts
+        without an error, and its strings are joined into the text.
         """
         converter = BaseMessageDictionaryConverter()
-        result = converter.to_dict(ContentFixtures.list_of_str())
+        result: Dict[str, Any] = converter.to_dict(ContentFixtures.list_of_str())
         # A list of strings has no block structure, so no content_blocks either.
         self.assertEqual(result, {
             "type": ChatMessageType.AI,
             "text": "part one, part two",
         })
 
-    def test_to_dict_empty_list_content_still_omits_text(self):
+    def test_to_dict_empty_list_content_omits_text(self) -> None:
         """
-        Empty-list content keeps omitting the text key (emitting text=""
-        would make such messages newly answer-eligible in AnswerMessageFilter).
+        Empty-list content omits the text key (emitting text="" would make
+        such messages answer-eligible in AnswerMessageFilter).
         """
         converter = BaseMessageDictionaryConverter()
-        result = converter.to_dict(ContentFixtures.empty_list_content())
-        assert result == {
+        result: Dict[str, Any] = converter.to_dict(ContentFixtures.empty_list_content())
+        self.assertEqual(result, {
             "type": ChatMessageType.AI,
-        }
+        })
 
-    def test_to_dict_blank_text_block_keeps_emitting_text(self):
+    def test_to_dict_blank_text_block_emits_text(self) -> None:
         """
-        Blank-but-non-empty block content keeps emitting its (blank) text,
-        exactly as the old first-block flatten did - only the empty LIST
-        omits the text key. Gating omission on "no visible text" instead
-        would newly omit text for reasoning-only messages, changing their
+        Blank-but-non-empty block content emits its (blank) text; only the
+        empty LIST omits the text key. Gating omission on "no visible text"
+        instead would omit text for reasoning-only messages, changing their
         wire shape.
         """
         converter = BaseMessageDictionaryConverter()
-        result = converter.to_dict(AIMessage(content=[{"type": "text", "text": " "}]))
-        assert result == {
+        result: Dict[str, Any] = converter.to_dict(AIMessage(content=[{"type": "text", "text": " "}]))
+        self.assertEqual(result, {
             "type": ChatMessageType.AI,
             "text": " ",
-        }
+        })
 
-    def test_to_dict_agent_framework_message_optionals_exact_shape(self):
+    def test_to_dict_agent_framework_message_optionals_exact_shape(self) -> None:
         """
         The optional sibling keys (chat_context, structure, sly_data) pass
         through exactly, alongside type + text.
         """
-        chat_context = {"chat_histories": []}
-        structure = {"key": "value"}
-        sly_data = {"secret": "s"}
+        chat_context: Dict[str, Any] = {"chat_histories": []}
+        structure: Dict[str, Any] = {"key": "value"}
+        sly_data: Dict[str, Any] = {"secret": "s"}
         message = AgentFrameworkMessage(content="the answer", chat_context=chat_context,
                                         sly_data=sly_data, structure=structure)
-        result = BaseMessageDictionaryConverter().to_dict(message)
-        assert result == {
+        converter = BaseMessageDictionaryConverter()
+        result: Dict[str, Any] = converter.to_dict(message)
+        self.assertEqual(result, {
             "type": ChatMessageType.AGENT_FRAMEWORK,
             "text": "the answer",
             "chat_context": chat_context,
             "structure": structure,
             "sly_data": sly_data,
-        }
+        })
 
     def test_to_dict_trivial_text_block_emits_no_content_blocks(self) -> None:
         """
         A lone text block, provider bookkeeping and empty annotations included,
-        is plain text on the wire: exactly the shape it has always had.
+        is plain text on the wire: the same shape as plain-string content.
         """
         converter = BaseMessageDictionaryConverter()
         message = AIMessage(content=[{"type": "text", "text": "hi", "id": "msg_1", "index": 0, "annotations": []}])
@@ -286,7 +272,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
     def test_to_dict_anthropic_tool_use_stays_text_only(self) -> None:
         """
         The most common list content in production, an Anthropic tool-calling
-        turn of text + tool_use, keeps its exact text-only wire shape: tool-call
+        turn of text + tool_use, has the exact text-only wire shape: tool-call
         blocks are not message content and the lone text block is trivial.
         """
         converter = BaseMessageDictionaryConverter()
@@ -303,6 +289,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
         """
         converter = BaseMessageDictionaryConverter()
         message = AIMessage(content=[{"type": "text"}], response_metadata={"model_provider": "anthropic"})
+        result: Optional[Dict[str, Any]] = None
         with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
             result = converter.to_dict(message)
         self.assertEqual(result, {
@@ -325,6 +312,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
                 {"type": "text", "text": "world"},
             ],
             response_metadata={"model_provider": "anthropic"})
+        result: Optional[Dict[str, Any]] = None
         with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
             result = converter.to_dict(message)
         self.assertEqual(result, {
@@ -362,7 +350,8 @@ class TestBaseMessageDictionaryConverter(TestCase):
     def test_to_dict_text_block_with_phase_emits_content_blocks(self) -> None:
         """
         A lone text block carrying a provider key with a value (OpenAI's
-        Responses "phase") is no longer collapsed, so the key reaches clients.
+        Responses "phase") is not collapsed to plain text, so the key reaches
+        clients.
         """
         converter = BaseMessageDictionaryConverter()
         message = AIMessage(
@@ -412,20 +401,359 @@ class TestBaseMessageDictionaryConverter(TestCase):
             },
         })
 
-    def test_from_dict_restores_agent_types_when_not_langchain_only(self):
+    def test_from_dict_restores_agent_types_when_not_langchain_only(self) -> None:
         """
         With langchain_only=False the internal AGENT/AGENT_FRAMEWORK types
         are restored with their text (and structure for AGENT).
         """
         converter = BaseMessageDictionaryConverter(langchain_only=False)
-        structure = {"key": "value"}
-        agent = converter.from_dict(
-            {"type": ChatMessageType.AGENT, "text": "thinking", "structure": structure})
-        assert isinstance(agent, AgentMessage)
-        assert agent.content == "thinking"
-        assert agent.structure == structure
+        structure: Dict[str, Any] = {"key": "value"}
+        agent_dict: Dict[str, Any] = {"type": ChatMessageType.AGENT, "text": "thinking", "structure": structure}
+        agent: BaseMessage = converter.from_dict(agent_dict)
+        self.assertIsInstance(agent, AgentMessage)
+        self.assertEqual(agent.content, "thinking")
+        self.assertEqual(agent.structure, structure)
 
-        framework = converter.from_dict(
-            {"type": ChatMessageType.AGENT_FRAMEWORK, "text": "answer"})
-        assert isinstance(framework, AgentFrameworkMessage)
-        assert framework.content == "answer"
+        framework: BaseMessage = converter.from_dict({"type": ChatMessageType.AGENT_FRAMEWORK, "text": "answer"})
+        self.assertIsInstance(framework, AgentFrameworkMessage)
+        self.assertEqual(framework.content, "answer")
+
+    # --- from_dict with content_blocks
+
+    def test_from_dict_restores_blocks_from_wrapper(self) -> None:
+        """
+        Outside chat history, a langchain_v1 wrapper restores to block
+        content: the same block dictionaries, reasoning and an OpenAI "phase"
+        included, marked as standard blocks so that .content_blocks passes
+        them through.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+                "extras": {"signature": "sig"},
+            },
+            {
+                "type": "text",
+                "text": "the answer",
+                "phase": "final_answer",
+            },
+        ]
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "the answer",
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        restored: AIMessage = BaseMessageDictionaryConverter(langchain_only=False).from_dict(wire)
+        self.assertIsInstance(restored, AIMessage)
+        self.assertEqual(restored.content, blocks)
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
+        self.assertEqual(restored.content_blocks, blocks)
+        self.assertEqual(restored.text, "the answer")
+        self.assertEqual(restored.tool_calls, [])
+
+    def test_from_dict_holds_reasoning_back_for_chat_history(self) -> None:
+        """
+        The default converter rebuilds messages for a model's chat history,
+        where reasoning blocks are held back until the wire says which
+        provider produced them. A text block with a phase still restores as
+        a block; a plain text block leaves the text as content.
+        """
+        reasoning: Dict[str, Any] = {
+            "type": "reasoning",
+            "reasoning": "deep",
+            "extras": {"signature": "sig"},
+        }
+        phased: Dict[str, Any] = {
+            "type": "text",
+            "text": "the answer",
+            "phase": "final_answer",
+        }
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "the answer",
+            "content_blocks": ContentUtils.wrap_content_blocks([reasoning, phased]),
+        }
+        restored: AIMessage = BaseMessageDictionaryConverter().from_dict(wire)
+        self.assertEqual(restored.content, [phased])
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
+        self.assertEqual(self.block_types(BaseMessageDictionaryConverter().to_dict(restored)), ["text"])
+
+        plain: Dict[str, Any] = {
+            "type": "text",
+            "text": "the answer",
+        }
+        wire["content_blocks"] = ContentUtils.wrap_content_blocks([reasoning, plain])
+        self.assertEqual(BaseMessageDictionaryConverter().from_dict(wire), AIMessage(content="the answer"))
+
+    def test_from_dict_then_to_dict_is_stable(self) -> None:
+        """
+        A wire dictionary with content_blocks survives from_dict -> to_dict
+        unchanged, for the shapes the server itself emits, when nothing is
+        held back.
+        """
+        converter = BaseMessageDictionaryConverter(langchain_only=False)
+        originals: Dict[str, AIMessage] = {
+            "v1 reasoning": ContentFixtures.v1_reasoning_blocks(),
+            "anthropic thinking": ContentFixtures.anthropic_thinking_first(),
+            "openai reasoning": ContentFixtures.openai_responses_reasoning(),
+            "phase": AIMessage(
+                content=[
+                    {
+                        "type": "text",
+                        "text": "the answer",
+                        "phase": "final_answer",
+                    },
+                ],
+                response_metadata={
+                    "model_provider": "openai",
+                    "output_version": "v1",
+                },
+            ),
+        }
+        # Each shape survives the round trip unchanged.
+        label: str = None
+        original: AIMessage = None
+        for label, original in originals.items():
+            with self.subTest(case=label):
+                wire: Dict[str, Any] = converter.to_dict(original)
+                self.assertIn("content_blocks", wire)
+                again: Dict[str, Any] = converter.to_dict(converter.from_dict(wire))
+                self.assertEqual(again, wire)
+
+    def test_from_dict_strips_tool_calls(self) -> None:
+        """
+        Tool-call blocks never become content or tool calls. With a text
+        block that says more than the text, the rest is restored; with a
+        plain text block, the content is the text.
+        """
+        tool_call: Dict[str, Any] = {
+            "type": "tool_call",
+            "name": "lookup",
+            "args": {"q": 1},
+            "id": "call_1",
+        }
+        phased: Dict[str, Any] = {
+            "type": "text",
+            "text": "the answer",
+            "phase": "final_answer",
+        }
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "the answer",
+            "content_blocks": ContentUtils.wrap_content_blocks([tool_call, phased]),
+        }
+        restored: AIMessage = BaseMessageDictionaryConverter().from_dict(wire)
+        self.assertEqual(restored.content, [phased])
+        self.assertEqual(restored.tool_calls, [])
+
+        plain: Dict[str, Any] = {
+            "type": "text",
+            "text": "the answer",
+        }
+        wire["content_blocks"] = ContentUtils.wrap_content_blocks([tool_call, plain])
+        restored = BaseMessageDictionaryConverter().from_dict(wire)
+        self.assertEqual(restored.content, "the answer")
+        self.assertEqual(restored.tool_calls, [])
+        self.assertNotIn("output_version", restored.response_metadata)
+
+    def test_from_dict_keeps_text_for_unknown_format_or_bare_list(self) -> None:
+        """
+        A format this server does not know, or a bare list, leaves the text
+        as the content, the same as a message with no content_blocks.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+            },
+            {
+                "type": "text",
+                "text": "a",
+            },
+        ]
+        cases: Dict[str, Any] = {
+            "unknown format": {
+                "format": "somebody_elses_v2",
+                "blocks": blocks,
+            },
+            "bare list": blocks,
+        }
+        # Each case restores to the plain text message.
+        label: str = None
+        content_blocks: Any = None
+        for label, content_blocks in cases.items():
+            with self.subTest(case=label):
+                wire: Dict[str, Any] = {
+                    "type": ChatMessageType.AI,
+                    "text": "a",
+                    "content_blocks": content_blocks,
+                }
+                restored: AIMessage = BaseMessageDictionaryConverter().from_dict(wire)
+                self.assertEqual(restored, AIMessage(content="a"))
+
+    def test_from_dict_keeps_text_when_blocks_shorten_it(self) -> None:
+        """
+        Blocks whose text is only part of the message's text are not used as
+        the content, even outside chat history, so a restore never shortens
+        what the message says.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+            },
+            {
+                "type": "text",
+                "text": "hello",
+            },
+        ]
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "hello world",
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        converter = BaseMessageDictionaryConverter(langchain_only=False)
+        restored: AIMessage = converter.from_dict(wire)
+        self.assertEqual(restored, AIMessage(content="hello world"))
+        self.assertNotIn("output_version", restored.response_metadata)
+
+    def test_from_dict_uses_empty_content_when_text_is_missing(self) -> None:
+        """
+        A message with no text whose blocks are all dropped still restores,
+        with empty text as its content, and the gap is logged.
+        """
+        tool_call: Dict[str, Any] = {
+            "type": "tool_call",
+            "name": "lookup",
+            "args": {},
+            "id": "call_1",
+        }
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "content_blocks": ContentUtils.wrap_content_blocks([tool_call]),
+        }
+        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING") as logs:
+            restored: AIMessage = BaseMessageDictionaryConverter().from_dict(wire)
+        self.assertEqual(restored, AIMessage(content=""))
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("no text", logs.output[0])
+
+    def test_from_dict_drops_attachments(self) -> None:
+        """
+        Attachments are not sent back to a model yet: a data block is
+        dropped on restore, and the message keeps its text as content.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "look",
+            },
+            {
+                "type": "image",
+                "base64": "aW1hZ2UtYnl0ZXM=",
+                "mime_type": "image/png",
+            },
+        ]
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.HUMAN,
+            "text": "look",
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        restored: HumanMessage = BaseMessageDictionaryConverter().from_dict(wire)
+        self.assertEqual(restored, HumanMessage(content="look"))
+
+    def test_from_dict_restores_blocks_on_tool_result(self) -> None:
+        """
+        An AGENT_TOOL_RESULT keeps its tool_result_origin and restores its
+        blocks like any other message.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "found it",
+                "extras": {"source": "db"},
+            },
+            {
+                "type": "text",
+                "text": " twice",
+            },
+        ]
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT_TOOL_RESULT,
+            "text": "found it twice",
+            "tool_result_origin": self.ORIGIN,
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        restored: AgentToolResultMessage = BaseMessageDictionaryConverter().from_dict(wire)
+        self.assertIsInstance(restored, AgentToolResultMessage)
+        self.assertEqual(restored.content, blocks)
+        self.assertEqual(restored.tool_result_origin, self.ORIGIN)
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
+
+    def test_from_dict_restores_blocks_for_agent_types_when_not_langchain_only(self) -> None:
+        """
+        The internal AGENT type restores blocks too, keeping its structure,
+        and a text-less message still gets "" as content.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+            },
+            {
+                "type": "text",
+                "text": "a",
+            },
+        ]
+        structure: Dict[str, Any] = {"key": "value"}
+        wire: Dict[str, Any] = {
+            "type": ChatMessageType.AGENT,
+            "text": "a",
+            "structure": structure,
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        converter = BaseMessageDictionaryConverter(langchain_only=False)
+        restored: AgentMessage = converter.from_dict(wire)
+        self.assertIsInstance(restored, AgentMessage)
+        self.assertEqual(restored.content, blocks)
+        self.assertEqual(restored.structure, structure)
+        self.assertEqual(restored.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
+
+        textless: AgentFrameworkMessage = converter.from_dict({"type": ChatMessageType.AGENT_FRAMEWORK})
+        self.assertIsInstance(textless, AgentFrameworkMessage)
+        self.assertEqual(textless.content, "")
+
+    @staticmethod
+    def block_types(chat_message: Dict[str, Any]) -> List[str]:
+        """
+        List the block types a wire dictionary carries.
+
+        :param chat_message: A ChatMessage dictionary produced by to_dict
+        :return: The "type" of each block inside its content_blocks wrapper
+        """
+        extractor = DictionaryExtractor(chat_message)
+        blocks: List[Dict[str, Any]] = extractor.get("content_blocks.blocks", [])
+        types: List[str] = []
+        block: Optional[Dict[str, Any]] = None
+        for block in blocks:
+            types.append(block.get("type"))
+        return types
+
+    def assert_wrapped_blocks(self, chat_message: Dict[str, Any]) -> None:
+        """
+        Asserts the content_blocks wrapper shape: the langchain_v1 format tag,
+        a non-empty block list, and text equal to the blocks' flattened text.
+
+        :param chat_message: A ChatMessage dictionary produced by to_dict
+        """
+        wrapper: Dict[str, Any] = chat_message.get("content_blocks")
+        blocks: List[Dict[str, Any]] = wrapper.get("blocks")
+        self.assertEqual(sorted(wrapper.keys()), ["blocks", "format"])
+        self.assertEqual(wrapper.get("format"), LangchainV1ContentBlocksFormat.NAME)
+        self.assertGreater(len(blocks), 0)
+        self.assertEqual(ContentUtils.flatten_to_text(blocks), chat_message.get("text"))

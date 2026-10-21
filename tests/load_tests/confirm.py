@@ -14,24 +14,23 @@
 #
 # END COPYRIGHT
 
-"""Strict interactive yes/no confirmation prompt.
-
-A single reusable helper for every ``[y/n]`` prompt in the load test:
-only ``y`` or ``n`` are accepted (case-insensitive), any other input
-re-prompts, and Ctrl+C / EOF (closed stdin) are treated as ``n``.
-"""
-
 import logging
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class Confirm:
-    """Strict yes/no prompt: only y or n; Ctrl+C and EOF mean no."""
+    """
+    Strict yes/no prompt for every ``[y/n]`` question in the load test.
+
+    Only ``y`` or ``n`` are accepted (case-insensitive), any other input
+    re-prompts, and Ctrl+C / EOF (closed stdin) are treated as ``n``.
+    """
 
     @staticmethod
     def ask(question: str) -> bool:
-        """Prompt until the user answers ``y`` or ``n``.
+        """
+        Prompt until the user answers ``y`` or ``n``.
 
         Returns True for ``y`` and False for ``n``.  Ctrl+C and EOF
         (closed stdin) are treated as ``n``.  Anything else is
@@ -46,6 +45,9 @@ class Confirm:
             try:
                 answer = input(prompt).strip().lower()
             except (EOFError, KeyboardInterrupt):
+                # A bare newline, not a log record: after Ctrl+C the
+                # cursor is still on the prompt line, so the next
+                # output would land mid-line without this.
                 print()
                 return False
             if answer == "y":

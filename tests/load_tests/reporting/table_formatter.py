@@ -14,18 +14,18 @@
 #
 # END COPYRIGHT
 
-"""Formats and logs aligned console tables."""
-
 import logging
 from typing import Any
 from typing import List
 from typing import Sequence
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TableFormatter:
-    """Formats and logs aligned tables."""
+    """
+    Formats and logs aligned console tables.
+    """
 
     @staticmethod
     def log_table(header: List[str], rows: Sequence[Sequence[Any]]) -> None:
@@ -35,14 +35,27 @@ class TableFormatter:
         :param header: Column names
         :param rows: Rows of cell values, one per column
         """
-        col_widths: List[int] = [len(h) for h in header]
+        column_widths: List[int] = []
+        column_header: str
+        # Start each column at the width of its header.
+        for column_header in header:
+            column_widths.append(len(column_header))
+        row: Sequence[Any]
+        index: int
+        value: Any
+        # Widen each column to its longest value.
         for row in rows:
-            for i, val in enumerate(row):
-                col_widths[i] = max(col_widths[i], len(str(val)))
-        fmt: str = "  ".join(f"{{:>{w}}}" for w in col_widths)
-        logger.info("%s", fmt.format(*header))
-        logger.info(
-            "%s", "-" * (sum(col_widths) + 2 * (len(header) - 1)),
-        )
+            # Widen a column when this value is longer.
+            for index, value in enumerate(row):
+                column_widths[index] = max(column_widths[index], len(str(value)))
+        column_patterns: List[str] = []
+        column_width: int
+        # One right-aligned field per column.
+        for column_width in column_widths:
+            column_patterns.append(f"{{:>{column_width}}}")
+        format_pattern: str = "  ".join(column_patterns)
+        logger.info("%s", format_pattern.format(*header))
+        logger.info("%s", "-" * (sum(column_widths) + 2 * (len(header) - 1)))
+        # One line per row.
         for row in rows:
-            logger.info("%s", fmt.format(*row))
+            logger.info("%s", format_pattern.format(*row))

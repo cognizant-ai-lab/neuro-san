@@ -19,13 +19,15 @@ import shutil
 import tempfile
 from typing import Any
 from typing import Dict
+from typing import List
 from unittest import TestCase
 
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
+from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import STATUS_FAILED
+from tests.load_tests.load_test_constants import STATUS_KILLED
+from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 
 
 # pylint: disable=protected-access
@@ -39,25 +41,22 @@ class TestScanRequests(TestCase):
     """
 
     def setUp(self) -> None:
-        """Create a run directory removed again after each test."""
-        self._dir = tempfile.mkdtemp()
+        """
+        Create a run directory removed again after each test.
+        """
+        self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
 
-    def _write_request(self, req_id: int) -> None:
+    def _write_request(self, request_id: int) -> None:
         """
         Write stdout for a request that got as far as reserving.
 
-        :param req_id: Request id used in the file name and reservation id
+        :param request_id: Request id used in the file name and reservation id
         """
-        path = os.path.join(
-            self._dir, "requests", f"request_{req_id}_stdout.txt",
-        )
+        path: str = os.path.join(self._dir, "requests", f"request_{request_id}_stdout.txt")
         with open(path, "w", encoding="utf-8") as handle:
-            handle.write(
-                '{"reservation_id": "abc-%s",'
-                ' "agent_network_name": "music_nerd"}\n' % req_id
-            )
+            handle.write('{"reservation_id": "abc-%s", "agent_network_name": "music_nerd"}\n' % request_id)
 
     def _write_log(self, text: str) -> None:
         """
@@ -65,7 +64,7 @@ class TestScanRequests(TestCase):
 
         :param text: Log text to write
         """
-        path = os.path.join(self._dir, "load_test.log")
+        path: str = os.path.join(self._dir, LEGACY_RUN_LOG_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
 
@@ -75,48 +74,55 @@ class TestScanRequests(TestCase):
 
         :return: Results keyed by request id
         """
-        rebuilder = ResultsRebuilder(self._dir)
-        results = rebuilder._scan_requests(
+        rebuilder: ResultsRebuilder = ResultsRebuilder(self._dir)
+        results: List[Dict[str, Any]] = rebuilder._scan_requests(
             os.path.join(self._dir, "requests"), rebuilder._parse_timing(),
         )
         keyed: Dict[str, Dict[str, Any]] = {}
+        result: Dict[str, Any]
+        # Key each result by its request id.
         for result in results:
             keyed[result.get("request_id")] = result
         return keyed
 
     def test_partial_output_does_not_promote_a_timeout(self) -> None:
-        """A TIMEOUT with a reservation_id stays a TIMEOUT."""
+        """
+        A TIMEOUT with a reservation_id stays a TIMEOUT.
+        """
         self._write_request(1)
         self._write_log("Request 1: TIMEOUT (61.00s (1m))\n")
 
-        self.assertEqual(
-            self._rebuild()["request-1"]["status"], STATUS_TIMEOUT,
-        )
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_TIMEOUT)
 
     def test_partial_output_does_not_promote_a_kill(self) -> None:
-        """A KILLED request with a reservation_id stays KILLED."""
+        """
+        A KILLED request with a reservation_id stays KILLED.
+        """
         self._write_request(1)
         self._write_log("Request 1: KILLED (5.00s)\n")
 
-        self.assertEqual(
-            self._rebuild()["request-1"]["status"], STATUS_KILLED,
-        )
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_KILLED)
 
     def test_partial_output_alone_is_not_success(self) -> None:
-        """With no log line, partial output is not counted as passing."""
+        """
+        With no log line, partial output is not counted as passing.
+        """
         self._write_request(1)
         self._write_log("")
 
-        self.assertEqual(
-            self._rebuild()["request-1"]["status"], STATUS_FAILED,
-        )
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_FAILED)
 
     def test_successful_request_is_still_rebuilt_as_created(self) -> None:
-        """The normal case is unaffected."""
+        """
+        The normal case is unaffected.
+        """
         self._write_request(1)
         self._write_log("Request 1: CREATED (3.00s)\n")
 
-        result = self._rebuild()["request-1"]
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
 
-        self.assertEqual(result["status"], STATUS_CREATED)
-        self.assertEqual(result["elapsed"], 3.0)
+        self.assertEqual(result.get("status", ""), STATUS_CREATED)
+        self.assertEqual(result.get("elapsed", 0.0), 3.0)

@@ -19,6 +19,7 @@ from typing import Optional
 from unittest import TestCase
 
 from tests.load_tests.validation.input_validator import InputValidator
+from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 
 class TestResolveMaxRequests(TestCase):
@@ -39,59 +40,67 @@ class TestResolveMaxRequests(TestCase):
         :param max_requests: --max-requests value; None when not given
         :return: Validator over those args
         """
-        return InputValidator(Namespace(
-            num_rounds=num_rounds,
-            max_requests=max_requests,
-        ))
+        return InputValidator(Namespace(num_rounds=num_rounds, max_requests=max_requests))
 
     def test_cap_is_stage_total_times_rounds(self) -> None:
-        """The default cap covers every stage of every round."""
-        validator = self._validator(num_rounds=3)
+        """
+        The default cap covers every stage of every round.
+        """
+        validator: InputValidator = self._validator(num_rounds=3)
 
         self.assertEqual(validator.resolve_max_requests([2, 4, 8]), 42)
 
     def test_explicit_max_requests_wins(self) -> None:
-        """--max-requests overrides the computed cap."""
-        validator = self._validator(num_rounds=3, max_requests=5)
+        """
+        --max-requests overrides the computed cap.
+        """
+        validator: InputValidator = self._validator(num_rounds=3, max_requests=5)
 
         self.assertEqual(validator.resolve_max_requests([2, 4, 8]), 5)
 
     def test_zero_rounds_exits(self) -> None:
-        """--num-rounds 0 must exit before the probe spends tokens."""
-        validator = self._validator(num_rounds=0)
+        """
+        --num-rounds 0 must exit before the probe spends tokens.
+        """
+        validator: InputValidator = self._validator(num_rounds=0)
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             validator.resolve_max_requests([3])
 
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_negative_rounds_exits(self) -> None:
-        """A negative --num-rounds is rejected the same way."""
-        validator = self._validator(num_rounds=-3)
+        """
+        A negative --num-rounds is rejected the same way.
+        """
+        validator: InputValidator = self._validator(num_rounds=-3)
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             validator.resolve_max_requests([3])
 
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_rounds_are_validated_before_explicit_max_requests(self) -> None:
-        """--max-requests must not mask an invalid --num-rounds.
+        """
+        --max-requests must not mask an invalid --num-rounds.
 
         The rounds check runs first, so passing both does not slip
         past validation through the early return.
         """
-        validator = self._validator(num_rounds=0, max_requests=5)
+        validator: InputValidator = self._validator(num_rounds=0, max_requests=5)
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             validator.resolve_max_requests([3])
 
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)
 
     def test_zero_max_requests_exits(self) -> None:
-        """--max-requests 0 caps the run at nothing, so it is rejected."""
-        validator = self._validator(max_requests=0)
+        """
+        --max-requests 0 caps the run at nothing, so it is rejected.
+        """
+        validator: InputValidator = self._validator(max_requests=0)
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(LoadTestAbortError) as caught:
             validator.resolve_max_requests([3])
 
-        self.assertEqual(caught.exception.code, 1)
+        self.assertEqual(caught.exception.get_exit_code(), 1)

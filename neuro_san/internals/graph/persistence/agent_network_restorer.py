@@ -112,7 +112,7 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         name: str = self.agent_mapper.filepath_to_agent_network_name(file_reference)
 
         # Now create the AgentNetwork
-        agent_network = AgentNetwork(config, name)
+        agent_network: AgentNetwork = AgentNetwork(config, name)
         return agent_network
 
     def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:

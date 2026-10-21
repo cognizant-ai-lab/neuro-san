@@ -343,7 +343,8 @@
         "price_per_1k_input_tokens": 0.0002,
         "price_per_1k_output_tokens": 0.00125,
         "model_launch_date": "2026-03-17",
-        "model_retirement_date": null,
+        # The deprecations page lists this model by its bare name, "gpt-5.4-nano".
+        "model_retirement_date": "2027-04-01",
     },
     "gpt-5.2": {
         "use_model_name": "gpt-5.2-2025-12-11",
@@ -383,7 +384,8 @@
         "price_per_1k_input_tokens": 0.0015,
         "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2025-11-13",
-        "model_retirement_date": null,
+        # The deprecations page lists this model by its bare name, "gpt-5.1".
+        "model_retirement_date": "2027-04-01",
     },
     "gpt-5": {
         "use_model_name": "gpt-5-2025-08-07",
@@ -403,7 +405,7 @@
         "price_per_1k_input_tokens": 0.00125,
         "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2025-08-07",
-        "model_retirement_date": null,
+        "model_retirement_date": "2026-12-11",
     },
     "gpt-5-mini": {
         "use_model_name": "gpt-5-mini-2025-08-07",
@@ -423,7 +425,7 @@
         "price_per_1k_input_tokens": 0.00025,
         "price_per_1k_output_tokens": 0.02,
         "model_launch_date": "2025-08-07",
-        "model_retirement_date": null,
+        "model_retirement_date": "2026-12-11",
     },
     "gpt-4.1": {
         "use_model_name": "gpt-4.1-2025-04-14",
@@ -443,7 +445,7 @@
         "price_per_1k_input_tokens": 0.002,
         "price_per_1k_output_tokens": 0.008,
         "model_launch_date": "2025-04-14",
-        "model_retirement_date": null,
+        "model_retirement_date": "2027-01-14",
     },
     "gpt-4o": {
         "use_model_name": "gpt-4o-2024-08-06",
@@ -480,7 +482,7 @@
         "price_per_1k_input_tokens": 0.0025,
         "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2024-08-06",
-        "model_retirement_date": null,
+        "model_retirement_date": "2027-01-14",
     },
     "gpt-4o-2024-11-20": {
         "class": "openai",
@@ -497,7 +499,7 @@
         "price_per_1k_input_tokens": 0.0025,
         "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2024-11-20",
-        "model_retirement_date": null,
+        "model_retirement_date": "2027-01-14",
     },
 
     "gpt-4o-mini": {
@@ -518,7 +520,7 @@
         "price_per_1k_input_tokens": 0.00015,
         "price_per_1k_output_tokens": 0.00060,
         "model_launch_date": "2024-07-18",
-        "model_retirement_date": null,
+        "model_retirement_date": "2027-01-14",
     },
 
     "gpt-4-turbo": {
@@ -669,10 +671,10 @@
     # https://platform.claude.com/docs/en/about-claude/model-deprecations
     # Model launch dates come from the AWS Bedrock model cards:
     # https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards-anthropic.html
-    # For deprecated models, "model_retirement_date" is the actual retirement date.
-    # For active models, it is the "not sooner than" tentative retirement date and may be pushed out.
+    # For deprecated models, "model_retirement_date" is the announced retirement date.
+    # Active models only have a "not sooner than" date, so their "model_retirement_date" is null.
     "claude-haiku": {
-        "use_model_name": "claude-haiku-4-5-20251001"
+        "use_model_name": "claude-haiku-5-5"
     },
     "claude-sonnet": {
         "use_model_name": "claude-sonnet-5-5"
@@ -703,7 +705,25 @@
         "price_per_1k_input_tokens": 0.001,
         "price_per_1k_output_tokens": 0.005,
         "model_launch_date": "2025-10-16",
-        "model_retirement_date": "2026-10-15",
+        "model_retirement_date": null,
+    },
+    "claude-haiku-5-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.0001,
+        "price_per_1k_output_tokens": 0.0005,
+        "model_launch_date": "2026-10-07",
+        "model_retirement_date": null,
     },
 
     "claude-sonnet-4-5": {
@@ -725,7 +745,7 @@
         "price_per_1k_input_tokens": 0.003,
         "price_per_1k_output_tokens": 0.015,
         "model_launch_date": "2025-09-30",
-        "model_retirement_date": "2026-09-29",
+        "model_retirement_date": "2026-11-30",
     },
     "claude-sonnet-4-6": {
         "class": "anthropic",
@@ -743,7 +763,7 @@
         "price_per_1k_input_tokens": 0.003,
         "price_per_1k_output_tokens": 0.015,
         "model_launch_date": "2026-02-17",
-        "model_retirement_date": "2027-02-17",
+        "model_retirement_date": null,
     },
     "claude-sonnet-5": {
         "class": "anthropic",
@@ -801,7 +821,7 @@
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
         "model_launch_date": "2025-11-24",
-        "model_retirement_date": "2026-11-24",
+        "model_retirement_date": null,
     },
     "claude-opus-4-6": {
         "class": "anthropic",
@@ -819,7 +839,7 @@
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
         "model_launch_date": "2026-02-05",
-        "model_retirement_date": "2027-02-05",
+        "model_retirement_date": null,
     },
     "claude-opus-4-7": {
         "class": "anthropic",
@@ -837,7 +857,7 @@
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
         "model_launch_date": "2026-04-16",
-        "model_retirement_date": "2027-04-16",
+        "model_retirement_date": null,
     },
     "claude-opus-4-8": {
         "class": "anthropic",
@@ -855,7 +875,7 @@
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
         "model_launch_date": "2026-05-28",
-        "model_retirement_date": "2027-05-28",
+        "model_retirement_date": null,
     },
     "claude-opus-5": {
         "class": "anthropic",
@@ -1072,7 +1092,19 @@
         "knowledge_cutoff": "01/2026",
     },
     "bedrock-claude-haiku": {
-        "use_model_name": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        "use_model_name": "global.anthropic.claude-haiku-5-5"
+    },
+    "global.anthropic.claude-haiku-5-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
     },
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "class": "anthropic-bedrock",
@@ -1304,6 +1336,28 @@
     # Per Google, the listed shutdown dates are the "earliest possible dates" — exact
     # retirement is communicated with advance notice. For models with no announced
     # retirement, "model_retirement_date" is null.
+    "gemini-4-argon": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-4-argon",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        # Default synchronous limit. Long decode allows up to 1,048,576 output tokens.
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-4-argon/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        # This price is effective until Nov 30, 2026 after that it will be doubled.
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.010,
+        # Not yet on the deprecations page. Launch date comes from the release notes:
+        # https://ai.google.dev/gemini-api/docs/changelog
+        "model_launch_date": "2026-10-13",
+        "model_retirement_date": null,
+    },
     "gemini-3.8-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
@@ -1490,7 +1544,7 @@
         "price_per_1k_input_tokens": 0.00125,
         "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2025-06-17",
-        "model_retirement_date": "2026-10-16",
+        "model_retirement_date": null,
     },
     "gemini-2.5-flash": {
         "class": "gemini",
@@ -1507,7 +1561,7 @@
         "price_per_1k_input_tokens": 0.0003,
         "price_per_1k_output_tokens": 0.0025,
         "model_launch_date": "2025-06-17",
-        "model_retirement_date": "2026-10-16",
+        "model_retirement_date": null,
     },
     "gemini-2.5-flash-lite": {
         "class": "gemini",
@@ -1524,7 +1578,7 @@
         "price_per_1k_input_tokens": 0.0001,
         "price_per_1k_output_tokens": 0.0004,
         "model_launch_date": "2025-07-22",
-        "model_retirement_date": "2026-10-16",
+        "model_retirement_date": null,
     },
 
     # Bedrock (class: "bedrock") — boto3-based ChatBedrock
@@ -1532,37 +1586,18 @@
     # Do not pick this class for Anthropic Claude — use the "anthropic-bedrock"
     # class further up instead. It is async, exposes ChatAnthropic's full
     # parameter surface (thinking, effort, mcp_servers, context_management,
-    # ...), and avoids the per-process serialization boto3 imposes. The Claude
-    # entry below is kept only for backward compatibility with networks that
-    # still reference it.
+    # ...), and avoids the per-process serialization boto3 imposes.
     #
     # Reach for the "bedrock" class only when you need a non-Anthropic Bedrock
     # model (Amazon Nova, Mistral, Meta Llama, AI21, Cohere, etc.).
     #
-    # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
+    # This file has no "bedrock" entries. To use one, add an entry with
+    # "class": "bedrock" in your own llm_info file, set through the
+    # AGENT_LLM_INFO_FILE environment variable or the "llm_info_file" key.
+    #
     # Also know that so far as of 10/7/2025, all bedrock models use synchronous clients,
     # which might not be the most performant choice for a server situation.
     # Consider bugging the maintainers of langchain-aws for async functionality.
-
-    "bedrock-us-claude-sonnet-4": {
-        "use_model_name": "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    },
-    "us.anthropic.claude-sonnet-4-20250514-v1:0": {
-        "class": "bedrock",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 64000,
-        "knowledge_cutoff": "03/2025",
-        "model_launch_date": "2025-05-23",
-        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle.html
-        "model_retirement_date": "2026-10-14",
-    },
 
     # OpenRouter
     # https://openrouter.ai/
@@ -1708,6 +1743,25 @@
                 # by default. Any non-null value selects the Responses API in langchain when use_responses_api is
                 # null, and is rejected by Chat Completions, so this must never be given a non-null default here.
                 "include": null,
+                # Default strict value for function tools (bool or null). Not a ChatOpenAI constructor argument:
+                # the chat model applies it in bind_tools(), where langchain writes strict into each tool. See
+                # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+                # and OpenAI's function calling guide: https://developers.openai.com/api/docs/guides/function-calling
+                #   false - (default) every tool is sent with "strict": false. Chat Completions treats a missing strict
+                #           as false, but the Responses API tries strict mode when strict is omitted, and in strict mode
+                #           the model fills in every property of a tool's schema, optional ones included. Tools whose
+                #           optional arguments depend on each other (common on MCP servers) then get calls the server
+                #           rejects. false keeps the tool behavior of Chat Completions on both endpoints.
+                #   true  - strict mode on every tool: langchain marks every property required and forbids extra ones,
+                #           and OpenAI guarantees the arguments match that schema. Only for tools whose schemas work
+                #           with every argument always present.
+                #   null  - send no strict value and let each endpoint apply its own default (Chat Completions
+                #           non-strict, the Responses API strict whenever the schema allows it).
+                # Exception for all three: with a structured-output response_format bound on Chat Completions, OpenAI
+                # requires strict function tools next to it and langchain sets strict true on every tool (a definition
+                # that names its own strict keeps it). neuro-san's agents bind no such format, so this only affects
+                # code that calls the chat model directly.
+                "tool_strict": false,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
@@ -1716,9 +1770,10 @@
             # OpenAI models served by an Azure OpenAI resource, reached through Azure's v1 API at
             # {AZURE_OPENAI_ENDPOINT}/openai/v1/. That API serves the OpenAI wire format for both Chat Completions
             # and the Responses API without an api-version, so this class extends "openai" and inherits every
-            # argument and default above, including "use_responses_api": true, "store": false and "include": null;
-            # all of them are forwarded. The inherited "openai_api_key" falls back to AZURE_OPENAI_API_KEY,
-            # then OPENAI_API_KEY; a Microsoft Entra token can be given as "azure_ad_token" instead.
+            # argument and default above, including "use_responses_api": true, "store": false, "include": null and
+            # "tool_strict": false; all of them are forwarded. The inherited "openai_api_key" falls back to
+            # AZURE_OPENAI_API_KEY, then OPENAI_API_KEY; a Microsoft Entra token can be given as "azure_ad_token"
+            # instead.
             # The usual llm_config names this class, the OpenAI model_name behind the deployment and the
             # deployment_name; see neuro_san/registries/music_nerd_pro_llm_azure.hocon.
             # Two Azure-specific caveats for the Responses default: Azure offers the Responses API in most but
@@ -1757,8 +1812,6 @@
                 "openai_api_version": null,
                 "openai_api_type": null,
                 "model_version": null,
-                # streaming defaults to off; set "streaming": true in llm_config to enable.
-                "streaming": false,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
@@ -1846,6 +1899,11 @@
             # ChatAnthropicBedrock subclasses ChatAnthropic, so all Anthropic args
             # are inherited unchanged. We only declare the AWS-specific knobs here.
             # See https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock
+            #
+            # An llm_config that names this class should also set "max_tokens", unless
+            # your own llm info file gives this class a "max_tokens" default in its args.
+            # neuro-san fills it in from "max_output_tokens" only when an llm_config
+            # has no "class", and langchain's default for a Bedrock model id is 4096.
             "extends": "anthropic",
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
@@ -2012,9 +2070,11 @@
                 "tags": null,
                 "temperature": null,
 
-                # Keyword arguments to pass to the model.
-                # Can be used to pass reasoning parameters for Anthropic reasoning models.
-                # For example: {"thinking": {"type": "enabled", "budget_tokens": 10000}}
+                # Extra request parameters for the model that have no key of their own
+                # above, named as the model's provider documents them for Bedrock.
+                # With "beta_use_converse_api": true, a provider-specific key such as
+                # "top_k" must go under "additional_model_request_fields", e.g.
+                # {"additional_model_request_fields": {"top_k": 50}}, or it is dropped.
                 "model_kwargs": null,
             }
         }

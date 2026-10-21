@@ -19,7 +19,7 @@ import os
 import tempfile
 from unittest import TestCase
 
-from tests.load_tests.config import HISTORY_FILE_NAME
+from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
 from tests.load_tests.reporting.trend_history import TrendHistory
 
 
@@ -33,12 +33,18 @@ class TestResolvePath(TestCase):
     """
 
     def setUp(self) -> None:
-        """Create a scratch directory removed again after each test."""
-        self._dir = tempfile.mkdtemp()
+        """
+        Create a scratch directory removed again after each test.
+        """
+        self._dir: str = tempfile.mkdtemp()
         self.addCleanup(self._remove_dir)
 
     def _remove_dir(self) -> None:
-        """Remove the scratch directory and anything left in it."""
+        """
+        Remove the scratch directory and anything left in it.
+        """
+        name: str
+        # Delete each file left in the directory.
         for name in os.listdir(self._dir):
             os.unlink(os.path.join(self._dir, name))
         os.rmdir(self._dir)
@@ -49,23 +55,29 @@ class TestResolvePath(TestCase):
 
         :return: Path of the created file
         """
-        path = os.path.join(self._dir, HISTORY_FILE_NAME)
+        path: str = os.path.join(self._dir, HISTORY_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(json.dumps({"agent": "one"}) + "\n")
         return path
 
     def test_a_file_path_is_used_directly(self) -> None:
-        """Passing the history file itself resolves to that file."""
-        path = self._create_history()
+        """
+        Passing the history file itself resolves to that file.
+        """
+        path: str = self._create_history()
 
         self.assertEqual(TrendHistory(path)._resolve_path(), path)
 
     def test_a_directory_resolves_to_its_history_file(self) -> None:
-        """Passing the output directory finds history.jsonl inside it."""
-        path = self._create_history()
+        """
+        Passing the output directory finds history.jsonl inside it.
+        """
+        path: str = self._create_history()
 
         self.assertEqual(TrendHistory(self._dir)._resolve_path(), path)
 
     def test_missing_history_resolves_to_none(self) -> None:
-        """A directory with no history file resolves to None."""
+        """
+        A directory with no history file resolves to None.
+        """
         self.assertIsNone(TrendHistory(self._dir)._resolve_path())

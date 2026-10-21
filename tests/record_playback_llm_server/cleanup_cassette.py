@@ -14,33 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Standalone tool that cleans a cassette recorded by the record/playback proxy so
-it is safe for playback/hybrid: it removes any recorded FAILURE responses (a
-non-2xx status such as a 429 rate limit, 401 auth error, or upstream 5xx) that
-an interrupted or throttled recording session may have left behind.
 
-Rules:
-  - Single-response entry ("response"): dropped if its status is not 2xx.
-  - Multi-response entry ("responses"): non-2xx variants are removed; the whole
-    entry is dropped if no successful variant remains.
-  - Structurally invalid entries (no usable response) are dropped.
-
-Everything else -- request metadata, keys, latencies, unknown fields, the file's
-"version" -- is preserved untouched. The tool works on the raw JSON so it is
-forward-compatible with cassette fields it does not know about.
-
-Usage:
-    export PYTHONPATH=$(pwd)
-    # Non-destructive: writes <cassette>.clean.json next to the input.
-    python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json
-
-    # Overwrite in place (a <cassette>.bak copy is made first).
-    python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --in-place
-
-    # Report what would change without writing anything.
-    python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --dry-run
-"""
 from __future__ import annotations
 
 import argparse
@@ -58,8 +32,31 @@ from typing import Tuple
 
 class CassetteCleaner:
     """
-    Loads a cassette, strips recorded non-2xx (failure) responses, and writes a
-    cleaned copy. See the module docstring for the exact rules.
+    Loads a cassette recorded by the record/playback proxy, strips the recorded
+    FAILURE responses (a non-2xx status such as a 429 rate limit, 401 auth error,
+    or upstream 5xx) that an interrupted or throttled recording session may have
+    left behind, and writes a cleaned copy that is safe for playback/hybrid.
+
+    Rules:
+      - Single-response entry ("response"): dropped if its status is not 2xx.
+      - Multi-response entry ("responses"): non-2xx variants are removed; the whole
+        entry is dropped if no successful variant remains.
+      - Structurally invalid entries (no usable response) are dropped.
+
+    Everything else -- request metadata, keys, latencies, unknown fields, the file's
+    "version" -- is preserved untouched. The tool works on the raw JSON so it is
+    forward-compatible with cassette fields it does not know about.
+
+    Usage:
+        export PYTHONPATH=$(pwd)
+        # Non-destructive: writes <cassette>.clean.json next to the input.
+        python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json
+
+        # Overwrite in place (a <cassette>.bak copy is made first).
+        python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --in-place
+
+        # Report what would change without writing anything.
+        python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --dry-run
     """
 
     @staticmethod

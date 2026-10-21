@@ -18,14 +18,15 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
+from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
@@ -36,7 +37,7 @@ from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 class TestOriginatingJournal(IsolatedAsyncioTestCase):
     """
-    Tests for OriginatingJournal's held-message dupe suppression.
+    Tests for OriginatingJournal's held-message dupe suppression and its chat-history copies.
 
     JournalingCallbackHandler.on_llm_end holds intermediate LLM output as a
     STRIPPED AGENT message via write_message_if_next_not_dupe, while the AI
@@ -47,41 +48,24 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
 
     The comparison also projects both sides to text: the held AGENT copy is
     always a flattened str, while the incoming AI message can carry block
-    content (reasoning + text) once native messages are preserved. A raw
-    equality between a str and a block list could never match, so without
-    the projection every block-content answer would leak both copies.
+    content (reasoning + text). A raw equality between a str and a block list
+    could never match, so without the projection every block-content answer
+    would leak both copies.
     """
 
-    ORIGIN = [{"tool": "front_man", "instantiation_index": 0}]
-
-    def _make_journal(self):
-        """Build a journal whose wrapped journal records written messages."""
-        wrapped = MagicMock()
-        wrapped.write_message = AsyncMock()
-        journal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN)
-        return journal, wrapped
-
-    @staticmethod
-    def _written_messages(wrapped: MagicMock) -> List[BaseMessage]:
-        """
-        Collect the messages that reached the wrapped journal.
-
-        :param wrapped: The wrapped journal mock whose write_message calls to inspect
-        :return: The messages written to the wrapped journal, in order
-        """
-        written: List[BaseMessage] = []
-        for call in wrapped.write_message.call_args_list:
-            written.append(call.args[0])
-        return written
+    ORIGIN: List[Dict[str, Any]] = [{"tool": "front_man", "instantiation_index": 0}]
 
     async def test_exact_dupe_is_suppressed(self) -> None:
         """
         A held AGENT message whose content matches the next message exactly
         is dropped: only the AI message reaches the wrapped journal.
         """
-        journal, wrapped = self._make_journal()
-        await journal.write_message_if_next_not_dupe(AgentMessage(content="the answer"))
-        await journal.write_message(AIMessage(content="the answer"))
+        wrapped: MagicMock = self._make_wrapped_journal()
+        journal: OriginatingJournal = self._make_journal(wrapped)
+        held: AgentMessage = AgentMessage(content="the answer")
+        await journal.write_message_if_next_not_dupe(held)
+        incoming: AIMessage = AIMessage(content="the answer")
+        await journal.write_message(incoming)
 
         written: List[BaseMessage] = self._written_messages(wrapped)
         self.assertEqual(len(written), 1)
@@ -91,12 +75,15 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
     async def test_dupe_comparison_ignores_edge_whitespace(self) -> None:
         """
         The held AGENT content is stripped at capture while the AI content is
-        not, so the comparison must treat "the answer" and "the answer\\n" as
-        the same content - otherwise clients receive both copies.
+        not, so the comparison treats "the answer" and "the answer\\n" as
+        the same content and clients receive only the AI copy.
         """
-        journal, wrapped = self._make_journal()
-        await journal.write_message_if_next_not_dupe(AgentMessage(content="the answer"))
-        await journal.write_message(AIMessage(content="the answer\n"))
+        wrapped: MagicMock = self._make_wrapped_journal()
+        journal: OriginatingJournal = self._make_journal(wrapped)
+        held: AgentMessage = AgentMessage(content="the answer")
+        await journal.write_message_if_next_not_dupe(held)
+        incoming: AIMessage = AIMessage(content="the answer\n")
+        await journal.write_message(incoming)
 
         written: List[BaseMessage] = self._written_messages(wrapped)
         self.assertEqual(len(written), 1)
@@ -107,9 +94,12 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         A held AGENT message with genuinely different content is not a dupe:
         it is flushed ahead of the incoming message, preserving stream order.
         """
-        journal, wrapped = self._make_journal()
-        await journal.write_message_if_next_not_dupe(AgentMessage(content="a thought"))
-        await journal.write_message(AIMessage(content="the answer"))
+        wrapped: MagicMock = self._make_wrapped_journal()
+        journal: OriginatingJournal = self._make_journal(wrapped)
+        held: AgentMessage = AgentMessage(content="a thought")
+        await journal.write_message_if_next_not_dupe(held)
+        incoming: AIMessage = AIMessage(content="the answer")
+        await journal.write_message(incoming)
 
         written: List[BaseMessage] = self._written_messages(wrapped)
         self.assertEqual(len(written), 2)
@@ -124,8 +114,10 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         are projected to text, so the AGENT copy is still recognized as a dupe
         and only the AI message reaches the wrapped journal.
         """
-        journal, wrapped = self._make_journal()
-        await journal.write_message_if_next_not_dupe(AgentMessage(content="the answer"))
+        wrapped: MagicMock = self._make_wrapped_journal()
+        journal: OriginatingJournal = self._make_journal(wrapped)
+        held: AgentMessage = AgentMessage(content="the answer")
+        await journal.write_message_if_next_not_dupe(held)
         blocks: List[Dict[str, Any]] = [
             {"type": "reasoning", "reasoning": "hidden"},
             {"type": "text", "text": "the answer\n"},
@@ -142,9 +134,12 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         Block content whose visible text differs from the held AGENT copy is
         not a dupe: the AGENT copy is flushed first, then the AI message.
         """
-        journal, wrapped = self._make_journal()
-        await journal.write_message_if_next_not_dupe(AgentMessage(content="a thought"))
-        incoming: AIMessage = AIMessage(content=[{"type": "text", "text": "the answer"}])
+        wrapped: MagicMock = self._make_wrapped_journal()
+        journal: OriginatingJournal = self._make_journal(wrapped)
+        held: AgentMessage = AgentMessage(content="a thought")
+        await journal.write_message_if_next_not_dupe(held)
+        blocks: List[Dict[str, Any]] = [{"type": "text", "text": "the answer"}]
+        incoming: AIMessage = AIMessage(content=blocks)
         await journal.write_message(incoming)
 
         written: List[BaseMessage] = self._written_messages(wrapped)
@@ -160,11 +155,9 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         history-safe text: providers reject data blocks in assistant-role
         history, and the image is replaced by a short reference.
         """
-        wrapped: MagicMock = MagicMock()
-        wrapped.write_message = AsyncMock()
+        wrapped: MagicMock = self._make_wrapped_journal()
         chat_history: List[BaseMessage] = []
-        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
-                                                         chat_history=chat_history)
+        journal: OriginatingJournal = self._make_journal(wrapped, chat_history)
         blocks: List[Dict[str, Any]] = ContentFixtures.mcp_tool_content()
         tool_result: AgentToolResultMessage = AgentToolResultMessage(content=blocks, tool_result_origin=self.ORIGIN)
         await journal.write_message(tool_result)
@@ -181,15 +174,15 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
 
     async def test_tool_result_str_history_copy_unchanged(self) -> None:
         """
-        A plain-string tool result keeps producing a plain AIMessage history
-        copy with the identical text.
+        A plain-string tool result gets a plain AIMessage history copy with
+        the same text.
         """
-        wrapped: MagicMock = MagicMock()
-        wrapped.write_message = AsyncMock()
+        wrapped: MagicMock = self._make_wrapped_journal()
         chat_history: List[BaseMessage] = []
-        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
-                                                         chat_history=chat_history)
-        await journal.write_message(AgentToolResultMessage(content="tool says", tool_result_origin=self.ORIGIN))
+        journal: OriginatingJournal = self._make_journal(wrapped, chat_history)
+        tool_result: AgentToolResultMessage = AgentToolResultMessage(content="tool says",
+                                                                     tool_result_origin=self.ORIGIN)
+        await journal.write_message(tool_result)
 
         self.assertEqual(len(chat_history), 1)
         self.assertIsInstance(chat_history[0], AIMessage)
@@ -198,17 +191,16 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
     async def test_block_answer_history_copy_is_text_projected(self) -> None:
         """
         An AI answer carrying block content is journaled with its blocks intact,
-        but its chat-history copy is a plain AIMessage holding only the text:
-        the history is handed to whichever provider runs next (possibly a
-        fallback from a different provider) and is exported as chat_context,
-        and neither should carry provider-native blocks.
+        but its chat-history copy is a plain AIMessage holding only the text,
+        with no response metadata: the history is handed to whichever provider
+        runs next (possibly a fallback from a different provider) and is
+        exported as chat_context, and neither should carry provider-native blocks.
         """
-        wrapped: MagicMock = MagicMock()
-        wrapped.write_message = AsyncMock()
+        wrapped: MagicMock = self._make_wrapped_journal()
         chat_history: List[BaseMessage] = []
-        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
-                                                         chat_history=chat_history)
-        answer: BaseMessage = ContentUtils.normalize_message(ContentFixtures.anthropic_thinking_first())
+        journal: OriginatingJournal = self._make_journal(wrapped, chat_history)
+        provider_answer: AIMessage = ContentFixtures.anthropic_thinking_first()
+        answer: BaseMessage = ContentUtils.normalize_message(provider_answer)
         self.assertIsInstance(answer.content, list)
         await journal.write_message(answer)
 
@@ -225,16 +217,49 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
 
     async def test_str_answer_history_copy_is_same_instance(self) -> None:
         """
-        A plain-string AI answer is appended to the chat history as the very
-        same instance, exactly as before.
+        A plain-string AI answer goes into the chat history as the same
+        instance, not a copy.
         """
-        wrapped: MagicMock = MagicMock()
-        wrapped.write_message = AsyncMock()
+        wrapped: MagicMock = self._make_wrapped_journal()
         chat_history: List[BaseMessage] = []
-        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
-                                                         chat_history=chat_history)
+        journal: OriginatingJournal = self._make_journal(wrapped, chat_history)
         answer: AIMessage = AIMessage(content="the answer")
         await journal.write_message(answer)
 
         self.assertEqual(len(chat_history), 1)
         self.assertIs(chat_history[0], answer)
+
+    @staticmethod
+    def _make_wrapped_journal() -> MagicMock:
+        """
+        Build the Journal mock that the OriginatingJournal under test wraps.
+
+        :return: A Journal mock whose write_message records each written message
+        """
+        wrapped: MagicMock = MagicMock(spec=Journal)
+        return wrapped
+
+    def _make_journal(self, wrapped: MagicMock, chat_history: Optional[List[BaseMessage]] = None) -> OriginatingJournal:
+        """
+        Build the OriginatingJournal under test, with ORIGIN as its origin.
+
+        :param wrapped: The Journal mock that the new journal writes to
+        :param chat_history: The list that receives the chat-history copies, or None for no chat history
+        :return: The OriginatingJournal that wraps the given mock
+        """
+        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
+                                                         chat_history=chat_history)
+        return journal
+
+    @staticmethod
+    def _written_messages(wrapped: MagicMock) -> List[BaseMessage]:
+        """
+        Collect the messages that reached the wrapped journal.
+
+        :param wrapped: The wrapped journal mock whose write_message calls to inspect
+        :return: The messages written to the wrapped journal, in order
+        """
+        written: List[BaseMessage] = []
+        for call in wrapped.write_message.call_args_list:
+            written.append(call.args[0])
+        return written

@@ -14,10 +14,13 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
+from typing import Dict
 from unittest import TestCase
 
-from tests.load_tests.config import DEFAULT_PRICING
-from tests.load_tests.config import MODEL_PRICING
+from typing_extensions import override
+
+from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
 from tests.load_tests.cost_estimator import CostEstimator
 
 
@@ -27,49 +30,71 @@ class TestCostEstimator(TestCase):
 
     The estimate is what the dry-run probe shows before a paid run, so
     a wrong rate means an under-stated bill at exactly the moment the
-    user is deciding whether to spend the money.
+    user is deciding whether to spend the money.  The expected prices
+    are read from default_llm_info.hocon, the file the server prices with.
     """
 
-    def test_rate_is_per_million_tokens(self) -> None:
-        """Prompt and completion tokens are billed at their own rates."""
-        pricing = MODEL_PRICING["gpt-4o"]
-        expected = pricing["prompt"] + pricing["completion"]
+    DATED_MODEL: str = "gpt-5.2-2025-12-11"
+    ALIAS_MODEL: str = "gpt-5.2"
+    UNKNOWN_MODEL: str = "llama-9"
+    TOKENS_PER_THOUSAND: int = 1_000
 
-        self.assertAlmostEqual(
-            CostEstimator.estimate(1_000_000, 1_000_000, "gpt-4o"),
-            expected,
-        )
-
-    def test_longest_matching_model_key_wins(self) -> None:
-        """A more specific model must not be priced as its base model.
-
-        'gpt-4o' is a substring of 'gpt-4o-mini', so matching in
-        dictionary order would bill mini traffic at ~17x its real
-        prompt rate.  Keys are tried longest-first to prevent that.
+    @override
+    def setUp(self) -> None:
         """
-        mini = CostEstimator.estimate(1_000_000, 0, "gpt-4o-mini")
+        Read the dated model's llm_info entry from the default hocon.
+        """
+        restorer = LlmInfoRestorer()
+        llm_infos: Dict[str, Any] = restorer.restore()
+        self.dated_entry: Dict[str, Any] = llm_infos.get(TestCostEstimator.DATED_MODEL, {})
 
-        self.assertAlmostEqual(mini, MODEL_PRICING["gpt-4o-mini"]["prompt"])
-        self.assertLess(mini, CostEstimator.estimate(1_000_000, 0, "gpt-4o"))
+    def test_prompt_tokens_use_the_input_price(self) -> None:
+        """
+        1k prompt tokens cost the model's price_per_1k_input_tokens.
+        """
+        input_dollars_per_1k_tokens: float = self.dated_entry.get("price_per_1k_input_tokens", 0.0)
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
+        prompt_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.DATED_MODEL)
 
-    def test_nano_is_not_priced_as_mini(self) -> None:
-        """The same specificity rule holds across a three-way prefix."""
-        nano = CostEstimator.estimate(1_000_000, 0, "gpt-4.1-nano")
+        self.assertGreater(input_dollars_per_1k_tokens, 0.0)
+        self.assertAlmostEqual(prompt_cost_dollars, input_dollars_per_1k_tokens)
 
-        self.assertAlmostEqual(nano, MODEL_PRICING["gpt-4.1-nano"]["prompt"])
+    def test_completion_tokens_use_the_output_price(self) -> None:
+        """
+        1k completion tokens cost the model's price_per_1k_output_tokens.
+        """
+        output_dollars_per_1k_tokens: float = self.dated_entry.get("price_per_1k_output_tokens", 0.0)
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
+        completion_cost_dollars: float = CostEstimator.estimate(0, token_count, TestCostEstimator.DATED_MODEL)
 
-    def test_dated_model_names_resolve_to_their_base_model(self) -> None:
-        """Server-reported names carry a date suffix and still match."""
-        dated = CostEstimator.estimate(1_000_000, 0, "gpt-5.2-2025-12-11")
+        self.assertGreater(output_dollars_per_1k_tokens, 0.0)
+        self.assertAlmostEqual(completion_cost_dollars, output_dollars_per_1k_tokens)
 
-        self.assertAlmostEqual(dated, MODEL_PRICING["gpt-5.2"]["prompt"])
+    def test_alias_is_priced_as_the_model_it_names(self) -> None:
+        """
+        An alias entry has no price of its own and uses its use_model_name entry's price.
+        """
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
+        dated_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.DATED_MODEL)
+        alias_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.ALIAS_MODEL)
 
-    def test_unknown_model_falls_back_to_default_pricing(self) -> None:
-        """An unrecognized model is costed, not silently free."""
-        unknown = CostEstimator.estimate(1_000_000, 0, "llama-9")
+        self.assertGreater(dated_cost_dollars, 0.0)
+        self.assertAlmostEqual(alias_cost_dollars, dated_cost_dollars)
 
-        self.assertAlmostEqual(unknown, DEFAULT_PRICING["prompt"])
+    def test_unknown_model_costs_nothing_and_logs_a_warning(self) -> None:
+        """
+        A model missing from llm_info costs 0.0, and a WARNING names the model.
+        """
+        token_count: int = TestCostEstimator.TOKENS_PER_THOUSAND
+        with self.assertLogs(level="WARNING") as captured_logs:
+            unknown_cost_dollars: float = CostEstimator.estimate(token_count, 0, TestCostEstimator.UNKNOWN_MODEL)
+        logged_text: str = "\n".join(captured_logs.output)
+
+        self.assertEqual(unknown_cost_dollars, 0.0)
+        self.assertIn(TestCostEstimator.UNKNOWN_MODEL, logged_text)
 
     def test_zero_tokens_cost_nothing(self) -> None:
-        """A request with no token data contributes no cost."""
-        self.assertEqual(CostEstimator.estimate(0, 0, "gpt-4o"), 0.0)
+        """
+        A request with no token data contributes no cost.
+        """
+        self.assertEqual(CostEstimator.estimate(0, 0, TestCostEstimator.DATED_MODEL), 0.0)

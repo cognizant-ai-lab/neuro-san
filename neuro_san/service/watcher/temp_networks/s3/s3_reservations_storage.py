@@ -16,11 +16,12 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import Dict
 from typing import Tuple
 
 from logging import getLogger
 from logging import Logger
+
+from leaf_common.utils.map import Map
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -82,7 +83,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         # let's start underlying logic:
         super().start()
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any], source: str = None):
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         """
         Add reservations to S3 storage.
 

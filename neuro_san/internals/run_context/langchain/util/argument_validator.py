@@ -24,6 +24,7 @@ from types import MethodType
 from inspect import isclass
 from inspect import signature
 from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 
 
 class ArgumentValidator:
@@ -78,11 +79,14 @@ class ArgumentValidator:
 
         # Check for field name and info
         # field info includes attributes like "required", "default", "description", and "alias"
+        field_name: str = None
+        field_info: FieldInfo = None
         for field_name, field_info in base_model_class.model_fields.items():
+            use_field_info: FieldInfo = field_info
             # Add field name to the set
             fields_and_aliases.add(field_name)
-            if field_info.alias:
+            if use_field_info.alias:
                 # If there is "alias" in the info add it to the set as well
-                fields_and_aliases.add(field_info.alias)
+                fields_and_aliases.add(use_field_info.alias)
 
         return fields_and_aliases
