@@ -15,11 +15,6 @@
 # END COPYRIGHT
 
 # pylint: disable=too-many-lines
-"""Generic load-test orchestrator for neuro-san agent networks.
-
-See tests/load_tests/load_tests.md for prerequisites, test levels, and
-usage examples.
-"""
 
 import argparse
 import getpass
@@ -100,7 +95,12 @@ logger = logging.getLogger(__name__)
 
 
 class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
-    """Orchestrates the full load test workflow."""
+    """
+    Orchestrates the full load test workflow for neuro-san agent networks.
+
+    See tests/load_tests/load_tests.md for prerequisites, test levels, and
+    usage examples.
+    """
 
     def __init__(self, args) -> None:
         """Initialize the orchestrator with parsed arguments."""

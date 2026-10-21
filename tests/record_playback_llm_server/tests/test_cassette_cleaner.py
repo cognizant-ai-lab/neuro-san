@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Tests for the CassetteCleaner (strips recorded failures from a cassette).
-"""
+
 from tests.record_playback_llm_server.cleanup_cassette import CassetteCleaner
 
 

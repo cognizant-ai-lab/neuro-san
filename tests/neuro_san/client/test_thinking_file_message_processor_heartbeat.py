@@ -14,16 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Unit tests for ThinkingFileMessageProcessor's handling of AGENT_PROGRESS
-heartbeat messages emitted by the neuro-san HTTP server.
-
-The server may emit empty-text AGENT_PROGRESS messages as keepalive ticks
-to prevent intermediate proxies and clients from dropping idle streaming
-connections during long quiet periods. The CLI's thinking-file logger
-must treat those as no-ops; real AGENT_PROGRESS messages with content
-must continue to be written.
-"""
 
 from pathlib import Path
 
@@ -35,6 +25,12 @@ class TestThinkingFileMessageProcessorHeartbeat:
     """
     Verifies that the thinking-file logger silently drops empty-content
     AGENT_PROGRESS heartbeats and still writes real AGENT_PROGRESS messages.
+
+    The neuro-san HTTP server may emit empty-text AGENT_PROGRESS messages as
+    keepalive ticks to prevent intermediate proxies and clients from dropping idle
+    streaming connections during long quiet periods. The CLI's thinking-file logger
+    must treat those as no-ops; real AGENT_PROGRESS messages with content must
+    continue to be written.
     """
 
     def _make_processor(self, thinking_dir: Path) -> ThinkingFileMessageProcessor:
