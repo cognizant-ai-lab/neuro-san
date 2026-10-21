@@ -133,6 +133,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         return time.time() > reservation.get_expiration_time_in_seconds()
 
+    # pylint: disable=too-many-locals
     async def add_reservations(self, reservations_dict: Map[Reservation, Dict[str, Any]],
                                source: str = None):
         """
