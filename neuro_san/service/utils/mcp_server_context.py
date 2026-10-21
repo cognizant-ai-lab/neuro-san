@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
+
 import json
 
 from leaf_common.serialization.util.text_file_reader import TextFileReader

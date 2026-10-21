@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details.
-"""
+
 from __future__ import annotations
 
 from tests.record_playback_llm_server.proxy_handler import ProxyHandler

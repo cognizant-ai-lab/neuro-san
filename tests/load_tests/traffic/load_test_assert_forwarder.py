@@ -13,9 +13,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-AssertForwarder for the load tester: raises plain AssertionErrors.
-"""
 
 from typing import Any
 from typing import Optional

@@ -14,13 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-close()/is_closed() single-use contract tests for HttpServiceAgentSession.
 
-These exercise the client-side contract only and never contact a server: the
-closed-session guard raises before any network call, so no LLM key or running
-service is required.
-"""
 from typing import Any
 from typing import Dict
 
@@ -31,7 +25,13 @@ from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
 
 class TestHttpServiceAgentSessionClose:
-    """A HttpServiceAgentSession is single-use once close() has been called."""
+    """
+    A HttpServiceAgentSession is single-use once close() has been called.
+
+    These close()/is_closed() contract tests exercise the client-side contract only
+    and never contact a server: the closed-session guard raises before any network
+    call, so no LLM key or running service is required.
+    """
 
     @staticmethod
     def _make_session() -> HttpServiceAgentSession:
