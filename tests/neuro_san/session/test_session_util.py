@@ -73,6 +73,8 @@ class TestSessionUtil(TestCase):
         """
         "0" (the Dockerfile default), negatives and blank strings mean no limit; nothing is logged.
         """
+        # Each of these values must mean "no limit" without a warning.
+        value: str = None
         for value in ["0", "-1", "-999", "", "  "]:
             with self.subTest(value=value):
                 self.set_limit(value)
@@ -96,6 +98,8 @@ class TestSessionUtil(TestCase):
         """
         A limit at or above the list length changes nothing and logs nothing.
         """
+        # The list has five entries, so none of these limits drops anything.
+        value: str = None
         for value in ["5", "6", "100"]:
             with self.subTest(value=value):
                 self.set_limit(value)
@@ -106,6 +110,8 @@ class TestSessionUtil(TestCase):
         """
         Values with surrounding whitespace or a leading "+" still parse as a limit.
         """
+        # int() accepts each of these as written, so each must read as a limit of 2.
+        value: str = None
         for value in [" 2 ", "+2", "2\n"]:
             with self.subTest(value=value):
                 self.set_limit(value)
@@ -115,6 +121,8 @@ class TestSessionUtil(TestCase):
         """
         A non-integer value means no limit; the warning names the variable and includes the value.
         """
+        # Each of these fails int(), so each must be ignored with exactly one warning.
+        value: str = None
         for value in ["abc", "2.5", "5o"]:
             with self.subTest(value=value):
                 self.set_limit(value)
@@ -129,6 +137,17 @@ class TestSessionUtil(TestCase):
         Anything that is not a list (None, a dict, a string) is returned unchanged even when a limit is set.
         """
         self.set_limit("2")
-        for payload in [None, {"a": 1, "b": 2, "c": 3}, "abcd"]:
+        payloads: List[Any] = [
+            None,
+            {
+                "a": 1,
+                "b": 2,
+                "c": 3,
+            },
+            "abcd",
+        ]
+        # Each payload must come back as the very same object, not a copy or a slice.
+        payload: Any = None
+        for payload in payloads:
             with self.subTest(payload=payload):
                 self.assertIs(payload, SessionUtil.limit_agents_list(payload))

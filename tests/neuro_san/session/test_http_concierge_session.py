@@ -41,9 +41,18 @@ class TestHttpConciergeSession(TestCase):
 
     GET_TARGET: str = "neuro_san.session.http_concierge_session.http_get"
     AGENTS: List[Dict[str, Any]] = [
-        {"agent_name": "one", "tags": ["a"]},
-        {"agent_name": "two", "tags": ["b"]},
-        {"agent_name": "three", "tags": ["a", "b"]},
+        {
+            "agent_name": "one",
+            "tags": ["a"],
+        },
+        {
+            "agent_name": "two",
+            "tags": ["b"],
+        },
+        {
+            "agent_name": "three",
+            "tags": ["a", "b"],
+        },
     ]
 
     @override
@@ -120,7 +129,11 @@ class TestHttpConciergeSession(TestCase):
         """
         os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "1"
         session: HttpConciergeSession = self.make_session()
-        with self.patch_get({"agents": self.AGENTS, "extra": "kept"}):
+        body: Dict[str, Any] = {
+            "agents": self.AGENTS,
+            "extra": "kept",
+        }
+        with self.patch_get(body):
             result: Dict[str, Any] = session.list({})
         self.assertEqual("kept", result["extra"])
         self.assertEqual(self.AGENTS[:1], result["agents"])
