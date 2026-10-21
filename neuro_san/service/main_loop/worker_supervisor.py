@@ -13,9 +13,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Supervisor for managing fresh worker processes in multi-instance HTTP server mode.
-"""
+
 from typing import Any
 from typing import List
 from typing import Optional

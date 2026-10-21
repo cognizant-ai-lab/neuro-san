@@ -14,19 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Transport-level tests that AsyncHttpServiceAgentSession.close() -- called
-synchronously from another thread -- aborts an in-flight request in both the
-pre-header and post-header windows.
 
-The client runs on its own event loop in a background thread while the main
-thread calls the synchronous close(). This exercises the loop-scheduled aborts:
-- post-header: close the tracked response (call_soon_threadsafe) to unblock an
-  iter_chunked() read;
-- pre-header: close the tracked ClientSession (run_coroutine_threadsafe) to abort
-  a request still awaiting response headers (no total timeout).
-Both must surface as AgentSessionClosedError.
-"""
 from typing import Any
 from typing import Dict
 
@@ -40,7 +28,21 @@ from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceA
 
 
 class TestAsyncHttpServiceAgentSessionCloseIntegration:
-    """close() unblocks pre-header and post-header async requests from another thread."""
+    """
+    close() unblocks pre-header and post-header async requests from another thread.
+
+    Transport-level tests that AsyncHttpServiceAgentSession.close() -- called
+    synchronously from another thread -- aborts an in-flight request in both the
+    pre-header and post-header windows.
+
+    The client runs on its own event loop in a background thread while the main
+    thread calls the synchronous close(). This exercises the loop-scheduled aborts:
+    - post-header: close the tracked response (call_soon_threadsafe) to unblock an
+      iter_chunked() read;
+    - pre-header: close the tracked ClientSession (run_coroutine_threadsafe) to abort
+      a request still awaiting response headers (no total timeout).
+    Both must surface as AgentSessionClosedError.
+    """
 
     @staticmethod
     def _run_client(session: AsyncHttpServiceAgentSession, request: Dict[str, Any],
