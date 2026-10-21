@@ -14,12 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Resource monitoring — psutil-based process snapshots.
-
-Interim implementation. May be replaced by neuro-san built-in
-monitoring and telemetry when those features become available.
-"""
-
 import logging
 from typing import Any
 from typing import Dict
@@ -32,7 +26,12 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResourceMonitor:
-    """Captures and logs psutil-based process resource snapshots."""
+    """
+    Captures and logs psutil-based process resource snapshots.
+
+    Interim implementation. May be replaced by neuro-san built-in
+    monitoring and telemetry when those features become available.
+    """
 
     # Bytes in a megabyte and in a gigabyte, to convert memory readings
     ONE_MEGABYTE: int = 1024 ** 2
@@ -46,6 +45,8 @@ class ResourceMonitor:
         :param keyword: Text to look for in each process command line
         :return: The first matching process, or None
         """
+        process: psutil.Process
+        # Return the first process whose command line has the keyword.
         for process in psutil.process_iter(["pid", "cmdline"]):
             try:
                 command_line: str = " ".join(process.info.get("cmdline") or [])
@@ -63,8 +64,12 @@ class ResourceMonitor:
         :param port: TCP port the process listens on
         :return: The first process listening on the port, or None
         """
+        process: psutil.Process
+        # Look for a process with a listening connection on the port.
         for process in psutil.process_iter(["pid"]):
             try:
+                connection: Any
+                # Check each connection of the process for a listen on the port.
                 for connection in process.net_connections():
                     if connection.status == "LISTEN" and connection.laddr.port == port:
                         return psutil.Process(process.info.get("pid"))

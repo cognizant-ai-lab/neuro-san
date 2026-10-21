@@ -28,6 +28,7 @@ import sys
 import threading
 import time
 
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
@@ -131,6 +132,8 @@ class ServerLogMonitor:
             return {}
         lines: List[str] = self._read_lines_since(position, "retries")
         retry_counts: Dict[str, int] = {}
+        line: str
+        # Count each retry line by its error type.
         for line in lines:
             match: Optional[re.Match] = RETRY_LOG_PATTERN.search(line)
             if match:
@@ -156,6 +159,8 @@ class ServerLogMonitor:
             return []
         text: str = "".join(lines)
         errors: List[Dict[str, str]] = []
+        match: re.Match
+        # One error entry per server error block in the new text.
         for match in SERVER_ERROR_PATTERN.finditer(text):
             message: str = " ".join(match.group(1).split())
             errors.append({"request_id": match.group(2), "message": message})
@@ -216,6 +221,8 @@ class ServerLogMonitor:
         total_finished: int = 0
         primary_start_re: re.Pattern = re.compile(primary_start_pattern)
         primary_finish_re: re.Pattern = re.compile(primary_finish_pattern)
+        line: str
+        # Count the request start and finish lines, for all requests and for primary requests.
         for line in lines:
             if REQUEST_START_PATTERN.search(line):
                 total_started += 1
@@ -245,6 +252,8 @@ class ServerLogMonitor:
         if not lines:
             return {}
         results: Dict[str, Dict[str, Any]] = {}
+        block: Dict[str, object]
+        # Keep the token entry of each reporting block, with the network named after it.
         for block in self._collect_reporting_blocks(lines):
             entry: Optional[Dict[str, Any]] = self._extract_token_entry(block.get("text", ""))
             if entry:
@@ -315,6 +324,9 @@ class ServerLogMonitor:
         blocks: List[Dict[str, object]] = []
         in_block: bool = False
         block_lines: List[str] = []
+        index: int
+        line: str
+        # Gather the lines from each "Request reporting" line to its "request_id" line.
         for index, line in enumerate(lines):
             if "Request reporting" in line and not in_block:
                 in_block = True
@@ -331,6 +343,8 @@ class ServerLogMonitor:
     def _resolve_network_names(blocks, lines) -> List[Dict[str, Any]]:
         """Match each block to its network via Done-with log lines."""
         results: List[Dict[str, Any]] = []
+        block: Dict[str, object]
+        # Keep each block's token entry with the network named after it.
         for block in blocks:
             block_text: str = block.get("text", "")
             entry: Optional[Dict[str, Any]] = ServerLogMonitor._extract_token_entry(block_text)
@@ -364,6 +378,8 @@ class ServerLogMonitor:
     def _find_network_after(lines, end_idx, lookahead=NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
         """Find the network name from Done-with lines after a block."""
         limit: int = min(end_idx + lookahead, len(lines))
+        index: int
+        # Look for a Done-with line in the lines after the block.
         for index in range(end_idx + 1, limit):
             match: Optional[re.Match] = DONE_STREAMING_PATTERN.search(lines[index])
             if match:
@@ -389,12 +405,15 @@ class ServerLogMonitor:
     def _collect_validation_events(lines: List[str]) -> List[Dict[str, Any]]:
         """Group validation log lines by request_id."""
         by_request: Dict[str, Dict[str, object]] = {}
+        line: str
+        # Count validation attempts, fix cycles and errors per request_id.
         for line in lines:
             request_id_match: Optional[re.Match] = REQUEST_ID_PATTERN.search(line)
             if not request_id_match:
                 continue
             request_id: str = request_id_match.group(1)
-            if request_id not in by_request:
+            # pylint: disable=consider-iterating-dictionary
+            if request_id not in by_request.keys():
                 by_request[request_id] = {"attempts": 0, "fix_cycles": 0, "errors": []}
             entry: Dict[str, object] = by_request.get(request_id)
             if VALIDATION_ATTEMPT_PATTERN.search(line):
@@ -405,13 +424,16 @@ class ServerLogMonitor:
             if error_match:
                 entry.get("errors").extend(ServerLogMonitor._parse_validation_errors(error_match.group(1)))
         results: List[Dict[str, Any]] = []
-        for request_id, data in sorted(by_request.items()):
-            if data.get("fix_cycles", 0) > 0:
+        validation_entry: Dict[str, object]
+        # Keep only the requests that needed a fix cycle, sorted by request_id.
+        for request_id, validation_entry in sorted(by_request.items()):
+            fix_cycles: int = validation_entry.get("fix_cycles", 0)
+            if fix_cycles > 0:
                 results.append({
                     "request_id": request_id,
-                    "attempts": data.get("attempts", 0),
-                    "fix_cycles": data.get("fix_cycles", 0),
-                    "errors": data.get("errors", []),
+                    "attempts": validation_entry.get("attempts", 0),
+                    "fix_cycles": fix_cycles,
+                    "errors": validation_entry.get("errors", []),
                 })
         return results
 
@@ -452,10 +474,10 @@ class ServerLogMonitor:
     @staticmethod
     def _match_streaming_chat_pairs(lines) -> List[Dict[str, object]]:
         """Match Start/Finish pairs from server log lines."""
-        from datetime import datetime  # pylint: disable=import-outside-toplevel
-
         starts: Dict[Tuple[str, str], float] = {}
         results: List[Dict[str, object]] = []
+        line: str
+        # Pair each streaming_chat Start record with its Finish record.
         for line in lines:
             entry: Any = None
             try:
@@ -517,6 +539,8 @@ class ServerLogMonitor:
         context_request_id: Optional[str] = None
         agent_by_request_id: Dict[str, str] = {}
 
+        line: str
+        # Track the current request_id and record primary requests, disconnections and cancels.
         for line in lines:
             request_match: Optional[re.Match] = REQUEST_ID_PATTERN.search(line)
             if request_match:
@@ -524,12 +548,15 @@ class ServerLogMonitor:
             start_match: Optional[re.Match] = REQUEST_START_PATTERN.search(line)
             if start_match and request_match:
                 agent_by_request_id[request_match.group(1)] = start_match.group(1)
-            if primary_start_re and primary_start_re.search(line) and context_request_id:
+            if (primary_start_re
+                    and primary_start_re.search(line)
+                    and context_request_id):
                 if context_request_id not in primary_request_ids:
                     primary_request_ids.append(context_request_id)
             if CLIENT_DISCONNECT_PATTERN.search(line):
                 request_id: str = context_request_id or "unknown"
-                if request_id not in disconnections:
+                # pylint: disable=consider-iterating-dictionary
+                if request_id not in disconnections.keys():
                     disconnections[request_id] = {"request_id": request_id, "agent": "unknown"}
             cancel_match: Optional[re.Match] = TASK_CANCELLED_PATTERN.search(line)
             if cancel_match:
@@ -565,13 +592,20 @@ class ServerLogMonitor:
             return
 
         primary_numbers: List[int] = []
+        primary_request_id: str
+        # Get the request number of each primary request.
         for primary_request_id in primary_request_ids:
             primary_numbers.append(ServerLogMonitor._request_number(primary_request_id))
 
+        disconnection: Dict[str, str]
+        # Find the client request that each disconnection belongs to.
         for disconnection in disconnections.values():
             request_id: str = disconnection.get("request_id", "")
             request_number: int = ServerLogMonitor._request_number(request_id)
             parent_index: Optional[int] = None
+            index: int
+            primary_number: int
+            # The parent is the last primary request at or before this request number.
             for index, primary_number in enumerate(primary_numbers):
                 if primary_number <= request_number:
                     parent_index = index

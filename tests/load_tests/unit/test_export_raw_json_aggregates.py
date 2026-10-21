@@ -44,7 +44,9 @@ class TestExportRawJsonAggregates(TestCase):
     """
 
     def setUp(self) -> None:
-        """Create an output directory removed again after each test."""
+        """
+        Create an output directory removed again after each test.
+        """
         self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
 
@@ -80,6 +82,9 @@ class TestExportRawJsonAggregates(TestCase):
         :return: Aggregates read back from raw_results.json
         """
         results: List[Dict[str, Any]] = []
+        index: int
+        elapsed_seconds: float
+        # One successful request per elapsed time, numbered from 1.
         for index, elapsed_seconds in enumerate(elapsed_values_seconds, start=1):
             results.append({"request_id": f"request-{index}", "status": STATUS_CREATED, "elapsed": elapsed_seconds})
         # One stage whose wall-clock time is the slowest request,
@@ -97,7 +102,8 @@ class TestExportRawJsonAggregates(TestCase):
             return json.load(handle).get("aggregates", {})
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
-        """Concurrency must not divide the reported latency.
+        """
+        Concurrency must not divide the reported latency.
 
         Ten overlapping 30-second requests average 30 seconds, not the
         3 seconds that dividing wall-clock time by the request count
@@ -108,13 +114,17 @@ class TestExportRawJsonAggregates(TestCase):
         self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
-        """The mean is taken over every request's own elapsed time."""
+        """
+        The mean is taken over every request's own elapsed time.
+        """
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
         self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
 
     def test_wall_clock_total_is_reported_separately(self) -> None:
-        """Throughput is still derivable from the elapsed total."""
+        """
+        Throughput is still derivable from the elapsed total.
+        """
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
         self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)

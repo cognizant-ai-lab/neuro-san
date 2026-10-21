@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Factory that builds an AgentProfile from a JSON profile or test-case hocons."""
-
 import logging
 import os
 from typing import Any
@@ -36,7 +34,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 class AgentProfileFactory:
     """
-    Builds AgentProfile instances.
+    Builds AgentProfile instances from a JSON profile or from test-case hocons.
 
     Policy lives here (where the profile comes from, how hocons map to
     profile settings, validation); AgentProfile itself only carries data.

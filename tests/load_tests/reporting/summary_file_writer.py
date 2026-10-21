@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Write a human-readable summary.txt for load test results."""
-
 import logging
 import os
 import time
@@ -39,7 +37,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class SummaryFileWriter:
-    """Writes a human-readable summary.txt to the output directory.
+    """
+    Writes a human-readable summary.txt to the output directory.
 
     Collects data from stage summaries and optional server timing
     to produce a single text file for quick review.

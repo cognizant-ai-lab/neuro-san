@@ -14,12 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Progress heartbeat — periodic logging while requests are in-flight.
-
-Interim implementation. May be replaced by neuro-san built-in
-monitoring and telemetry when those features become available.
-"""
-
 import logging
 import os
 import re
@@ -51,13 +45,17 @@ OUT_OF_MEMORY_WARNING_THRESHOLD: float = 0.80
 
 
 class Heartbeat:  # pylint: disable=too-many-instance-attributes
-    """Logs periodic progress while requests are in-flight.
+    """
+    Logs periodic progress while requests are in-flight.
 
     Holds the server process handle so the heartbeat thread can
     read thread counts without the caller passing it each time.
 
     Also keeps the stage's peak readings. The heartbeat thread writes
     them; read them with the get_peak_*() methods after join().
+
+    Interim implementation. May be replaced by neuro-san built-in
+    monitoring and telemetry when those features become available.
     """
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -449,6 +447,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Number of futures that are done
         """
         done_count: int = 0
+        future: Future
+        # Count the futures that are done.
         for future in futures:
             if future.done():
                 done_count += 1
@@ -467,6 +467,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Durations in seconds of the finished requests
         """
         durations: List[float] = []
+        future: Future
+        # Read the elapsed time of each request that finished without an error.
         for future in futures:
             if not future.done() or future.cancelled():
                 continue
@@ -500,6 +502,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         except (OSError, ValueError):
             return []
         durations: List[float] = []
+        pair: Dict[str, object]
+        # Keep the duration of each primary agent Start/Finish pair.
         for pair in pairs:
             if self._primary_start_regex is not None:
                 agent: object = pair.get("agent", "")

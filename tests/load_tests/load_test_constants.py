@@ -14,7 +14,9 @@
 #
 # END COPYRIGHT
 
-"""Shared constants, regex patterns, and defaults for the load test framework."""
+"""
+Shared constants, regex patterns, and defaults for the load test framework.
+"""
 
 import os
 import re
@@ -36,6 +38,10 @@ LEVEL_MIN: str = "min"
 LEVEL_NORM: str = "norm"
 LEVEL_ADV: str = "adv"
 
+# Flat-mode defaults for --level adv, unless the flag is given
+ADV_NUM_REQUESTS: int = 50
+ADV_NUM_ROUNDS: int = 3
+
 # Tracked retry error types.  All but ProviderRetry are neuro-san's own
 # max_attempts retries; ProviderRetry counts retries the LLM provider
 # SDK performs internally.
@@ -48,11 +54,15 @@ SEPARATOR_WIDTH: int = 60
 
 # Default configuration
 LOCAL_HOSTS: Set[str] = {"localhost", "127.0.0.1", "::1"}
+# Server port when --https is set and --port is not given
+DEFAULT_HTTPS_PORT: int = 443
 DEFAULT_STAGES: List[int] = [10, 30, 50, 100]
 # Parent dir of per-agent load-test hocon fixtures, relative to project root
 DEFAULT_FIXTURES_HOCON_DIR: str = os.path.join("tests", "fixtures", "load_tests")
 DEFAULT_TIMEOUT_SECONDS: int = 1200
 DEFAULT_IDLE_TIMEOUT_SECONDS: int = 900
+DEFAULT_STAGE_TIMEOUT_SECONDS: int = 1500
+DEFAULT_SETTLE_TIME_SECONDS: int = 15
 NETWORK_LOOKAHEAD_LINES: int = 10
 # Max per-request failure blocks printed to the console before the rest
 # are suppressed (full detail always remains in raw_results.json).

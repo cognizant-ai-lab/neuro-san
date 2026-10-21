@@ -32,7 +32,9 @@ from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
 
 class FakeSession:
-    """Stand-in for HttpServiceAgentSession that streams on a timer."""
+    """
+    Stand-in for HttpServiceAgentSession that streams on a timer.
+    """
 
     def __init__(self, message_count: int, message_interval_seconds: float, **_kwargs: Any) -> None:
         """
@@ -53,6 +55,8 @@ class FakeSession:
         :param _request_dict: The streaming_chat request, ignored
         :return: One AI chat message per interval
         """
+        _: int
+        # Yield one message per interval, counting each one sent.
         for _ in range(self._message_count):
             time.sleep(self._message_interval_seconds)
             self.sent += 1
@@ -60,7 +64,9 @@ class FakeSession:
 
 
 class FakeProcessor:
-    """Stand-in for StreamingInputProcessor that drains the stream."""
+    """
+    Stand-in for StreamingInputProcessor that drains the stream.
+    """
 
     def __init__(self, session: FakeSession, **_kwargs: Any) -> None:
         """
@@ -89,6 +95,8 @@ class FakeProcessor:
         :param state: The request state
         :return: A copy of the state with the answer filled in
         """
+        _: Dict[str, Any]
+        # Read the whole stream.
         for _ in self._session.streaming_chat({}):
             pass
         updated: Dict[str, Any] = dict(state)
@@ -133,31 +141,36 @@ class TestAgentRequestExecutor(TestCase):
         return result, session
 
     def test_streaming_past_the_cap_is_a_timeout(self) -> None:
-        """A stream that outruns the cap reports TIMEOUT."""
-        execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
-                                                                          message_interval_seconds=0.05)
-        result: AgentRequestResult = execution[0]
+        """
+        A stream that outruns the cap reports TIMEOUT.
+        """
+        result: Optional[AgentRequestResult] = None
+        unused_session: Optional[FakeSession] = None
+        result, unused_session = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
 
         self.assertEqual(result.get_status(), STATUS_TIMEOUT)
 
     def test_streaming_past_the_cap_stops_early(self) -> None:
-        """The request is abandoned rather than drained to the end.
+        """
+        The request is abandoned rather than drained to the end.
 
         Reporting TIMEOUT after draining the whole stream would still
-        label the request correctly while the worker stayed occupied,
-        which is the behaviour being fixed.
+        label the request correctly, but the worker would stay occupied
+        until the stream ends.
         """
         start_seconds: float = time.perf_counter()
-        execution: Tuple[AgentRequestResult, FakeSession] = self._execute(timeout_seconds=0.3, message_count=20,
-                                                                          message_interval_seconds=0.05)
-        session: FakeSession = execution[1]
+        unused_result: Optional[AgentRequestResult] = None
+        session: Optional[FakeSession] = None
+        unused_result, session = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
         elapsed_seconds: float = time.perf_counter() - start_seconds
 
         self.assertLess(session.sent, 20)
         self.assertLess(elapsed_seconds, 20 * 0.05)
 
     def test_request_within_the_cap_succeeds(self) -> None:
-        """A request that finishes in time is unaffected."""
+        """
+        A request that finishes in time is unaffected.
+        """
         result: Optional[AgentRequestResult] = None
         session: Optional[FakeSession] = None
         result, session = self._execute(timeout_seconds=30, message_count=3, message_interval_seconds=0.01)
