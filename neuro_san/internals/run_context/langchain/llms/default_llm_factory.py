@@ -400,8 +400,9 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         extends: str = chat_class.get("extends")
         if extends is not None:
             # If this class extends another, get its args too.
+            # The overlay wins, so this class's own args override the inherited ones.
             extends_args: Dict[str, Any] = self.get_chat_class_args(extends, use_model_name)
-            args = self.overlayer.overlay(args, extends_args)
+            args = self.overlayer.overlay(extends_args, args)
 
         return args
 

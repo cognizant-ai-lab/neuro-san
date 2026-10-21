@@ -1812,8 +1812,6 @@
                 "openai_api_version": null,
                 "openai_api_type": null,
                 "model_version": null,
-                # streaming defaults to off; set "streaming": true in llm_config to enable.
-                "streaming": false,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
@@ -1901,6 +1899,11 @@
             # ChatAnthropicBedrock subclasses ChatAnthropic, so all Anthropic args
             # are inherited unchanged. We only declare the AWS-specific knobs here.
             # See https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock
+            #
+            # An llm_config that names this class should also set "max_tokens", unless
+            # your own llm info file gives this class a "max_tokens" default in its args.
+            # neuro-san fills it in from "max_output_tokens" only when an llm_config
+            # has no "class", and langchain's default for a Bedrock model id is 4096.
             "extends": "anthropic",
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
@@ -2067,9 +2070,11 @@
                 "tags": null,
                 "temperature": null,
 
-                # Keyword arguments to pass to the model.
-                # Can be used to pass reasoning parameters for Anthropic reasoning models.
-                # For example: {"thinking": {"type": "enabled", "budget_tokens": 10000}}
+                # Extra request parameters for the model that have no key of their own
+                # above, named as the model's provider documents them for Bedrock.
+                # With "beta_use_converse_api": true, a provider-specific key such as
+                # "top_k" must go under "additional_model_request_fields", e.g.
+                # {"additional_model_request_fields": {"top_k": 50}}, or it is dropped.
                 "model_kwargs": null,
             }
         }
