@@ -67,6 +67,7 @@ class BedrockLlmPolicy(LlmPolicy):
             guardrails=config.get("guardrails"),
             max_tokens=config.get("max_tokens"),
             metadata=config.get("metadata"),
+            model_kwargs=config.get("model_kwargs"),
             provider=config.get("provider"),
             rate_limiter=config.get("rate_limiter"),
             region_name=config.get("region_name"),
