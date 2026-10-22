@@ -25,7 +25,6 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.load_test_constants import STATUS_FAILED
 from tests.load_tests.load_test_constants import STATUS_KILLED
@@ -65,12 +64,12 @@ class SummaryReporter:
 
         :param is_ramp: True to label each row by stage, False by round
         """
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         title: str = "ROUND SUMMARY"
         if is_ramp:
             title = "RAMP-UP SUMMARY"
         logger.info("  %s", title)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         has_server_counts: bool = False
         summary: Dict[str, Any]
@@ -128,9 +127,9 @@ class SummaryReporter:
 
         total_sent: int = total_created + total_failed + total_timeout + total_killed
 
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  OVERALL RESULTS")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         if self._neuro_san_version:
             logger.info("  neuro-san version: %s", self._neuro_san_version)
         logger.info("  Total requests: %s", total_sent)
@@ -175,9 +174,9 @@ class SummaryReporter:
         """
         if client is None and server is None:
             return False
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  LLM & TOKEN USAGE")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         SummaryReporter._log_token_source(f"Client ({client_source})", client)
         SummaryReporter._log_token_source("Server log", server)
         if client is not None and server is not None:

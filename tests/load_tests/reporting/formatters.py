@@ -20,6 +20,9 @@ class Formatters:
     Reporting helpers for human-readable metrics and derived values.
     """
 
+    # Header and footer line of each report section: 60 "=" characters.
+    SEPARATOR_LINE: str = "============================================================"
+
     @staticmethod
     def format_rss(rss_megabytes: float) -> str:
         """

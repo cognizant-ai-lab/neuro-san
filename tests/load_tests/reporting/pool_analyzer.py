@@ -20,7 +20,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -60,9 +60,9 @@ class PoolAnalyzer:
 
         base_threads: int = stages_with_data[0].get("before_threads")
 
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  EXECUTOR POOL REUSE ANALYSIS")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Batch", "Server Calls", "New Threads",
