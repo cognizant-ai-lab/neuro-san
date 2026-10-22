@@ -29,7 +29,6 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
@@ -286,9 +285,9 @@ class CrossRunComparison:
         :param runs: One agent's runs sorted by num_requests; the first is the baseline
         :param agent_name: Agent name shown in the table title
         """
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Folder", "Requests", "Succeeded",

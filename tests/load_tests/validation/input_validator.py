@@ -27,10 +27,10 @@ import psutil
 
 from tests.load_tests.load_test_constants import DEFAULT_STAGES
 from tests.load_tests.load_test_constants import LEVEL_ADV
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.project_paths import ProjectPaths
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
@@ -223,7 +223,7 @@ Then use:
                                               total_planned_requests=total_planned_requests,
                                               stale_log_age_minutes=stale_log_age_minutes)
             self._print_warnings(warnings)
-            logger.info("=" * SEPARATOR_WIDTH)
+            logger.info("%s", Formatters.SEPARATOR_LINE)
             return None
 
         probe_result: Dict[str, Any] = {}
@@ -258,7 +258,7 @@ Then use:
        --no-dry-run does not auto-adjust timeouts.""",
         )
 
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
             logger.info("Aborted by user.")
@@ -275,9 +275,9 @@ Then use:
         :param capped_requests: Requests after the --max-requests cap
         """
         args: Namespace = self._args
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  PRE-RUN SUMMARY")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         logger.info("  Agent:    %s", args.agent)
         logger.info("  Level:    %s", args.level)
         if args.ramp:
