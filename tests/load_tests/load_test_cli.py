@@ -103,7 +103,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     """
 
     def __init__(self, args) -> None:
-        """Initialize the orchestrator with parsed arguments."""
+        """
+        Initialize the orchestrator with parsed arguments.
+
+        :param args: Parsed command-line arguments
+        """
         self.args = args
         self.input_validator = InputValidator(args)
         self.hocon_files: List[str] = self.input_validator.validate_fixtures_hocon_dir()
@@ -128,14 +132,24 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._history_recorder: HistoryRecorder = HistoryRecorder(args, self._output_base())
 
     def _profile_source(self) -> str:
-        """Describe where the profile came from, for logs and raw_results.json."""
+        """
+        Describe where the profile came from, for logs and raw_results.json.
+
+        :return: "hocon (<N> files)" or "json profile"
+        """
         if self.hocon_files:
             return f"hocon ({len(self.hocon_files)} files)"
         return "json profile"
 
     # pylint: disable=too-many-locals
     def _run_all_stages(self, stages, total_cap) -> List[Dict[str, Any]]:
-        """Execute all stages of the load test, collecting data per stage."""
+        """
+        Execute all stages of the load test, collecting data per stage.
+
+        :param stages: Request count of each stage, in order
+        :param total_cap: Most requests to send in the whole test
+        :return: One summary dict per stage that runs
+        """
         monitor_resources = (self.args.level != LEVEL_MIN
                              or self.args.client_only
                              or self.args.server_only)
@@ -205,10 +219,14 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return stage_summaries
 
     def _total_timeout_reached(self, test_start) -> bool:
-        """Check if total-timeout has been exceeded.
+        """
+        Check if total-timeout has been exceeded.
 
-        Returns True and logs a warning when the elapsed time since
-        test_start exceeds --total-timeout (0 means disabled).
+        Logs a warning when the elapsed time since
+        test_start reaches --total-timeout (0 means disabled).
+
+        :param test_start: time.time() at the start of the test
+        :return: True when the total timeout is reached
         """
         limit = self.args.total_timeout
         if limit <= 0:
@@ -500,7 +518,14 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return before_snapshots
 
     def _log_fire_info(self, actual_requests, monitor_resources, *, probe_result):
-        """Log the 'Firing N requests' line with thread count."""
+        """
+        Log the 'Firing N requests' line with thread count.
+
+        :param actual_requests: Number of requests this stage fires
+        :param monitor_resources: When True and a local server process is known, the line also shows the
+                                  server thread count
+        :param probe_result: Result of the dry-run probe to count in this stage, or None
+        """
         fire_ts = time.strftime("%H:%M:%S", time.localtime(time.time()))
         fire_threads = ""
         if monitor_resources and self.server_process:
@@ -644,11 +669,14 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return server_log_analysis
 
     def _output_base(self) -> str:
-        """Return the base output directory.
+        """
+        Return the base output directory.
 
         The default is per-user because the temp directory is shared:
         whoever ran first would otherwise own ``load_test`` and lock
         everyone else out of it.
+
+        :return: Path of the base output directory
         """
         if self.args.output_dir:
             return self.args.output_dir
@@ -661,7 +689,9 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return os.path.join(tempfile.gettempdir(), f"load_test_{user}")
 
     def _setup_test_log(self) -> None:
-        """Create output directory and add a file handler for logging."""
+        """
+        Create output directory and add a file handler for logging.
+        """
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         base = self._output_base()
         neuro_san_version: Optional[str] = self._resolve_ns_version()
@@ -672,11 +702,14 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         self._run_log.open(self._output_dir)
 
     def _preflight_server_check(self) -> None:
-        """Abort before firing if the target server is unreachable.
+        """
+        Abort before firing if the target server is unreachable.
 
         A quick TCP connect to --host:--port catches "server not
         found" (connection refused / DNS failure / host down) so a
         whole run's worth of requests is not fired at nothing.
+
+        :raises SystemExit: When the server can't be reached
         """
         host = self.args.host
         port = self.args.port
@@ -697,13 +730,16 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         raise SystemExit(1)
 
     def _fetch_server_version(self) -> Optional[str]:
-        """Return the server's neuro-san version via its /healthz API.
+        """
+        Return the server's neuro-san version via its /healthz API.
 
         Queries ``<scheme>://<host>:<port>/healthz`` (the same HTTP
         endpoint the client already reaches, so it works remotely
         without any access to the server machine) and reads
-        ``versions['neuro-san']``.  Returns None if the endpoint is
-        unreachable or unparseable (e.g. an older/gRPC-only server).
+        ``versions['neuro-san']``.
+
+        :return: The server's version, or None if the endpoint is
+                 unreachable or unparseable (e.g. an older/gRPC-only server)
         """
         scheme = "https" if getattr(self.args, "https", False) else "http"
         url = f"{scheme}://{self.args.host}:{self.args.port}/healthz"
@@ -717,7 +753,11 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             return None
 
     def _finalize_test_log(self, stage_summaries) -> None:
-        """Report the output directory and close the log handler."""
+        """
+        Report the output directory and close the log handler.
+
+        :param stage_summaries: One summary dict per stage
+        """
         if self._output_dir is None:
             self._run_log.close()
             return
@@ -757,7 +797,9 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         self._run_log.close()
 
     def _archive_server_log(self) -> None:
-        """Gzip the server log into the output directory."""
+        """
+        Gzip the server log into the output directory.
+        """
         if not self.args.archive_server_log:
             return
         if not self.server_log or not os.path.isfile(self.server_log):
@@ -768,14 +810,16 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             shutil.copyfileobj(f_in, f_out)
 
     def _validate_server_log(self) -> Optional[int]:
-        """Validate --server-log path when provided.
+        """
+        Validate --server-log path when provided.
 
         Skips validation when --server-log is used without a path
         (auto-detect mode, value is ``"auto"``).  At norm/adv levels
         without --server-log, logs a warning listing which features
         will be unavailable.
 
-        Returns the stale log age in minutes, or None if not stale.
+        :return: The stale log age in minutes, or None when the log is not stale, not given, or "auto"
+        :raises SystemExit: When the --server-log file is not found
         """
         level = self.args.level
         server_log = self.args.server_log
@@ -814,11 +858,15 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return None
 
     def _confirm_no_server_log(self, level) -> None:
-        """Prompt to continue when a local server.log isn't found.
+        """
+        Prompt to continue when a local server.log isn't found.
 
         norm/adv expect a server log; if auto-detect fails, offer to
         run without it or abort. --no-server-log skips this prompt;
         --no-dry-run does not (it only bypasses the cost confirmation).
+
+        :param level: The --level value
+        :raises SystemExit: When the user chooses not to continue
         """
         logger.warning(
             """Server log not found for --level %s. Without it: no retry, disconnection, or pool analysis.
@@ -857,10 +905,13 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
     @staticmethod
     def _apply_scale(args) -> None:
-        """Multiply load parameters by --scale factor.
+        """
+        Multiply load parameters by --scale factor.
 
         Applied after level defaults so that both explicit
         values and level defaults are scaled uniformly.
+
+        :param args: Parsed command-line arguments, scaled in place
         """
         factor = args.scale
         if factor <= 1:
@@ -873,14 +924,15 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if args.total_timeout > 0:
             args.total_timeout *= factor
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _server_only_primary_pairs(self, log_position, primary_start_regex) -> List[Dict]:
-        """Primary-agent streaming_chat Start/Finish pairs since log_position.
+        """
+        Primary-agent streaming_chat Start/Finish pairs since log_position.
 
-        Returns the subset of parsed pairs whose agent matches the
-        primary (front-man) agent, each with ``start_ts``,
-        ``finish_ts``, and ``duration_seconds``.  Empty on read error or when
-        no primary request has completed yet.
+        :param log_position: Server log position at the start of the round
+        :param primary_start_regex: Compiled pattern for the primary agent's Start line
+        :return: The pairs of the primary (front-man) agent, each with "agent", "start_ts", "finish_ts",
+                 "duration_seconds" and "request_id"; empty when there is no log monitor, on a read error,
+                 or before a primary request completes
         """
         if self.log_monitor is None:
             return []
@@ -899,11 +951,15 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return primary
 
     def _server_only_duration_stats(self, log_position, primary_start_regex) -> str:
-        """Cumulative server-side min/avg/max for the primary agent.
+        """
+        Cumulative server-side min/avg/max for the primary agent.
 
         Parses primary streaming_chat Start/Finish pairs seen since
-        the round's log position and formats them.  Returns "n/a"
-        until at least one request has completed.
+        the round's log position and formats them.
+
+        :param log_position: Server log position at the start of the round
+        :param primary_start_regex: Compiled pattern for the primary agent's Start line
+        :return: The formatted stats, or "n/a" until at least one request has completed
         """
         durations = [
             float(pair.get("duration_seconds"))
@@ -916,11 +972,14 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return Heartbeat.format_duration_stats(durations)
 
     def _log_server_only_token_usage(self, log_position) -> None:
-        """Log the LLM & TOKEN USAGE section for a server-only round.
+        """
+        Log the LLM & TOKEN USAGE section for a server-only round.
 
         There is no client side in server-only, so the client line
         reads "not available" and the numbers come solely from
         server.log token accounting.
+
+        :param log_position: Server log position at the start of the round
         """
         token_data = self.log_monitor.parse_token_accounting_since(log_position)
         server_stats = SummaryReporter.aggregate_token_entries(token_data.values())
@@ -959,7 +1018,20 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             current_system_cpu_percent: Optional[float] = None,
             peak_system_cpu_percent: Optional[float] = None,
     ) -> None:
-        """Log a periodic heartbeat during server-only monitoring."""
+        """
+        Log a periodic heartbeat during server-only monitoring.
+
+        :param received: Number of requests the server has received
+        :param expected: Number of requests the client will send
+        :param completed: Number of requests the server has finished
+        :param elapsed_seconds: Seconds since the round started
+        :param now: time.time() of this heartbeat
+        :param server_snapshot: Server process snapshot (rss, threads), or None
+        :param virtual_memory_stats: The psutil.virtual_memory() result
+        :param duration_stats: Formatted server-side duration stats
+        :param current_system_cpu_percent: System CPU percent now, or None
+        :param peak_system_cpu_percent: Highest system CPU percent in the round, or None
+        """
         used_bytes = virtual_memory_stats.total - virtual_memory_stats.available
         used_megabytes = used_bytes / ResourceMonitor.ONE_MEGABYTE
         available_gigabytes = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
@@ -995,7 +1067,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         )
 
     def _run_server_only_monitor(self) -> int:
-        """Interactive server-only monitoring loop.
+        """
+        Interactive server-only monitoring loop.
 
         Prompts the user for the expected request count, then
         monitors the server log until all requests arrive (or
@@ -1003,6 +1076,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         writes raw_results.json, archives the server log, and
         loops back for another round.  Only exits on Ctrl-C
         at the prompt.
+
+        :return: 0 when the user exits at the prompt
         """
         primary_start_pattern = self.profile.get_primary_start_pattern()
         primary_start_regex = re.compile(primary_start_pattern)
@@ -1033,7 +1108,12 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             self._run_server_only_round(expected, round_num, primary_start_regex, primary_finish_regex)
 
     def _setup_round_output_dir(self, expected) -> str:
-        """Create an output directory for a server-only round."""
+        """
+        Create an output directory for a server-only round.
+
+        :param expected: Number of requests the client will send, for the folder name
+        :return: Path of the round output directory
+        """
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         base = self._output_base()
         neuro_san_version: Optional[str] = self._resolve_ns_version()
@@ -1043,11 +1123,17 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return round_dir
 
     def _run_server_only_round(self, expected, round_num, primary_start_regex, primary_finish_regex) -> None:
-        """Execute one round of server-only monitoring.
+        """
+        Execute one round of server-only monitoring.
 
         Wraps the round body with a per-round ``stdout.log`` file
         handler so each server-only round captures its own console
         output (heartbeats + summary) in its output directory.
+
+        :param expected: Number of requests the client will send
+        :param round_num: Round number, starting at 1
+        :param primary_start_regex: Compiled pattern for the primary agent's Start line
+        :param primary_finish_regex: Compiled pattern for the primary agent's Finish line
         """
         round_dir = self._setup_round_output_dir(expected)
         log_position = self.log_monitor.read_position()
@@ -1074,7 +1160,18 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             primary_start_regex, primary_finish_regex,
             round_dir, log_position, round_log_path,
     ) -> None:
-        """Execute one round of server-only monitoring."""
+        """
+        Run the steps of one server-only round: snapshots, log tailing, reports, raw_results.json and the
+        server log copy.
+
+        :param expected: Number of requests the client will send
+        :param round_num: Round number, starting at 1
+        :param primary_start_regex: Compiled pattern for the primary agent's Start line
+        :param primary_finish_regex: Compiled pattern for the primary agent's Finish line
+        :param round_dir: Output directory of the round
+        :param log_position: Server log position at the start of the round
+        :param round_log_path: Path of the round's stdout.log
+        """
         logger.info("\n%s", "=" * 60)
         logger.info("  Round %d: expecting %d request(s)", round_num, expected)
         logger.info("=" * 60)
@@ -1215,6 +1312,7 @@ Waiting for %d request(s) in server log...
         logger.info("  Stdout log:  %s", round_log_path)
         self._history_recorder.log_existing_history_files()
 
+        # "\u2500" is the box-drawing character "─", so this logs a horizontal line.
         logger.info("\n%s", "\u2500" * 45)
         logger.info("  Round %d complete. Ready for next round.", round_num)
         logger.info("%s", "\u2500" * 45)
@@ -1432,7 +1530,27 @@ Waiting for %d request(s) in server log...
             server_errors: Optional[List[Dict[str, str]]] = None,
             tool_warnings: Optional[List[Dict[str, str]]] = None,
     ) -> None:
-        """Write raw_results.json for a server-only round."""
+        """
+        Write raw_results.json for a server-only round.
+
+        :param round_dir: Output directory of the round
+        :param expected: Number of requests the client will send
+        :param count: Number of requests the server received
+        :param elapsed: Seconds the round takes
+        :param before_server: Server process snapshot before the round, or None
+        :param after_server: Server process snapshot after the round, or None
+        :param peak_server: Server process snapshot with the highest RSS, or None
+        :param peak_threads: Most server threads seen in the round
+        :param before_system_memory_percent: System memory used before the round, in percent
+        :param peak_system_memory_percent: Highest system memory used in the round, in percent
+        :param after_system_memory_percent: System memory used after the round, in percent
+        :param interrupted: True when Ctrl-C stops the round
+        :param kernel_breakdown: Kernel memory breakdown in MB, or None
+        :param avg_system_cpu_percent: Average system CPU percent in the round, or None
+        :param peak_system_cpu_percent: Highest system CPU percent in the round, or None
+        :param server_errors: Server "Errors detected:" events, or None
+        :param tool_warnings: "Failed to create Agent/tool" warnings, or None
+        """
         server_cpu_seconds = None
         if before_server and after_server:
             cpu_before = before_server.get("cpu_seconds")
@@ -1491,10 +1609,11 @@ Waiting for %d request(s) in server log...
 
     @staticmethod
     def _read_kernel_memory() -> Optional[Dict[str, float]]:
-        """Read kernel memory breakdown from /proc/meminfo.
+        """
+        Read kernel memory breakdown from /proc/meminfo.
 
-        Returns a dict with values in MB, or None if not on
-        Linux.
+        :return: A dict of every /proc/meminfo value in MB plus "TcpMem" (TCP buffers in MB, 0.0 when
+                 /proc/net/sockstat can't be read), or None when /proc/meminfo is missing or can't be read
         """
         if not os.path.isfile("/proc/meminfo"):
             return None
@@ -1531,10 +1650,18 @@ Waiting for %d request(s) in server log...
 
     @staticmethod
     def _log_kernel_breakdown(after_kernel, server_rss_peak, *, log=True) -> Dict[str, float]:
-        """Compute the kernel memory breakdown.
+        """
+        Compute the kernel memory breakdown.
 
         When ``log`` is False the values are still returned for JSON
         export but nothing is printed to the console.
+
+        :param after_kernel: Kernel memory values in MB from _read_kernel_memory(), or None
+        :param server_rss_peak: Peak server RSS in MB (the caller passes the after-round RSS when there is no peak)
+        :param log: When True, the breakdown is also logged
+        :return: A dict with "server_rss_mb", "kernel_stacks_mb", "page_tables_mb", "slab_mb", "page_cache_mb",
+                 "tcp_buffers_mb", "accounted_mb", "unaccounted_mb" and "system_total_mb", or {} when
+                 after_kernel is empty
         """
         if not after_kernel:
             return {}
@@ -1560,6 +1687,7 @@ Waiting for %d request(s) in server log...
             logger.info("    Slab cache:       %.0fM", slab)
             logger.info("    Page cache:       %.0fM", cached)
             logger.info("    TCP buffers:      %.0fM", tcp_mem)
+            # "\u2500" is the box-drawing character "─", so this logs a horizontal line.
             logger.info("    %s", "\u2500" * 30)
             logger.info("    Accounted:        %.0fM", accounted)
             logger.info("    Unaccounted:      %.0fM", unaccounted)
@@ -1578,7 +1706,11 @@ Waiting for %d request(s) in server log...
         }
 
     def _archive_server_log_to(self, target_dir) -> None:
-        """Gzip the server log into the given directory."""
+        """
+        Gzip the server log into the given directory.
+
+        :param target_dir: Directory for the gzipped server log
+        """
         if not self.server_log or not os.path.isfile(self.server_log):
             return
         gz_path = os.path.join(target_dir, "server.log.gz")
@@ -1586,7 +1718,13 @@ Waiting for %d request(s) in server log...
             shutil.copyfileobj(f_in, f_out)
 
     def run(self) -> int:
-        """Execute the full load test workflow."""
+        """
+        Execute the full load test workflow.
+
+        :return: The exit code: 0 when every request passes or the server-only monitor exits at its prompt,
+                 1 on failures or an abort, 2 on Ctrl-C
+        :raises SystemExit: When the arguments don't fit together or the server can't be reached
+        """
         level = self.args.level
         self.args.include_tokens = not self.args.no_tokens
         split_mode = self.args.client_only or self.args.server_only
@@ -1794,19 +1932,32 @@ Waiting for %d request(s) in server log...
         return exit_code
 
     def was_interrupted(self) -> bool:
-        """Return True if the run was stopped early by Ctrl-C."""
+        """
+        Return True if the run was stopped early by Ctrl-C.
+
+        :return: True when Ctrl-C stops the run
+        """
         return self._interrupted
 
     def _install_interrupt_handler(self):
-        """Install a SIGINT handler that requests a graceful stop.
+        """
+        Install a SIGINT handler that requests a graceful stop.
 
         The first Ctrl-C sets a cancel event so in-flight requests are
         killed and the completed ones are still summarized.  A second
         Ctrl-C restores the previous handler so the interpreter exits
-        immediately.  Returns the previous handler (or None if it could
-        not be installed, e.g. not on the main thread).
+        immediately.
+
+        :return: The previous handler, or None if it could not be installed
+                 (e.g. not on the main thread)
         """
         def _handle_sigint(_signum, _frame):
+            """
+            Stop gracefully on the first Ctrl-C, and restore the previous handler on the second.
+
+            :param _signum: Signal number (not used)
+            :param _frame: Current stack frame (not used)
+            """
             # Nested to close over self and prev_handler, which the
             # signal callback needs to toggle graceful vs. forced stop;
             # signal.signal() takes a bare callable, not a bound method.
@@ -1830,13 +1981,16 @@ Waiting for %d request(s) in server log...
 
     @staticmethod
     def _log_server_completion_percentiles(primary_pairs) -> None:
-        """Log server-side completion-duration percentiles on one line.
+        """
+        Log server-side completion-duration percentiles on one line.
 
         Durations are server-side processing times (Start->Finish from
         the primary agent's log pairs), so they run slightly shorter
         than the client's end-to-end per-request duration.  Reuses
         ``LatencyAnalyzer._percentile`` and ``COMPLETION_MILESTONES`` so
         the math and labels match the client's percentile line.
+
+        :param primary_pairs: Primary-agent Start/Finish pairs, each with ``duration_seconds``
         """
         durations = sorted(
             float(pair.get("duration_seconds")) for pair in primary_pairs
@@ -1860,7 +2014,12 @@ Waiting for %d request(s) in server log...
         logger.info("\n  Server-side completion percentiles (%d requests): %s", len(durations), parts)
 
     def _export_raw_json(self, stage_summaries, *, exit_code) -> None:
-        """Save all test data as a single raw_results.json file."""
+        """
+        Save all test data as a single raw_results.json file.
+
+        :param stage_summaries: One summary dict per stage
+        :param exit_code: Exit code of the test
+        """
         all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
 
         total_tokens = sum(r.get("total_tokens", 0) for r in all_results)
@@ -1938,7 +2097,9 @@ Waiting for %d request(s) in server log...
             json.dump(raw_data, json_file, indent=2, default=str)
 
     def _rename_interrupted(self) -> None:
-        """Append _interrupted to the output directory name."""
+        """
+        Append _interrupted to the output directory name.
+        """
         if self._output_dir is None:
             return
         new_path = self._output_dir + "_interrupted"
@@ -1950,9 +2111,13 @@ Waiting for %d request(s) in server log...
             logger.warning("  Could not rename output dir: %s", exc)
 
     def _maybe_write_summary(self, stage_summaries, server_chat_timing) -> None:
-        """Write summary.txt for adv level only.
+        """
+        Write summary.txt for adv level only.
 
         With --no-dry-run: auto-write.  Otherwise prompt the user.
+
+        :param stage_summaries: One summary dict per stage
+        :param server_chat_timing: Server streaming_chat Start/Finish pairs for the test
         """
         if self.args.level != LEVEL_ADV:
             return
@@ -1963,7 +2128,12 @@ Waiting for %d request(s) in server log...
         writer.write(self._output_dir)
 
     def _check_results(self, stage_summaries) -> int:
-        """Log pass/fail verdict and return appropriate exit code."""
+        """
+        Log pass/fail verdict and return appropriate exit code.
+
+        :param stage_summaries: One summary dict per stage
+        :return: 0 when the test passes, 1 when it fails
+        """
         all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
         total = len(all_results)
         passed = sum(1 for r in all_results if r.get("status") == STATUS_CREATED)
@@ -1994,14 +2164,20 @@ Waiting for %d request(s) in server log...
 
     @staticmethod
     def _get_package_version(package_name) -> Optional[str]:
-        """Return the installed version of a package, or None."""
+        """
+        Return the installed version of a package, or None.
+
+        :param package_name: Name of the installed package
+        :return: The version, or None when the package is not installed
+        """
         try:
             return _pkg_meta.version(package_name)
         except _pkg_meta.PackageNotFoundError:
             return None
 
     def _resolve_ns_version(self) -> Optional[str]:
-        """Return the neuro-san version to tag this run with.
+        """
+        Return the neuro-san version to tag this run with.
 
         Prefers the *server's* version (via ``/healthz``) so the tag
         reflects what is actually being exercised, even when the client
@@ -2009,6 +2185,8 @@ Waiting for %d request(s) in server log...
         result is cached in ``_server_ns_version``.  Falls back to the
         locally installed package version when the server is
         unreachable or does not report one.
+
+        :return: The server's version, else the local package version, or None
         """
         if not self._server_ns_version:
             self._server_ns_version = self._fetch_server_version()
@@ -2016,14 +2194,21 @@ Waiting for %d request(s) in server log...
 
     @staticmethod
     def _agent_filter(args) -> Optional[List[str]]:
-        """Split --compare-agent into a list of agent names."""
+        """
+        Split --compare-agent into a list of agent names.
+
+        :param args: Parsed command-line arguments
+        :return: The agent names, or None when --compare-agent is not set
+        """
         if not args.compare_agent:
             return None
         return [name.strip() for name in args.compare_agent.split(",")]
 
     @staticmethod
     def main() -> None:
-        """Entry point for the load test script."""
+        """
+        Entry point for the load test script.
+        """
         args = LoadTestArguments.parse_args(__doc__)
         if args.rebuild:
             ResultsRebuilder(args.rebuild, force=args.rebuild_all).run()
@@ -2055,7 +2240,7 @@ Waiting for %d request(s) in server log...
             # hang joining those threads at interpreter shutdown.
             sys.stdout.flush()
             sys.stderr.flush()
-            os._exit(exit_code)  # pylint: disable=protected-access
+            os._exit(exit_code)
         sys.exit(exit_code)
 
 
