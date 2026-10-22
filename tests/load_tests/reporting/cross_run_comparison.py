@@ -515,11 +515,11 @@ class CrossRunComparison:
         :param measured_value: The metric (seconds or megabytes); 0 or less when the run has no value
         :param formatted_value: measured_value formatted for display, e.g. '45s' or '512M'
         :param delta_percentage: Percent change from the baseline run, or None for the baseline itself
-        :return: e.g. '45s (+12%)', or an em dash when measured_value is 0 or less
+        :return: e.g. '45s (+12%)', or '-' when measured_value is 0 or less
         """
         if measured_value <= 0:
-            # "\u2014" draws "—", the dash shown for a missing value.
-            return "\u2014"
+            # Plain "-", the missing-value cell of the other load-test tables.
+            return "-"
         return CrossRunComparison._val_with_delta(formatted_value, delta_percentage)
 
     @staticmethod

@@ -39,12 +39,13 @@ from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 
 class TestCrossRunComparison(TestCase):
     """
-    Unit tests for CrossRunComparison._extract_metrics() and _parse_validation_loops().
+    Unit tests for CrossRunComparison._extract_metrics(), _parse_validation_loops() and _value_or_dash().
 
     A missing, unreadable or malformed raw_results.json, or one that is not a JSON
     object, returns None (comparisons keep working) and reports the path and reason
     through SensitiveLogger. A server_tokens.log written by TokenLogWriter gives one
     validation-loop entry per request with at least LOOP_THRESHOLD LLM calls.
+    A table cell shows "-" for a metric of 0 or less, else the value with its percent change.
     """
 
     @override
@@ -155,6 +156,28 @@ class TestCrossRunComparison(TestCase):
         }
         self.assertEqual(expected, loop_entry)
         self.assertGreaterEqual(cost_dollars, 0.0)
+
+    def test_missing_value_cell_is_dash(self) -> None:
+        """
+        A metric of 0 or less gives a plain "-" cell, with or without a percent change.
+        """
+        zero_cell: str = CrossRunComparison._value_or_dash(0.0, "0s", 12.0)
+        negative_cell: str = CrossRunComparison._value_or_dash(-1.0, "-1s", None)
+
+        self.assertEqual("-", zero_cell)
+        self.assertEqual("-", negative_cell)
+
+    def test_value_cell_shows_value_and_percent_change(self) -> None:
+        """
+        A metric above 0 gives its value with the percent change, or the value alone for the baseline run.
+        """
+        increase_cell: str = CrossRunComparison._value_or_dash(45.0, "45s", 12.0)
+        decrease_cell: str = CrossRunComparison._value_or_dash(512.0, "512M", -20.4)
+        baseline_cell: str = CrossRunComparison._value_or_dash(45.0, "45s", None)
+
+        self.assertEqual("45s (+12%)", increase_cell)
+        self.assertEqual("512M (-20%)", decrease_cell)
+        self.assertEqual("45s", baseline_cell)
 
     def _write(self, contents: str) -> str:
         """
