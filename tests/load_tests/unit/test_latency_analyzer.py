@@ -17,7 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Tuple
+from typing import Union
 from unittest import TestCase
 
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
@@ -28,7 +28,8 @@ from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 # pylint: disable=protected-access
 class TestLatencyAnalyzer(TestCase):
     """
-    Unit tests for LatencyAnalyzer helpers: percentile(), _extract_latencies() and _peak_in_flight_count().
+    Unit tests for LatencyAnalyzer helpers: percentile(), _extract_latencies(), _peak_in_flight_count(),
+    _build_timeline(), _bucket_peaks(), _chart_bar() and count_milestones().
     """
 
     def test_percentile_of_no_values_is_zero(self) -> None:
@@ -91,5 +92,97 @@ class TestLatencyAnalyzer(TestCase):
         """
         The peak is the largest in-flight count, wherever it is in the timeline.
         """
-        timeline: List[Tuple[float, int]] = [(0.0, 1), (0.5, 4), (1.0, 2)]
+        timeline: List[Dict[str, Union[int, float]]] = [
+            {
+                "time_seconds": 0.0,
+                "in_flight_count": 1,
+            },
+            {
+                "time_seconds": 0.5,
+                "in_flight_count": 4,
+            },
+            {
+                "time_seconds": 1.0,
+                "in_flight_count": 2,
+            },
+        ]
         self.assertEqual(LatencyAnalyzer._peak_in_flight_count(timeline), 4)
+
+    def test_build_timeline_puts_an_end_before_a_start_at_the_same_time(self) -> None:
+        """
+        Times count from the first start, a request with no start time is left out, and an end at the same
+        time as a start comes first.
+        """
+        results: List[Dict[str, Any]] = [
+            {
+                "start_time": 101.0,
+                "end_time": 102.0,
+            },
+            {
+                "start_time": 100.0,
+                "end_time": 101.0,
+            },
+            {
+                "start_time": 0,
+                "end_time": 103.0,
+            },
+        ]
+        timeline: List[Dict[str, Union[int, float]]] = LatencyAnalyzer._build_timeline(results)
+        expected_timeline: List[Dict[str, Union[int, float]]] = [
+            {
+                "time_seconds": 0.0,
+                "in_flight_count": 1,
+            },
+            {
+                "time_seconds": 1.0,
+                "in_flight_count": 0,
+            },
+            {
+                "time_seconds": 1.0,
+                "in_flight_count": 1,
+            },
+            {
+                "time_seconds": 2.0,
+                "in_flight_count": 0,
+            },
+        ]
+        self.assertEqual(timeline, expected_timeline)
+
+    def test_bucket_peaks_carry_the_count_forward(self) -> None:
+        """
+        Each bucket starts at the count carried from the bucket before it and keeps its largest count.
+        """
+        timeline: List[Dict[str, Union[int, float]]] = [
+            {
+                "time_seconds": 0.0,
+                "in_flight_count": 2,
+            },
+            {
+                "time_seconds": 1.2,
+                "in_flight_count": 1,
+            },
+            {
+                "time_seconds": 2.5,
+                "in_flight_count": 0,
+            },
+        ]
+        bucket_peaks: List[int] = LatencyAnalyzer._bucket_peaks(timeline, 3, 1.0)
+        self.assertEqual(bucket_peaks, [2, 2, 1])
+
+    def test_chart_bar_has_one_hash_per_character(self) -> None:
+        """
+        The bar has one "#" per character, and none for a length of 0.
+        """
+        three_character_bar: str = LatencyAnalyzer._chart_bar(3)
+        self.assertEqual(three_character_bar, "###")
+        empty_bar: str = LatencyAnalyzer._chart_bar(0)
+        self.assertEqual(empty_bar, "")
+
+    def test_count_milestones_lists_each_step_then_the_total(self) -> None:
+        """
+        Counts go up in steps of COUNT_MILESTONE_STEP and end with the total; none when the total is one step.
+        """
+        milestones: List[int] = LatencyAnalyzer.count_milestones(120)
+        self.assertEqual(milestones, [50, 100, 120])
+        no_milestones: List[int] = LatencyAnalyzer.count_milestones(50)
+        self.assertEqual(no_milestones, [])

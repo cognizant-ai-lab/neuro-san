@@ -113,4 +113,7 @@ class TestReadRecords(TestCase):
         """
         A missing file warns and returns empty rather than raising.
         """
-        self.assertEqual(TrendHistory._read_records("/nonexistent/history.jsonl"), [])
+        with self.assertLogs("tests.load_tests.reporting.trend_history", level="WARNING") as captured_logs:
+            records: List[Dict[str, Any]] = TrendHistory._read_records("/nonexistent/history.jsonl")
+        self.assertEqual(records, [])
+        self.assertIn("Could not read history file /nonexistent/history.jsonl", captured_logs.output[0])

@@ -15,6 +15,7 @@
 # END COPYRIGHT
 
 import logging
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -27,7 +28,7 @@ except ImportError:
 
 import psutil
 
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -97,22 +98,25 @@ class SystemResources:
         Capture a point-in-time whole-system snapshot.
 
         :param cpu_interval_seconds: Seconds to sample CPU usage over
-        :return: mem_pct, mem_avail_gb, cpu_pct and threads
+        :return: A dictionary with "mem_pct", "mem_avail_gb", "cpu_pct" and "threads"
         """
-        memory_stats = psutil.virtual_memory()
-        return {
+        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = psutil.virtual_memory()
+        system_snapshot: SysSnapshot = {
             "mem_pct": memory_stats.percent,
             "mem_avail_gb": memory_stats.available / (1024 ** 3),
             "cpu_pct": psutil.cpu_percent(interval=cpu_interval_seconds),
             "threads": cls.total_threads(),
         }
+        return system_snapshot
 
     @classmethod
     def log_prerun(cls) -> None:
         """
         Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads).
         """
-        memory_stats = psutil.virtual_memory()
+        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = psutil.virtual_memory()
         total_gigabytes: float = memory_stats.total / (1024 ** 3)
         available_gigabytes: float = memory_stats.available / (1024 ** 3)
         core_count: int = psutil.cpu_count() or 1
@@ -159,9 +163,9 @@ class SystemResources:
                 break
         if not has_snapshot:
             return
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  SYSTEM RESOURCES")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         total_gigabytes: float = psutil.virtual_memory().total / (1024 ** 3)
         core_count: int = psutil.cpu_count() or 1
         user_limit: str = ""

@@ -45,7 +45,6 @@ from psutil import cpu_percent
 from psutil import virtual_memory
 
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SEPARATOR_LINE
 from tests.load_tests.load_test_constants import SERVER_LOG_GZ_FILE_NAME
 from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
 from tests.load_tests.monitoring.kernel_memory import KernelMemory
@@ -257,9 +256,9 @@ Waiting for %d request(s) in server log...
         :param round_number: Round number, starting at 1
         :param expected_count: Number of requests the client will send
         """
-        self.logger.info("\n%s", SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
         self.logger.info("  Round %d: expecting %d request(s)", round_number, expected_count)
-        self.logger.info(SEPARATOR_LINE)
+        self.logger.info(Formatters.SEPARATOR_LINE)
         version_text: str = "unknown"
         resolved_version: Optional[str] = self.server_checker.resolve_ns_version()
         if resolved_version:
@@ -466,9 +465,9 @@ Waiting for %d request(s) in server log...
         :param round_dir: Output directory of the round
         :param round_log_path: Path of the round's stdout.log
         """
-        self.logger.info("\n%s", SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
         self.logger.info("  OUTPUT FILES")
-        self.logger.info(SEPARATOR_LINE)
+        self.logger.info(Formatters.SEPARATOR_LINE)
         self.logger.info("  Directory:   %s", round_dir)
         json_path: str = join(round_dir, RAW_RESULTS_FILE_NAME)
         if isfile(json_path):
