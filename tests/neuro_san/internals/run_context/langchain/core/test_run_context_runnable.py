@@ -18,6 +18,7 @@
 from functools import partial
 
 from typing import Any
+from typing import AsyncIterator
 from typing import Awaitable
 from typing import Dict
 from typing import List
@@ -278,7 +279,8 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # A non-parse ValueError exercises the retry branch on every attempt.
         agent_chain = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=ValueError("not a parsing error"))
+        agent_chain.astream = MagicMock(side_effect=partial(TestRunContextRunnable._stream_of,
+                                                            ValueError("not a parsing error")))
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
@@ -318,7 +320,8 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # A RuntimeError exercises the non-retryable broad-exception branch.
         agent_chain = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=RuntimeError("Server error '504 Gateway Time-out'"))
+        agent_chain.astream = MagicMock(side_effect=partial(TestRunContextRunnable._stream_of,
+                                                            RuntimeError("Server error '504 Gateway Time-out'")))
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
@@ -365,7 +368,8 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         rate_limit_error = RateLimitError("rate limited", response=response, body=None)
 
         agent_chain = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=[KeyError("missing field"), rate_limit_error])
+        agent_chain.astream = MagicMock(side_effect=[self._states(KeyError("missing field")),
+                                                     self._states(rate_limit_error)])
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
@@ -395,7 +399,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         Build a runnable whose agent chain returns the given result and whose
         journal records every written message.
 
-        :param chain_result: What agent_chain.ainvoke should return
+        :param chain_result: The one state agent_chain.astream should yield
         :param error_detector: Optional error detector; defaults to a pass-through
         :return: The runnable and the list its journal appends written messages to
         """
@@ -403,7 +407,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         journal: MagicMock = MagicMock()
         journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         agent_chain: MagicMock = MagicMock()
-        agent_chain.ainvoke = AsyncMock(return_value=chain_result)
+        agent_chain.astream = MagicMock(side_effect=partial(TestRunContextRunnable._stream_of, chain_result))
         if error_detector is None:
             error_detector = MagicMock()
             error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
@@ -644,14 +648,14 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         written: List[BaseMessage] = runnable_and_written[1]
 
         # Attempt 1 is rate limited, attempt 2 succeeds.
-        chain_results: List[Any] = [self._rate_limit_error(), {"output": "the answer"}]
         agent_chain: MagicMock = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=chain_results)
+        agent_chain.astream = MagicMock(side_effect=[self._states(self._rate_limit_error()),
+                                                     self._states({"output": "the answer"})])
         copy_update: Dict[str, Any] = {"agent_chain": agent_chain}
         retrying_runnable: RunContextRunnable = runnable.model_copy(update=copy_update)
         await retrying_runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
 
-        self.assertEqual(agent_chain.ainvoke.await_count, 2)
+        self.assertEqual(agent_chain.astream.call_count, 2)
         final: BaseMessage = written[-1]
         self.assertIsInstance(final, AIMessage)
         self.assertEqual(final.content, "the answer")
@@ -668,7 +672,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         rate_limit_error: RateLimitError = self._rate_limit_error()
         agent_chain: MagicMock = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=rate_limit_error)
+        agent_chain.astream = MagicMock(side_effect=partial(self._stream_of, rate_limit_error))
         tool_caller: MagicMock = MagicMock()
         tool_caller.get_agent_tool_spec = MagicMock(return_value=agent_spec)
         invocation_context: MagicMock = MagicMock()
@@ -690,7 +694,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         with patch.object(LangChainTokenCounter, "count_tokens", new=count_tokens):
             await run_it_runnable.run_it({})
 
-        return agent_chain.ainvoke.await_count
+        return agent_chain.astream.call_count
 
     @staticmethod
     async def _await_awaitable(awaitable: Awaitable, max_execution_seconds: float = None) -> Any:
@@ -703,6 +707,32 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         _ = max_execution_seconds
         return await awaitable
+
+    @staticmethod
+    async def _states(*states: Any) -> AsyncIterator[Any]:
+        """
+        Stands in for one agent_chain.astream() call: yields each state in turn.
+
+        :param states: The states to yield; an exception among them is raised in its place
+        :return: An async iterator over the states
+        """
+        state: Any = None
+        # Yield the states in order, failing where the chain would have failed.
+        for state in states:
+            if isinstance(state, BaseException):
+                raise state
+            yield state
+
+    @staticmethod
+    def _stream_of(*states: Any, **_kwargs: Any) -> AsyncIterator[Any]:
+        """
+        Builds a fresh stand-in stream for every agent_chain.astream() call.
+
+        :param states: The states to yield, bound with functools.partial
+        :param _kwargs: The keyword arguments of the astream() call; ignored
+        :return: An async iterator over the states
+        """
+        return TestRunContextRunnable._states(*states)
 
     @staticmethod
     def _rate_limit_error() -> RateLimitError:

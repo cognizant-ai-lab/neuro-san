@@ -99,6 +99,7 @@
     "gist.hocon": true,
     "assess_failure.hocon": true,
     "chat_mock_llm_echo.hocon": true,
+    "chat_mock_llm_tool.hocon": true,
 
     # STOP AND READ: YOU PROBABLY DON'T WANT TO ADD YOUR .hocon FILE HERE.
     #

@@ -181,6 +181,21 @@ replicated from neuro-san OpenAPI specification:
                         },
                         "content_blocks": {
                           "$ref": "#/components/schemas/ContentBlocks"
+                        },
+                        "tool_calls": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ToolCall"
+                          },
+                          "description": "Optional tool calls an AI message made. Each is answered by the AGENT_TOOL_RESULT message that follows with the matching tool_call_id."
+                        },
+                        "tool_call_id": {
+                          "type": "string",
+                          "description": "Optional id of the tool call an AGENT_TOOL_RESULT message answers."
+                        },
+                        "tool_status": {
+                          "type": "string",
+                          "description": "Optional status of the tool call an AGENT_TOOL_RESULT message answers: \"error\" when the tool failed. Absent when the tool succeeded."
                         }
                       },
                       "description": "Structure describing a single chat message."
@@ -224,6 +239,24 @@ replicated from neuro-san OpenAPI specification:
                         }
                       },
                       "description": "Optional structured content of a ChatMessage, tagged with the schema its blocks follow so the format can evolve without breaking clients."
+                    },
+                    "ToolCall": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "The id the model gave the call."
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "The name of the tool that was called."
+                        },
+                        "args": {
+                          "type": "object",
+                          "description": "The arguments the call was made with."
+                        }
+                      },
+                      "description": "A tool call made by an AI message. Its result is the AGENT_TOOL_RESULT message whose tool_call_id equals this id."
                     },
                     "MimeData": {
                       "type": "object",

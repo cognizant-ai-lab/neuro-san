@@ -199,7 +199,11 @@ This response is telling you:
   within the network.
 * The "text" of what came back as the answer - "Hello, world!" with typical extra LLM elaborating text.
 * The chat_context that is returned is a structure that helps you continue the conversation.
-  For the most part, you can think of this as semi-opaque chat history data.
+  For the most part, you can think of this as semi-opaque chat history data. Besides the user
+  and agent messages, it holds the tool calls the agent made (`tool_calls` on an AI message) and
+  their results (AGENT_TOOL_RESULT messages whose `tool_call_id` names the call they answer, with
+  `tool_status` set to `error` when the tool failed), so on the next turn the model can see which
+  values came from tools rather than from its own text.
 
 For a single-shot conversation, this is all you really need to report back to your user.
 

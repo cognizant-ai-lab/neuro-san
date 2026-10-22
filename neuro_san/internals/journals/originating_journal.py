@@ -23,7 +23,6 @@ from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.system import SystemMessage
 
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -74,43 +73,27 @@ class OriginatingJournal(Journal):
             use_origin = origin
 
         if self.chat_history is not None and BaseMessageDictionaryConverter.is_relevant_to_chat_history(message):
-            # Different LLM providers handle message types differently when constructing responses:
+            # The history copy of an AI message with block content is a text
+            # projection, not the blocks themselves. The chat history feeds the
+            # next provider invocation (possibly a fallback from a different
+            # provider) and the chat_context returned to clients. Providers
+            # reject data blocks and other providers' native blocks in
+            # assistant-role history (an API 400 mid-conversation), and neither
+            # consumer should change for text-only traffic. history_safe_text
+            # keeps the text, replaces data blocks with a short reference, and
+            # is an identity for plain-string content. The journaled message
+            # keeps the full blocks.
             #
-            # - Anthropic models (via ChatAnthropic) explicitly check the `message.type` string
-            #   and only accept messages of type "human" or "ai". Custom subclasses like
-            #   AgentToolResultMessage return a different type (e.g., "agent_tool_result"),
-            #   which causes Anthropic's handler to reject the message.
+            # Reasoning blocks are deliberately not replayed. Replaying them is
+            # provider-specific (Anthropic needs its own signed thinking blocks;
+            # OpenAI Responses needs its own reasoning item ids), so that is a
+            # separate, provider-aware piece of work.
             #
-            #
-            # - OpenAI and Ollama models (via ChatOpenAI and ChatOllama) do not rely on `message.type`.
-            #   Instead, they use `isinstance(message, AIMessage)` checks, which allows us to safely pass
-            #   `AgentToolResultMessage` since it subclasses `AIMessage`. This gives us the flexibility
-            #   to include additional metadata like `tool_result_origin` when supported.
-            #
-            # To avoid problem with any other LLMs, convert "AgentToolResultMessage" to "AIMessage"
-            # when appending it chat history but allow it to be written in the journal as is to
-            # to maintain the information on tool origin.
-            #
-            # The history copy of any AI-side message with block content is a
-            # text projection, not the blocks themselves. The chat history
-            # feeds the next provider invocation (possibly a fallback from a
-            # different provider) and the chat_context returned to clients.
-            # Providers reject data blocks and other providers' native blocks
-            # in assistant-role history (an API 400 mid-conversation), and
-            # neither consumer should change for text-only traffic.
-            # history_safe_text keeps the text, replaces data blocks with a
-            # short reference, and is an identity for plain-string content.
-            # The journaled message keeps the full blocks.
-            #
-            # Reasoning blocks are deliberately not replayed in this phase.
-            # Replaying them is provider-specific (Anthropic needs its own
-            # signed thinking blocks and strips prior-turn thinking anyway;
-            # OpenAI Responses needs its own reasoning item ids), so a
-            # provider-aware replay path is Phase 2 work (#1223). Until then
-            # the history carries exactly what providers receive today.
+            # Tool results never reach this point: is_relevant_to_chat_history
+            # keeps them out, and RunContextRunnable appends each turn's tool
+            # calls and results to the history as a pair instead.
             chat_history_message: BaseMessage = None
-            if isinstance(message, AgentToolResultMessage) or \
-                    (isinstance(message, AIMessage) and not isinstance(message.content, str)):
+            if isinstance(message, AIMessage) and not isinstance(message.content, str):
                 safe_text: str = ContentUtils.history_safe_text(message)
                 chat_history_message = AIMessage(content=safe_text)
             else:

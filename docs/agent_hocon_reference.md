@@ -1004,6 +1004,11 @@ An integer which tells the server how many of the most recent chat history messa
 to send back in its chat_context field which allows for continuing a conversation
 on the next client invocation.  By default this value is None, indicating there is no limit.
 
+The count includes the tool calls an agent made and their results, which the chat history
+keeps alongside the user and agent messages. The messages kept always start at a user
+message, so a tool result is never sent back without the call that asked for it; when the
+cut lands inside a turn, that turn is dropped.
+
 This is useful when end-user conversations with agents are expected to be lengthy and/or change
 topics frequently.
 
