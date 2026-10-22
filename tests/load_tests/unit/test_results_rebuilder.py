@@ -44,7 +44,7 @@ from tests.load_tests.load_test_constants import STATUS_KILLED
 from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
 from tests.load_tests.load_test_arguments import LoadTestArguments
-from tests.load_tests.load_test_cli import LoadTestOrchestrator
+from tests.load_tests.load_test_cli import LoadTestCli
 from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
@@ -152,7 +152,7 @@ class TestResultsRebuilder(TestCase):
                        side_effect=answer), \
                     patch("tests.load_tests.validation.environment_validator.EnvironmentValidator.is_port_open",
                           return_value=True):
-                LoadTestOrchestrator(args).run()
+                LoadTestCli(args).run()
             run_dir: str = self._run_dir(output_base)
             raw_results_path: str = os.path.join(run_dir, RAW_RESULTS_FILE_NAME)
             raw_results_file = EasyJsonPersistence(full_ref=raw_results_path, must_exist=True)
