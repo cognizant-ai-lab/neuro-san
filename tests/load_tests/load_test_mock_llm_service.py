@@ -497,19 +497,19 @@ Then:
         :return: "round_num", "before_rss_megabytes", "settled_rss_megabytes", "rss_delta_megabytes", "fds",
                  "before_threads", "settled_threads", "thread_delta", "connections", "cpu_percent" and "children"
         """
-        rss_delta_megabytes: float = after_snapshot.get("rss") - before_snapshot.get("rss")
+        rss_delta_megabytes: float = after_snapshot.get("rss_megabytes") - before_snapshot.get("rss_megabytes")
         thread_delta: int = after_snapshot.get("threads") - before_snapshot.get("threads")
         snapshot_row: Dict[str, Any] = {
             "round_num": round_num,
-            "before_rss_megabytes": before_snapshot.get("rss"),
-            "settled_rss_megabytes": after_snapshot.get("rss"),
+            "before_rss_megabytes": before_snapshot.get("rss_megabytes"),
+            "settled_rss_megabytes": after_snapshot.get("rss_megabytes"),
             "rss_delta_megabytes": rss_delta_megabytes,
             "fds": after_snapshot.get("fds"),
             "before_threads": before_snapshot.get("threads"),
             "settled_threads": after_snapshot.get("threads"),
             "thread_delta": thread_delta,
             "connections": after_snapshot.get("connections"),
-            "cpu_percent": after_snapshot.get("cpu"),
+            "cpu_percent": after_snapshot.get("cpu_percent"),
             "children": after_snapshot.get("children"),
         }
         return snapshot_row

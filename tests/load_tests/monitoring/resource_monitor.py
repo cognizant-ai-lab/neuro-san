@@ -104,7 +104,7 @@ class ResourceMonitor:
         Capture a point-in-time resource snapshot of a process.
 
         :param process: Process to measure, or None
-        :return: A dictionary with "rss" (megabytes), "fds", "threads", "connections", "children", "cpu" (percent)
+        :return: A dictionary with "rss_megabytes", "fds", "threads", "connections", "children", "cpu_percent"
             and "cpu_seconds"; None if the process cannot be read
         """
         if process is None:
@@ -127,12 +127,12 @@ class ResourceMonitor:
             cpu_percentage: float = process.cpu_percent(interval=0.1)
             cpu_seconds: float = cpu_times.user + cpu_times.system
             process_snapshot: Dict[str, Any] = {
-                "rss": rss_megabytes,
+                "rss_megabytes": rss_megabytes,
                 "fds": file_descriptor_count,
                 "threads": thread_count,
                 "connections": connection_count,
                 "children": child_count,
-                "cpu": cpu_percentage,
+                "cpu_percent": cpu_percentage,
                 "cpu_seconds": cpu_seconds,
             }
             return process_snapshot
@@ -152,6 +152,11 @@ class ResourceMonitor:
             return
         logger.info(
             "  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s",
-            label, resource_snapshot.get("rss"), resource_snapshot.get("fds"), resource_snapshot.get("threads"),
-            resource_snapshot.get("connections"), resource_snapshot.get("cpu"), resource_snapshot.get("children"),
+            label,
+            resource_snapshot.get("rss_megabytes"),
+            resource_snapshot.get("fds"),
+            resource_snapshot.get("threads"),
+            resource_snapshot.get("connections"),
+            resource_snapshot.get("cpu_percent"),
+            resource_snapshot.get("children"),
         )

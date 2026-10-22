@@ -451,9 +451,9 @@ Waiting for %d request(s) in server log...
         after_kernel: Optional[Dict[str, float]] = after_values.get("after_kernel")
         peak_rss_megabytes: float = 0.0
         if peak_server:
-            peak_rss_megabytes = peak_server.get("rss", 0)
+            peak_rss_megabytes = peak_server.get("rss_megabytes", 0)
         elif after_server:
-            peak_rss_megabytes = after_server.get("rss", 0)
+            peak_rss_megabytes = after_server.get("rss_megabytes", 0)
         kernel_breakdown: Dict[str, float] = KernelMemory.kernel_breakdown(after_kernel, peak_rss_megabytes, log=False)
         return kernel_breakdown
 

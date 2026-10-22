@@ -156,7 +156,7 @@ class HistoryRecorder:
         :param expected: Number of requests the round expects
         :param received: Number of requests the server received
         :param elapsed_seconds: Round wall time in seconds
-        :param peak_server: Peak server snapshot with "rss" in megabytes, or None
+        :param peak_server: Peak server snapshot with "rss_megabytes", or None
         :param peak_system_cpu_percent: Peak system CPU percent over all cores, or None
         :param primary_pairs: Primary agent Start/Finish pairs with "duration_seconds", "start_ts" and
             "finish_ts", or None
@@ -181,7 +181,7 @@ class HistoryRecorder:
         peak_cpu_cores: float = round(cores_in_use, 2)
         peak_memory_gigabytes: Optional[float] = None
         if peak_server:
-            peak_rss_megabytes: float = peak_server.get("rss", 0.0)
+            peak_rss_megabytes: float = peak_server.get("rss_megabytes", 0.0)
             peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
             peak_memory_gigabytes = round(peak_gigabytes, 2)
         first_completed_seconds: float = HistoryRecorder._time_to_first_completed(pairs)

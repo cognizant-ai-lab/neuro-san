@@ -14,14 +14,20 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 from unittest import TestCase
+
+from psutil import Process
 
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 
 class TestResourceMonitor(TestCase):
     """
-    Unit tests for ResourceMonitor: CPU cores in use.
+    Unit tests for ResourceMonitor: CPU cores in use and the keys of a process snapshot.
     """
 
     def test_cores_in_use(self) -> None:
@@ -33,3 +39,22 @@ class TestResourceMonitor(TestCase):
 
         self.assertEqual(2.0, half_of_four)
         self.assertEqual(0.0, none_of_eight)
+
+    def test_snapshot_keys_carry_units(self) -> None:
+        """
+        A snapshot of this test process names its memory and CPU keys with their units.
+        """
+        process_snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(Process())
+
+        self.assertIsNotNone(process_snapshot)
+        snapshot_keys: List[str] = sorted(process_snapshot.keys())
+        expected_keys: List[str] = sorted(
+            ["rss_megabytes", "fds", "threads", "connections", "children", "cpu_percent", "cpu_seconds"]
+        )
+        self.assertEqual(expected_keys, snapshot_keys)
+
+    def test_snapshot_of_no_process(self) -> None:
+        """
+        No process gives no snapshot.
+        """
+        self.assertIsNone(ResourceMonitor.snapshot(None))

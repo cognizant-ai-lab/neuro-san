@@ -219,7 +219,7 @@ class ServerLogTailer:
         server_rss_megabytes: float = 0.0
         server_threads: int = 0
         if server_snapshot:
-            server_rss_megabytes = server_snapshot.get("rss", 0)
+            server_rss_megabytes = server_snapshot.get("rss_megabytes", 0)
             server_threads = server_snapshot.get("threads", 0)
             server_text = f"  threads: {server_threads}  RSS: {server_rss_megabytes:.0f}M"
         return server_text
@@ -429,8 +429,8 @@ class ServerLogTailer:
         current_threads: int = 0
         peak_threads: int = tail_state.get("peak_threads")
         if server_snapshot:
-            server_rss_megabytes = server_snapshot.get("rss", 0)
-            if peak_server is None or server_rss_megabytes > peak_server.get("rss", 0):
+            server_rss_megabytes = server_snapshot.get("rss_megabytes", 0)
+            if peak_server is None or server_rss_megabytes > peak_server.get("rss_megabytes", 0):
                 tail_state["peak_server"] = server_snapshot
             current_threads = server_snapshot.get("threads", 0)
             tail_state["peak_threads"] = max(peak_threads, current_threads)
