@@ -172,7 +172,7 @@ class LangChainTokenCounter:
                 retval = await wait_for(future, max_execution_seconds)
             except AsyncTimeout:
                 # Per docs for wait_for(), the future is already cancelled, so the
-                # future's own final journal.write_message(AIMessage(...)) never ran.
+                # wrapped Awaitable's own final journal.write_message(AIMessage(...)) never ran.
                 # Synthesize that final AIMessage here — before report() below — so
                 # the journal order matches the normal-completion path:
                 #   streamed events -> final AIMessage -> token accounting.
@@ -202,6 +202,9 @@ class LangChainTokenCounter:
         """
         Riffed from:
         https://stackoverflow.com/questions/78659844/async-version-of-context-run-for-context-vars-in-python-asyncio
+
+        :param awaitable: The awaitable to run
+        :return: A Future
         """
         executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
         origin_str: str = ORIGIN_INFO.get()
