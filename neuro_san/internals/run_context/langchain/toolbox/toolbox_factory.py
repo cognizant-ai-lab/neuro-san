@@ -265,7 +265,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
 
         if "class" not in tool_info:
-            if tool_name in self.REMOVED_TOOLS:
+            if tool_name in ToolboxFactory.REMOVED_TOOLS:
                 # A user toolbox file that overrides only part of a removed
                 # entry has no "class", because the bundled default does not
                 # define removed tools.
