@@ -42,6 +42,9 @@ class ResourceReporter:
     """
 
     def __init__(self) -> None:
+        """
+        Start with no server or client resource rows.
+        """
         self._resource_rows: List[ServerResourceRow] = []
         self._client_rows: List[ClientResourceRow] = []
 
