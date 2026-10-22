@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import List
 from typing import Optional
 
 from logging import getLogger
@@ -56,7 +57,7 @@ class SessionUtil:
         return max(max_agents, 0)
 
     @staticmethod
-    def limit_agents_list(agents_list: Any) -> Any:
+    def limit_agents_list(agents_list: List[Any]) -> List[Any]:
         """
         Limits a list of agents/tools from a server to at most MAX_AGENTS_FROM_EXTERNAL_SERVER entries.
         The argument is typed Any because server JSON can hold anything; a non-list is returned unchanged.
@@ -74,4 +75,5 @@ class SessionUtil:
         logger: Logger = getLogger(SessionUtil.__name__)
         logger.warning("%s=%d: considering only the first %d of the %d entries the server listed",
                        SessionUtil.MAX_AGENTS_ENV_VAR, max_agents, max_agents, len(agents_list))
-        return agents_list[:max_agents]
+        use_agents_list: List[Any] = agents_list[:max_agents]
+        return use_agents_list
