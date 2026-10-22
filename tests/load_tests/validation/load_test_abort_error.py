@@ -21,7 +21,7 @@ class LoadTestAbortError(Exception):
 
     The validators, AgentProfileFactory and AgentProfile log the reason
     and raise this instead of exiting.
-    Only the __main__ entry point, LoadTestOrchestrator.main(), turns it
+    Only the __main__ entry point, LoadTestCli.main(), turns it
     into a process exit with get_exit_code().
     """
 

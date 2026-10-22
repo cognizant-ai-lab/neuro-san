@@ -26,7 +26,7 @@ from unittest import TestCase
 
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_cli import LoadTestOrchestrator
+from tests.load_tests.load_test_cli import LoadTestCli
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 
@@ -50,20 +50,20 @@ class TestExportRawJsonAggregates(TestCase):
         self._dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
 
-    def _orchestrator(self) -> LoadTestOrchestrator:
+    def _load_test_cli(self) -> LoadTestCli:
         """
-        Build an orchestrator with only what the export reads.
+        Build a LoadTestCli with only what the export reads.
 
-        :return: Orchestrator that writes to the scratch directory
+        :return: LoadTestCli that writes to the scratch directory
         """
-        orchestrator: LoadTestOrchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
-        orchestrator._output_dir = self._dir
-        orchestrator._server_ns_version = "0.6.92"
-        orchestrator.server_log = None
-        orchestrator.hocon_files = []
-        orchestrator.profile = AgentProfile("hello_world", {"estimated_tokens_per_request": 1000})
-        orchestrator.resource_reporter = ResourceReporter()
-        orchestrator.args = Namespace(
+        load_test_cli: LoadTestCli = LoadTestCli.__new__(LoadTestCli)
+        load_test_cli._output_dir = self._dir
+        load_test_cli._server_ns_version = "0.6.92"
+        load_test_cli.server_log = None
+        load_test_cli.hocon_files = []
+        load_test_cli.profile = AgentProfile("hello_world", {"estimated_tokens_per_request": 1000})
+        load_test_cli.resource_reporter = ResourceReporter()
+        load_test_cli.args = Namespace(
             agent="music_nerd", profile_path=None, level="norm",
             ramp=False, host="localhost", port=30011,
             request_timeout=120, idle_timeout=60, stage_timeout=300,
@@ -72,7 +72,7 @@ class TestExportRawJsonAggregates(TestCase):
             allow_caching=False, chat_filter=None,
             fixtures_hocon_dir=None,
         )
-        return orchestrator
+        return load_test_cli
 
     def _export(self, elapsed_values_seconds: List[float]) -> Dict[str, Any]:
         """
@@ -95,7 +95,7 @@ class TestExportRawJsonAggregates(TestCase):
             "elapsed": max(elapsed_values_seconds),
         }]
 
-        self._orchestrator()._export_raw_json(stage_summaries, exit_code=0)
+        self._load_test_cli()._export_raw_json(stage_summaries, exit_code=0)
 
         path: str = os.path.join(self._dir, RAW_RESULTS_FILE_NAME)
         with open(path, "r", encoding="utf-8") as handle:

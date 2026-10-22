@@ -20,7 +20,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from tests.load_tests.load_test_cli import LoadTestOrchestrator
+from tests.load_tests.load_test_cli import LoadTestCli
 
 
 # These tests call a deliberately-internal helper directly; suppress
@@ -28,7 +28,7 @@ from tests.load_tests.load_test_cli import LoadTestOrchestrator
 # pylint: disable=protected-access
 class TestOutputBase(TestCase):
     """
-    Unit tests for LoadTestOrchestrator._output_base().
+    Unit tests for LoadTestCli._output_base().
 
     The default lives in the shared temp directory, so it has to be
     per-user: a fixed name belongs to whoever ran first and everyone
@@ -36,16 +36,16 @@ class TestOutputBase(TestCase):
     """
 
     @staticmethod
-    def _orchestrator(output_dir: Optional[str] = None) -> LoadTestOrchestrator:
+    def _load_test_cli(output_dir: Optional[str] = None) -> LoadTestCli:
         """
-        Build an orchestrator with only the args _output_base reads.
+        Build a LoadTestCli with only the args _output_base reads.
 
         :param output_dir: --output-dir value; None for the default
-        :return: Orchestrator with only args set
+        :return: LoadTestCli with only args set
         """
-        orchestrator: LoadTestOrchestrator = LoadTestOrchestrator.__new__(LoadTestOrchestrator)
-        orchestrator.args = Namespace(output_dir=output_dir)
-        return orchestrator
+        load_test_cli: LoadTestCli = LoadTestCli.__new__(LoadTestCli)
+        load_test_cli.args = Namespace(output_dir=output_dir)
+        return load_test_cli
 
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
@@ -59,7 +59,7 @@ class TestOutputBase(TestCase):
         get_user.return_value = "alice"
         get_temp_dir.return_value = "/tmp"
 
-        self.assertEqual(self._orchestrator()._output_base(), "/tmp/load_test_alice")
+        self.assertEqual(self._load_test_cli()._output_base(), "/tmp/load_test_alice")
 
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
     def test_output_dir_argument_wins(self, get_user: MagicMock) -> None:
@@ -70,7 +70,7 @@ class TestOutputBase(TestCase):
         """
         get_user.side_effect = AssertionError("user name not needed")
 
-        self.assertEqual(self._orchestrator(output_dir="/data/runs")._output_base(), "/data/runs")
+        self.assertEqual(self._load_test_cli(output_dir="/data/runs")._output_base(), "/data/runs")
 
     @patch("tests.load_tests.load_test_cli.os.getuid")
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
@@ -89,7 +89,7 @@ class TestOutputBase(TestCase):
         get_temp_dir.return_value = "/tmp"
         get_uid.return_value = 1000
 
-        self.assertEqual(self._orchestrator()._output_base(), "/tmp/load_test_1000")
+        self.assertEqual(self._load_test_cli()._output_base(), "/tmp/load_test_1000")
 
     @patch("tests.load_tests.load_test_cli.tempfile.gettempdir")
     @patch("tests.load_tests.load_test_cli.getpass.getuser")
@@ -103,4 +103,4 @@ class TestOutputBase(TestCase):
         get_user.return_value = "CORP\\alice"
         get_temp_dir.return_value = "/tmp"
 
-        self.assertEqual(self._orchestrator()._output_base(), "/tmp/load_test_CORP_alice")
+        self.assertEqual(self._load_test_cli()._output_base(), "/tmp/load_test_CORP_alice")
