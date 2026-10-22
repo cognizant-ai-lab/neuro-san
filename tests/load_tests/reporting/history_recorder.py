@@ -31,6 +31,7 @@ from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
 from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.load_test_constants import HISTORY_UNKNOWN_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -45,7 +46,6 @@ class HistoryRecorder:
     never fails the run.
     """
 
-    MEGABYTES_PER_GIGABYTE: int = 1024
     PERCENT_PER_CORE: int = 100
 
     def __init__(self, args: Namespace, output_base: str) -> None:
@@ -179,7 +179,8 @@ class HistoryRecorder:
         peak_memory_gigabytes: Optional[float] = None
         if peak_server:
             peak_rss_megabytes: float = peak_server.get("rss", 0.0)
-            peak_memory_gigabytes = round(peak_rss_megabytes / HistoryRecorder.MEGABYTES_PER_GIGABYTE, 2)
+            peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
+            peak_memory_gigabytes = round(peak_gigabytes, 2)
         first_completed_seconds: float = HistoryRecorder._time_to_first_completed(pairs)
         errors: List[Dict[str, str]] = server_errors or []
         warnings: List[Dict[str, str]] = tool_warnings or []

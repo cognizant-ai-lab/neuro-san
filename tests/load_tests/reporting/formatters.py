@@ -14,6 +14,8 @@
 #
 # END COPYRIGHT
 
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+
 
 class Formatters:
     """
@@ -31,8 +33,9 @@ class Formatters:
         :param rss_megabytes: Resident set size in megabytes
         :return: e.g. '512M' or '1.5G'
         """
-        if rss_megabytes >= 1024:
-            return f"{rss_megabytes / 1024:.1f}G"
+        if rss_megabytes >= ResourceMonitor.MEGABYTES_PER_GIGABYTE:
+            rss_gigabytes: float = rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
+            return f"{rss_gigabytes:.1f}G"
         return f"{rss_megabytes:.0f}M"
 
     @staticmethod

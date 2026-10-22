@@ -17,6 +17,7 @@
 import logging
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 
 import psutil
@@ -36,6 +37,8 @@ class ResourceMonitor:
     # Bytes in a megabyte and in a gigabyte, to convert memory readings
     ONE_MEGABYTE: int = 1024 ** 2
     ONE_GIGABYTE: int = 1024 ** 3
+    # Megabytes in a gigabyte, to show megabyte values in gigabytes
+    MEGABYTES_PER_GIGABYTE: int = 1024
 
     @staticmethod
     def find_process(keyword: str) -> Optional[psutil.Process]:
@@ -83,7 +86,8 @@ class ResourceMonitor:
         Capture a point-in-time resource snapshot of a process.
 
         :param process: Process to measure, or None
-        :return: rss (MB), fds, threads, connections, children, cpu and cpu_seconds; None if process cannot be read
+        :return: A dictionary with "rss" (megabytes), "fds", "threads", "connections", "children", "cpu" (percent)
+            and "cpu_seconds"; None if the process cannot be read
         """
         if process is None:
             return None
@@ -95,15 +99,25 @@ class ResourceMonitor:
             except AttributeError:
                 file_descriptor_count = process.num_handles()
             cpu_times: Any = process.cpu_times()
-            return {
-                "rss": memory_info.rss / 1024 / 1024,
+            rss_megabytes: float = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
+            thread_count: int = process.num_threads()
+            # net_connections() returns psutil's private pconn named tuples, which have no public type to name.
+            connections: List[Any] = process.net_connections()
+            connection_count: int = len(connections)
+            children: List[psutil.Process] = process.children()
+            child_count: int = len(children)
+            cpu_percentage: float = process.cpu_percent(interval=0.1)
+            cpu_seconds: float = cpu_times.user + cpu_times.system
+            process_snapshot: Dict[str, Any] = {
+                "rss": rss_megabytes,
                 "fds": file_descriptor_count,
-                "threads": process.num_threads(),
-                "connections": len(process.net_connections()),
-                "children": len(process.children()),
-                "cpu": process.cpu_percent(interval=0.1),
-                "cpu_seconds": cpu_times.user + cpu_times.system,
+                "threads": thread_count,
+                "connections": connection_count,
+                "children": child_count,
+                "cpu": cpu_percentage,
+                "cpu_seconds": cpu_seconds,
             }
+            return process_snapshot
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return None
 

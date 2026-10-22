@@ -425,7 +425,8 @@ server log to fall back on:
         virtual_memory_stats: Any = psutil.virtual_memory()
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         per_request_megabytes: int = 2
-        needed_gigabytes: float = (num_requests * per_request_megabytes) / 1024
+        needed_megabytes: int = num_requests * per_request_megabytes
+        needed_gigabytes: float = needed_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
         if needed_gigabytes > available_gigabytes * 0.8:
             total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:

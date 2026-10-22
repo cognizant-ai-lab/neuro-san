@@ -30,6 +30,7 @@ from collections import Counter
 import psutil
 
 from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 
@@ -253,7 +254,9 @@ class SummaryFileWriter:
                     peak_available_gigabytes = available_gigabytes
         if peak_memory_percentage is None:
             return
-        total_gigabytes: float = psutil.virtual_memory().total / (1024 ** 3)
+        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = psutil.virtual_memory()
+        total_gigabytes: float = memory_stats.total / ResourceMonitor.ONE_GIGABYTE
         peak_detail: str = (
             f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes or 0:.1f}G free / {total_gigabytes:.1f}G)"
         )
