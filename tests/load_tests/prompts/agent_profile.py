@@ -46,7 +46,7 @@ class AgentProfile:
     <fixtures-hocon-dir>/<agent>/*.hocon (one prompt + response per file).
 
     Use: TrafficRunner takes the prompt and response checks for each
-    request; LoadTestOrchestrator takes the log patterns and token
+    request; LoadTestCli takes the log patterns and token
     estimate.
     """
 
