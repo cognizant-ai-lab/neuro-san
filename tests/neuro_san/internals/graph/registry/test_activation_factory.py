@@ -41,10 +41,10 @@ class TestActivationFactory(TestCase):
     # The repo root is the PYTHONPATH entry that directory roots are mapped against.
     REPO_ROOT: str = str(Path(__file__).resolve().parents[5])
     # A tool root laid out like a project's coded_tools directory, used as a directory root
-    CODED_TOOLS_DIR: str = str(Path(REPO_ROOT, "tests", "coded_tools"))
-    CODED_TOOLS_PACKAGE: str = "tests.coded_tools"
+    FIRST_AGENT_TOOL_PATH_DIR: str = str(Path(REPO_ROOT, "tests", "first_agent_tool_path"))
+    FIRST_AGENT_TOOL_PATH_PACKAGE: str = "tests.first_agent_tool_path"
     # A second tool root of the same shape, used as a module-path root
-    ALT_CODED_TOOLS_PACKAGE: str = "tests.coded_tools_alt"
+    SECOND_AGENT_TOOL_PATH_PACKAGE: str = "tests.second_agent_tool_path"
     # A PYTHONPATH entry that holds no tool root and is not an ancestor of the working directory,
     # so a root that is wrongly mapped as a directory cannot be mapped by accident.
     OTHER_PYTHONPATH: str = str(Path(REPO_ROOT, "docs"))
@@ -99,22 +99,27 @@ class TestActivationFactory(TestCase):
         A directory root becomes the module path beneath the PYTHONPATH entry that holds it.
         """
         factory: ActivationFactory = self.make_factory(
-            TestActivationFactory.NETWORK_NAME, TestActivationFactory.CODED_TOOLS_DIR, TestActivationFactory.REPO_ROOT)
+            TestActivationFactory.NETWORK_NAME, TestActivationFactory.FIRST_AGENT_TOOL_PATH_DIR,
+            TestActivationFactory.REPO_ROOT)
 
-        self.assertEqual(factory.get_agent_tool_paths(), [f"{TestActivationFactory.CODED_TOOLS_PACKAGE}.my_network"])
+        expected: List[str] = [f"{TestActivationFactory.FIRST_AGENT_TOOL_PATH_PACKAGE}.my_network"]
+        self.assertEqual(factory.get_agent_tool_paths(), expected)
 
     def test_several_roots_keep_their_order(self) -> None:
         """
         A list of roots, directories and module paths mixed, gives one tool path per root
         in the order listed.
         """
-        roots: List[str] = [TestActivationFactory.CODED_TOOLS_DIR, TestActivationFactory.ALT_CODED_TOOLS_PACKAGE]
+        roots: List[str] = [
+            TestActivationFactory.FIRST_AGENT_TOOL_PATH_DIR,
+            TestActivationFactory.SECOND_AGENT_TOOL_PATH_PACKAGE,
+        ]
         factory: ActivationFactory = self.make_factory(
             TestActivationFactory.NETWORK_NAME, os.pathsep.join(roots), TestActivationFactory.REPO_ROOT)
 
         expected: List[str] = [
-            f"{TestActivationFactory.CODED_TOOLS_PACKAGE}.my_network",
-            f"{TestActivationFactory.ALT_CODED_TOOLS_PACKAGE}.my_network",
+            f"{TestActivationFactory.FIRST_AGENT_TOOL_PATH_PACKAGE}.my_network",
+            f"{TestActivationFactory.SECOND_AGENT_TOOL_PATH_PACKAGE}.my_network",
         ]
         self.assertEqual(factory.get_agent_tool_paths(), expected)
 
@@ -142,11 +147,12 @@ class TestActivationFactory(TestCase):
         A directory root that no PYTHONPATH entry holds is an error that names the root,
         even when another root in the list is fine.
         """
-        roots: List[str] = [TestActivationFactory.CODED_TOOLS_DIR, "neuro_san.coded_tools"]
+        unmapped_root: str = TestActivationFactory.FIRST_AGENT_TOOL_PATH_DIR
+        roots: List[str] = [unmapped_root, "neuro_san.coded_tools"]
         with self.assertRaises(ValueError) as raised_error:
             self.make_factory(TestActivationFactory.NETWORK_NAME, os.pathsep.join(roots))
 
-        expected: str = f"No reasonable agent tool path found in PYTHONPATH for {TestActivationFactory.CODED_TOOLS_DIR}"
+        expected: str = f"No reasonable agent tool path found in PYTHONPATH for {unmapped_root}"
         self.assertIn(expected, str(raised_error.exception))
 
     def test_hierarchical_network_name_becomes_dotted_suffix(self) -> None:

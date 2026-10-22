@@ -16,8 +16,8 @@
 # END COPYRIGHT
 
 
-class AltNetworkTool:
+class SecondNetworkTool:
     """
-    A fixture class resolvable at the network-specific level of the tests/coded_tools_alt
-    tool root only, used by multiple-root resolution tests.
+    A fixture class resolvable at the network-specific level of the
+    tests/second_agent_tool_path tool root only, used by multiple-root resolution tests.
     """

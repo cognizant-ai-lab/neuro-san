@@ -41,9 +41,9 @@ from tests.neuro_san.internals.graph.activations.concrete_class_activation impor
 
 # A tool root laid out like a project's coded_tools directory: shared modules at the top,
 # network-specific modules under the agent network's own folder.
-CODED_TOOLS_PACKAGE: str = "tests.coded_tools"
+FIRST_AGENT_TOOL_PATH_PACKAGE: str = "tests.first_agent_tool_path"
 # A second tool root of the same shape, for tests that give AGENT_TOOL_PATH several roots.
-ALT_CODED_TOOLS_PACKAGE: str = "tests.coded_tools_alt"
+SECOND_AGENT_TOOL_PATH_PACKAGE: str = "tests.second_agent_tool_path"
 # A canary module deliberately outside any tool path; see resolution_canary.py.
 CANARY_MODULE: str = "tests.neuro_san.internals.graph.activations.resolution_canary"
 
@@ -58,7 +58,7 @@ class TestToolPathOnlyResolution(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Create a mock RunContext and activations pointed at the tests/coded_tools roots.
+        Create a mock RunContext and activations pointed at the two test tool roots.
         """
         self.mock_run_context = MagicMock()
 
@@ -75,13 +75,13 @@ class TestToolPathOnlyResolution(TestCase):
         self.mock_run_context.get_origin.return_value = {"agent": "test_agent"}
         self.mock_run_context.get_invocation_context.return_value = invocation_context
 
-        fixture_tool_path: str = f"{CODED_TOOLS_PACKAGE}.my_network"
+        fixture_tool_path: str = f"{FIRST_AGENT_TOOL_PATH_PACKAGE}.my_network"
         self.fixture_activation: ConcreteClassActivation = self.make_activation([fixture_tool_path], "my_network")
 
         # The same network with a second root listed after the first
-        alt_tool_path: str = f"{ALT_CODED_TOOLS_PACKAGE}.my_network"
+        second_tool_path: str = f"{SECOND_AGENT_TOOL_PATH_PACKAGE}.my_network"
         self.two_root_activation: ConcreteClassActivation = self.make_activation(
-            [fixture_tool_path, alt_tool_path], "my_network")
+            [fixture_tool_path, second_tool_path], "my_network")
 
     def test_default_mode_resolves_fully_qualified_ref(self) -> None:
         """
@@ -154,8 +154,8 @@ class TestToolPathOnlyResolution(TestCase):
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
             resolved_class: Type[Any] = self.two_root_activation.resolve_class(
-                "AltNetworkTool", "alt_network_tool")
-            self.assertEqual(resolved_class.__name__, "AltNetworkTool")
+                "SecondNetworkTool", "second_network_tool")
+            self.assertEqual(resolved_class.__name__, "SecondNetworkTool")
 
     def test_tool_path_only_resolves_shared_tool_in_later_root(self) -> None:
         """
@@ -163,8 +163,8 @@ class TestToolPathOnlyResolution(TestCase):
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
             resolved_class: Type[Any] = self.two_root_activation.resolve_class(
-                "AltSharedTool", "alt_shared_tool")
-            self.assertEqual(resolved_class.__name__, "AltSharedTool")
+                "SecondSharedTool", "second_shared_tool")
+            self.assertEqual(resolved_class.__name__, "SecondSharedTool")
 
     def test_earlier_root_wins_over_later_root(self) -> None:
         """
@@ -172,17 +172,17 @@ class TestToolPathOnlyResolution(TestCase):
         shared_tool wins over the later root's network-specific shared_tool, and
         listing the roots the other way round flips the winner.
         """
-        first_tool_path: str = f"{CODED_TOOLS_PACKAGE}.my_network"
-        alt_tool_path: str = f"{ALT_CODED_TOOLS_PACKAGE}.my_network"
+        first_tool_path: str = f"{FIRST_AGENT_TOOL_PATH_PACKAGE}.my_network"
+        second_tool_path: str = f"{SECOND_AGENT_TOOL_PATH_PACKAGE}.my_network"
         reversed_activation: ConcreteClassActivation = self.make_activation(
-            [alt_tool_path, first_tool_path], "my_network")
+            [second_tool_path, first_tool_path], "my_network")
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
             first_wins: Type[Any] = self.two_root_activation.resolve_class("SharedTool", "shared_tool")
-            self.assertEqual(first_wins.__module__, f"{CODED_TOOLS_PACKAGE}.shared_tool")
+            self.assertEqual(first_wins.__module__, f"{FIRST_AGENT_TOOL_PATH_PACKAGE}.shared_tool")
 
             second_wins: Type[Any] = reversed_activation.resolve_class("SharedTool", "shared_tool")
-            self.assertEqual(second_wins.__module__, f"{ALT_CODED_TOOLS_PACKAGE}.my_network.shared_tool")
+            self.assertEqual(second_wins.__module__, f"{SECOND_AGENT_TOOL_PATH_PACKAGE}.my_network.shared_tool")
 
     def test_tool_path_only_blocks_fully_qualified_ref_with_several_roots(self) -> None:
         """
@@ -208,7 +208,7 @@ class TestToolPathOnlyResolution(TestCase):
             with self.assertRaises(ValueError) as raised_error:
                 self.two_root_activation.resolve_class("MissingTool", "missing_tool")
 
-        expected_roots: str = os.pathsep.join([CODED_TOOLS_PACKAGE, ALT_CODED_TOOLS_PACKAGE])
+        expected_roots: str = os.pathsep.join([FIRST_AGENT_TOOL_PATH_PACKAGE, SECOND_AGENT_TOOL_PATH_PACKAGE])
         expected_lines: List[str] = [
             'Could not find class "MissingTool"',
             'in module "missing_tool"',
@@ -221,14 +221,14 @@ class TestToolPathOnlyResolution(TestCase):
         Test that the roots in the error lose every part of a hierarchical agent network name.
         """
         activation: ConcreteClassActivation = self.make_activation(
-            [f"{CODED_TOOLS_PACKAGE}.deep.math_guy", f"{ALT_CODED_TOOLS_PACKAGE}.deep.math_guy"],
+            [f"{FIRST_AGENT_TOOL_PATH_PACKAGE}.deep.math_guy", f"{SECOND_AGENT_TOOL_PATH_PACKAGE}.deep.math_guy"],
             "deep/math_guy")
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
             with self.assertRaises(ValueError) as raised_error:
                 activation.resolve_class("MissingTool", "missing_tool")
 
-        expected_roots: str = os.pathsep.join([CODED_TOOLS_PACKAGE, ALT_CODED_TOOLS_PACKAGE])
+        expected_roots: str = os.pathsep.join([FIRST_AGENT_TOOL_PATH_PACKAGE, SECOND_AGENT_TOOL_PATH_PACKAGE])
         self.assertIn(f'under AGENT_TOOL_PATH "{expected_roots}"', str(raised_error.exception))
 
     def test_tool_path_only_resolves_shipped_coded_tool_from_added_root(self) -> None:
@@ -237,7 +237,7 @@ class TestToolPathOnlyResolution(TestCase):
         resolve a coded tool shipped with neuro-san next to a project's own tools.
         """
         activation: ConcreteClassActivation = self.make_activation(
-            [f"{CODED_TOOLS_PACKAGE}.my_network", "neuro_san.coded_tools.my_network"],
+            [f"{FIRST_AGENT_TOOL_PATH_PACKAGE}.my_network", "neuro_san.coded_tools.my_network"],
             "my_network", agent_name="current_date_time")
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):

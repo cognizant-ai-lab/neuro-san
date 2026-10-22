@@ -18,7 +18,7 @@
 
 class SharedTool:
     """
-    A fixture class at the network-specific level of the tests/coded_tools_alt tool root,
-    in a module named like the shared shared_tool.py of tests/coded_tools. Which SharedTool
-    resolves shows that roots are searched in the order listed.
+    A fixture class at the network-specific level of the tests/second_agent_tool_path tool
+    root, in a module named like the shared shared_tool.py of tests/first_agent_tool_path.
+    Which SharedTool resolves shows that roots are searched in the order listed.
     """
