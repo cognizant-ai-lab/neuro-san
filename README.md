@@ -303,9 +303,8 @@ look like this:
 
     <your_repo>/coded_tools/<your_agent_name>/<your_coded_tool>.py
 
-`AGENT_TOOL_PATH` can also list several tool roots separated by the OS path separator
-(`:` on Linux and macOS). Each root is a directory like the one above or a Python module
-path such as `neuro_san.coded_tools`, and the roots are searched in the order listed.
+Like `PYTHONPATH`, `AGENT_TOOL_PATH` can list several roots, searched in order.
+A root can also be a Python module path such as `neuro_san.coded_tools`.
 See [class](docs/agent_hocon_reference.md#class-1) for details.
 
 ## Creating Clients

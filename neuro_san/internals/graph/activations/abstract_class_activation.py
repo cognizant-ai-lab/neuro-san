@@ -244,7 +244,8 @@ class AbstractClassActivation(AbstractCallableActivation):
         for one_agent_tool_path in agent_tool_paths:
             tool_path_parts: List[str] = one_agent_tool_path.split(".")
             use_tool_path_parts: List[str] = tool_path_parts[:-len(agent_network_name_parts)]
-            agent_tool_roots.append(".".join(use_tool_path_parts))
+            agent_tool_root: str = ".".join(use_tool_path_parts)
+            agent_tool_roots.append(agent_tool_root)
         agent_tool_path: str = pathsep.join(agent_tool_roots)
 
         strict_note: str = ""
@@ -279,8 +280,6 @@ Check these things:
     e)  If an agent network contains both specific and global CodedTools,
         the global module must not have the same name as the agent network.
 3. Is AGENT_TOOL_PATH findable from what is set for your PYTHONPATH?
-4. If AGENT_TOOL_PATH lists several roots, they are searched in the order listed.
-   Each root is a directory under the PYTHONPATH or a Python module path.
 {strict_note}"""
         self.logger.error(message)
         raise ValueError(message) from last_exception
@@ -349,7 +348,7 @@ Check these things:
         :param module_name: The module name containing the class
         :param this_agent_tool_path: The root path from AGENT_TOOL_PATH plus the agent network name
         :param agent_network_name_parts: The agent network name split into parts
-        :return: The resolved Python class, or None if no level under the root resolves it
+        :return: The resolved Python class
         :raises ValueError: If the last level searched had no such module
         :raises AttributeError: If the last level searched found the module but not the class
         """

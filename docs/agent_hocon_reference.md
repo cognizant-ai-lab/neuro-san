@@ -768,14 +768,8 @@ If the agent is called `math_guy` and the class is valued as `calculator.Calcula
 The python file math_guy/calculator.py under `AGENT_TOOL_PATH` is expected to have
 a class called Calculator which implements the CodedTool interface.
 
-`AGENT_TOOL_PATH` can also list several tool roots, separated by the OS path separator
-(`:` on Linux and macOS, `;` on Windows). Each root is either a directory under the `PYTHONPATH`,
-as described above, or a Python module path such as `neuro_san.coded_tools`, which is used as is
-and so can name coded tools installed as a package. A root that contains a path separator is
-treated as a directory; any other root is treated as a module path. The roots are searched in the
-order listed, each one from `<root>/<agent-name>` up to `<root>`, and the first match wins. For
-example, this serves a project's own coded tools first and the ones shipped with neuro-san after
-them:
+Like `PYTHONPATH`, `AGENT_TOOL_PATH` can list several roots, searched in order. A root can also be a
+Python module path such as `neuro_san.coded_tools`, for coded tools installed as a package. For example:
 
 ```bash
 export AGENT_TOOL_PATH=<top-level>/coded_tools:neuro_san.coded_tools

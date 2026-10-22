@@ -74,10 +74,9 @@ class ActivationFactory(AgentToolFactory):
         Policy for determining where tool source should be looked for
         when resolving references to coded tools.
 
-        AGENT_TOOL_PATH holds one or more tool roots separated by the OS path
-        separator (":" on Linux and macOS, ";" on Windows). A root is either a
-        directory under the PYTHONPATH or a Python module path. Each root becomes
-        a dotted module path ending with the agent network name.
+        Like PYTHONPATH, AGENT_TOOL_PATH can list several tool roots. A root is
+        either a directory under the PYTHONPATH or a Python module path. Each root
+        becomes a dotted module path ending with the agent network name.
 
         :return: The agent tool paths to use for source resolution,
                  one per root, in the order the roots are listed.
