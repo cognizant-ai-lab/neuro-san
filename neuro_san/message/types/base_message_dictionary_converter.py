@@ -30,6 +30,7 @@ from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
 from langchain_core.messages.tool import ToolMessage
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
 from neuro_san.message.content_blocks.content_blocks_format import ContentBlocksFormat
@@ -179,8 +180,12 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         try:
             normalized = ContentUtils.normalize_content(message)
         except (KeyError, ValueError, TypeError, AttributeError) as exception:
-            logger.warning("Could not standardize the block content of a %s; sending its text only: %s",
-                           message.__class__.__name__, exception)
+            # CheckMarx false-positive for Information Exposure Through an Error Message
+            # The exception text comes from provider translators that neuro-san does not control,
+            # so it goes through a SensitiveLogger, which LEAF_LOG_SENSITIVE="false" silences.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
+            sensitive_logger.warning("Could not standardize the block content of a %s; sending its text only: %s",
+                                     message.__class__.__name__, exception)
             return None
 
         if not isinstance(normalized, list):

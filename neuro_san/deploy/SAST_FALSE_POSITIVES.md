@@ -88,6 +88,7 @@ Destination Classes:
 * ProfilerControlHandler
 * HttpLogger
 * AuthorizerFactory
+* BaseMessageDictionaryConverter
 
 We employ a special SensitiveLogger class in all of these locations to optionally
 forbid the logging of sensitive information, such as exceptions or use of specific class names
