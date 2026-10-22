@@ -28,7 +28,7 @@ from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 # pylint: disable=protected-access
 class TestLatencyAnalyzer(TestCase):
     """
-    Unit tests for LatencyAnalyzer helpers: _percentile(), _extract_latencies(), _peak_in_flight_count(),
+    Unit tests for LatencyAnalyzer helpers: percentile(), _extract_latencies(), _peak_in_flight_count(),
     _build_timeline(), _bucket_peaks(), _chart_bar() and count_milestones().
     """
 
@@ -36,36 +36,44 @@ class TestLatencyAnalyzer(TestCase):
         """
         An empty list has no percentile, so the result is 0.0.
         """
-        self.assertEqual(LatencyAnalyzer._percentile([], 50), 0.0)
+        percentile_seconds: float = LatencyAnalyzer.percentile([], 50)
+        self.assertEqual(percentile_seconds, 0.0)
 
     def test_percentile_of_one_value_is_that_value(self) -> None:
         """
         With one value, every percentile is that value.
         """
-        self.assertEqual(LatencyAnalyzer._percentile([4.0], 0), 4.0)
-        self.assertEqual(LatencyAnalyzer._percentile([4.0], 90), 4.0)
-        self.assertEqual(LatencyAnalyzer._percentile([4.0], 100), 4.0)
+        percentage: float
+        # Every percentile of a one-value list is that value.
+        for percentage in [0, 90, 100]:
+            percentile_seconds: float = LatencyAnalyzer.percentile([4.0], percentage)
+            self.assertEqual(percentile_seconds, 4.0)
 
     def test_percentile_ends_are_minimum_and_maximum(self) -> None:
         """
         The 0th percentile is the smallest value and the 100th the largest.
         """
         values_seconds: List[float] = [1.0, 2.0, 5.0, 9.0]
-        self.assertEqual(LatencyAnalyzer._percentile(values_seconds, 0), 1.0)
-        self.assertEqual(LatencyAnalyzer._percentile(values_seconds, 100), 9.0)
+        minimum_seconds: float = LatencyAnalyzer.percentile(values_seconds, 0)
+        maximum_seconds: float = LatencyAnalyzer.percentile(values_seconds, 100)
+        self.assertEqual(minimum_seconds, 1.0)
+        self.assertEqual(maximum_seconds, 9.0)
 
     def test_percentile_on_a_value_returns_that_value(self) -> None:
         """
         The median of an odd-length list is its middle value.
         """
-        self.assertEqual(LatencyAnalyzer._percentile([1.0, 3.0, 8.0], 50), 3.0)
+        median_seconds: float = LatencyAnalyzer.percentile([1.0, 3.0, 8.0], 50)
+        self.assertEqual(median_seconds, 3.0)
 
     def test_percentile_between_values_is_interpolated(self) -> None:
         """
         A percentile between two values lies on the straight line between them.
         """
-        self.assertEqual(LatencyAnalyzer._percentile([1.0, 2.0, 3.0, 4.0], 50), 2.5)
-        self.assertAlmostEqual(LatencyAnalyzer._percentile([10.0, 20.0], 90), 19.0)
+        median_seconds: float = LatencyAnalyzer.percentile([1.0, 2.0, 3.0, 4.0], 50)
+        ninetieth_seconds: float = LatencyAnalyzer.percentile([10.0, 20.0], 90)
+        self.assertEqual(median_seconds, 2.5)
+        self.assertAlmostEqual(ninetieth_seconds, 19.0)
 
     def test_extract_latencies_skips_results_without_elapsed_time(self) -> None:
         """

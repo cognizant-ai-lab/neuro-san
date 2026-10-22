@@ -166,6 +166,25 @@ class LatencyAnalyzer:
     # Helpers
     # ----------------------------------------------------------
 
+    @staticmethod
+    def percentile(sorted_values_seconds: List[float], percentage: float) -> float:
+        """
+        Compute a percentile of pre-sorted values.
+
+        :param sorted_values_seconds: Values sorted in ascending order
+        :param percentage: Percentile to compute, 0 to 100
+        :return: The interpolated percentile, or 0.0 when there are no values
+        """
+        if not sorted_values_seconds:
+            return 0.0
+        index: float = (percentage / 100.0) * (len(sorted_values_seconds) - 1)
+        lower_index: int = math.floor(index)
+        upper_index: int = min(lower_index + 1, len(sorted_values_seconds) - 1)
+        fraction: float = index - lower_index
+        neighbor_gap_seconds: float = sorted_values_seconds[upper_index] - sorted_values_seconds[lower_index]
+        percentile_seconds: float = sorted_values_seconds[lower_index] + fraction * neighbor_gap_seconds
+        return percentile_seconds
+
     def _log_completion_timeline(self, is_ramp: bool) -> None:
         """
         Log completion latency percentiles per stage on one line.
@@ -193,7 +212,7 @@ class LatencyAnalyzer:
             percentage: int
             # One "p<N> <duration>" part per milestone percentage.
             for percentage in COMPLETION_MILESTONES:
-                percentile_seconds: float = self._percentile(latencies_seconds, percentage)
+                percentile_seconds: float = self.percentile(latencies_seconds, percentage)
                 formatted_duration: str = Formatters.fmt_duration(percentile_seconds, precision=1)
                 parts_list.append(f"p{percentage} {formatted_duration}")
             parts: str = " / ".join(parts_list)
@@ -218,25 +237,6 @@ class LatencyAnalyzer:
             duration_seconds: float = sorted_latencies_seconds[count - 1]
             formatted_duration: str = Formatters.fmt_duration(duration_seconds, precision=1)
             logger.info("    %4d requests completed by %s", count, formatted_duration)
-
-    @staticmethod
-    def _percentile(sorted_values_seconds: List[float], percentage: float) -> float:
-        """
-        Compute a percentile of pre-sorted values.
-
-        :param sorted_values_seconds: Values sorted in ascending order
-        :param percentage: Percentile to compute, 0 to 100
-        :return: The interpolated percentile, or 0.0 when there are no values
-        """
-        if not sorted_values_seconds:
-            return 0.0
-        index: float = (percentage / 100.0) * (len(sorted_values_seconds) - 1)
-        lower_index: int = int(math.floor(index))
-        upper_index: int = min(lower_index + 1, len(sorted_values_seconds) - 1)
-        fraction: float = index - lower_index
-        neighbor_gap_seconds: float = sorted_values_seconds[upper_index] - sorted_values_seconds[lower_index]
-        percentile_seconds: float = sorted_values_seconds[lower_index] + fraction * neighbor_gap_seconds
-        return percentile_seconds
 
     @staticmethod
     def _extract_latencies(summary: Dict[str, Any]) -> List[float]:
