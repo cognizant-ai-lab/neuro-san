@@ -13,10 +13,11 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-import json
-import os
-import shutil
-import tempfile
+from json import JSONDecodeError
+from json import dumps
+from os.path import join
+from shutil import rmtree
+from tempfile import mkdtemp
 from typing import Any
 from typing import Dict
 from typing import List
@@ -53,14 +54,14 @@ class TestCrossRunComparison(TestCase):
         """
         Create a scratch directory removed again after each test.
         """
-        self._dir: str = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self._dir)
+        self._dir: str = mkdtemp()
+        self.addCleanup(rmtree, self._dir)
 
     def test_valid_file_returns_metrics(self) -> None:
         """
         A readable, well-formed file parses into metrics and logs nothing.
         """
-        path: str = self._write(json.dumps({"config": {"agent": "hello_world", "num_requests": 3}}))
+        path: str = self._write(dumps({"config": {"agent": "hello_world", "num_requests": 3}}))
 
         with patch("tests.load_tests.reporting.cross_run_comparison.SensitiveLogger") as mock_cls:
             metrics: Optional[Dict[str, Any]] = CrossRunComparison._extract_metrics(path, "run-1")
@@ -73,7 +74,7 @@ class TestCrossRunComparison(TestCase):
         """
         A path that does not exist returns None and logs the path and reason.
         """
-        missing_path: str = os.path.join(self._dir, "does_not_exist.json")
+        missing_path: str = join(self._dir, "does_not_exist.json")
 
         reason: Union[OSError, ValueError, str] = self._assert_logged_none(missing_path)
         self.assertIsInstance(reason, FileNotFoundError)
@@ -85,13 +86,13 @@ class TestCrossRunComparison(TestCase):
         path: str = self._write("{not valid json")
 
         reason: Union[OSError, ValueError, str] = self._assert_logged_none(path)
-        self.assertIsInstance(reason, json.JSONDecodeError)
+        self.assertIsInstance(reason, JSONDecodeError)
 
     def test_non_object_json_is_logged_and_returns_none(self) -> None:
         """
         Valid JSON that is a list, not an object, returns None and logs the path and reason.
         """
-        path: str = self._write(json.dumps([1, 2]))
+        path: str = self._write(dumps([1, 2]))
 
         reason: Union[OSError, ValueError, str] = self._assert_logged_none(path)
         self.assertIn("not a JSON object", reason)
@@ -100,7 +101,7 @@ class TestCrossRunComparison(TestCase):
         """
         A PermissionError while opening the file returns None and logs the path and reason.
         """
-        path: str = self._write(json.dumps({"config": {}}))
+        path: str = self._write(dumps({"config": {}}))
 
         reason: Optional[Union[OSError, ValueError, str]] = None
         with patch("builtins.open", side_effect=PermissionError("permission denied")):
@@ -138,7 +139,7 @@ class TestCrossRunComparison(TestCase):
         with self.assertLogs("tests.load_tests.reporting.token_log_writer", level="INFO"):
             TokenLogWriter.log_token_summary(results, output_dir=self._dir)
 
-        log_path: str = os.path.join(self._dir, SERVER_TOKENS_LOG_FILE_NAME)
+        log_path: str = join(self._dir, SERVER_TOKENS_LOG_FILE_NAME)
         loops: List[Dict[str, Any]] = CrossRunComparison._parse_validation_loops(log_path)
 
         self.assertEqual(1, len(loops), loops)
@@ -186,7 +187,7 @@ class TestCrossRunComparison(TestCase):
         :param contents: Raw file contents
         :return: Path of the created file
         """
-        path: str = os.path.join(self._dir, RAW_RESULTS_FILE_NAME)
+        path: str = join(self._dir, RAW_RESULTS_FILE_NAME)
         with open(path, "w", encoding="utf-8") as file_handle:
             file_handle.write(contents)
         return path

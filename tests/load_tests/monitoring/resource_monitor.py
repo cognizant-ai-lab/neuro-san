@@ -20,7 +20,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import psutil
+from psutil import AccessDenied
+from psutil import NoSuchProcess
+from psutil import Process
+from psutil import process_iter
 
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -39,49 +42,64 @@ class ResourceMonitor:
     ONE_GIGABYTE: int = 1024 ** 3
     # Megabytes in a gigabyte, to show megabyte values in gigabytes
     MEGABYTES_PER_GIGABYTE: int = 1024
+    # A percentage that stands for one whole (one core, all memory)
+    ONE_HUNDRED_PERCENT: float = 100.0
 
     @staticmethod
-    def find_process(keyword: str) -> Optional[psutil.Process]:
+    def cores_in_use(cpu_percentage: float, core_count: int) -> float:
+        """
+        Convert a whole-system CPU percentage into the number of cores it keeps busy.
+
+        :param cpu_percentage: CPU use in percent of all cores, e.g. 50.0
+        :param core_count: Number of CPU cores
+        :return: Cores in use, e.g. 2.0 for 50.0 percent of 4 cores
+        """
+        used_fraction: float = cpu_percentage / ResourceMonitor.ONE_HUNDRED_PERCENT
+        cores: float = used_fraction * core_count
+        return cores
+
+    @staticmethod
+    def find_process(keyword: str) -> Optional[Process]:
         """
         Find a running process whose command line contains the given keyword.
 
         :param keyword: Text to look for in each process command line
         :return: The first matching process, or None
         """
-        process: psutil.Process
+        process: Process
         # Return the first process whose command line has the keyword.
-        for process in psutil.process_iter(["pid", "cmdline"]):
+        for process in process_iter(["pid", "cmdline"]):
             try:
                 command_line: str = " ".join(process.info.get("cmdline") or [])
                 if keyword in command_line:
-                    return psutil.Process(process.info.get("pid"))
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    return Process(process.info.get("pid"))
+            except (NoSuchProcess, AccessDenied):
                 continue
         return None
 
     @staticmethod
-    def find_process_by_port(port: int) -> Optional[psutil.Process]:
+    def find_process_by_port(port: int) -> Optional[Process]:
         """
         Find a process listening on the given port.
 
         :param port: TCP port the process listens on
         :return: The first process listening on the port, or None
         """
-        process: psutil.Process
+        process: Process
         # Look for a process with a listening connection on the port.
-        for process in psutil.process_iter(["pid"]):
+        for process in process_iter(["pid"]):
             try:
                 connection: Any
                 # Check each connection of the process for a listen on the port.
                 for connection in process.net_connections():
                     if connection.status == "LISTEN" and connection.laddr.port == port:
-                        return psutil.Process(process.info.get("pid"))
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        return Process(process.info.get("pid"))
+            except (NoSuchProcess, AccessDenied):
                 continue
         return None
 
     @staticmethod
-    def snapshot(process: Optional[psutil.Process]) -> Optional[Dict[str, Any]]:
+    def snapshot(process: Optional[Process]) -> Optional[Dict[str, Any]]:
         """
         Capture a point-in-time resource snapshot of a process.
 
@@ -104,7 +122,7 @@ class ResourceMonitor:
             # net_connections() returns psutil's private pconn named tuples, which have no public type to name.
             connections: List[Any] = process.net_connections()
             connection_count: int = len(connections)
-            children: List[psutil.Process] = process.children()
+            children: List[Process] = process.children()
             child_count: int = len(children)
             cpu_percentage: float = process.cpu_percent(interval=0.1)
             cpu_seconds: float = cpu_times.user + cpu_times.system
@@ -118,7 +136,7 @@ class ResourceMonitor:
                 "cpu_seconds": cpu_seconds,
             }
             return process_snapshot
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except (NoSuchProcess, AccessDenied):
             return None
 
     @staticmethod

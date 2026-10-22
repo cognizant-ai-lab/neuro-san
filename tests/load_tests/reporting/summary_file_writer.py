@@ -15,8 +15,8 @@
 # END COPYRIGHT
 
 import logging
-import os
-import time
+from os.path import join
+from time import strftime
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -27,12 +27,10 @@ from typing import Tuple
 
 from collections import Counter
 
-import psutil
-
 from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
+from tests.load_tests.reporting.system_resources import SystemResources
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -71,7 +69,7 @@ class SummaryFileWriter:
         self._write_completion_timeline(lines)
         self._write_server_timing(lines)
 
-        path: str = os.path.join(output_dir, "summary.txt")
+        path: str = join(output_dir, "summary.txt")
         with open(path, "w", encoding="utf-8") as file_handle:
             file_handle.write("\n".join(lines) + "\n")
         logger.info("  Summary:     %s", path)
@@ -93,7 +91,7 @@ class SummaryFileWriter:
             stage_durations_seconds.append(stage_summary.get("elapsed", 0))
         total_elapsed_seconds: float = sum(stage_durations_seconds)
         agent: str = self._args.agent
-        date_text: str = time.strftime("%Y-%m-%d %H:%M")
+        date_text: str = strftime("%Y-%m-%d %H:%M")
         request_count: int = self._args.num_requests
         round_count: int = self._args.num_rounds
         workers: int = self._args.max_workers
@@ -254,15 +252,20 @@ class SummaryFileWriter:
                     peak_available_gigabytes = available_gigabytes
         if peak_memory_percentage is None:
             return
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        memory_stats: Any = psutil.virtual_memory()
-        total_gigabytes: float = memory_stats.total / ResourceMonitor.ONE_GIGABYTE
+        total_gigabytes: float = SystemResources.total_gigabytes()
+        # Show a missing start, end or free value as 0.
+        if start_memory_percentage is None:
+            start_memory_percentage = 0.0
+        if end_memory_percentage is None:
+            end_memory_percentage = 0.0
+        if peak_available_gigabytes is None:
+            peak_available_gigabytes = 0.0
         peak_detail: str = (
-            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes or 0:.1f}G free / {total_gigabytes:.1f}G)"
+            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes:.1f}G free / {total_gigabytes:.1f}G)"
         )
         lines.append(
-            f"  System memory: {start_memory_percentage or 0:.0f}% start \u2192 {peak_detail}"
-            f" \u2192 {end_memory_percentage or 0:.0f}% end"
+            f"  System memory: {start_memory_percentage:.0f}% start \u2192 {peak_detail}"
+            f" \u2192 {end_memory_percentage:.0f}% end"
         )
 
     def _write_validation_summary(self, lines: List[str]) -> None:
