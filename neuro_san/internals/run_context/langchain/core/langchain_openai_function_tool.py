@@ -31,6 +31,7 @@ from langchain_core.tools import BaseTool
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
+from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
 from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter import BaseModelDictionaryConverter
@@ -233,7 +234,7 @@ It's function_json is described thusly:
                  On failure, returns the string form of the exception so the
                  calling LLM can verbally recognize the problem.
         """
-        run: LangChainRun = None
+        run: Run = None
         try:
             # Use the CallingTool/tool_caller to invoke
             # its other tools within the context of other llm/agent/tool
