@@ -630,7 +630,7 @@ class TestLangChainTokenCounter(TestCase):
 
     def test_merge_dicts_empty_responses_backward_compat(self) -> None:
         """
-        merge_dicts carries empty_responses even when one operand has no empty_responses key.
+        merge_dicts carries empty_responses when only one operand has that key, so stats without the key still merge.
         """
         # Accumulator with no empty_responses key.
         existing_models: Dict[str, Any] = {
