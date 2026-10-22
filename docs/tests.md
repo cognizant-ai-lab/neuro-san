@@ -161,6 +161,15 @@ A few conventions keep the unit tests consistent across contributors:
   `tests/` that holds test modules needs an `__init__.py`: the CI gate hands
   pylint the `tests` tree, and pylint only descends into sub-directories that
   are packages, so a directory without one is silently not linted.
+- Split by topic only past the size limit. When all the tests of `SomeClass`
+  together would go over pylint's 1000-line module limit, split them instead
+  of disabling `too-many-lines`: move any number of whole topics (one method
+  or behavior each) to `tests/.../test_some_module_<topic>.py`, each holding
+  the single class `TestSomeClass<Topic>`, for example
+  `test_some_module_timeout.py` with `TestSomeClassTimeout`, and keep the rest
+  in `test_some_module.py`. Share helpers through a helper class of their own,
+  since importing or subclassing `TestSomeClass` makes pytest run its tests
+  again. When all the tests fit under the limit, keep them in one module.
 - Test classes derive from `unittest.TestCase`, or from
   `unittest.IsolatedAsyncioTestCase` when they contain `async def` tests.
   `IsolatedAsyncioTestCase` runs async tests itself, so its methods do not
