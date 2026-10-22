@@ -15,45 +15,47 @@
 #
 # END COPYRIGHT
 
-import asyncio
-from contextlib import contextmanager
+from typing import Any
+from typing import Dict
 
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest import TestCase
 from unittest.mock import Mock
-from unittest.mock import patch
 
-import pytest
-
-from langchain_core.messages.ai import AIMessage
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from typing_extensions import override
 
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
-from neuro_san.message.types.agent_message import AgentMessage
 
 
-# pylint: disable=too-many-public-methods
-class TestLangChainTokenCounter:
-    """Test cases for sum_all_tokens and merge_dicts methods."""
+class TestLangChainTokenCounter(TestCase):
+    """
+    Tests for LangChainTokenCounter: sum_all_tokens() and merge_dicts().
+    The count_tokens() timeout tests are in TestTokenCounterTimeout.
+    """
 
-    @pytest.fixture
-    def token_counter(self):
-        """Create a LangChainTokenCounter instance for testing."""
+    @override
+    def setUp(self) -> None:
+        """
+        Gives each test a fresh LangChainTokenCounter built on mocked dependencies.
+        """
         # Mock the required dependencies
-        mock_llm = Mock()
-        mock_invocation_context = Mock()
-        mock_journal = Mock()
-        mock_origin = Mock()
+        mock_llm: Mock = Mock()
+        mock_invocation_context: Mock = Mock()
+        mock_journal: Mock = Mock()
+        mock_origin: Mock = Mock()
 
-        return LangChainTokenCounter(
+        self.token_counter: LangChainTokenCounter = LangChainTokenCounter(
             llm=mock_llm,
             invocation_context=mock_invocation_context,
             journal=mock_journal,
             origin=mock_origin
         )
 
-    def test_sum_all_tokens_single_provider_single_model(self, token_counter):
-        """Test aggregation with a single provider and single model."""
-        token_dict = {
+    def test_sum_all_tokens_single_provider_single_model(self) -> None:
+        """
+        Test aggregation with a single provider and single model.
+        """
+        token_dict: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 100,
@@ -66,9 +68,9 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 3.0)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 3.0)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "total_tokens": 100,
             "prompt_tokens": 80,
             "completion_tokens": 20,
@@ -78,11 +80,13 @@ class TestLangChainTokenCounter:
             "time_taken_in_seconds": 3.0  # Uses the time_value parameter
         }
 
-        assert result == expected
+        self.assertEqual(token_totals, expected)
 
-    def test_sum_all_tokens_single_provider_multiple_models(self, token_counter):
-        """Test aggregation with a single provider and multiple models."""
-        token_dict = {
+    def test_sum_all_tokens_single_provider_multiple_models(self) -> None:
+        """
+        Test aggregation with a single provider and multiple models.
+        """
+        token_dict: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 100,
@@ -103,9 +107,9 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 4.5)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 4.5)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "total_tokens": 300,
             "prompt_tokens": 230,
             "completion_tokens": 70,
@@ -115,11 +119,13 @@ class TestLangChainTokenCounter:
             "time_taken_in_seconds": 4.5
         }
 
-        assert result == expected
+        self.assertEqual(token_totals, expected)
 
-    def test_sum_all_tokens_multiple_providers_multiple_models(self, token_counter):
-        """Test aggregation with multiple providers and multiple models."""
-        token_dict = {
+    def test_sum_all_tokens_multiple_providers_multiple_models(self) -> None:
+        """
+        Test aggregation with multiple providers and multiple models.
+        """
+        token_dict: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 100,
@@ -150,9 +156,9 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 7.0)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 7.0)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "total_tokens": 450,
             "prompt_tokens": 340,
             "completion_tokens": 110,
@@ -162,19 +168,19 @@ class TestLangChainTokenCounter:
             "time_taken_in_seconds": 7.0
         }
 
-        assert result == expected
+        self.assertEqual(token_totals, expected)
 
-    def test_sum_all_tokens_empty_dict(self, token_counter):
+    def test_sum_all_tokens_empty_dict(self) -> None:
         """
         Aggregation of an empty token dictionary yields explicit zeros.
         The standard metric keys must always be present: downstream consumers
         (e.g. TokenAccountingMessageFilter) rely on "total_tokens" existing.
         """
-        token_dict = {}
+        token_dict: Dict[str, Any] = {}
 
-        result = token_counter.sum_all_tokens(token_dict, 1.5)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 1.5)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "total_tokens": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -184,18 +190,20 @@ class TestLangChainTokenCounter:
             "time_taken_in_seconds": 1.5
         }
 
-        assert result == expected
+        self.assertEqual(token_totals, expected)
 
-    def test_sum_all_tokens_empty_models(self, token_counter):
-        """Test aggregation with empty models in providers yields explicit zeros."""
-        token_dict = {
+    def test_sum_all_tokens_empty_models(self) -> None:
+        """
+        Test aggregation with empty models in providers yields explicit zeros.
+        """
+        token_dict: Dict[str, Any] = {
             "openai": {},
             "anthropic": {}
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 2.0)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 2.0)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "total_tokens": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -205,11 +213,13 @@ class TestLangChainTokenCounter:
             "time_taken_in_seconds": 2.0
         }
 
-        assert result == expected
+        self.assertEqual(token_totals, expected)
 
-    def test_sum_all_tokens_excludes_time_from_models(self, token_counter):
-        """Test that time_taken_in_seconds from models is excluded from aggregation."""
-        token_dict = {
+    def test_sum_all_tokens_excludes_time_from_models(self) -> None:
+        """
+        Test that time_taken_in_seconds from models is excluded from aggregation.
+        """
+        token_dict: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 100,
@@ -218,15 +228,19 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 5.0)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 5.0)
 
         # The time should come from the parameter, not the model stats
-        assert result["time_taken_in_seconds"] == 5.0
-        assert result["total_tokens"] == 100
+        time_taken_in_seconds: float = token_totals.get("time_taken_in_seconds")
+        total_tokens: int = token_totals.get("total_tokens")
+        self.assertEqual(time_taken_in_seconds, 5.0)
+        self.assertEqual(total_tokens, 100)
 
-    def test_sum_all_tokens_with_zero_values(self, token_counter):
-        """Test aggregation with zero values."""
-        token_dict = {
+    def test_sum_all_tokens_with_zero_values(self) -> None:
+        """
+        Test aggregation with zero values.
+        """
+        token_dict: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 0,
@@ -239,9 +253,9 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 0.1)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 0.1)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "total_tokens": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -251,11 +265,13 @@ class TestLangChainTokenCounter:
             "time_taken_in_seconds": 0.1
         }
 
-        assert result == expected
+        self.assertEqual(token_totals, expected)
 
-    def test_sum_all_tokens_floating_point_precision(self, token_counter):
-        """Test aggregation with floating point numbers."""
-        token_dict = {
+    def test_sum_all_tokens_floating_point_precision(self) -> None:
+        """
+        Test aggregation with floating point numbers.
+        """
+        token_dict: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_cost": 0.1,
@@ -270,298 +286,241 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 3.5)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 3.5)
 
-        assert abs(result["total_cost"] - 0.3) < 1e-10
-        assert result["time_taken_in_seconds"] == 3.5
+        total_cost: float = token_totals.get("total_cost")
+        cost_error: float = abs(total_cost - 0.3)
+        self.assertLess(cost_error, 1e-10)
+        time_taken_in_seconds: float = token_totals.get("time_taken_in_seconds")
+        self.assertEqual(time_taken_in_seconds, 3.5)
 
-    def test_merge_dicts_no_overlap(self, token_counter):
-        """Test merging dictionaries with no overlapping keys."""
-        dict_1 = {"a": 1, "b": 2}
-        dict_2 = {"c": 3, "d": 4}
-
-        result = token_counter.merge_dicts(dict_1, dict_2)
-
-        expected = {"a": 1, "b": 2, "c": 3, "d": 4}
-        assert result == expected
-
-    def test_merge_dicts_numeric_overlap(self, token_counter):
-        """Test merging dictionaries with overlapping numeric values."""
-        dict_1 = {"a": 1, "b": 2, "c": 3}
-        dict_2 = {"a": 4, "c": 5, "d": 6}
-
-        result = token_counter.merge_dicts(dict_1, dict_2)
-
-        expected = {"a": 5, "b": 2, "c": 8, "d": 6}
-        assert result == expected
-
-    def test_merge_dicts_nested_dictionaries(self, token_counter):
-        """Test merging dictionaries with nested dictionary values."""
-        dict_1 = {
-            "provider1": {
-                "model1": {"tokens": 100, "cost": 0.05}
-            }
+    def test_merge_dicts_no_overlap(self) -> None:
+        """
+        Test merging dictionaries with no overlapping keys.
+        """
+        dict_1: Dict[str, Any] = {
+            "a": 1,
+            "b": 2
         }
-        dict_2 = {
-            "provider1": {
-                "model1": {"tokens": 50, "requests": 1},
-                "model2": {"tokens": 200, "cost": 0.10}
-            }
+        dict_2: Dict[str, Any] = {
+            "c": 3,
+            "d": 4
         }
 
-        result = token_counter.merge_dicts(dict_1, dict_2)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
 
-        expected = {
+        expected: Dict[str, Any] = {
+            "a": 1,
+            "b": 2,
+            "c": 3,
+            "d": 4
+        }
+        self.assertEqual(merged_dict, expected)
+
+    def test_merge_dicts_numeric_overlap(self) -> None:
+        """
+        Test merging dictionaries with overlapping numeric values.
+        """
+        dict_1: Dict[str, Any] = {
+            "a": 1,
+            "b": 2,
+            "c": 3
+        }
+        dict_2: Dict[str, Any] = {
+            "a": 4,
+            "c": 5,
+            "d": 6
+        }
+
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
+
+        expected: Dict[str, Any] = {
+            "a": 5,
+            "b": 2,
+            "c": 8,
+            "d": 6
+        }
+        self.assertEqual(merged_dict, expected)
+
+    def test_merge_dicts_nested_dictionaries(self) -> None:
+        """
+        Test merging dictionaries with nested dictionary values.
+        """
+        dict_1: Dict[str, Any] = {
             "provider1": {
-                "model1": {"tokens": 150, "cost": 0.05, "requests": 1},
-                "model2": {"tokens": 200, "cost": 0.10}
+                "model1": {
+                    "tokens": 100,
+                    "cost": 0.05
+                }
             }
         }
-        assert result == expected
+        dict_2: Dict[str, Any] = {
+            "provider1": {
+                "model1": {
+                    "tokens": 50,
+                    "requests": 1
+                },
+                "model2": {
+                    "tokens": 200,
+                    "cost": 0.10
+                }
+            }
+        }
 
-    def test_merge_dicts_deeply_nested(self, token_counter):
-        """Test merging deeply nested dictionaries."""
-        dict_1 = {
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
+
+        expected: Dict[str, Any] = {
+            "provider1": {
+                "model1": {
+                    "tokens": 150,
+                    "cost": 0.05,
+                    "requests": 1
+                },
+                "model2": {
+                    "tokens": 200,
+                    "cost": 0.10
+                }
+            }
+        }
+        self.assertEqual(merged_dict, expected)
+
+    def test_merge_dicts_deeply_nested(self) -> None:
+        """
+        Test merging deeply nested dictionaries.
+        """
+        dict_1: Dict[str, Any] = {
             "level1": {
                 "level2": {
                     "level3": {"value": 10}
                 }
             }
         }
-        dict_2 = {
+        dict_2: Dict[str, Any] = {
             "level1": {
                 "level2": {
-                    "level3": {"value": 5, "other": 20}
+                    "level3": {
+                        "value": 5,
+                        "other": 20
+                    }
                 }
             }
         }
 
-        result = token_counter.merge_dicts(dict_1, dict_2)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "level1": {
                 "level2": {
-                    "level3": {"value": 15, "other": 20}
+                    "level3": {
+                        "value": 15,
+                        "other": 20
+                    }
                 }
             }
         }
-        assert result == expected
+        self.assertEqual(merged_dict, expected)
 
-    def test_merge_dicts_mixed_types(self, token_counter):
-        """Test merging with mixed data types (dict vs numeric)."""
-        dict_1 = {
+    def test_merge_dicts_mixed_types(self) -> None:
+        """
+        Test merging with mixed data types (dict vs numeric).
+        """
+        dict_1: Dict[str, Any] = {
             "a": {"nested": 1},
             "b": 10
         }
-        dict_2 = {
-            "a": {"nested": 2, "other": 3},
+        dict_2: Dict[str, Any] = {
+            "a": {
+                "nested": 2,
+                "other": 3
+            },
             "b": 5,
             "c": {"new": 4}
         }
 
-        result = token_counter.merge_dicts(dict_1, dict_2)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
 
-        expected = {
-            "a": {"nested": 3, "other": 3},
+        expected: Dict[str, Any] = {
+            "a": {
+                "nested": 3,
+                "other": 3
+            },
             "b": 15,
             "c": {"new": 4}
         }
-        assert result == expected
+        self.assertEqual(merged_dict, expected)
 
-    def test_merge_dicts_empty_dictionaries(self, token_counter):
-        """Test merging with empty dictionaries."""
-        dict_1 = {}
-        dict_2 = {"a": 1, "b": 2}
+    def test_merge_dicts_empty_dictionaries(self) -> None:
+        """
+        Test merging with empty dictionaries.
+        """
+        dict_1: Dict[str, Any] = {}
+        dict_2: Dict[str, Any] = {
+            "a": 1,
+            "b": 2
+        }
 
-        result = token_counter.merge_dicts(dict_1, dict_2)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
 
-        expected = {"a": 1, "b": 2}
-        assert result == expected
+        expected: Dict[str, Any] = {
+            "a": 1,
+            "b": 2
+        }
+        self.assertEqual(merged_dict, expected)
 
-        # Test the reverse
-        result2 = token_counter.merge_dicts(dict_2, dict_1)
-        assert result2 == {"a": 1, "b": 2}
+        # Swapped on purpose: with one empty operand, merge_dicts() gives the same result in either order.
+        reversed_merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1=dict_2, dict_2=dict_1)
+        self.assertEqual(reversed_merged_dict, expected)
 
-    def test_merge_dicts_both_empty(self, token_counter):
-        """Test merging two empty dictionaries."""
-        dict_1 = {}
-        dict_2 = {}
+    def test_merge_dicts_both_empty(self) -> None:
+        """
+        Test merging two empty dictionaries.
+        """
+        dict_1: Dict[str, Any] = {}
+        dict_2: Dict[str, Any] = {}
 
-        result = token_counter.merge_dicts(dict_1, dict_2)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
 
-        assert result == {}
+        self.assertEqual(merged_dict, {})
 
-    def test_merge_dicts_does_not_modify_originals(self, token_counter):
-        """Test that merge_dicts does not modify the original dictionaries."""
-        dict_1 = {"a": 1, "b": {"nested": 2}}
-        dict_2 = {"a": 3, "b": {"nested": 4}, "c": 5}
+    def test_merge_dicts_does_not_modify_originals(self) -> None:
+        """
+        Test that merge_dicts does not modify the original dictionaries.
+        """
+        dict_1: Dict[str, Any] = {
+            "a": 1,
+            "b": {"nested": 2}
+        }
+        dict_2: Dict[str, Any] = {
+            "a": 3,
+            "b": {"nested": 4},
+            "c": 5
+        }
 
-        dict_1_original = {"a": 1, "b": {"nested": 2}}
-        dict_2_original = {"a": 3, "b": {"nested": 4}, "c": 5}
+        dict_1_original: Dict[str, Any] = {
+            "a": 1,
+            "b": {"nested": 2}
+        }
+        dict_2_original: Dict[str, Any] = {
+            "a": 3,
+            "b": {"nested": 4},
+            "c": 5
+        }
 
-        result = token_counter.merge_dicts(dict_1, dict_2)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(dict_1, dict_2)
 
         # Original dictionaries should remain unchanged
-        assert dict_1 == dict_1_original
-        assert dict_2 == dict_2_original
+        self.assertEqual(dict_1, dict_1_original)
+        self.assertEqual(dict_2, dict_2_original)
 
         # Result should be different from originals
-        assert result != dict_1
-        assert result != dict_2
+        self.assertNotEqual(merged_dict, dict_1)
+        self.assertNotEqual(merged_dict, dict_2)
 
-    @pytest.mark.asyncio
-    async def test_count_tokens_timeout_writes_aimessage_before_token_accounting_and_raises(self):
+    def test_merge_dicts_complex_token_scenario(self) -> None:
         """
-        On AsyncTimeout, count_tokens should:
-        1. Write a final AIMessage to the journal BEFORE report() writes its
-           token-accounting AgentMessages, so the journal stream order matches
-           the normal-completion path.
-        2. Re-raise AsyncTimeout so the caller (RunContextRunnable.run_it) can
-           log/handle it.
+        Test merging with a realistic token counting scenario.
         """
-        # Capture journal.write_message arguments in call order.
-        written_messages = []
-
-        async def record(msg, *_args, **_kwargs):
-            written_messages.append(msg)
-
-        mock_journal = MagicMock()
-        mock_journal.write_message = AsyncMock(side_effect=record)
-
-        # Mock the invocation_context dependencies that count_tokens / report touch.
-        mock_invocation_context = MagicMock()
-        mock_invocation_context.get_llm_factory.return_value.llm_infos = {}
-        mock_invocation_context.get_request_reporting.return_value = {}
-        # Not a clone: report() writes the network token message for front men.
-        mock_invocation_context.is_cloned.return_value = False
-
-        # The executor wraps the awaitable in a real asyncio.Task so
-        # asyncio.wait_for() actually times out and cancels it.
-        mock_executor = MagicMock()
-        mock_executor.create_task.side_effect = (
-            lambda awaitable, _origin_str: asyncio.create_task(awaitable)
-        )
-        mock_invocation_context.get_asyncio_executor.return_value = mock_executor
-
-        counter = LangChainTokenCounter(
-            llm=MagicMock(),
-            invocation_context=mock_invocation_context,
-            journal=mock_journal,
-            # Single-element origin on a non-cloned context -> report() takes the
-            # main-front-man branch and writes the two request-level messages.
-            origin=[{"tool": "test_agent", "instantiation_index": 0}],
-        )
-
-        async def slow_awaitable():
-            await asyncio.sleep(10)
-
-        @contextmanager
-        def fake_callback_cm(_llm_infos):
-            cb = MagicMock()
-            cb.models_token_dict = {}
-            cb.total_tokens = 0
-            cb.prompt_tokens = 0
-            cb.completion_tokens = 0
-            cb.successful_requests = 0
-            cb.empty_responses = 0
-            cb.total_cost = 0.0
-            yield cb
-
-        callback_path: str = (
-            "neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter.get_llm_token_callback"
-        )
-
-        with patch(callback_path, fake_callback_cm):
-            with pytest.raises(asyncio.TimeoutError):
-                await counter.count_tokens(slow_awaitable(), max_execution_seconds=0.05)
-
-        # 1) First journal write must be the synthesized timeout AIMessage.
-        assert written_messages, "Expected at least the timeout AIMessage on the journal"
-        first = written_messages[0]
-        assert isinstance(first, AIMessage), (
-            f"First journal message should be AIMessage, got {type(first).__name__}"
-        )
-        assert "max_execution_seconds" in first.content
-
-        # 2) The subsequent messages are the front man's two token-accounting
-        #    AgentMessages (main network, then request total).
-        assert len(written_messages) == 3, (
-            "Expected the two request-level AgentMessages after the timeout AIMessage"
-        )
-        for msg in written_messages[1:]:
-            assert isinstance(msg, AgentMessage), (
-                f"Expected AgentMessage after AIMessage, got {type(msg).__name__}"
-            )
-
-    @pytest.mark.asyncio
-    async def test_count_tokens_timeout_agent_branch_writes_per_agent_message(self):
-        """
-        A timed-out non-front-man agent (multi-element origin) still writes its
-        per-agent token accounting message after the synthesized AIMessage.
-        """
-        written_messages = []
-
-        async def record(msg, *_args, **_kwargs):
-            written_messages.append(msg)
-
-        mock_journal = MagicMock()
-        mock_journal.write_message = AsyncMock(side_effect=record)
-
-        mock_invocation_context = MagicMock()
-        mock_invocation_context.get_llm_factory.return_value.llm_infos = {}
-        mock_invocation_context.get_request_reporting.return_value = {}
-        mock_invocation_context.is_cloned.return_value = False
-
-        mock_executor = MagicMock()
-        mock_executor.create_task.side_effect = (
-            lambda awaitable, _origin_str: asyncio.create_task(awaitable)
-        )
-        mock_invocation_context.get_asyncio_executor.return_value = mock_executor
-
-        counter = LangChainTokenCounter(
-            llm=MagicMock(),
-            invocation_context=mock_invocation_context,
-            journal=mock_journal,
-            # Multi-element origin -> report() takes the per-agent else-branch.
-            origin=[
-                {"tool": "front_man", "instantiation_index": 0},
-                {"tool": "slow_agent", "instantiation_index": 0},
-            ],
-        )
-
-        async def slow_awaitable():
-            await asyncio.sleep(10)
-
-        @contextmanager
-        def fake_callback_cm(_llm_infos):
-            cb = MagicMock()
-            cb.models_token_dict = {}
-            cb.total_tokens = 0
-            cb.prompt_tokens = 0
-            cb.completion_tokens = 0
-            cb.successful_requests = 0
-            cb.empty_responses = 0
-            cb.total_cost = 0.0
-            yield cb
-
-        callback_path: str = (
-            "neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter.get_llm_token_callback"
-        )
-
-        with patch(callback_path, fake_callback_cm):
-            with pytest.raises(asyncio.TimeoutError):
-                await counter.count_tokens(slow_awaitable(), max_execution_seconds=0.05)
-
-        # Timeout AIMessage first, then exactly one per-agent AgentMessage.
-        assert len(written_messages) == 2
-        assert isinstance(written_messages[0], AIMessage)
-        agent_message = written_messages[1]
-        assert isinstance(agent_message, AgentMessage)
-        assert "tracked at the agent level" in agent_message.structure["caveats"][0]
-
-    def test_merge_dicts_complex_token_scenario(self, token_counter):
-        """Test merging with a realistic token counting scenario."""
-        existing_models = {
+        existing_models: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 100,
@@ -573,7 +532,7 @@ class TestLangChainTokenCounter:
             }
         }
 
-        new_models = {
+        new_models: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 150,
@@ -601,9 +560,9 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.merge_dicts(existing_models, new_models)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(existing_models, new_models)
 
-        expected = {
+        expected: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 250,
@@ -631,11 +590,13 @@ class TestLangChainTokenCounter:
             }
         }
 
-        assert result == expected
+        self.assertEqual(merged_dict, expected)
 
-    def test_sum_all_tokens_aggregates_empty_responses(self, token_counter):
-        """empty_responses sums across providers and models into the network-wide dict."""
-        token_dict = {
+    def test_sum_all_tokens_aggregates_empty_responses(self) -> None:
+        """
+        empty_responses sums across providers and models into the network-wide dict.
+        """
+        token_dict: Dict[str, Any] = {
             "ollama": {
                 "gpt-oss:20B": {
                     "total_tokens": 10,
@@ -660,15 +621,19 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.sum_all_tokens(token_dict, 3.0)
+        token_totals: Dict[str, Any] = self.token_counter.sum_all_tokens(token_dict, 3.0)
 
-        assert result["empty_responses"] == 3
-        assert result["successful_requests"] == 5
+        empty_responses: int = token_totals.get("empty_responses")
+        successful_requests: int = token_totals.get("successful_requests")
+        self.assertEqual(empty_responses, 3)
+        self.assertEqual(successful_requests, 5)
 
-    def test_merge_dicts_empty_responses_backward_compat(self, token_counter):
-        """merge_dicts carries empty_responses even when one operand predates the key."""
-        # Older serialized accumulator written before empty_responses existed.
-        existing = {
+    def test_merge_dicts_empty_responses_backward_compat(self) -> None:
+        """
+        merge_dicts carries empty_responses when only one operand has that key, so stats without the key still merge.
+        """
+        # Accumulator with no empty_responses key.
+        existing_models: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 100,
@@ -677,8 +642,8 @@ class TestLangChainTokenCounter:
                 }
             }
         }
-        # Newer per-callback dict that tracks empty_responses.
-        new = {
+        # Per-callback dict that tracks empty_responses.
+        new_models: Dict[str, Any] = {
             "openai": {
                 "gpt-4": {
                     "total_tokens": 50,
@@ -689,9 +654,13 @@ class TestLangChainTokenCounter:
             }
         }
 
-        result = token_counter.merge_dicts(existing, new)
+        merged_dict: Dict[str, Any] = self.token_counter.merge_dicts(existing_models, new_models)
 
-        gpt4 = result["openai"]["gpt-4"]
-        assert gpt4["empty_responses"] == 2
-        assert gpt4["successful_requests"] == 2
-        assert gpt4["total_tokens"] == 150
+        # DictionaryExtractor splits keys on "."; the model name "gpt-4" has none.
+        gpt4_stats: Dict[str, Any] = DictionaryExtractor(merged_dict).get("openai.gpt-4")
+        empty_responses: int = gpt4_stats.get("empty_responses")
+        successful_requests: int = gpt4_stats.get("successful_requests")
+        total_tokens: int = gpt4_stats.get("total_tokens")
+        self.assertEqual(empty_responses, 2)
+        self.assertEqual(successful_requests, 2)
+        self.assertEqual(total_tokens, 150)
