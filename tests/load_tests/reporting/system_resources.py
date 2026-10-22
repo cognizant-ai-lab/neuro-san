@@ -231,14 +231,18 @@ class SystemResources:
 
         :param snapshot: System snapshot; log_section passes only one whose "mem_pct" is not None
         :param total_gigabytes: Total system memory in GB
-        :return: e.g. '8192M used / 7.5G free (50% used)'
+        :return: e.g. '8192M used / 7.5G free (50% used)', with 'n/a free' when "mem_avail_gb" is None
         """
         memory_percentage: Optional[float] = snapshot.get("mem_pct", 0.0)
         available_gigabytes: Optional[float] = snapshot.get("mem_avail_gb", 0.0)
         used_fraction: float = memory_percentage / ResourceMonitor.ONE_HUNDRED_PERCENT
         used_gigabytes: float = used_fraction * total_gigabytes
         used_megabytes: float = used_gigabytes * ResourceMonitor.MEGABYTES_PER_GIGABYTE
-        return f"{used_megabytes:.0f}M used / {available_gigabytes:.1f}G free ({memory_percentage:.0f}% used)"
+        # A stage summary can have the memory percentage without the free memory.
+        free_text: str = "n/a"
+        if available_gigabytes is not None:
+            free_text = f"{available_gigabytes:.1f}G"
+        return f"{used_megabytes:.0f}M used / {free_text} free ({memory_percentage:.0f}% used)"
 
     @staticmethod
     def _format_cpu_row(snapshot: SystemSnapshot, core_count: int) -> str:
