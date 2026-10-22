@@ -128,7 +128,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         default_headers: Dict[str, str] = self.build_default_headers(config)
         # The deployment is checked here for the same reason: create_llm() would only find it
         # missing once this client exists.
-        self.resolve_deployment_name(config, self.get_model_name(config))
+        self.resolve_deployment_name(config, AzureLlmPolicy.get_model_name(config))
 
         self.create_http_client(config)
 
@@ -318,9 +318,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         """
         trimmed: str = azure_endpoint.strip().rstrip("/")
         # Tolerate an endpoint that already carries the v1 path, as Azure's own quickstarts show it.
-        if trimmed.endswith(self.V1_PATH):
+        if trimmed.endswith(AzureLlmPolicy.V1_PATH):
             return trimmed + "/"
-        return trimmed + self.V1_PATH + "/"
+        return trimmed + AzureLlmPolicy.V1_PATH + "/"
 
     def resolve_credential(self, config: Dict[str, Any]) -> str:
         """
@@ -426,7 +426,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         """
         legacy_present: List[str] = []
         key: str = None
-        for key in self.LEGACY_KEYS:
+        for key in AzureLlmPolicy.LEGACY_KEYS:
             # null and "" are the neutral values the class defaults carry; only a real value counts.
             if config.get(key):
                 legacy_present.append(key)
