@@ -51,6 +51,7 @@ RETRY_LABELS: Dict[str, str] = {"ProviderRetry": "Provider SDK retries"}
 
 # Console formatting
 SEPARATOR_WIDTH: int = 60
+SEPARATOR_LINE: str = "============================================================"
 
 # Default configuration
 LOCAL_HOSTS: Set[str] = {"localhost", "127.0.0.1", "::1"}
@@ -85,6 +86,9 @@ HISTORY_THRESHOLDS_SECONDS: Tuple[int, int] = (70, 300)
 
 # Files in each run directory. Older runs named the run log (stdout.log) load_test.log.
 RAW_RESULTS_FILE_NAME: str = "raw_results.json"
+
+# The gzipped copy of the server log in a run or round output directory.
+SERVER_LOG_GZ_FILE_NAME: str = "server.log.gz"
 PROGRESS_LOG_FILE_NAME: str = "progress.log"
 SERVER_TOKENS_LOG_FILE_NAME: str = "server_tokens.log"
 STDOUT_LOG_FILE_NAME: str = "stdout.log"
