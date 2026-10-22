@@ -233,7 +233,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             content = restored_blocks
         chat_message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(message_type)
 
-        if content is None and chat_message_type in self.CHAT_HISTORY_TYPES:
+        if content is None and chat_message_type in BaseMessageDictionaryConverter.CHAT_HISTORY_TYPES:
             # Message constructors reject None content, so a message with no
             # text and no block content to restore gets empty text.
             logger: Logger = getLogger(self.__class__.__name__)
