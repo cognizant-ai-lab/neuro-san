@@ -66,13 +66,22 @@ if not _progress_logger.handlers:
 
 
 class _NullFile:
-    """No-op context manager used when no receipt file is needed."""
+    """
+    No-op context manager used when no receipt file is needed.
+    """
 
     def __enter__(self):
+        """
+        Enter the context without opening a file.
+        """
         return None
 
     def __exit__(self, *args):
-        pass
+        """
+        Leave the context; there is no file to close.
+
+        :param args: Exception type, value and traceback (not used)
+        """
 
 
 class ServerLogMonitor:
@@ -88,10 +97,19 @@ class ServerLogMonitor:
     """
 
     def __init__(self, server_log: Optional[str]) -> None:
+        """
+        Store the server log path.
+
+        :param server_log: Path of the server log, or None when there is none
+        """
         self._server_log: Optional[str] = server_log
 
     def read_position(self) -> Optional[int]:
-        """Return the current end position of the server log file."""
+        """
+        Return the current end position of the server log file.
+
+        :return: The end position, or None when there is no server log or it can't be read
+        """
         if self._server_log is None:
             return None
         try:
@@ -102,10 +120,12 @@ class ServerLogMonitor:
             return None
 
     def _read_lines_since(self, position, label) -> List[str]:
-        """Read all lines from server_log starting at the given position.
+        """
+        Read all lines from server_log starting at the given position.
 
-        Returns an empty list on read failure.  The label is used in
-        the log message when an OSError occurs.
+        :param position: Server log position to read from, from read_position()
+        :param label: What is being read, for the log message when an OSError occurs
+        :return: The lines, or an empty list on read failure
         """
         try:
             with open(self._server_log, "r", encoding="utf-8") as server_log_file:
@@ -116,7 +136,8 @@ class ServerLogMonitor:
             return []
 
     def count_retries_since(self, position: Optional[int]) -> Dict[str, int]:
-        """Count retry log entries since the given position.
+        """
+        Count retry log entries since the given position.
 
         Covers both neuro-san's own max_attempts retries ("Retrying:
         <reason> (<ErrorType>) - <error>") and retries the LLM provider SDK performs
@@ -125,7 +146,8 @@ class ServerLogMonitor:
         neuro-san but are still extra LLM attempts, so they belong in
         the amplification factor.
 
-        Returns a dict of error_type -> count for each tracked type.
+        :param position: Server log position to read from, from read_position(), or None
+        :return: A dict of error_type -> count for each tracked type
         """
         if self._server_log is None or position is None:
             return {}
@@ -143,36 +165,43 @@ class ServerLogMonitor:
         return retry_counts
 
     def scan_server_errors_since(self, position) -> List[Dict[str, str]]:
-        """Scan for server "Errors detected:" events since position.
+        """
+        Scan for server "Errors detected:" events since position.
 
         These are logged as JSON with a "message" value that starts
         with "Errors detected:" and spans literal newlines, so the log
-        window is joined and matched with a DOTALL pattern.  Returns a
-        list of {request_id, message} dicts with the message flattened
-        to a single line.
+        window is joined and matched with a DOTALL pattern.
+
+        :param position: Server log position to read from, from read_position(), or None
+        :return: A list of {request_id, message} dicts with the message flattened
+                 to a single line
         """
         if self._server_log is None or position is None:
             return []
         lines: List[str] = self._read_lines_since(position, "errors")
         if not lines:
             return []
-        text: str = "".join(lines)
+        log_text: str = "".join(lines)
         errors: List[Dict[str, str]] = []
         match: re.Match
         # One error entry per server error block in the new text.
-        for match in SERVER_ERROR_PATTERN.finditer(text):
-            message: str = " ".join(match.group(1).split())
+        for match in SERVER_ERROR_PATTERN.finditer(log_text):
+            message_words: List[str] = match.group(1).split()
+            message: str = " ".join(message_words)
             errors.append({"request_id": match.group(2), "message": message})
         return errors
 
     def scan_tool_warnings_since(self, position) -> List[Dict[str, str]]:
-        """Scan for "Failed to create Agent/tool" warnings since position.
+        """
+        Scan for "Failed to create Agent/tool" warnings since position.
 
         These are logged as one-line JSON with message_type "Warning"
         and mean a requested tool (e.g. web_search) was unavailable to
         an agent.  They do not affect the created network, but a high
-        count under load may point to tool-creation failures.  Returns
-        a list of {request_id, message} dicts.
+        count under load may point to tool-creation failures.
+
+        :param position: Server log position to read from, from read_position(), or None
+        :return: A list of {request_id, message} dicts
         """
         if self._server_log is None or position is None:
             return []
@@ -191,24 +220,37 @@ class ServerLogMonitor:
                 continue
             if not isinstance(entry, dict):
                 continue
-            message: str = entry.get("message", "")
+            entry_dict: Dict[str, Any] = entry
+            message: str = entry_dict.get("message", "")
             if not message.startswith("Failed to create Agent/tool"):
                 continue
-            warning_message: str = " ".join(message.split())
+            message_words: List[str] = message.split()
+            warning_message: str = " ".join(message_words)
             warning: Dict[str, str] = {
-                "request_id": entry.get("request_id", "unknown"),
+                "request_id": entry_dict.get("request_id", "unknown"),
                 "message": warning_message,
             }
             warnings.append(warning)
         return warnings
 
     def count_requests_since(self, position, primary_start_pattern, primary_finish_pattern) -> Dict[str, Optional[int]]:
-        """Count request Start/Finish entries since the given position.
+        """
+        Count request Start/Finish entries since the given position.
 
         Uses agent-specific patterns for primary requests.
+
+        :param position: Server log position to read from, from read_position(), or None
+        :param primary_start_pattern: Pattern for the primary agent's Start line
+        :param primary_finish_pattern: Pattern for the primary agent's Finish line
+        :return: A dict with "primary_started", "primary_finished", "total_started" and "total_finished"
+                 counts, all None when there is no server log or position, or no lines since position
         """
-        none_result: Dict[str, Optional[int]] = {"primary_started": None, "primary_finished": None,
-                                                 "total_started": None, "total_finished": None}
+        none_result: Dict[str, Optional[int]] = {
+            "primary_started": None,
+            "primary_finished": None,
+            "total_started": None,
+            "total_finished": None,
+        }
         if self._server_log is None or position is None:
             return none_result
         lines: List[str] = self._read_lines_since(position, "counts")
@@ -231,19 +273,22 @@ class ServerLogMonitor:
                 primary_started += 1
             if primary_finish_re.search(line):
                 primary_finished += 1
-        return {
+        request_counts: Dict[str, Optional[int]] = {
             "primary_started": primary_started,
             "primary_finished": primary_finished,
             "total_started": total_started,
             "total_finished": total_finished,
         }
+        return request_counts
 
     def parse_token_accounting_since(self, position) -> Dict[str, Dict[str, Any]]:
-        """Parse Request reporting entries for token accounting data.
+        """
+        Parse Request reporting entries for token accounting data.
 
-        Returns a dict of request_id -> token data, where each entry has:
-            total_tokens, prompt_tokens, completion_tokens,
-            successful_requests, model, reporting_agent
+        :param position: Server log position to read from, from read_position(), or None
+        :return: A dict of request_id -> token entry. Each entry has "request_id", "total_tokens",
+                 "prompt_tokens", "completion_tokens", "llm_calls" and "model", plus "reporting_agent"
+                 when a Done-with line follows the block
         """
         if self._server_log is None or position is None:
             return {}
@@ -254,19 +299,41 @@ class ServerLogMonitor:
         block: Dict[str, object]
         # Keep the token entry of each reporting block, with the network named after it.
         for block in self._collect_reporting_blocks(lines):
-            entry: Optional[Dict[str, Any]] = self._extract_token_entry(block.get("text", ""))
+            block_text: str = block.get("text", "")
+            entry: Optional[Dict[str, Any]] = self._extract_token_entry(block_text)
             if entry:
                 request_id: Optional[str] = entry.get("request_id")
                 if request_id is not None:
-                    agent: Optional[str] = self._find_network_after(lines, block.get("end_idx", 0))
+                    end_idx: int = block.get("end_idx", 0)
+                    agent: Optional[str] = self._find_network_after(lines, end_idx)
                     if agent:
                         entry["reporting_agent"] = agent
                     results[request_id] = entry
         return results
 
     @staticmethod
+    def _int_group(match: Optional[re.Match]) -> int:
+        """
+        Read group 1 of a regex match as an int.
+
+        :param match: The match, or None
+        :return: The number, or 0 when there is no match
+        """
+        number: int = 0
+        if match:
+            number_text: str = match.group(1)
+            number = int(number_text)
+        return number
+
+    @staticmethod
     def _extract_token_entry(block: str) -> Optional[Dict[str, Any]]:
-        """Extract token accounting fields from a Request reporting log block."""
+        """
+        Extract token accounting fields from a Request reporting log block.
+
+        :param block: Text of one Request reporting log block
+        :return: A dict with "request_id", "total_tokens", "prompt_tokens", "completion_tokens", "llm_calls"
+                 and "model", or None when the block has no request_id
+        """
         request_id_match: Optional[re.Match] = re.search(r'"request_id": "([^"]+)"', block)
         if not request_id_match:
             return None
@@ -276,22 +343,14 @@ class ServerLogMonitor:
         llm_calls_match: Optional[re.Match] = re.search(r'"successful_requests": (\d+)', block)
         # Pulls model names that start with gpt, claude, gemini or o<digit>
         model_names: List[str] = re.findall(r'"(gpt[^"]+|claude[^"]+|gemini[^"]+|o\d[^"]*)"', block)
-        total_tokens: int = 0
-        if total_match:
-            total_tokens = int(total_match.group(1))
-        prompt_tokens: int = 0
-        if prompt_match:
-            prompt_tokens = int(prompt_match.group(1))
-        completion_tokens: int = 0
-        if completion_match:
-            completion_tokens = int(completion_match.group(1))
-        llm_calls: int = 0
-        if llm_calls_match:
-            llm_calls = int(llm_calls_match.group(1))
+        total_tokens: int = ServerLogMonitor._int_group(total_match)
+        prompt_tokens: int = ServerLogMonitor._int_group(prompt_match)
+        completion_tokens: int = ServerLogMonitor._int_group(completion_match)
+        llm_calls: int = ServerLogMonitor._int_group(llm_calls_match)
         model: str = "unknown"
         if model_names:
             model = model_names[0]
-        return {
+        token_entry: Dict[str, Any] = {
             "request_id": request_id_match.group(1),
             "total_tokens": total_tokens,
             "prompt_tokens": prompt_tokens,
@@ -299,15 +358,21 @@ class ServerLogMonitor:
             "llm_calls": llm_calls,
             "model": model,
         }
+        return token_entry
 
     def parse_per_network_tokens_since(self, position) -> List[Dict[str, Any]]:
-        """Parse per-sub-network token data from Request reporting blocks.
+        """
+        Parse per-sub-network token data from Request reporting blocks.
 
         For multi-agent networks (e.g. AND), each sub-network produces
         its own Request reporting block followed by a
         "Done with <network>.StreamingChat" log line.  This method
         collects all such blocks and returns one entry per sub-network
         per request.
+
+        :param position: Server log position to read from, from read_position(), or None
+        :return: One dict per sub-network block that has a network name, with the keys listed in
+                 _resolve_network_names()
         """
         if self._server_log is None or position is None:
             return []
@@ -319,7 +384,13 @@ class ServerLogMonitor:
 
     @staticmethod
     def _collect_reporting_blocks(lines) -> List[Dict[str, object]]:
-        """Collect Request reporting blocks with their line positions."""
+        """
+        Collect Request reporting blocks with their line positions.
+
+        :param lines: Server log lines
+        :return: One dict per Request reporting block, with "text" (its lines joined) and "end_idx"
+                 (index of its "request_id" line)
+        """
         blocks: List[Dict[str, object]] = []
         in_block: bool = False
         block_lines: List[str] = []
@@ -340,7 +411,15 @@ class ServerLogMonitor:
 
     @staticmethod
     def _resolve_network_names(blocks, lines) -> List[Dict[str, Any]]:
-        """Match each block to its network via Done-with log lines."""
+        """
+        Match each block to its network via Done-with log lines.
+
+        :param blocks: Blocks from _collect_reporting_blocks()
+        :param lines: Server log lines
+        :return: One dict per block that has a token entry and a network name, with "request_id",
+                 "network", "total_tokens", "prompt_tokens", "completion_tokens", "llm_calls", "duration",
+                 "model" and "cost"
+        """
         results: List[Dict[str, Any]] = []
         block: Dict[str, object]
         # Keep each block's token entry with the network named after it.
@@ -349,17 +428,20 @@ class ServerLogMonitor:
             entry: Optional[Dict[str, Any]] = ServerLogMonitor._extract_token_entry(block_text)
             if not entry:
                 continue
-            network: Optional[str] = ServerLogMonitor._find_network_after(lines, block.get("end_idx", 0))
+            end_idx: int = block.get("end_idx", 0)
+            network: Optional[str] = ServerLogMonitor._find_network_after(lines, end_idx)
             if not network:
                 continue
             duration_match: Optional[re.Match] = re.search(r'"time_taken_in_seconds": ([\d.]+)', block_text)
             total_cost_match: Optional[re.Match] = re.search(r'"total_cost": ([\d.]+)', block_text)
             duration_seconds: float = 0.0
             if duration_match:
-                duration_seconds = float(duration_match.group(1))
+                duration_text: str = duration_match.group(1)
+                duration_seconds = float(duration_text)
             total_cost_usd: float = 0.0
             if total_cost_match:
-                total_cost_usd = float(total_cost_match.group(1))
+                total_cost_text: str = total_cost_match.group(1)
+                total_cost_usd = float(total_cost_text)
             results.append({
                 "request_id": entry.get("request_id", ""),
                 "network": network,
@@ -374,9 +456,19 @@ class ServerLogMonitor:
         return results
 
     @staticmethod
-    def _find_network_after(lines, end_idx, lookahead=NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
-        """Find the network name from Done-with lines after a block."""
-        limit: int = min(end_idx + lookahead, len(lines))
+    def _find_network_after(lines: List[str], end_idx: int,
+                            lookahead_lines: int = NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
+        """
+        Find the network name from Done-with lines after a block.
+
+        :param lines: Server log lines
+        :param end_idx: Index of the last line of the block
+        :param lookahead_lines: The search stops before line end_idx + lookahead_lines, so it checks
+                                lookahead_lines - 1 lines after the block
+        :return: The network name, or None when no Done-with line is found
+        """
+        line_count: int = len(lines)
+        limit: int = min(end_idx + lookahead_lines, line_count)
         index: int
         # Look for a Done-with line in the lines after the block.
         for index in range(end_idx + 1, limit):
@@ -386,12 +478,17 @@ class ServerLogMonitor:
         return None
 
     def parse_validation_events_since(self, position) -> List[Dict[str, Any]]:
-        """Parse validation attempts and fix cycles per request.
+        """
+        Parse validation attempts and fix cycles per request.
 
         Scans for 'Validating toolbox agents' (attempt),
         'Validation errors' (error detail), and
         'Invoking agent network designer to fix' (fix cycle).
         Groups by request_id.
+
+        :param position: Server log position to read from, from read_position(), or None
+        :return: One dict with "request_id", "attempts", "fix_cycles" and "errors" for each request that
+                 needed a fix cycle, sorted by request_id
         """
         if self._server_log is None or position is None:
             return []
@@ -402,15 +499,22 @@ class ServerLogMonitor:
 
     @staticmethod
     def _collect_validation_events(lines: List[str]) -> List[Dict[str, Any]]:
-        """Group validation log lines by request_id."""
+        """
+        Group validation log lines by request_id.
+
+        :param lines: Server log lines
+        :return: One dict with "request_id", "attempts", "fix_cycles" and "errors" for each request that
+                 needed a fix cycle, sorted by request_id
+        """
         by_request: Dict[str, Dict[str, object]] = {}
+        request_id: str = ""
         line: str
         # Count validation attempts, fix cycles and errors per request_id.
         for line in lines:
             request_id_match: Optional[re.Match] = REQUEST_ID_PATTERN.search(line)
             if not request_id_match:
                 continue
-            request_id: str = request_id_match.group(1)
+            request_id = request_id_match.group(1)
             # pylint: disable=consider-iterating-dictionary
             if request_id not in by_request.keys():
                 by_request[request_id] = {"attempts": 0, "fix_cycles": 0, "errors": []}
@@ -421,11 +525,20 @@ class ServerLogMonitor:
                 entry["fix_cycles"] = entry.get("fix_cycles", 0) + 1
             error_match: Optional[re.Match] = VALIDATION_ERROR_PATTERN.search(line)
             if error_match:
-                entry.get("errors").extend(ServerLogMonitor._parse_validation_errors(error_match.group(1)))
+                error_list_text: str = error_match.group(1)
+                validation_errors: List[str] = ServerLogMonitor._parse_validation_errors(error_list_text)
+                entry.get("errors").extend(validation_errors)
         results: List[Dict[str, Any]] = []
         validation_entry: Dict[str, object]
-        # Keep only the requests that needed a fix cycle, sorted by request_id.
-        for request_id, validation_entry in sorted(by_request.items()):
+        request_ids: List[str] = []
+        # Collect the request ids, then sort them.
+        # pylint: disable=consider-iterating-dictionary
+        for request_id in by_request.keys():
+            request_ids.append(request_id)
+        request_ids.sort()
+        # Keep only the requests that needed a fix cycle, in request_id order.
+        for request_id in request_ids:
+            validation_entry = by_request.get(request_id)
             fix_cycles: int = validation_entry.get("fix_cycles", 0)
             if fix_cycles > 0:
                 results.append({
@@ -458,10 +571,12 @@ class ServerLogMonitor:
         return errors
 
     def parse_streaming_chat_timing_since(self, position) -> List[Dict[str, object]]:
-        """Parse Start/Finish streaming_chat entries for timing.
+        """
+        Parse Start/Finish streaming_chat entries for timing.
 
-        Returns a list of dicts with agent, start_ts, finish_ts,
-        duration_seconds, and request_id for each streaming_chat pair.
+        :param position: Server log position to read from, from read_position(), or None
+        :return: A list of dicts with agent, start_ts, finish_ts,
+                 duration_seconds, and request_id for each streaming_chat pair
         """
         if self._server_log is None or position is None:
             return []
@@ -472,7 +587,12 @@ class ServerLogMonitor:
 
     @staticmethod
     def _match_streaming_chat_pairs(lines) -> List[Dict[str, object]]:
-        """Match Start/Finish pairs from server log lines."""
+        """
+        Match Start/Finish pairs from server log lines.
+
+        :param lines: Server log lines
+        :return: One dict per Start/Finish pair
+        """
         starts: Dict[Tuple[str, str], float] = {}
         results: List[Dict[str, object]] = []
         line: str
@@ -480,14 +600,16 @@ class ServerLogMonitor:
         for line in lines:
             entry: Any = None
             try:
-                entry = json.loads(line.strip())
+                stripped_line: str = line.strip()
+                entry = json.loads(stripped_line)
             except (json.JSONDecodeError, ValueError):
                 continue
             if not isinstance(entry, dict):
                 continue
-            message: str = entry.get("message", "")
-            timestamp_text: str = entry.get("Timestamp", "")
-            request_id: str = entry.get("request_id", "")
+            entry_dict: Dict[str, Any] = entry
+            message: str = entry_dict.get("message", "")
+            timestamp_text: str = entry_dict.get("Timestamp", "")
+            request_id: str = entry_dict.get("request_id", "")
             if not message or not timestamp_text:
                 continue
             timestamp_seconds: float = 0.0
@@ -517,12 +639,15 @@ class ServerLogMonitor:
 
     def scan_disconnections_since(self, position: Optional[int],
                                   primary_start_pattern: Optional[str] = None) -> List[Dict[str, str]]:
-        """Scan server log for client disconnections since the given position.
+        """
+        Scan server log for client disconnections since the given position.
 
-        Returns a list of dicts with request_id, agent (from the
-        request's "Start <agent>/streaming_chat" line, once its task
-        is cancelled), and client_request (the originating client
-        request ordinal).
+        :param position: Server log position to read from, from read_position(), or None
+        :param primary_start_pattern: Pattern for the primary agent's Start line, or None
+        :return: A list of dicts with request_id, agent (from the
+                 request's "Start <agent>/streaming_chat" line, once its task
+                 is cancelled), and client_request (the originating client
+                 request ordinal); "client_request" is set only when a primary request comes before it
         """
         if self._server_log is None or position is None:
             return []
@@ -562,7 +687,22 @@ class ServerLogMonitor:
                 ServerLogMonitor._set_cancelled_agent(cancel_match, disconnections, agent_by_request_id)
 
         self._map_to_client_requests(disconnections, primary_request_ids)
-        return list(disconnections.values())
+        return ServerLogMonitor._disconnection_list(disconnections)
+
+    @staticmethod
+    def _disconnection_list(disconnections: Dict[str, Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        List the disconnections in first-seen order.
+
+        :param disconnections: The disconnections by request id
+        :return: The disconnection dicts, in first-seen order
+        """
+        disconnection_list: List[Dict[str, str]] = []
+        disconnection: Dict[str, str]
+        # Keep the disconnections in first-seen order.
+        for disconnection in disconnections.values():
+            disconnection_list.append(disconnection)
+        return disconnection_list
 
     @staticmethod
     def _set_cancelled_agent(cancel_match: re.Match, disconnections: Dict[str, Dict[str, str]],
@@ -582,10 +722,14 @@ class ServerLogMonitor:
 
     @staticmethod
     def _map_to_client_requests(disconnections, primary_request_ids):
-        """Map each disconnected sub-request to its parent client request.
+        """
+        Map each disconnected sub-request to its parent client request.
 
         Uses sequential server request_id ordering: a sub-request
         belongs to the nearest preceding primary request.
+
+        :param disconnections: The disconnections by request_id, updated in place
+        :param primary_request_ids: Request ids of the primary requests, in log order
         """
         if not primary_request_ids:
             return
@@ -594,7 +738,8 @@ class ServerLogMonitor:
         primary_request_id: str
         # Get the request number of each primary request.
         for primary_request_id in primary_request_ids:
-            primary_numbers.append(ServerLogMonitor._request_number(primary_request_id))
+            primary_number: int = ServerLogMonitor._request_number(primary_request_id)
+            primary_numbers.append(primary_number)
 
         disconnection: Dict[str, str]
         # Find the client request that each disconnection belongs to.
