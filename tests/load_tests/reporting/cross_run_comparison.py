@@ -14,9 +14,12 @@
 #
 # END COPYRIGHT
 
-import json
+from json import JSONDecodeError
 import logging
-import os
+from os import listdir
+from os.path import isfile
+from os.path import join
+# Whole module: "from re import compile" would hide the built-in compile().
 import re
 from typing import Any
 from typing import Dict
@@ -29,7 +32,6 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
@@ -125,11 +127,11 @@ class CrossRunComparison:
         runs: List[Dict[str, Any]] = []
         entry: str
         # Collect the metrics of each run folder that has a raw results file.
-        for entry in os.listdir(self._base_dir):
+        for entry in listdir(self._base_dir):
             if self._run_filter and entry not in self._run_filter:
                 continue
-            json_path: str = os.path.join(self._base_dir, entry, RAW_RESULTS_FILE_NAME)
-            if not os.path.isfile(json_path):
+            json_path: str = join(self._base_dir, entry, RAW_RESULTS_FILE_NAME)
+            if not isfile(json_path):
                 continue
             metrics: Optional[Dict[str, Any]] = self._extract_metrics(json_path, entry)
             if metrics is not None:
@@ -167,7 +169,7 @@ class CrossRunComparison:
         raw_results: Optional[Dict[str, Any]] = None
         try:
             raw_results = EasyJsonPersistence(full_ref=json_path, must_exist=True).restore()
-        except (json.JSONDecodeError, OSError) as error:
+        except (JSONDecodeError, OSError) as error:
             SensitiveLogger(logger).error("Could not read %s: %s", json_path, error)
             return None
         if raw_results is None:
@@ -286,9 +288,9 @@ class CrossRunComparison:
         :param runs: One agent's runs sorted by num_requests; the first is the baseline
         :param agent_name: Agent name shown in the table title
         """
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Folder", "Requests", "Succeeded",
@@ -383,7 +385,7 @@ class CrossRunComparison:
         # Log the validation loops of each run folder.
         for run in runs:
             folder: str = run.get("folder", "")
-            log_path: str = os.path.join(self._base_dir, folder, SERVER_TOKENS_LOG_FILE_NAME)
+            log_path: str = join(self._base_dir, folder, SERVER_TOKENS_LOG_FILE_NAME)
             loops: List[Dict[str, Any]] = self._parse_validation_loops(log_path)
             if not loops:
                 continue
@@ -397,7 +399,7 @@ class CrossRunComparison:
         :param log_path: Path to a run's server_tokens.log
         :return: One entry per request with at least LOOP_THRESHOLD LLM calls; empty when the file is missing
         """
-        if not os.path.isfile(log_path):
+        if not isfile(log_path):
             return []
         loops: List[Dict[str, Any]] = []
         with open(log_path, "r", encoding="utf-8") as file_handle:
@@ -516,11 +518,11 @@ class CrossRunComparison:
         :param measured_value: The metric (seconds or megabytes); 0 or less when the run has no value
         :param formatted_value: measured_value formatted for display, e.g. '45s' or '512M'
         :param delta_percentage: Percent change from the baseline run, or None for the baseline itself
-        :return: e.g. '45s (+12%)', or an em dash when measured_value is 0 or less
+        :return: e.g. '45s (+12%)', or '-' when measured_value is 0 or less
         """
         if measured_value <= 0:
-            # "\u2014" draws "—", the dash shown for a missing value.
-            return "\u2014"
+            # Plain "-", the missing-value cell of the other load-test tables.
+            return "-"
         return CrossRunComparison._val_with_delta(formatted_value, delta_percentage)
 
     @staticmethod

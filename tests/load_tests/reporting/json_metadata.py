@@ -109,7 +109,7 @@ class JsonMetadata:
                 "Server process snapshot before stage execution.",
             "resource_rows[].after":
                 "Server process snapshot after settle period.",
-            "resource_rows[].*.rss":
+            "resource_rows[].*.rss_megabytes":
                 "Resident Set Size in megabytes.",
             "resource_rows[].*.fds":
                 "Open file descriptor count.",
@@ -119,7 +119,7 @@ class JsonMetadata:
                 "Active network connections.",
             "resource_rows[].*.children":
                 "Child process count.",
-            "resource_rows[].*.cpu":
+            "resource_rows[].*.cpu_percent":
                 "CPU usage percentage.",
             "client_resource_rows[].before":
                 "Client process snapshot before stage.",
@@ -217,8 +217,8 @@ class JsonMetadata:
             "settle_time": "seconds",
             "start_time": "unix_timestamp",
             "end_time": "unix_timestamp",
-            "rss": "megabytes",
-            "cpu": "percent",
+            "rss_megabytes": "megabytes",
+            "cpu_percent": "percent",
             "cost_usd": "USD",
             "cost": "USD",
             "total_cost_usd": "USD",

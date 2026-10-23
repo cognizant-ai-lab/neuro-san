@@ -21,7 +21,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)
@@ -78,11 +78,11 @@ class ResourceReporter:
         :param after_snapshot: Server process snapshot taken after the stage
         :return: (display_row, before_snapshot, after_snapshot)
         """
-        before_rss_megabytes: float = before_snapshot.get("rss")
-        after_rss_megabytes: float = after_snapshot.get("rss")
+        before_rss_megabytes: float = before_snapshot.get("rss_megabytes")
+        after_rss_megabytes: float = after_snapshot.get("rss_megabytes")
         before_threads: int = before_snapshot.get("threads")
         after_threads: int = after_snapshot.get("threads")
-        after_cpu_percent: float = after_snapshot.get("cpu")
+        after_cpu_percent: float = after_snapshot.get("cpu_percent")
         rss_delta_megabytes: float = after_rss_megabytes - before_rss_megabytes
         thread_delta: int = after_threads - before_threads
         display: Tuple[str, ...] = (
@@ -116,15 +116,15 @@ class ResourceReporter:
         :param settled_snapshot: Client process snapshot taken after the stage settled
         :return: (display_row, before_snapshot, peak_snapshot or {}, settled_snapshot)
         """
-        before_rss_megabytes: float = before_snapshot.get("rss")
-        settled_rss_megabytes: float = settled_snapshot.get("rss")
+        before_rss_megabytes: float = before_snapshot.get("rss_megabytes")
+        settled_rss_megabytes: float = settled_snapshot.get("rss_megabytes")
         rss_delta_megabytes: float = settled_rss_megabytes - before_rss_megabytes
         # Memory cells: megabytes with 1 decimal place, e.g. 123.5M.
         peak_rss_text: str = "-"
         if peak_snapshot:
-            peak_rss_megabytes: float = peak_snapshot.get("rss")
+            peak_rss_megabytes: float = peak_snapshot.get("rss_megabytes")
             peak_rss_text = f"{peak_rss_megabytes:.1f}M"
-        settled_cpu_percent: float = settled_snapshot.get("cpu")
+        settled_cpu_percent: float = settled_snapshot.get("cpu_percent")
         settled_fds: Optional[int] = settled_snapshot.get("fds")
         settled_threads: Optional[int] = settled_snapshot.get("threads")
         display: Tuple[str, ...] = (
@@ -164,7 +164,7 @@ class ResourceReporter:
             "Threads", "Thread Delta", "Conns", "Children",
         ]
         rows: List[List[str]] = self._combined_server_rows() + self._combined_client_rows()
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         if total_server_calls > 0:
             logger.info(
                 "  RESOURCE ANALYSIS (%s client requests, %s server calls)",
@@ -172,7 +172,7 @@ class ResourceReporter:
             )
         else:
             logger.info("  RESOURCE ANALYSIS (%s total requests)", total_client_requests)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         TableFormatter.log_table(header, rows)
         self._log_resource_deltas()
         self._log_client_deltas()
@@ -248,7 +248,7 @@ class ResourceReporter:
         self._log_snapshot_deltas(
             "Server", first_before_snapshot, last_after_snapshot,
             fields=[
-                ["RSS", "rss", "%.1f MB"],
+                ["RSS", "rss_megabytes", "%.1f MB"],
                 ["FDs", "fds", "%s"],
                 ["Threads", "threads", "%s"],
                 ["Connections", "connections", "%s"],
@@ -267,7 +267,7 @@ class ResourceReporter:
         self._log_snapshot_deltas(
             "Client", first_before_snapshot, last_settled_snapshot,
             fields=[
-                ["RSS", "rss", "%.1f MB"],
+                ["RSS", "rss_megabytes", "%.1f MB"],
                 ["FDs", "fds", "%s"],
                 ["Threads", "threads", "%s"],
             ],

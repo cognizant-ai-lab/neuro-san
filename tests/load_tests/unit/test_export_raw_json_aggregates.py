@@ -23,12 +23,14 @@ from typing import Any
 from typing import Dict
 from typing import List
 from unittest import TestCase
+from unittest.mock import patch
 
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.load_test_cli import LoadTestCli
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
+from tests.load_tests.validation.server_checker import ServerChecker
 
 
 # These tests call a deliberately-internal helper directly; suppress
@@ -58,7 +60,6 @@ class TestExportRawJsonAggregates(TestCase):
         """
         load_test_cli: LoadTestCli = LoadTestCli.__new__(LoadTestCli)
         load_test_cli._output_dir = self._dir
-        load_test_cli._server_ns_version = "0.6.92"
         load_test_cli.server_log = None
         load_test_cli.hocon_files = []
         load_test_cli.profile = AgentProfile("hello_world", {"estimated_tokens_per_request": 1000})
@@ -72,6 +73,10 @@ class TestExportRawJsonAggregates(TestCase):
             allow_caching=False, chat_filter=None,
             fixtures_hocon_dir=None,
         )
+        load_test_cli.server_checker = ServerChecker(load_test_cli.args)
+        # The server version comes from /healthz; patch the fetch so the cached version is "0.6.92".
+        with patch.object(ServerChecker, "fetch_server_version", return_value="0.6.92"):
+            load_test_cli.server_checker.resolve_ns_version()
         return load_test_cli
 
     def _export(self, elapsed_values_seconds: List[float]) -> Dict[str, Any]:

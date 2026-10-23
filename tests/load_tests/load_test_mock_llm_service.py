@@ -40,6 +40,7 @@ import psutil
 
 from tests.load_tests.load_test_constants import LOCAL_HOSTS
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -117,8 +118,6 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     MOCK_LOG_PATH: str = "/tmp/mock_llm_server.log"
     SERVER_LOG_PATH: str = "/tmp/neuro_san_server.log"
     STARTUP_WAIT_SECONDS: int = 10
-    # 60 "=" characters.
-    SEPARATOR_LINE: str = "============================================================"
 
     def __init__(self, args: Namespace) -> None:
         """
@@ -498,19 +497,19 @@ Then:
         :return: "round_num", "before_rss_megabytes", "settled_rss_megabytes", "rss_delta_megabytes", "fds",
                  "before_threads", "settled_threads", "thread_delta", "connections", "cpu_percent" and "children"
         """
-        rss_delta_megabytes: float = after_snapshot.get("rss") - before_snapshot.get("rss")
+        rss_delta_megabytes: float = after_snapshot.get("rss_megabytes") - before_snapshot.get("rss_megabytes")
         thread_delta: int = after_snapshot.get("threads") - before_snapshot.get("threads")
         snapshot_row: Dict[str, Any] = {
             "round_num": round_num,
-            "before_rss_megabytes": before_snapshot.get("rss"),
-            "settled_rss_megabytes": after_snapshot.get("rss"),
+            "before_rss_megabytes": before_snapshot.get("rss_megabytes"),
+            "settled_rss_megabytes": after_snapshot.get("rss_megabytes"),
             "rss_delta_megabytes": rss_delta_megabytes,
             "fds": after_snapshot.get("fds"),
             "before_threads": before_snapshot.get("threads"),
             "settled_threads": after_snapshot.get("threads"),
             "thread_delta": thread_delta,
             "connections": after_snapshot.get("connections"),
-            "cpu_percent": after_snapshot.get("cpu"),
+            "cpu_percent": after_snapshot.get("cpu_percent"),
             "children": after_snapshot.get("children"),
         }
         return snapshot_row
@@ -571,13 +570,13 @@ Then:
         round_num: int
         # Run each round, numbered from 1, with resource snapshots before and after it.
         for round_num in range(1, self.args.num_rounds + 1):
-            logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
+            logger.info("\n%s", Formatters.SEPARATOR_LINE)
             logger.info(
                 "  ROUND %s of %s (%s requests, %s workers)",
                 round_num, self.args.num_rounds,
                 self.args.num_requests, self.args.max_workers,
             )
-            logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
+            logger.info("%s", Formatters.SEPARATOR_LINE)
 
             before_server: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self.server_process)
             before_mock: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self.mock_process)
@@ -644,9 +643,9 @@ Then:
         """
         total_requests: int = self.args.num_requests * self.args.num_rounds
 
-        logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  OVERALL RESULTS")
-        logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         logger.info(
             "  Total requests: %s (%s passed, %s failed)",
             total_requests, totals.get("passed"), totals.get("failed"),
@@ -659,9 +658,9 @@ Then:
                              "FDs", "Threads", "Thread Delta",
                              "Conns", "CPU%", "Children"]
 
-        logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)", self.args.num_rounds, total_requests)
-        logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if server_rows:
             logger.info("\nNEURO-SAN SERVER:")
@@ -747,7 +746,7 @@ Then:
             server_rows, mock_rows, totals = self._run_rounds()
             self._log_results(totals, server_rows, mock_rows)
             if is_local and not self.args.auto_start:
-                logger.info("\n%s", MockLlmLoadTest.SEPARATOR_LINE)
+                logger.info("\n%s", Formatters.SEPARATOR_LINE)
                 logger.info("  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE ON NEURO-SAN SERVER")
                 logger.info("  Key:   OPENAI_API_BASE")
                 logger.info("  Value: %s", self._api_base)
@@ -756,7 +755,7 @@ Then:
                 logger.info("    1. Stop the neuro-san server")
                 logger.info("    2. unset OPENAI_API_BASE")
                 logger.info("    3. Restart: python -m neuro_san.service.main_loop.server_main_loop")
-                logger.info("%s", MockLlmLoadTest.SEPARATOR_LINE)
+                logger.info("%s", Formatters.SEPARATOR_LINE)
         finally:
             if self.args.auto_start:
                 self._stop_servers()
