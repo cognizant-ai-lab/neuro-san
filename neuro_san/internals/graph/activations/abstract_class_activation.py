@@ -35,6 +35,7 @@ from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.config_util import ConfigUtil
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver import Resolver
 from leaf_common.resolution.resolver_util import ResolverUtil
@@ -327,8 +328,11 @@ Check these things:
             except (ValueError, AttributeError) as exception:
                 # Move on to the next root, but keep a trace of why this one failed,
                 # as only the last root's exception reaches the caller.
-                self.logger.debug("Class `%s` in module `%s` not found under `%s`: %s",
-                                  class_name, module_name, one_agent_tool_path, exception)
+                # Exception messages can carry sensitive details, so log them through
+                # a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE env var setting.
+                sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+                sensitive_logger.debug("Class `%s` in module `%s` not found under `%s`: %s",
+                                       class_name, module_name, one_agent_tool_path, exception)
                 last_exception = exception
 
         # Re-raise the last exception so the caller knows resolution failed
