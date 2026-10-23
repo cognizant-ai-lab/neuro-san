@@ -135,7 +135,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         return "json profile"
 
     # pylint: disable=too-many-locals
-    def _run_all_stages(self, stages, total_cap) -> List[Dict[str, Any]]:
+    def _run_all_stages(self, stages: List[int], total_cap: int) -> List[Dict[str, Any]]:
         """
         Execute all stages of the load test, collecting data per stage.
 
@@ -143,17 +143,17 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         :param total_cap: Most requests to send in the whole test
         :return: One summary dict per stage that runs
         """
-        monitor_resources = (self.args.level != LEVEL_MIN
-                             or self.args.client_only
-                             or self.args.server_only)
-        has_server_log = self.server_log is not None
-        probe_result = self.probe_result
-        only_stage = len(stages) == 1 and self.args.num_rounds == 1
+        monitor_resources: bool = (self.args.level != LEVEL_MIN
+                                   or self.args.client_only
+                                   or self.args.server_only)
+        has_server_log: bool = self.server_log is not None
+        probe_result: Optional[Dict[str, Any]] = self.probe_result
+        only_stage: bool = len(stages) == 1 and self.args.num_rounds == 1
 
         stage_summaries: List[Dict[str, Any]] = []
-        global_offset = 0
-        total_sent = 0
-        test_start = time.time()
+        global_offset: int = 0
+        total_sent: int = 0
+        test_start_seconds: float = time.time()
 
         round_num: int
         # Run every stage once per round.
@@ -168,34 +168,34 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             # Run each stage, stopping at the request cap or the total timeout.
             for stage_idx, num_concurrent in enumerate(stages):
                 if total_sent >= total_cap:
-                    total_planned = sum(stages) * self.args.num_rounds
+                    total_planned: int = sum(stages) * self.args.num_rounds
                     logger.warning(
                         """
 WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests completed.
          Use --max-requests %s to run all planned requests.""",
-                        total_cap, total_sent, total_planned,
-                        total_planned,
+                        total_cap, total_sent, total_planned, total_planned,
                     )
                     return stage_summaries
 
-                if self._total_timeout_reached(test_start):
+                if self._total_timeout_reached(test_start_seconds):
                     self._aborted = True
                     return stage_summaries
 
-                remaining = total_cap - total_sent
-                actual_requests = min(num_concurrent, remaining)
+                remaining: int = total_cap - total_sent
+                actual_requests: int = min(num_concurrent, remaining)
 
-                stage_result: Dict[str, Any] = self._run_single_stage(
-                    actual_requests=actual_requests,
-                    num_concurrent=num_concurrent,
-                    stage_num=stage_idx + 1,
-                    round_num=round_num,
-                    global_offset=global_offset,
-                    monitor_resources=monitor_resources,
-                    has_server_log=has_server_log,
-                    probe_result=probe_result,
-                    only_stage=only_stage,
-                )
+                stage_inputs: Dict[str, Any] = {
+                    "actual_requests": actual_requests,
+                    "num_concurrent": num_concurrent,
+                    "stage_num": stage_idx + 1,
+                    "round_num": round_num,
+                    "global_offset": global_offset,
+                    "monitor_resources": monitor_resources,
+                    "has_server_log": has_server_log,
+                    "probe_result": probe_result,
+                    "only_stage": only_stage,
+                }
+                stage_result: Dict[str, Any] = self._run_single_stage(stage_inputs)
                 summary: Dict[str, Any] = stage_result.get("summary")
                 probe_used: bool = stage_result.get("probe_used")
                 should_abort: bool = stage_result.get("should_abort")
@@ -236,31 +236,35 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return True
 
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-    # pylint: disable=too-many-arguments
-    def _run_single_stage(
-            self, *, actual_requests, num_concurrent,
-            stage_num, round_num, global_offset,
-            monitor_resources, has_server_log,
-            probe_result, only_stage=False,
-    ) -> Dict[str, Any]:
+    def _run_single_stage(self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute one stage of the load test.
 
-        :param actual_requests: Number of requests to send in this stage
-        :param num_concurrent: Requested concurrency before the --max-requests cap
-        :param stage_num: Stage number, starting at 1
-        :param round_num: Round number, starting at 1
-        :param global_offset: Number of requests sent by earlier stages
-        :param monitor_resources: True to take resource snapshots around the stage
-        :param has_server_log: True when the server log can be read
-        :param probe_result: Result of the dry-run probe to count in this stage, or None
-        :param only_stage: True when this is the only stage
+        :param stage_inputs: A dictionary with "actual_requests" (number of requests to send in this stage),
+            "num_concurrent" (requested concurrency before the --max-requests cap), "stage_num" and "round_num"
+            (starting at 1), "global_offset" (number of requests sent by earlier stages), "monitor_resources" (True to
+            take resource snapshots around the stage), "has_server_log" (True when the server log can be read),
+            "probe_result" (result of the dry-run probe to count in this stage, or None) and "only_stage" (True when
+            this is the only stage)
         :return: Dict with "summary" (the stage summary dict), "probe_used" (True when probe_result was counted)
             and "should_abort" (True when the test must stop after this stage)
         """
-        stage_workers = self.args.max_workers if not self.args.ramp else actual_requests
+        actual_requests: int = stage_inputs.get("actual_requests")
+        num_concurrent: int = stage_inputs.get("num_concurrent")
+        stage_num: int = stage_inputs.get("stage_num")
+        round_num: int = stage_inputs.get("round_num")
+        global_offset: int = stage_inputs.get("global_offset")
+        monitor_resources: bool = stage_inputs.get("monitor_resources")
+        has_server_log: bool = stage_inputs.get("has_server_log")
+        probe_result: Optional[Dict[str, Any]] = stage_inputs.get("probe_result")
+        only_stage: bool = stage_inputs.get("only_stage", False)
+
+        stage_workers: int = self.args.max_workers
+        if self.args.ramp:
+            stage_workers = actual_requests
 
         logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        stage_label: str = ""
         if self.args.ramp:
             stage_label = f"[STAGE {stage_num}] {actual_requests} requests (max {stage_workers} workers)"
             if self.args.num_rounds > 1:
@@ -275,7 +279,9 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if actual_requests < num_concurrent:
             logger.info("  (Capped from %s to %s by --max-requests)", num_concurrent, actual_requests)
 
-        log_position = self.log_monitor.read_position() if has_server_log else None
+        log_position: Optional[int] = None
+        if has_server_log:
+            log_position = self.log_monitor.read_position()
 
         client_process: Optional[psutil.Process] = None
         before_server: Optional[Dict[str, Any]] = None
@@ -291,30 +297,35 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         # If a dry-run probe ran, inject it into stage 1.  The probe
         # fired before log_position was captured, so only stage_requests of
         # them appear in the server log from here on.
-        stage_requests = actual_requests
-        probe_used = probe_result is not None
+        stage_requests: int = actual_requests
+        probe_used: bool = probe_result is not None
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
         stop_event: threading.Event = threading.Event()
         monitor: Optional[threading.Thread] = None
         if has_server_log:
+            monitor_start_seconds: float = time.perf_counter()
+            primary_start_pattern: str = self.profile.get_primary_start_pattern()
             monitor = self.log_monitor.start_log_monitor(
-                log_position, stage_requests, time.perf_counter(), stop_event, client_process=client_process,
-                primary_start_pattern=self.profile.get_primary_start_pattern(), output_dir=self._output_dir)
+                log_position, stage_requests, monitor_start_seconds, stop_event, client_process=client_process,
+                primary_start_pattern=primary_start_pattern, output_dir=self._output_dir)
 
-        sys_before = SystemResources.snapshot()
-        before_system_memory_percent = sys_before["mem_pct"]
+        system_before: Dict[str, Optional[float]] = SystemResources.snapshot()
+        before_system_memory_percent: Optional[float] = system_before.get("mem_pct")
 
-        first_request_number: int = global_offset + (1 if probe_used else 0)
+        first_request_number: int = global_offset
+        # The dry-run probe is the first request of the stage.
+        if probe_used:
+            first_request_number += 1
         plan: StagePlan = StagePlan(stage_requests, stage_workers, first_request_number, self._output_dir)
         stage_run: Dict[str, Any] = self.runner.run_stage(plan, server_process=self.server_process,
                                                           client_process=client_process, log_monitor=self.log_monitor)
-        elapsed: float = stage_run.get("total_time_seconds")
+        elapsed_seconds: float = stage_run.get("total_time_seconds")
         results: List[Dict[str, Any]] = stage_run.get("results")
         peak_threads: Optional[int] = stage_run.get("peak_server_threads")
-        peak_client_rss: Optional[float] = stage_run.get("peak_client_rss_megabytes")
-        peak_server_rss: Optional[float] = stage_run.get("peak_server_rss_megabytes")
+        peak_client_rss_megabytes: Optional[float] = stage_run.get("peak_client_rss_megabytes")
+        peak_server_rss_megabytes: Optional[float] = stage_run.get("peak_server_rss_megabytes")
         peak_system_memory: Optional[Dict[str, float]] = stage_run.get("peak_system_memory")
         peak_system_cpu_percent: Optional[float] = stage_run.get("peak_system_cpu_percent")
         peak_system_threads: Optional[int] = stage_run.get("peak_system_threads")
@@ -325,49 +336,53 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         if probe_used:
             results.insert(0, probe_result)
-            elapsed += probe_result.get("elapsed", 0.0)
+            elapsed_seconds += probe_result.get("elapsed", 0.0)
 
         stop_event.set()
         if monitor:
             monitor.join(timeout=THREAD_JOIN_TIMEOUT_SECONDS)
 
-        peak_client = None
-        settled_client = None
+        peak_client: Optional[Dict[str, Any]] = None
+        settled_client: Optional[Dict[str, Any]] = None
         if monitor_resources:
-            if peak_client_rss is not None:
-                peak_client = {"rss_megabytes": peak_client_rss}
+            if peak_client_rss_megabytes is not None:
+                peak_client = {"rss_megabytes": peak_client_rss_megabytes}
             settled_client = ResourceMonitor.snapshot(client_process)
 
-        counts = OutputValidator.count_results(results)
+        counts: Dict[str, Any] = OutputValidator.count_results(results)
 
         retries: Dict[str, int] = {}
-        total_retries = 0
-        amplification = 1.0
+        total_retries: int = 0
+        amplification: float = 1.0
         if has_server_log:
             retries = self.log_monitor.count_retries_since(log_position)
-            total_retries = sum(retries.values())
+            retry_count: int
+            # Add up the retries of every error type.
+            for retry_count in retries.values():
+                total_retries += retry_count
             amplification = Formatters.compute_amplification(stage_requests, total_retries)
 
-        OutputValidator.log_stage_results(
-            actual_requests, counts, elapsed,
-            timeout_seconds=self.args.request_timeout,
-            idle_timeout_seconds=self.args.idle_timeout,
-            show_counts=not only_stage,
-        )
-        should_abort = server_died or interrupted
+        OutputValidator.log_stage_results(actual_requests, counts, elapsed_seconds,
+                                          timeout_seconds=self.args.request_timeout,
+                                          idle_timeout_seconds=self.args.idle_timeout, show_counts=not only_stage)
+        should_abort: bool = server_died or interrupted
         if not should_abort:
             should_abort = OutputValidator.check_permission_failures(results, self.args.agent)
         if not should_abort:
             should_abort = OutputValidator.check_timeout_abort(counts)
+        system_after: Dict[str, Optional[float]] = {}
+        after_system_memory_percent: Optional[float] = None
+        summary_entry: Dict[str, Any] = {}
+        stage_result: Dict[str, Any] = {}
         if should_abort:
-            sys_after = SystemResources.snapshot()
-            after_system_memory_percent = sys_after["mem_pct"]
+            system_after = SystemResources.snapshot()
+            after_system_memory_percent = system_after.get("mem_pct")
             summary_entry = StageSummaryBuilder.build_stage_summary(
                 stage_num=stage_num,
                 round_num=round_num,
                 actual_requests=actual_requests,
                 counts=counts,
-                elapsed=elapsed,
+                elapsed=elapsed_seconds,
                 retries=retries,
                 total_retries=total_retries,
                 amplification=amplification,
@@ -384,7 +399,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 before_server=before_server,
                 after_server=None,
                 peak_threads=peak_threads,
-                peak_server_rss=peak_server_rss,
+                peak_server_rss=peak_server_rss_megabytes,
                 before_client=before_client,
                 peak_client=peak_client,
                 settled_client=settled_client,
@@ -392,11 +407,11 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 after_system_memory_percent=after_system_memory_percent,
                 peak_system_memory=peak_system_memory,
                 peak_system_cpu_percent=peak_system_cpu_percent,
-                before_sys=sys_before,
-                after_sys=sys_after,
+                before_sys=system_before,
+                after_sys=system_after,
                 peak_system_threads=peak_system_threads,
             )
-            stage_result: Dict[str, Any] = {
+            stage_result = {
                 "summary": summary_entry,
                 "probe_used": probe_used,
                 "should_abort": True,
@@ -417,32 +432,39 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             server_log_requests=stage_requests,
         )
 
-        sys_after = SystemResources.snapshot()
-        after_system_memory_percent = sys_after["mem_pct"]
+        system_after = SystemResources.snapshot()
+        after_system_memory_percent = system_after.get("mem_pct")
 
+        server_counts: Dict[str, Any] = post_stage_data.get("server_counts")
+        disconnections: List[Dict[str, str]] = post_stage_data.get("disconnections")
+        server_errors: List[Dict[str, str]] = post_stage_data.get("server_errors")
+        tool_warnings: List[Dict[str, str]] = post_stage_data.get("tool_warnings")
+        network_tokens: List[Dict[str, Any]] = post_stage_data.get("network_tokens")
+        validation_events: List[Dict[str, Any]] = post_stage_data.get("validation_events")
+        after_server: Optional[Dict[str, Any]] = post_stage_data.get("after_server")
         summary_entry = StageSummaryBuilder.build_stage_summary(
             stage_num=stage_num,
             round_num=round_num,
             actual_requests=actual_requests,
             counts=counts,
-            elapsed=elapsed,
+            elapsed=elapsed_seconds,
             retries=retries,
             total_retries=total_retries,
             amplification=amplification,
             results=results,
-            server_counts=post_stage_data.get("server_counts"),
-            disconnections=post_stage_data.get("disconnections"),
-            server_errors=post_stage_data.get("server_errors"),
-            tool_warnings=post_stage_data.get("tool_warnings"),
-            network_tokens=post_stage_data.get("network_tokens"),
-            validation_events=post_stage_data.get("validation_events"),
+            server_counts=server_counts,
+            disconnections=disconnections,
+            server_errors=server_errors,
+            tool_warnings=tool_warnings,
+            network_tokens=network_tokens,
+            validation_events=validation_events,
             has_server_log=has_server_log,
             has_tokens=self.args.include_tokens,
             monitor_resources=monitor_resources,
             before_server=before_server,
-            after_server=post_stage_data.get("after_server"),
+            after_server=after_server,
             peak_threads=peak_threads,
-            peak_server_rss=peak_server_rss,
+            peak_server_rss=peak_server_rss_megabytes,
             before_client=before_client,
             peak_client=peak_client,
             settled_client=settled_client,
@@ -450,11 +472,11 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             after_system_memory_percent=after_system_memory_percent,
             peak_system_memory=peak_system_memory,
             peak_system_cpu_percent=peak_system_cpu_percent,
-            before_sys=sys_before,
-            after_sys=sys_after,
+            before_sys=system_before,
+            after_sys=system_after,
             peak_system_threads=peak_system_threads,
         )
-        stage_result: Dict[str, Any] = {
+        stage_result = {
             "summary": summary_entry,
             "probe_used": probe_used,
             "should_abort": False,
@@ -580,7 +602,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         post_stage_data["after_server"] = after_server
         return post_stage_data
 
-    def _analyze_server_log(self, has_server_log, log_position, results, actual_requests) -> Dict[str, Any]:
+    def _analyze_server_log(self, has_server_log: bool, log_position: Optional[int], results: List[Dict[str, Any]],
+                            actual_requests: int) -> Dict[str, Any]:
         """
         Analyze the server log of a stage, or report that it is not available.
 
@@ -598,23 +621,19 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         network_tokens: List[Dict[str, Any]] = []
         validation_events: List[Dict[str, Any]] = []
         if has_server_log:
-            server_counts = (
-                self.log_monitor.count_requests_since(
-                    log_position,
-                    self.profile.get_primary_start_pattern(),
-                    self.profile.get_primary_finish_pattern(),
-                )
-            )
-            disconnections = (
-                self.log_monitor.scan_disconnections_since(
-                    log_position,
-                    primary_start_pattern=(
-                        self.profile.get_primary_start_pattern()
-                    ),
-                )
-            )
-            token_data = self.log_monitor.parse_token_accounting_since(log_position)
-            stage_results = [r for r in results if r.get("request_id") != "request-0"]
+            primary_start_pattern: str = self.profile.get_primary_start_pattern()
+            primary_finish_pattern: str = self.profile.get_primary_finish_pattern()
+            server_counts = self.log_monitor.count_requests_since(log_position, primary_start_pattern,
+                                                                  primary_finish_pattern)
+            disconnections = self.log_monitor.scan_disconnections_since(log_position,
+                                                                        primary_start_pattern=primary_start_pattern)
+            token_data: Dict[str, Dict[str, Any]] = self.log_monitor.parse_token_accounting_since(log_position)
+            stage_results: List[Dict[str, Any]] = []
+            request_result: Dict[str, Any]
+            # Keep every result except request-0, the dry-run probe.
+            for request_result in results:
+                if request_result.get("request_id") != "request-0":
+                    stage_results.append(request_result)
             if token_data:
                 result: Dict[str, Any]
                 # Keep the client token counts of each request under client_* keys.
@@ -641,9 +660,15 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             OutputValidator.log_tool_warnings(tool_warnings)
             OutputValidator.log_server_validation(server_counts, actual_requests, self.args.agent)
         else:
-            has_token_data = any(r.get("total_tokens") for r in results)
+            has_token_data: bool = False
+            request_result: Dict[str, Any]
+            # Look for any result that has client token counts.
+            for request_result in results:
+                if request_result.get("total_tokens"):
+                    has_token_data = True
+                    break
             if has_token_data:
-                token_source = "HTTP token_accounting"
+                token_source: str = "HTTP token_accounting"
                 logger.info("\n  Token usage (from %s):", token_source)
                 TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)
             if self.args.level != LEVEL_MIN:
@@ -693,7 +718,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         os.makedirs(self._output_dir, exist_ok=True)
         self._run_log.open(self._output_dir)
 
-    def _finalize_test_log(self, stage_summaries) -> None:
+    def _finalize_test_log(self, stage_summaries: List[Dict[str, Any]]) -> None:
         """
         Report the output directory and close the log handler.
 
@@ -722,7 +747,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
-        requests_dir = os.path.join(self._output_dir, "requests")
+        requests_dir: str = os.path.join(self._output_dir, "requests")
         if os.path.isdir(requests_dir):
             logger.info("  Requests:    %s", requests_dir)
         stdout_log_path: Optional[str] = self._run_log.get_path()
