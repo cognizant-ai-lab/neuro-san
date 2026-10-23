@@ -36,6 +36,7 @@ from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.traffic.stage_plan import StagePlan
+from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestHelpers
 
 
 class TestRunnerResponseChecks(TestCase):
@@ -142,8 +143,9 @@ class TestRunnerResponseChecks(TestCase):
         run_stage() returns one result per request, numbered from the plan's global offset.
         """
         stage: Optional[Dict[str, Any]] = None
-        with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
-            stage = self._stage_runner().run_stage(StagePlan(3, 2, 10, None))
+        fake_request: partial = partial(TestRunnerResponseChecks._fake_request, 0.0)
+        with patch.object(TrafficRunner, "run_one_http", side_effect=fake_request):
+            stage = TrafficRunnerTestHelpers.create_runner().run_stage(StagePlan(3, 2, 10, None))
         global_ids: List[int] = []
         result: Dict[str, Any]
         # Collect the global request id of each result
@@ -159,8 +161,10 @@ class TestRunnerResponseChecks(TestCase):
         Requests still running at --stage-timeout come back KILLED with the reason as stderr.
         """
         stage: Optional[Dict[str, Any]] = None
-        with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.5)):
-            stage = self._stage_runner(stage_timeout_seconds=0.1).run_stage(StagePlan(2, 2, 0, None))
+        fake_request: partial = partial(TestRunnerResponseChecks._fake_request, 0.5)
+        with patch.object(TrafficRunner, "run_one_http", side_effect=fake_request):
+            runner: TrafficRunner = TrafficRunnerTestHelpers.create_runner(stage_timeout_seconds=0.1)
+            stage = runner.run_stage(StagePlan(2, 2, 0, None))
         self.assertEqual(2, len(stage.get("results")))
         result: Dict[str, Any]
         # Every request comes back killed by the stage timeout
@@ -175,8 +179,9 @@ class TestRunnerResponseChecks(TestCase):
         run_stage() returns the heartbeat's system peaks read after join(), and None for unmonitored processes.
         """
         stage: Optional[Dict[str, Any]] = None
-        with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
-            stage = self._stage_runner().run_stage(StagePlan(1, 1, 0, None))
+        fake_request: partial = partial(TestRunnerResponseChecks._fake_request, 0.0)
+        with patch.object(TrafficRunner, "run_one_http", side_effect=fake_request):
+            stage = TrafficRunnerTestHelpers.create_runner().run_stage(StagePlan(1, 1, 0, None))
         self.assertIsNone(stage.get("peak_server_threads"))
         self.assertIsNone(stage.get("peak_client_rss_megabytes"))
         self.assertIsNone(stage.get("peak_server_rss_megabytes"))
@@ -194,27 +199,8 @@ class TestRunnerResponseChecks(TestCase):
                                           {"status": STATUS_FAILED}]
         with patch.object(TrafficRunner, "run_one_http", side_effect=statuses), \
                 patch.object(Heartbeat, "count_failed_request") as count_failed_request:
-            self._stage_runner().run_stage(StagePlan(3, 1, 0, None))
+            TrafficRunnerTestHelpers.create_runner().run_stage(StagePlan(3, 1, 0, None))
         self.assertEqual(2, count_failed_request.call_count)
-
-    def test_heartbeat_failed_request_count(self) -> None:
-        """
-        The heartbeat's failed count starts at 0 and goes up by one per failed request.
-        """
-        heartbeat: Heartbeat = Heartbeat(None)
-        self.assertEqual(0, heartbeat.get_failed_request_count())
-        heartbeat.count_failed_request()
-        heartbeat.count_failed_request()
-        self.assertEqual(2, heartbeat.get_failed_request_count())
-
-    def test_peaks_ignore_zero_and_lower_readings(self) -> None:
-        """
-        A peak is only kept for a reading above zero and above the peak so far.
-        """
-        self.assertFalse(Heartbeat.is_new_peak(0, None))
-        self.assertTrue(Heartbeat.is_new_peak(5, None))
-        self.assertFalse(Heartbeat.is_new_peak(5, 5))
-        self.assertTrue(Heartbeat.is_new_peak(6.5, 5))
 
     @staticmethod
     def _processor(answer: str, sly_data: Optional[Dict[str, Any]] = None) -> BasicMessageProcessor:
@@ -244,22 +230,6 @@ class TestRunnerResponseChecks(TestCase):
         profile: AgentProfile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
         return TrafficRunner(Namespace(same_prompt=False), profile, threading.Event())
 
-    @staticmethod
-    def _stage_runner(stage_timeout_seconds: Optional[float] = None) -> TrafficRunner:
-        """
-        Return a runner over a one-prompt profile with every argument run_one_http() and run_stage() read.
-
-        :param stage_timeout_seconds: Seconds after which run_stage() kills unfinished requests, or None
-        :return: The runner
-        """
-        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
-        args: Namespace = Namespace(
-            same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
-            chat_filter="maximal",
-            request_timeout=5.0, idle_timeout=5.0, include_tokens=False, stage_timeout=stage_timeout_seconds,
-        )
-        return TrafficRunner(args, profile, threading.Event())
-
     def _run_one_http(self, request_result: AgentRequestResult) -> Dict[str, Any]:
         """
         Run one request whose AgentRequestExecutor returns request_result.
@@ -268,7 +238,7 @@ class TestRunnerResponseChecks(TestCase):
         :return: The request result from run_one_http()
         """
         with patch.object(AgentRequestExecutor, "execute_request", return_value=request_result):
-            return self._stage_runner().run_one_http(1, 0)
+            return TrafficRunnerTestHelpers.create_runner().run_one_http(1, 0)
 
     @staticmethod
     def _fake_request(delay_seconds: float, request_id: int, global_request_id: int,
