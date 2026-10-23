@@ -10,6 +10,11 @@ for its data-driven configuration elements.  Very simply put, you can think of
 .hocon files as JSON files that allow comments, but there is more to the hocon
 format than that which you can explore on your own.
 
+A [JSON Schema](./agent_network_schema.hocon) covering the keys described in this document is also
+available for scripted validation. See [agent_hocon_schema.md](./agent_hocon_schema.md) for how to
+use it. For checking an individual file by hand, also see
+[hocon_validator_cli.md](./hocon_validator_cli.md).
+
 Specifications in this document each have header changes for the depth of scope of the dictionary header they pertain to.
 Some key descriptions refer to values that are dictionaries.
 Sub-keys to those dictionaries will be described in the next-level down heading scope from their parent.
