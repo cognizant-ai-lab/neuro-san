@@ -150,13 +150,11 @@ class ResourceMonitor:
         if resource_snapshot is None:
             logger.info("  %s: process not found", label)
             return
-        logger.info(
-            "  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s",
-            label,
-            resource_snapshot.get("rss_megabytes"),
-            resource_snapshot.get("fds"),
-            resource_snapshot.get("threads"),
-            resource_snapshot.get("connections"),
-            resource_snapshot.get("cpu_percent"),
-            resource_snapshot.get("children"),
-        )
+        rss_megabytes: float = resource_snapshot.get("rss_megabytes")
+        file_descriptor_count: int = resource_snapshot.get("fds")
+        thread_count: int = resource_snapshot.get("threads")
+        connection_count: int = resource_snapshot.get("connections")
+        cpu_percent: float = resource_snapshot.get("cpu_percent")
+        child_count: int = resource_snapshot.get("children")
+        logger.info("  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s", label,
+                    rss_megabytes, file_descriptor_count, thread_count, connection_count, cpu_percent, child_count)
