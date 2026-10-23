@@ -322,15 +322,6 @@ class LoadTestArguments:
             help="Disable server log analysis (overrides the default local auto-detect).",
         )
         parser.add_argument(
-            "--archive-server-log",
-            action="store_true",
-            default=False,
-            help="""
-            Gzip and copy the server log into the output directory after the test completes.
-            Requires --server-log.
-            """,
-        )
-        parser.add_argument(
             "--client-only",
             action="store_true",
             default=False,
