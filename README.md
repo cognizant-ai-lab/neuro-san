@@ -1,6 +1,6 @@
 # Neuro SAN Data-Driven Agents
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/cognizant-ai-lab/neuro-san)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/cognizant-ai-lab/neuro-san)
 
 **Neuro AI system of agent networks (Neuro SAN)** is a library for building data-driven multi-agent networks
 which can be run as a library, or served up via an HTTP server.
