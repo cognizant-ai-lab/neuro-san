@@ -71,7 +71,6 @@ class ServerOnlyMonitor:
 
     # 45 box-drawing "─" characters: the line around the end-of-round message.
     ROUND_END_LINE: str = "─────────────────────────────────────────────"
-    ONE_HUNDRED_PERCENT: float = 100.0
     CPU_SAMPLE_SECONDS: float = 0.1
 
     def __init__(self, args: Namespace, profile: AgentProfile, monitor_parts: Dict[str, Any]) -> None:
@@ -358,7 +357,7 @@ Waiting for %d request(s) in server log...
         :return: Dict with "mem_pct", "mem_avail_gb", "cpu_pct" (None when not sampled) and "threads"
         """
         peak_system_memory_percent: float = tail_result.get("peak_sys_mem_pct")
-        peak_used_fraction: float = peak_system_memory_percent / ServerOnlyMonitor.ONE_HUNDRED_PERCENT
+        peak_used_fraction: float = peak_system_memory_percent / ResourceMonitor.ONE_HUNDRED_PERCENT
         peak_available_gigabytes: float = total_gigabytes - peak_used_fraction * total_gigabytes
         system_peak: Dict[str, float] = {
             "mem_pct": peak_system_memory_percent,
@@ -452,9 +451,9 @@ Waiting for %d request(s) in server log...
         after_kernel: Optional[Dict[str, float]] = after_values.get("after_kernel")
         peak_rss_megabytes: float = 0.0
         if peak_server:
-            peak_rss_megabytes = peak_server.get("rss", 0)
+            peak_rss_megabytes = peak_server.get("rss_megabytes", 0)
         elif after_server:
-            peak_rss_megabytes = after_server.get("rss", 0)
+            peak_rss_megabytes = after_server.get("rss_megabytes", 0)
         kernel_breakdown: Dict[str, float] = KernelMemory.kernel_breakdown(after_kernel, peak_rss_megabytes, log=False)
         return kernel_breakdown
 

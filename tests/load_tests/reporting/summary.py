@@ -30,7 +30,7 @@ from tests.load_tests.load_test_constants import STATUS_FAILED
 from tests.load_tests.load_test_constants import STATUS_KILLED
 from tests.load_tests.load_test_constants import STATUS_TIMEOUT
 from tests.load_tests.reporting.formatters import Formatters
-from tests.load_tests.reporting.system_resources import SysSnapshot
+from tests.load_tests.reporting.system_resources import SystemSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -370,7 +370,7 @@ class SummaryReporter:
             self._sys_edge_snapshot("after"),
         )
 
-    def _sys_edge_snapshot(self, edge: str) -> Optional[SysSnapshot]:
+    def _sys_edge_snapshot(self, edge: str) -> Optional[SystemSnapshot]:
         """
         Build the before/after whole-system snapshot across stages.
 
@@ -382,14 +382,14 @@ class SummaryReporter:
         :return: The snapshot, or None when no stage has system data
         """
         prefix: str = f"{edge}_sys_"
-        chosen_snapshot: Optional[SysSnapshot] = None
+        chosen_snapshot: Optional[SystemSnapshot] = None
         summary: Dict[str, Any]
         # Find the first ("before") or last ("after") stage with system data.
         for summary in self._summaries:
             memory_percentage: Optional[float] = summary.get(prefix + "mem_pct")
             if memory_percentage is None:
                 continue
-            snapshot: SysSnapshot = {
+            snapshot: SystemSnapshot = {
                 "mem_pct": memory_percentage,
                 "mem_avail_gb": summary.get(prefix + "mem_avail_gb"),
                 "cpu_pct": summary.get(prefix + "cpu"),
@@ -400,7 +400,7 @@ class SummaryReporter:
             chosen_snapshot = snapshot
         return chosen_snapshot
 
-    def _sys_peak_snapshot(self) -> Optional[SysSnapshot]:
+    def _sys_peak_snapshot(self) -> Optional[SystemSnapshot]:
         """
         Build the whole-system peak snapshot (per-metric max).
 
