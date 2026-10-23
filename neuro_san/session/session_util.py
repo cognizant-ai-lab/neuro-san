@@ -60,7 +60,7 @@ class SessionUtil:
     def limit_agents_list(agents_list: List[Any]) -> List[Any]:
         """
         Limits a list of agents/tools from a server to at most MAX_AGENTS_FROM_EXTERNAL_SERVER entries.
-        The argument is typed Any because server JSON can hold anything; a non-list is returned unchanged.
+        Server JSON can hold anything, so a non-list is returned unchanged.
 
         :param agents_list: List of agents/tools as returned by the server
         :return: The same list, or just its first MAX_AGENTS_FROM_EXTERNAL_SERVER entries (a warning is logged)

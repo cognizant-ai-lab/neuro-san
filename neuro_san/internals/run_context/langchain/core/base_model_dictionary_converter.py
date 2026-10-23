@@ -272,7 +272,8 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             message = f"Parameter name '{field_name}' must not start with an underscore."
         elif field_name == "model_config":
             message = "Parameter name 'model_config' is reserved by pydantic for model configuration."
-        elif field_name.startswith(("model_dump", "model_validate")) and hasattr(BaseModel, field_name):
+        elif (field_name.startswith("model_dump") or field_name.startswith("model_validate")) \
+                and hasattr(BaseModel, field_name):
             message = f"Parameter name '{field_name}' shadows a pydantic BaseModel method."
 
         if message is not None:

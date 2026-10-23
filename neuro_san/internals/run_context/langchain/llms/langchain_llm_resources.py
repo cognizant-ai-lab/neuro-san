@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from __future__ import annotations
 
+from typing import Any
 from typing import List
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -39,7 +40,7 @@ class LangChainLlmResources(LlmResources):
         :param model: Language model used.
         :param llm_policy: optional LlmPolicy object to manage connections to LLM host.
         """
-        self.model: BaseLanguageModel | RunnableWithFallbacks = model
+        self.model: BaseLanguageModel | RunnableWithFallbacks[Any, Any] = model
         self.llm_policy: LlmPolicy = llm_policy
         self.child_resources: List[LingeringResource] = []
 
