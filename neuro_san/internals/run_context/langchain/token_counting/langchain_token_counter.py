@@ -349,9 +349,9 @@ class LangChainTokenCounter:
 
         # Organize the token dict for each agent to be the same format
         caveats: List[str] = [
-                "Token usage is tracked at the agent level. "
-                "Counts include usage from any downstream agents called on this agent's behalf."
-            ]
+            "Token usage is tracked at the agent level. "
+            "Counts include usage from any downstream agents called on this agent's behalf."
+        ]
         caveats.extend(COMMON_CAVEATS)
         agent_token_dict: Dict[str, Any] = {
             "total_tokens": callback.total_tokens,
