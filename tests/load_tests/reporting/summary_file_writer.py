@@ -29,9 +29,9 @@ from collections import Counter
 
 import psutil
 
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.reporting.formatters import Formatters
+from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -96,9 +96,9 @@ class SummaryFileWriter:
         request_count: int = self._args.num_requests
         round_count: int = self._args.num_rounds
         workers: int = self._args.max_workers
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  LOAD TEST SUMMARY")
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append(f"  Agent:       {agent}")
         lines.append(f"  Date:        {date_text} UTC")
         lines.append(f"  Requests:    {request_count} x {round_count} round(s) = {total_requests} total")
@@ -351,9 +351,9 @@ class SummaryFileWriter:
         if not all_results:
             return
 
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  REQUEST RESULTS")
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
 
         result: Dict[str, Any]
         # One line per request result.
@@ -426,9 +426,9 @@ class SummaryFileWriter:
         all_latencies_seconds.sort()
         total: int = len(all_latencies_seconds)
         milestones: List[int] = [50, 60, 70, 80, 90, 95, 100]
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  COMPLETION TIMELINE")
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
 
         previous_count: int = -1
         percentage: int
@@ -456,19 +456,17 @@ class SummaryFileWriter:
         :param sorted_latencies_seconds: Request latencies in seconds, sorted in ascending order
         """
         total: int = len(sorted_latencies_seconds)
-        step: int = 50
-        if total <= step:
+        milestones: List[int] = LatencyAnalyzer.count_milestones(total)
+        if not milestones:
             return
-        milestones: List[int] = list(range(step, total, step))
-        if not milestones or milestones[-1] != total:
-            milestones.append(total)
         lines.append("")
         lines.append("  Completion by count:")
         count: int
         # One line per count milestone.
         for count in milestones:
             duration_seconds: float = sorted_latencies_seconds[count - 1]
-            lines.append(f"  {count:5d} requests completed by {Formatters.fmt_duration(duration_seconds, precision=1)}")
+            formatted_duration: str = Formatters.fmt_duration(duration_seconds, precision=1)
+            lines.append(f"  {count:5d} requests completed by {formatted_duration}")
 
     def _write_server_timing(self, lines: List[str]) -> None:
         """
@@ -480,16 +478,17 @@ class SummaryFileWriter:
             return
 
         client_results: List[Dict[str, Any]] = self._collect_client_times()
-        by_server_id: Dict[str, list] = {}
+        by_server_id: Dict[str, List[Dict[str, Any]]] = {}
         entry: Dict[str, Any]
         # Group the timing entries by server request id.
         for entry in self._server_timing:
-            server_request_id: str = entry.get("request_id", "")
-            by_server_id.setdefault(server_request_id, []).append(entry)
+            entry_request_id: str = entry.get("request_id", "")
+            request_entries: List[Dict[str, Any]] = by_server_id.setdefault(entry_request_id, [])
+            request_entries.append(entry)
 
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  SERVER TIMING BREAKDOWN")
-        lines.append("=" * SEPARATOR_WIDTH)
+        lines.append(Formatters.SEPARATOR_LINE)
 
         server_request_id: str
         # One timing block per server request, in id order.
@@ -624,7 +623,7 @@ class SummaryFileWriter:
         parts: List[str] = []
         key: str
         # Use the first detail field that has a value.
-        for key in ("agent_network_name", "reservation_id"):
+        for key in ["agent_network_name", "reservation_id"]:
             value: Optional[str] = result.get(key, "")
             if value:
                 parts.append(str(value))
