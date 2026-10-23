@@ -25,8 +25,7 @@ from typing import Optional
 from unittest import TestCase
 
 from neuro_san import TOP_LEVEL_DIR
-from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
-from tests.load_tests.load_test_constants import DEFAULT_STAGES
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -44,7 +43,8 @@ class TestInputValidator(TestCase):
 
     # Real fixtures, not mocks: tests/fixtures/load_tests/hello_world/*.hocon
     PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
-    HELLO_WORLD_FIXTURES: str = TOP_LEVEL_DIR.get_file_in_basis(join("..", DEFAULT_FIXTURES_HOCON_DIR, "hello_world"))
+    HELLO_WORLD_FIXTURES: str = TOP_LEVEL_DIR.get_file_in_basis(
+        join("..", LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR, "hello_world"))
 
     def test_cap_is_stage_total_times_rounds(self) -> None:
         """
@@ -123,7 +123,7 @@ class TestInputValidator(TestCase):
         """
         validator: InputValidator = TestInputValidator._stages_validator(ramp=True)
 
-        self.assertEqual(validator.resolve_stages(), list(DEFAULT_STAGES))
+        self.assertEqual(validator.resolve_stages(), list(LoadTestConstants.DEFAULT_STAGES))
 
     def test_stages_are_parsed_and_trailing_commas_ignored(self) -> None:
         """
@@ -179,7 +179,7 @@ class TestInputValidator(TestCase):
         DIR default + agent name -> tests/fixtures/load_tests/hello_world.
         """
         validator: InputValidator = TestInputValidator._fixtures_validator(
-            fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR)
+            fixtures_hocon_dir=LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR)
         files: List[str] = validator.validate_fixtures_hocon_dir()
 
         expected: List[str] = []
@@ -197,7 +197,7 @@ class TestInputValidator(TestCase):
         basic/hello_world resolves to the hello_world subfolder.
         """
         validator: InputValidator = TestInputValidator._fixtures_validator(
-            agent="basic/hello_world", fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR)
+            agent="basic/hello_world", fixtures_hocon_dir=LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR)
         files: List[str] = validator.validate_fixtures_hocon_dir()
         self.assertEqual(len(files), 5)
         file_path: str
@@ -220,7 +220,7 @@ class TestInputValidator(TestCase):
         No <DIR>/<agent>/ folder -> exit 1.
         """
         validator: InputValidator = TestInputValidator._fixtures_validator(
-            agent="no_such_agent", fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR)
+            agent="no_such_agent", fixtures_hocon_dir=LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR)
         with self.assertRaises(LoadTestAbortError) as caught:
             validator.validate_fixtures_hocon_dir()
         self.assertEqual(caught.exception.get_exit_code(), 1)

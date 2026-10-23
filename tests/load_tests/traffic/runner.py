@@ -40,14 +40,7 @@ from neuro_san.message.processors.basic_message_processor import BasicMessagePro
 from neuro_san.test.driver.assert_capture import AssertCapture
 from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
 
-from tests.load_tests.load_test_constants import FAILURE_LOG_LIMIT
-from tests.load_tests.load_test_constants import FAILURE_REASON_LINE_LIMIT
-from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
-from tests.load_tests.load_test_constants import REQUESTS_DIR_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import THREAD_JOIN_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -100,7 +93,7 @@ class TrafficRunner:
         :return: The request result
         """
         result: Dict[str, Any] = self.run_one_http(request_id, global_request_id, output_dir)
-        if result.get("status") != STATUS_CREATED:
+        if result.get("status") != LoadTestConstants.STATUS_CREATED:
             heartbeat.count_failed_request()
         return result
 
@@ -129,11 +122,11 @@ class TrafficRunner:
         elapsed_seconds: float = time.perf_counter() - start_seconds
         status: str = request_result.get_status()
         failure_reason: Optional[str] = self._failure_reason(request_result, global_request_id)
-        if status == STATUS_CREATED and failure_reason:
-            status = STATUS_FAILED
+        if status == LoadTestConstants.STATUS_CREATED and failure_reason:
+            status = LoadTestConstants.STATUS_FAILED
 
         error: Optional[str] = None
-        if status != STATUS_CREATED:
+        if status != LoadTestConstants.STATUS_CREATED:
             error = failure_reason
         result: Dict[str, Any] = {
             "request_id": f"request-{request_id}",
@@ -160,7 +153,7 @@ class TrafficRunner:
         """
         status: str = request_result.get_status()
         response_text: str = request_result.get_response_text()
-        if status == STATUS_CREATED:
+        if status == LoadTestConstants.STATUS_CREATED:
             return self.check_response(
                 request_result.get_processor(),
                 self._profile.get_response(
@@ -168,7 +161,7 @@ class TrafficRunner:
                     same_prompt=self._args.same_prompt,
                 ),
             )
-        if status != STATUS_FAILED:
+        if status != LoadTestConstants.STATUS_FAILED:
             return None
         if not RequestStatusPolicy.is_traceback(status, response_text):
             return "empty response from agent"
@@ -325,7 +318,7 @@ class TrafficRunner:
         Return the first non-empty line of an assertion message, shortened.
 
         :param message: The AssertionError text, possibly multi-line
-        :return: Its first non-empty line, cut to FAILURE_REASON_LINE_LIMIT
+        :return: Its first non-empty line, cut to LoadTestConstants.FAILURE_REASON_LINE_LIMIT
         """
         line: str = message
         part: str
@@ -335,9 +328,11 @@ class TrafficRunner:
                 line = part
                 break
         line = line.strip()
-        if len(line) <= FAILURE_REASON_LINE_LIMIT:
+        if len(line) <= LoadTestConstants.FAILURE_REASON_LINE_LIMIT:
             return line
-        return line[:FAILURE_REASON_LINE_LIMIT - 3] + "..."
+        kept_length: int = LoadTestConstants.FAILURE_REASON_LINE_LIMIT - 3
+        kept_text: str = line[:kept_length]
+        return kept_text + "..."
 
     def _http_saved_stdout(self, response_text: str, token_data: Optional[Dict[str, Any]]) -> str:
         """
@@ -429,7 +424,7 @@ class TrafficRunner:
         finally:
             heartbeat_kwargs.get("stop_event").set()
             if heartbeat_thread is not None:
-                heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT_SECONDS)
+                heartbeat_thread.join(timeout=LoadTestConstants.THREAD_JOIN_TIMEOUT_SECONDS)
             pool.shutdown(wait=not interrupted, cancel_futures=True)
         total_time_seconds: float = time.perf_counter() - start_seconds
         # The heartbeat thread was joined above, so its peaks are final.
@@ -634,7 +629,7 @@ class TrafficRunner:
             if future.cancelled() or not future.done():
                 results_list.append({
                     "request_id": "unknown",
-                    "status": STATUS_KILLED,
+                    "status": LoadTestConstants.STATUS_KILLED,
                     "stdout": "",
                     "stderr": reason,
                     "returncode": -1,
@@ -651,7 +646,7 @@ class TrafficRunner:
         """
         Log the result of a single request to the console.
 
-        FAILED/TIMEOUT/KILLED print up to FAILURE_LOG_LIMIT.
+        FAILED/TIMEOUT/KILLED print up to LoadTestConstants.FAILURE_LOG_LIMIT.
 
         :param request_id: Request number within the current stage
         :param result: The request result, with status, elapsed and failure_reason
@@ -667,9 +662,9 @@ class TrafficRunner:
             with self._failure_log_lock:
                 self._failures_logged += 1
                 rank = self._failures_logged
-            if rank > FAILURE_LOG_LIMIT:
+            if rank > LoadTestConstants.FAILURE_LOG_LIMIT:
                 return
-            if rank == FAILURE_LOG_LIMIT:
+            if rank == LoadTestConstants.FAILURE_LOG_LIMIT:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
                 logger.info("Request %s: %s (%s)", request_id, status,
@@ -703,7 +698,7 @@ class TrafficRunner:
         :param elapsed_seconds: Request duration in seconds
         :param parsed_fields: Flattened sly_data string fields of the response
         """
-        path: str = os.path.join(output_dir, PROGRESS_LOG_FILE_NAME)
+        path: str = os.path.join(output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
         field_parts: List[str] = []
         key: str
         value: str
@@ -731,7 +726,7 @@ class TrafficRunner:
         """
         if not output_dir:
             return
-        requests_dir: str = os.path.join(output_dir, REQUESTS_DIR_NAME)
+        requests_dir: str = os.path.join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         os.makedirs(requests_dir, exist_ok=True)
         stdout_path: str = os.path.join(requests_dir, f"request_{request_id}_stdout.txt")
         with open(stdout_path, "w", encoding="utf-8") as stdout_file:

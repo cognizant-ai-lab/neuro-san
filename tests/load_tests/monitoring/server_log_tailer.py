@@ -34,7 +34,7 @@ from psutil import Process
 from psutil import cpu_percent
 from psutil import virtual_memory
 
-from tests.load_tests.load_test_constants import HEARTBEAT_INTERVAL_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -455,7 +455,7 @@ class ServerLogTailer:
     def _maybe_heartbeat(self, round_values: Dict[str, Any], tail_state: Dict[str, Any], now_perf_seconds: float,
                          elapsed_seconds: float) -> None:
         """
-        Log a heartbeat when HEARTBEAT_INTERVAL_SECONDS have passed since the last one.
+        Log a heartbeat when LoadTestConstants.HEARTBEAT_INTERVAL_SECONDS have passed since the last one.
 
         :param round_values: The round values passed to tail_server_log()
         :param tail_state: The round's counters and peaks; "last_heartbeat_seconds" is updated here
@@ -463,7 +463,7 @@ class ServerLogTailer:
         :param elapsed_seconds: Seconds since the tail started
         """
         last_heartbeat_seconds: float = tail_state.get("last_heartbeat_seconds")
-        if now_perf_seconds - last_heartbeat_seconds < HEARTBEAT_INTERVAL_SECONDS:
+        if now_perf_seconds - last_heartbeat_seconds < LoadTestConstants.HEARTBEAT_INTERVAL_SECONDS:
             return
         log_position: Optional[int] = round_values.get("log_position")
         primary_start_regex: Pattern = round_values.get("primary_start_regex")

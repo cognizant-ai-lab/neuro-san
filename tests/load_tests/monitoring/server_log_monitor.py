@@ -33,20 +33,7 @@ from typing import Union
 
 import psutil
 
-from tests.load_tests.load_test_constants import CLIENT_DISCONNECT_PATTERN
-from tests.load_tests.load_test_constants import DONE_STREAMING_PATTERN
-from tests.load_tests.load_test_constants import NETWORK_LOOKAHEAD_LINES
-from tests.load_tests.load_test_constants import PROVIDER_RETRY_PATTERN
-from tests.load_tests.load_test_constants import REQUEST_FINISH_PATTERN
-from tests.load_tests.load_test_constants import REQUEST_ID_PATTERN
-from tests.load_tests.load_test_constants import REQUEST_START_PATTERN
-from tests.load_tests.load_test_constants import RETRY_LOG_PATTERN
-from tests.load_tests.load_test_constants import SERVER_ERROR_PATTERN
-from tests.load_tests.load_test_constants import TASK_CANCELLED_PATTERN
-from tests.load_tests.load_test_constants import VALIDATION_ATTEMPT_PATTERN
-from tests.load_tests.load_test_constants import VALIDATION_ERROR_ITEM_PATTERN
-from tests.load_tests.load_test_constants import VALIDATION_ERROR_PATTERN
-from tests.load_tests.load_test_constants import VALIDATION_REINVOKE_PATTERN
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -156,11 +143,11 @@ class ServerLogMonitor:
         line: str
         # Count each retry line by its error type.
         for line in lines:
-            match: Optional[re.Match] = RETRY_LOG_PATTERN.search(line)
+            match: Optional[re.Match] = LoadTestConstants.RETRY_LOG_PATTERN.search(line)
             if match:
                 error_type: str = match.group(1)
                 retry_counts[error_type] = retry_counts.get(error_type, 0) + 1
-            elif PROVIDER_RETRY_PATTERN.search(line):
+            elif LoadTestConstants.PROVIDER_RETRY_PATTERN.search(line):
                 retry_counts["ProviderRetry"] = retry_counts.get("ProviderRetry", 0) + 1
         return retry_counts
 
@@ -185,7 +172,7 @@ class ServerLogMonitor:
         errors: List[Dict[str, str]] = []
         match: re.Match
         # One error entry per server error block in the new text.
-        for match in SERVER_ERROR_PATTERN.finditer(log_text):
+        for match in LoadTestConstants.SERVER_ERROR_PATTERN.finditer(log_text):
             message_words: List[str] = match.group(1).split()
             message: str = " ".join(message_words)
             errors.append({"request_id": match.group(2), "message": message})
@@ -265,9 +252,9 @@ class ServerLogMonitor:
         line: str
         # Count the request start and finish lines, for all requests and for primary requests.
         for line in lines:
-            if REQUEST_START_PATTERN.search(line):
+            if LoadTestConstants.REQUEST_START_PATTERN.search(line):
                 total_started += 1
-            if REQUEST_FINISH_PATTERN.search(line):
+            if LoadTestConstants.REQUEST_FINISH_PATTERN.search(line):
                 total_finished += 1
             if primary_start_re.search(line):
                 primary_started += 1
@@ -457,7 +444,7 @@ class ServerLogMonitor:
 
     @staticmethod
     def _find_network_after(lines: List[str], end_idx: int,
-                            lookahead_lines: int = NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
+                            lookahead_lines: int = LoadTestConstants.NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
         """
         Find the network name from Done-with lines after a block.
 
@@ -472,7 +459,7 @@ class ServerLogMonitor:
         index: int
         # Look for a Done-with line in the lines after the block.
         for index in range(end_idx + 1, limit):
-            match: Optional[re.Match] = DONE_STREAMING_PATTERN.search(lines[index])
+            match: Optional[re.Match] = LoadTestConstants.DONE_STREAMING_PATTERN.search(lines[index])
             if match:
                 return match.group(1)
         return None
@@ -511,7 +498,7 @@ class ServerLogMonitor:
         line: str
         # Count validation attempts, fix cycles and errors per request_id.
         for line in lines:
-            request_id_match: Optional[re.Match] = REQUEST_ID_PATTERN.search(line)
+            request_id_match: Optional[re.Match] = LoadTestConstants.REQUEST_ID_PATTERN.search(line)
             if not request_id_match:
                 continue
             request_id = request_id_match.group(1)
@@ -519,11 +506,11 @@ class ServerLogMonitor:
             if request_id not in by_request.keys():
                 by_request[request_id] = {"attempts": 0, "fix_cycles": 0, "errors": []}
             entry: Dict[str, object] = by_request.get(request_id)
-            if VALIDATION_ATTEMPT_PATTERN.search(line):
+            if LoadTestConstants.VALIDATION_ATTEMPT_PATTERN.search(line):
                 entry["attempts"] = entry.get("attempts", 0) + 1
-            if VALIDATION_REINVOKE_PATTERN.search(line):
+            if LoadTestConstants.VALIDATION_REINVOKE_PATTERN.search(line):
                 entry["fix_cycles"] = entry.get("fix_cycles", 0) + 1
-            error_match: Optional[re.Match] = VALIDATION_ERROR_PATTERN.search(line)
+            error_match: Optional[re.Match] = LoadTestConstants.VALIDATION_ERROR_PATTERN.search(line)
             if error_match:
                 error_list_text: str = error_match.group(1)
                 validation_errors: List[str] = ServerLogMonitor._parse_validation_errors(error_list_text)
@@ -563,7 +550,7 @@ class ServerLogMonitor:
         single_quoted: str
         double_quoted: str
         # Each match fills only the group of the quote Python chose for that error.
-        for single_quoted, double_quoted in VALIDATION_ERROR_ITEM_PATTERN.findall(error_list_text):
+        for single_quoted, double_quoted in LoadTestConstants.VALIDATION_ERROR_ITEM_PATTERN.findall(error_list_text):
             errors.append(single_quoted or double_quoted)
         if not errors and error_list_text != "[]":
             logger.info("Could not find a quoted error in the validation errors %s", error_list_text)
@@ -666,10 +653,10 @@ class ServerLogMonitor:
         line: str
         # Track the current request_id and record primary requests, disconnections and cancels.
         for line in lines:
-            request_match: Optional[re.Match] = REQUEST_ID_PATTERN.search(line)
+            request_match: Optional[re.Match] = LoadTestConstants.REQUEST_ID_PATTERN.search(line)
             if request_match:
                 context_request_id = request_match.group(1)
-            start_match: Optional[re.Match] = REQUEST_START_PATTERN.search(line)
+            start_match: Optional[re.Match] = LoadTestConstants.REQUEST_START_PATTERN.search(line)
             if start_match and request_match:
                 agent_by_request_id[request_match.group(1)] = start_match.group(1)
             if (primary_start_re
@@ -677,12 +664,12 @@ class ServerLogMonitor:
                     and context_request_id):
                 if context_request_id not in primary_request_ids:
                     primary_request_ids.append(context_request_id)
-            if CLIENT_DISCONNECT_PATTERN.search(line):
+            if LoadTestConstants.CLIENT_DISCONNECT_PATTERN.search(line):
                 request_id: str = context_request_id or "unknown"
                 # pylint: disable=consider-iterating-dictionary
                 if request_id not in disconnections.keys():
                     disconnections[request_id] = {"request_id": request_id, "agent": "unknown"}
-            cancel_match: Optional[re.Match] = TASK_CANCELLED_PATTERN.search(line)
+            cancel_match: Optional[re.Match] = LoadTestConstants.TASK_CANCELLED_PATTERN.search(line)
             if cancel_match:
                 ServerLogMonitor._set_cancelled_agent(cancel_match, disconnections, agent_by_request_id)
 

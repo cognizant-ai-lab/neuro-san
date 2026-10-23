@@ -17,10 +17,7 @@
 
 from unittest import TestCase
 
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.traffic.request_status_policy import RequestStatusPolicy
 
 
@@ -43,28 +40,28 @@ class TestRequestStatusPolicy(TestCase):
         A late answer is still a TIMEOUT.
         """
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
-        self.assertEqual(policy.status_for(10.0, "answer"), STATUS_TIMEOUT)
+        self.assertEqual(policy.status_for(10.0, "answer"), LoadTestConstants.STATUS_TIMEOUT)
 
     def test_status_for_empty_answer_is_failed(self) -> None:
         """
         No answer text within the cap is FAILED.
         """
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
-        self.assertEqual(policy.status_for(1.0, ""), STATUS_FAILED)
+        self.assertEqual(policy.status_for(1.0, ""), LoadTestConstants.STATUS_FAILED)
 
     def test_status_for_error_is_failed(self) -> None:
         """
         A raised request within the cap is FAILED even with answer text.
         """
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
-        self.assertEqual(policy.status_for(1.0, "answer", "Traceback"), STATUS_FAILED)
+        self.assertEqual(policy.status_for(1.0, "answer", "Traceback"), LoadTestConstants.STATUS_FAILED)
 
     def test_status_for_answer_is_created(self) -> None:
         """
         Answer text within the cap is CREATED.
         """
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
-        self.assertEqual(policy.status_for(1.0, "answer"), STATUS_CREATED)
+        self.assertEqual(policy.status_for(1.0, "answer"), LoadTestConstants.STATUS_CREATED)
 
     def test_is_failure(self) -> None:
         """
@@ -72,15 +69,16 @@ class TestRequestStatusPolicy(TestCase):
         """
         status: str
         # Each failure status is a failure.
-        for status in [STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED]:
+        for status in [LoadTestConstants.STATUS_FAILED, LoadTestConstants.STATUS_TIMEOUT,
+                       LoadTestConstants.STATUS_KILLED]:
             with self.subTest(status=status):
                 self.assertTrue(RequestStatusPolicy.is_failure(status))
-        self.assertFalse(RequestStatusPolicy.is_failure(STATUS_CREATED))
+        self.assertFalse(RequestStatusPolicy.is_failure(LoadTestConstants.STATUS_CREATED))
 
     def test_is_traceback(self) -> None:
         """
         Only a FAILED request with response text carries a traceback.
         """
-        self.assertTrue(RequestStatusPolicy.is_traceback(STATUS_FAILED, "Traceback ..."))
-        self.assertFalse(RequestStatusPolicy.is_traceback(STATUS_FAILED, ""))
-        self.assertFalse(RequestStatusPolicy.is_traceback(STATUS_CREATED, "answer"))
+        self.assertTrue(RequestStatusPolicy.is_traceback(LoadTestConstants.STATUS_FAILED, "Traceback ..."))
+        self.assertFalse(RequestStatusPolicy.is_traceback(LoadTestConstants.STATUS_FAILED, ""))
+        self.assertFalse(RequestStatusPolicy.is_traceback(LoadTestConstants.STATUS_CREATED, "answer"))

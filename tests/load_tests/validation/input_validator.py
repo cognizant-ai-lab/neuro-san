@@ -30,8 +30,7 @@ from typing import Tuple
 
 from psutil import virtual_memory
 
-from tests.load_tests.load_test_constants import DEFAULT_STAGES
-from tests.load_tests.load_test_constants import LEVEL_ADV
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.project_paths import ProjectPaths
@@ -140,7 +139,7 @@ Then use:
         Return the list of concurrency stages to run.
 
         If --ramp is set and --stages provided, parse the CSV.
-        If --ramp is set without --stages, use DEFAULT_STAGES.
+        If --ramp is set without --stages, use LoadTestConstants.DEFAULT_STAGES.
         Otherwise return a single-stage list from --num-requests.
 
         :return: Requests per stage
@@ -171,7 +170,7 @@ Then use:
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     raise LoadTestAbortError(1)
                 return stages
-            return list(DEFAULT_STAGES)
+            return list(LoadTestConstants.DEFAULT_STAGES)
         if self._args.num_requests <= 0:
             logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
             raise LoadTestAbortError(1)
@@ -223,7 +222,7 @@ Then use:
         self._print_summary_header(stages, total_planned_requests, capped_requests)
 
         warnings: List[str] = []
-        if self._args.no_dry_run or self._args.level == LEVEL_ADV:
+        if self._args.no_dry_run or self._args.level == LoadTestConstants.LEVEL_ADV:
             warnings = self._collect_warnings(capped_requests=capped_requests,
                                               total_planned_requests=total_planned_requests,
                                               stale_log_age_minutes=stale_log_age_minutes)

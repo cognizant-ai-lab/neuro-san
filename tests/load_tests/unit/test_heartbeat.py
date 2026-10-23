@@ -22,8 +22,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
@@ -43,7 +42,8 @@ class TestHeartbeat(TestCase):
         """
         runner: TrafficRunner = TrafficRunnerTestHelpers.create_runner()
         processor: BasicMessageProcessor = BasicMessageProcessor()
-        request_result: AgentRequestResult = AgentRequestResult(STATUS_CREATED, processor, "hi", 0.1, {})
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_CREATED, processor, "hi", 0.1,
+                                                                {})
         with TemporaryDirectory() as output_dir:
             with patch("tests.load_tests.traffic.agent_request_executor.AgentRequestExecutor.execute_request",
                        return_value=request_result):
@@ -57,7 +57,8 @@ class TestHeartbeat(TestCase):
             server_dead_event: threading.Event = TestHeartbeat._set_event()
             heartbeat.progress_heartbeat([], 1, start_seconds, stop_event, ready_event, fires_done_event,
                                          server_dead_event)
-            with open(os.path.join(output_dir, PROGRESS_LOG_FILE_NAME), encoding="utf-8") as progress_log:
+            progress_log_path: str = os.path.join(output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
+            with open(progress_log_path, encoding="utf-8") as progress_log:
                 progress_text: str = progress_log.read()
         self.assertIn("Request 1: CREATED", progress_text)
         self.assertIn("[progress] 0 of 1 completed", progress_text)

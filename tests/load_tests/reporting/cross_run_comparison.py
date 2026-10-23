@@ -31,9 +31,7 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
-from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
@@ -130,7 +128,7 @@ class CrossRunComparison:
         for entry in listdir(self._base_dir):
             if self._run_filter and entry not in self._run_filter:
                 continue
-            json_path: str = join(self._base_dir, entry, RAW_RESULTS_FILE_NAME)
+            json_path: str = join(self._base_dir, entry, LoadTestConstants.RAW_RESULTS_FILE_NAME)
             if not isfile(json_path):
                 continue
             metrics: Optional[Dict[str, Any]] = self._extract_metrics(json_path, entry)
@@ -195,7 +193,7 @@ class CrossRunComparison:
         result: Dict[str, Any]
         # Keep only the results of successful requests.
         for result in all_results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 created_results.append(result)
 
         total_requests: int = raw_results_extractor.get("aggregates.total_requests", 0)
@@ -226,7 +224,7 @@ class CrossRunComparison:
         result: Dict[str, Any]
         # Count the failed requests by failure kind.
         for result in all_results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 continue
             reason: str = result.get("failure_reason", "") or ""
             if "empty LLM response" in reason:
@@ -385,7 +383,7 @@ class CrossRunComparison:
         # Log the validation loops of each run folder.
         for run in runs:
             folder: str = run.get("folder", "")
-            log_path: str = join(self._base_dir, folder, SERVER_TOKENS_LOG_FILE_NAME)
+            log_path: str = join(self._base_dir, folder, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
             loops: List[Dict[str, Any]] = self._parse_validation_loops(log_path)
             if not loops:
                 continue

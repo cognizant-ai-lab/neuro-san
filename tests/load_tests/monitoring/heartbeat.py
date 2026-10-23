@@ -31,8 +31,7 @@ from typing import TextIO
 
 import psutil
 
-from tests.load_tests.load_test_constants import HEARTBEAT_INTERVAL_SECONDS
-from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.reporting.formatters import Formatters
@@ -276,7 +275,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         progress_file: Optional[TextIO] = self._open_progress_file()
         try:
             while True:
-                stopped: bool = stop_event.wait(timeout=HEARTBEAT_INTERVAL_SECONDS)
+                stopped: bool = stop_event.wait(timeout=LoadTestConstants.HEARTBEAT_INTERVAL_SECONDS)
                 if not stopped and not self._check_server_alive():
                     logger.error("\n  ABORT: Server process is no longer running. Possible OOM kill.")
                     server_dead_event.set()
@@ -573,7 +572,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         if not self._output_dir:
             return None
-        path: str = os.path.join(self._output_dir, PROGRESS_LOG_FILE_NAME)
+        path: str = os.path.join(self._output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
         return open(path, "a", encoding="utf-8")
 
     @staticmethod

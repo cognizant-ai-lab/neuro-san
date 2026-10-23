@@ -49,7 +49,7 @@ from psutil import AccessDenied
 from psutil import NoSuchProcess
 from psutil import Process
 
-from tests.load_tests.load_test_constants import LOCAL_HOSTS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
@@ -240,7 +240,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         self.agent_cli_command = self._build_cli_command()
 
-        is_local: bool = self.args.host in LOCAL_HOSTS
+        is_local: bool = self.args.host in LoadTestConstants.LOCAL_HOSTS
 
         if self.args.auto_start:
             if not is_local:

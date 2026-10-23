@@ -27,7 +27,7 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.system_resources import SystemResources
@@ -400,7 +400,7 @@ class SummaryFileWriter:
         result: Dict[str, Any]
         # Count the passed requests and collect each request's duration.
         for result in all_results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 passed += 1
             latencies_seconds.append(result.get("elapsed", 0))
         total: int = len(all_results)
