@@ -502,7 +502,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if before_client:
             client_rss_megabytes: float = before_client.get("rss_megabytes")
             client_cpu_percent: float = before_client.get("cpu_percent")
-            logger.info("  Client BEFORE: RSS %.1fM, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
+            logger.info("  Client BEFORE: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
 
         ResourceMonitor.log_system_memory("BEFORE")
         before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {

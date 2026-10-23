@@ -172,11 +172,11 @@ class TestCrossRunComparison(TestCase):
         A metric above 0 gives its value with the percent change, or the value alone for the baseline run.
         """
         increase_cell: str = CrossRunComparison._value_or_dash(45.0, "45s", 12.0)
-        decrease_cell: str = CrossRunComparison._value_or_dash(512.0, "512M", -20.4)
+        decrease_cell: str = CrossRunComparison._value_or_dash(512.0, "512 MB", -20.4)
         baseline_cell: str = CrossRunComparison._value_or_dash(45.0, "45s", None)
 
         self.assertEqual("45s (+12%)", increase_cell)
-        self.assertEqual("512M (-20%)", decrease_cell)
+        self.assertEqual("512 MB (-20%)", decrease_cell)
         self.assertEqual("45s", baseline_cell)
 
     def _write(self, contents: str) -> str:

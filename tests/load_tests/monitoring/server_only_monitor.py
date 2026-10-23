@@ -266,15 +266,10 @@ Waiting for %d request(s) in server log...
             ResourceMonitor.log_snapshot("Server BEFORE", before_server)
         # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         before_memory_stats: Any = virtual_memory()
-        before_used_bytes: int = before_memory_stats.total - before_memory_stats.available
-        before_used_megabytes: float = before_used_bytes / ResourceMonitor.ONE_MEGABYTE
         before_available_gigabytes: float = before_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        total_gigabytes: float = before_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        self.logger.info(
-            "  System BEFORE: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
-            before_memory_stats.percent, before_used_megabytes,
-            before_available_gigabytes, total_gigabytes,
-        )
+        # Log through self.logger so the line also goes to this round's log file.
+        before_memory_line: str = ResourceMonitor.system_memory_line("BEFORE", before_memory_stats)
+        self.logger.info("%s", before_memory_line)
         core_count: int = 1
         logical_core_count: Optional[int] = cpu_count()
         if logical_core_count:

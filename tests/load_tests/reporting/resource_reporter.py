@@ -122,20 +122,20 @@ class ResourceReporter:
         before_rss_megabytes: float = before_snapshot.get("rss_megabytes")
         settled_rss_megabytes: float = settled_snapshot.get("rss_megabytes")
         rss_delta_megabytes: float = settled_rss_megabytes - before_rss_megabytes
-        # Memory cells: megabytes with 1 decimal place, e.g. 123.5M.
+        # Memory cells: megabytes with 1 decimal place, e.g. 123.5 MB.
         peak_rss_text: str = "-"
         if peak_snapshot:
             peak_rss_megabytes: float = peak_snapshot.get("rss_megabytes")
-            peak_rss_text = f"{peak_rss_megabytes:.1f}M"
+            peak_rss_text = f"{peak_rss_megabytes:.1f} MB"
         settled_cpu_percent: float = settled_snapshot.get("cpu_percent")
         settled_fds: Optional[int] = settled_snapshot.get("fds")
         settled_threads: Optional[int] = settled_snapshot.get("threads")
         display: Dict[str, str] = {
             "stage": str(stage_label),
-            "before_rss": f"{before_rss_megabytes:.1f}M",
+            "before_rss": f"{before_rss_megabytes:.1f} MB",
             "peak_rss": peak_rss_text,
-            "settled_rss": f"{settled_rss_megabytes:.1f}M",
-            "rss_delta": f"{rss_delta_megabytes:+.1f}M",
+            "settled_rss": f"{settled_rss_megabytes:.1f} MB",
+            "rss_delta": f"{rss_delta_megabytes:+.1f} MB",
             "cpu": f"{settled_cpu_percent:.1f}%",
             "fds": str(settled_fds),
             "threads": str(settled_threads),
@@ -271,9 +271,9 @@ class ResourceReporter:
         after_children: Optional[int] = after_snapshot.get("children")
         display: Dict[str, str] = {
             "stage": str(stage_label),
-            "before_rss": f"{before_rss_megabytes:.1f}M",
-            "after_rss": f"{after_rss_megabytes:.1f}M",
-            "rss_delta": f"{rss_delta_megabytes:+.1f}M",
+            "before_rss": f"{before_rss_megabytes:.1f} MB",
+            "after_rss": f"{after_rss_megabytes:.1f} MB",
+            "rss_delta": f"{rss_delta_megabytes:+.1f} MB",
             "fds": str(after_fds),
             "threads": f"{before_threads} -> {after_threads}",
             "thread_delta": f"{thread_delta:+d}",

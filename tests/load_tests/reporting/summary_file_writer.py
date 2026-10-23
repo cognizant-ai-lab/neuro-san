@@ -263,7 +263,7 @@ class SummaryFileWriter:
         if peak_available_gigabytes is None:
             peak_available_gigabytes = 0.0
         peak_detail: str = (
-            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes:.1f}G free / {total_gigabytes:.1f}G)"
+            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB)"
         )
         # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(

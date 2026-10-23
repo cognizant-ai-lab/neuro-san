@@ -657,17 +657,28 @@ Then:
         :param snapshot_row: Row from _build_snapshot_row()
         :return: Cell text in the column order of the header in _log_results()
         """
+        round_num: int = snapshot_row.get("round_num")
+        before_rss_megabytes: float = snapshot_row.get("before_rss_megabytes")
+        settled_rss_megabytes: float = snapshot_row.get("settled_rss_megabytes")
+        rss_delta_megabytes: float = snapshot_row.get("rss_delta_megabytes")
+        fds: Optional[int] = snapshot_row.get("fds")
+        before_threads: Optional[int] = snapshot_row.get("before_threads")
+        settled_threads: Optional[int] = snapshot_row.get("settled_threads")
+        thread_delta: int = snapshot_row.get("thread_delta")
+        connections: Optional[int] = snapshot_row.get("connections")
+        cpu_percent: float = snapshot_row.get("cpu_percent")
+        children: Optional[int] = snapshot_row.get("children")
         cells: List[str] = [
-            str(snapshot_row.get("round_num")),
-            f"{snapshot_row.get('before_rss_megabytes'):.1f}M",
-            f"{snapshot_row.get('settled_rss_megabytes'):.1f}M",
-            f"+{snapshot_row.get('rss_delta_megabytes'):.1f}M",
-            str(snapshot_row.get("fds")),
-            f"{snapshot_row.get('before_threads')} -> {snapshot_row.get('settled_threads')}",
-            f"+{snapshot_row.get('thread_delta')}",
-            str(snapshot_row.get("connections")),
-            f"{snapshot_row.get('cpu_percent'):.1f}%",
-            str(snapshot_row.get("children")),
+            str(round_num),
+            f"{before_rss_megabytes:.1f} MB",
+            f"{settled_rss_megabytes:.1f} MB",
+            f"+{rss_delta_megabytes:.1f} MB",
+            str(fds),
+            f"{before_threads} -> {settled_threads}",
+            f"+{thread_delta}",
+            str(connections),
+            f"{cpu_percent:.1f}%",
+            str(children),
         ]
         return cells
 

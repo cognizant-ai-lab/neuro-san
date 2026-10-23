@@ -514,7 +514,7 @@ class CrossRunComparison:
         Format one metric cell: a dash when the metric is missing, else the value with its percent change.
 
         :param measured_value: The metric (seconds or megabytes); 0 or less when the run has no value
-        :param formatted_value: measured_value formatted for display, e.g. '45s' or '512M'
+        :param formatted_value: measured_value formatted for display, e.g. '45s' or '512 MB'
         :param delta_percentage: Percent change from the baseline run, or None for the baseline itself
         :return: e.g. '45s (+12%)', or '-' when measured_value is 0 or less
         """

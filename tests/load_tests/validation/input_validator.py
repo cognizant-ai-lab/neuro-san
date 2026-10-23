@@ -434,8 +434,8 @@ server log to fall back on:
         if needed_gigabytes > available_gigabytes * 0.8:
             total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:
-     Estimated need: ~{needed_gigabytes:.1f}G ({num_requests} x ~{per_request_megabytes}MB per request)
-     Available: {available_gigabytes:.1f}G / {total_gigabytes:.1f}G total
+     Estimated need: ~{needed_gigabytes:.1f} GB ({num_requests} x ~{per_request_megabytes} MB per request)
+     Available: {available_gigabytes:.1f} GB / {total_gigabytes:.1f} GB total
      Consider fewer concurrent workers or a larger instance"""
             return memory_warning
         return None

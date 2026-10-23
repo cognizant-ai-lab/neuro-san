@@ -161,6 +161,23 @@ class ResourceMonitor:
                     rss_megabytes, file_descriptor_count, thread_count, connection_count, cpu_percent, child_count)
 
     @staticmethod
+    def system_memory_text(virtual_memory_stats: Any) -> str:
+        """
+        Format the system memory part of a heartbeat line.
+
+        :param virtual_memory_stats: The psutil.virtual_memory() result
+        :return: "  sysmem: N% (N MB used / N GB free)"
+        """
+        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
+        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
+        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        system_memory_text: str = (
+            f"  sysmem: {virtual_memory_stats.percent:.0f}% ({used_megabytes:.0f} MB used"
+            f" / {available_gigabytes:.1f} GB free)"
+        )
+        return system_memory_text
+
+    @staticmethod
     def log_system_memory(label: str) -> None:
         """
         Log the system memory: percent used, then used, free and total.
@@ -169,9 +186,24 @@ class ResourceMonitor:
         """
         # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         virtual_memory_stats: Any = virtual_memory()
+        memory_line: str = ResourceMonitor.system_memory_line(label, virtual_memory_stats)
+        logger.info("%s", memory_line)
+
+    @staticmethod
+    def system_memory_line(label: str, virtual_memory_stats: Any) -> str:
+        """
+        Format the system memory log line: percent used, then used, free and total.
+
+        :param label: Label after "System", e.g. "BEFORE"
+        :param virtual_memory_stats: The psutil.virtual_memory() result
+        :return: "  System <label>: N% used (N MB used / N GB free / N GB total)"
+        """
         used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
         used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        logger.info("  System %s: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
-                    label, virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes)
+        memory_line: str = (
+            f"  System {label}: {virtual_memory_stats.percent:.0f}% used ({used_megabytes:.0f} MB used"
+            f" / {available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB total)"
+        )
+        return memory_line

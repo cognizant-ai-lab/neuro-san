@@ -893,5 +893,5 @@ class ServerLogMonitor:
         if snapshot:
             client_rss_megabytes: float = snapshot.get("rss_megabytes")
             client_cpu_percent: float = snapshot.get("cpu_percent")
-            logger.info("  Client AFTER: RSS %.1fM, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
+            logger.info("  Client AFTER: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
         ResourceMonitor.log_system_memory("RECEIVED")

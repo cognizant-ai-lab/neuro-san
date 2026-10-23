@@ -234,13 +234,13 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
             warning: str = (f"  WARNING: System memory at {virtual_memory_stats.percent:.0f}%"
-                            f" ({available_gigabytes:.1f}G free / {total_gigabytes:.1f}G total) — risk of OOM kill")
+                            f" ({available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB total) — risk of OOM kill")
             logger.warning("%s", warning)
             self._write_to_file(progress_file, warning)
             swap_memory_stats: Any = psutil.swap_memory()
             if swap_memory_stats.total > 0 and swap_memory_stats.used > 0:
                 swap_used_gigabytes: float = swap_memory_stats.used / ResourceMonitor.ONE_GIGABYTE
-                swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f}G"
+                swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f} GB"
                                      " — severe performance impact")
                 logger.warning("%s", swap_warning)
                 self._write_to_file(progress_file, swap_warning)
@@ -336,11 +336,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Dict with "text" (the progress line part), "memory_percent" and "available_gigabytes"
         """
         virtual_memory_stats: Any = psutil.virtual_memory()
-        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        line: str = (f"  sysmem: {virtual_memory_stats.percent:.0f}%"
-                     f" ({used_megabytes:.0f}M used / {available_gigabytes:.1f}G free)")
+        line: str = ResourceMonitor.system_memory_text(virtual_memory_stats)
         system_memory: Dict[str, Any] = {
             "text": line,
             "memory_percent": virtual_memory_stats.percent,
