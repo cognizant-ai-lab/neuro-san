@@ -128,18 +128,18 @@ class LangfuseTracingContext(LangChainTracingContext):
             environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
 
             # Create the callback handler instance
-            callback_handler: BaseCallbackHandler = callback_handler_type()
+            my_callback_handler: BaseCallbackHandler = callback_handler_type()
             # Langfuse's handler is synchronous, so LangChain routes every trace event through
             # a thread pool. Each of those ThreadPoolExecutor.submit calls grabs a process-global lock,
             # and with thousands of events, threads just queue on it.
             # This run_inline = True tells LangChain to call the handler directly,
             # skipping the thread pool entirely.
-            callback_handler.run_inline = True
+            my_callback_handler.run_inline = True
 
             # Carry the handler as the ContextVar default rather than via set():
             # a set() is only visible in contexts descended from the setting
             # thread, while a default is visible in every thread.
-            context_var = ContextVar(LANGFUSE_HANDLER_VAR_NAME, default=callback_handler)
+            context_var = ContextVar(LANGFUSE_HANDLER_VAR_NAME, default=my_callback_handler)
             register_configure_hook(context_var, inheritable=True)
             cls.HANDLER_CONTEXT_VAR = context_var
             return context_var

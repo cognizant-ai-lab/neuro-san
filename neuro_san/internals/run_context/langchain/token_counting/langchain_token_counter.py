@@ -26,6 +26,7 @@ from asyncio import Future
 from contextvars import Context
 from contextvars import ContextVar
 from contextvars import copy_context
+from copy import copy
 from time import time
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -289,8 +290,8 @@ class LangChainTokenCounter:
         # Assignment preserves key insertion order (main first, total last, as the
         # first reporter established) so the server log always prints them that way.
         request_reporting["token_accounting"] = main_accounting
-        request_reporting["total_token_accounting"] = \
-            {**network_token_dict, "models": models_token_dict}
+        total_token_accounting: Dict[str, Any] = copy(network_token_dict)
+        total_token_accounting["models"] = models_token_dict
 
         # Figure out whether we are the front man of the main network:
         # * Only front men sit at the root of the origin path (single-element origin).
@@ -347,6 +348,11 @@ class LangChainTokenCounter:
         """
 
         # Organize the token dict for each agent to be the same format
+        caveats: List[str] = [
+                "Token usage is tracked at the agent level. "
+                "Counts include usage from any downstream agents called on this agent's behalf."
+            ]
+        caveats.extend(COMMON_CAVEATS)
         agent_token_dict: Dict[str, Any] = {
             "total_tokens": callback.total_tokens,
             "prompt_tokens": callback.prompt_tokens,
@@ -355,10 +361,7 @@ class LangChainTokenCounter:
             "empty_responses": getattr(callback, "empty_responses", 0),
             "total_cost": callback.total_cost,
             "time_taken_in_seconds": time_taken_in_seconds,
-            "caveats": [
-                "Token usage is tracked at the agent level. "
-                "Counts include usage from any downstream agents called on this agent's behalf."
-            ] + COMMON_CAVEATS
+            "caveats": caveats,
         }
 
         return agent_token_dict
