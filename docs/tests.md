@@ -167,9 +167,12 @@ A few conventions keep the unit tests consistent across contributors:
   or behavior each) to `tests/.../test_some_module_<topic>.py`, each holding
   the single class `TestSomeClass<Topic>`, for example
   `test_some_module_timeout.py` with `TestSomeClassTimeout`, and keep the rest
-  in `test_some_module.py`. Share helpers through a helper class of their own,
-  since importing or subclassing `TestSomeClass` makes pytest run its tests
-  again. When all the tests fit under the limit, keep them in one module.
+  in `test_some_module.py`. Pick topics so that `some_module_<topic>` is not
+  the name of another module next to `some_module.py`. Share helpers through a
+  class such as `SomeClassTestHelpers` in `some_module_test_helpers.py`, names
+  pytest does not collect, since importing or subclassing `TestSomeClass`
+  makes pytest run its tests again. When all the tests fit under the limit,
+  keep them in one module.
 - Test classes derive from `unittest.TestCase`, or from
   `unittest.IsolatedAsyncioTestCase` when they contain `async def` tests.
   `IsolatedAsyncioTestCase` runs async tests itself, so its methods do not
@@ -178,10 +181,11 @@ A few conventions keep the unit tests consistent across contributors:
   `assertIsNone`, `assertIn`, `assertIsInstance`, `assertRaises`, and so on)
   rather than bare `assert` statements. On failure they report both operands,
   and one style keeps the tests readable for everyone.
-- Test helpers are methods or `@staticmethod`s on the test class, not
-  module-level or nested functions. Where a callback needs bound arguments,
-  for example a mock `side_effect` that records calls into a list, bind them
-  with `functools.partial` on a `@staticmethod` instead of writing a `lambda`.
+- Test helpers are methods or `@staticmethod`s on the test class, or on the
+  shared helper class described above, not module-level or nested functions.
+  Where a callback needs bound arguments, for example a mock `side_effect`
+  that records calls into a list, bind them with `functools.partial` on a
+  `@staticmethod` instead of writing a `lambda`.
 
 ### Golden files
 

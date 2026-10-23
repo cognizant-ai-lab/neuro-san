@@ -41,18 +41,18 @@ from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
     """
-    Tests for JournalingCallbackHandler.
+    Tests for JournalingCallbackHandler. An inherited handler must ignore events
+    owned by a descendant agent, while the handler owning the nearest agent scope
+    processes its own events.
 
     on_llm_end journals the intermediate LLM output as an AGENT message using
     the shared full-text projection: block content yields all of its text,
     tool-call-only steps stay unjournaled, and stripping is preserved.
 
     on_tool_start should journal a diagnostic "Invoking" label even when the
-    serialized tool carries no name.
-
-    on_tool_end preserves a tool's block-list output (text plus data blocks,
-    as block-returning tools produce) as a JSON-safe list, and keeps the
-    str() form for every other output shape.
+    serialized tool carries no name. on_tool_end preserves a tool's block-list
+    output (text plus data blocks, as block-returning tools produce) as a
+    JSON-safe list, and keeps the str() form for every other output shape.
     """
 
     @staticmethod
@@ -217,3 +217,60 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         self.assertEqual(result.content, blocks)
         self.assertEqual(ContentUtils.flatten_to_text(result), "42")
         self.assertEqual(got_result.structure["tool_output"], blocks)
+
+    @staticmethod
+    def _make_handler_with_origination() -> Tuple[JournalingCallbackHandler, MagicMock, MagicMock]:
+        """
+        Build a handler and mocks for observing its journal and origination calls.
+
+        :return: The handler, mocked calling-agent journal, and mocked origination.
+        """
+        calling_agent_journal: MagicMock = MagicMock()
+        calling_agent_journal.write_message = AsyncMock()
+        calling_agent_journal.write_message_if_next_not_dupe = AsyncMock()
+        origination: MagicMock = MagicMock()
+        handler: JournalingCallbackHandler = JournalingCallbackHandler(
+            calling_agent_journal=calling_agent_journal,
+            base_journal=MagicMock(),
+            parent_origin=[],
+            origination=origination,
+        )
+        return handler, calling_agent_journal, origination
+
+    async def test_descendant_llm_event_is_ignored(self) -> None:
+        """An ancestor handler must not journal a descendant's LLM output."""
+        ancestor, ancestor_journal, _ = self._make_handler_with_origination()
+        descendant, _, _ = self._make_handler_with_origination()
+        response = LLMResult(generations=[[ChatGeneration(message=AIMessage(content="thinking"))]])
+
+        with descendant.scope():
+            await ancestor.on_llm_end(response)
+
+        ancestor_journal.write_message_if_next_not_dupe.assert_not_awaited()
+
+    async def test_descendant_tool_events_are_ignored_before_origin_allocation(self) -> None:
+        """Descendant tool callbacks must be rejected before allocating an origin."""
+        ancestor, ancestor_journal, ancestor_origination = self._make_handler_with_origination()
+        descendant, _, _ = self._make_handler_with_origination()
+        run_id = uuid4()
+
+        with descendant.scope():
+            await ancestor.on_tool_start(
+                {"name": "search"}, "input", run_id=run_id,
+                tags=["langchain_tool"], inputs={"query": "hello"}
+            )
+            await ancestor.on_tool_end("result", run_id=run_id, tags=["langchain_tool"])
+
+        ancestor_journal.write_message.assert_not_awaited()
+        ancestor_origination.add_spec_name_to_origin.assert_not_called()
+        assert not ancestor._tool_journals  # pylint: disable=protected-access
+        assert not ancestor._tool_origins  # pylint: disable=protected-access
+
+    async def test_nearest_handler_processes_its_own_event(self) -> None:
+        """The handler owning the nearest agent scope must process its event."""
+        handler, journal, _ = self._make_handler_with_origination()
+
+        with handler.scope():
+            await handler.on_tool_start({"name": "search"}, "input", run_id=uuid4(), tags=[], inputs={})
+
+        journal.write_message.assert_awaited_once()

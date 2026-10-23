@@ -128,7 +128,7 @@ class FakeInvocationContext:
         return self.cloned
 
 
-class TestNestedTokenAccounting(IsolatedAsyncioTestCase):
+class TestLangChainTokenCounterNestedAgents(IsolatedAsyncioTestCase):
     """
     End-to-end test of the token accounting invariants through real langchain
     event dispatch, mirroring how agents nest in production:

@@ -27,7 +27,7 @@ from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChat
 # These tests access a deliberately-internal helper directly; suppress
 # protected-access warnings file-wide.
 # pylint: disable=protected-access
-class TestStreamingChatHandlerHeartbeatFrame(TestCase):
+class TestStreamingChatHandler(TestCase):
     """
     Pins the wire-format invariants of the constant heartbeat frame built by
     StreamingChatHandler._build_heartbeat_frame(): it must be a ChatResponse-shaped
