@@ -18,13 +18,11 @@
 
 import argparse
 import getpass
-import gzip
 import json
 import logging
 import os
 import platform
 import re
-import shutil
 import signal
 import socket
 import sys
@@ -45,7 +43,6 @@ from tests.load_tests.load_test_constants import LEVEL_ADV
 from tests.load_tests.load_test_constants import LEVEL_MIN
 from tests.load_tests.load_test_constants import LOCAL_HOSTS
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SERVER_LOG_GZ_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.load_test_constants import STATUS_FAILED
 from tests.load_tests.load_test_constants import STATUS_KILLED
@@ -707,7 +704,6 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if self._output_dir is None:
             self._run_log.close()
             return
-        self._archive_server_log()
         has_failures: bool = False
         summary: Dict[str, Any]
         # Look for a stage with failed, timed-out or killed requests
@@ -731,29 +727,12 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         requests_dir = os.path.join(self._output_dir, "requests")
         if os.path.isdir(requests_dir):
             logger.info("  Requests:    %s", requests_dir)
-        gz_path = os.path.join(self._output_dir, SERVER_LOG_GZ_FILE_NAME)
-        if os.path.isfile(gz_path):
-            size_megabytes: float = os.path.getsize(gz_path) / ResourceMonitor.ONE_MEGABYTE
-            logger.info("  Server log:  %s (%.1fM)", gz_path, size_megabytes)
         stdout_log_path: Optional[str] = self._run_log.get_path()
         if stdout_log_path is not None:
             logger.info("  Stdout log:  %s", stdout_log_path)
         self._history_recorder.log_existing_history_files()
         # Close the run log last so OUTPUT FILES is captured
         self._run_log.close()
-
-    def _archive_server_log(self) -> None:
-        """
-        Gzip the server log into the output directory.
-        """
-        if not self.args.archive_server_log:
-            return
-        if not self.server_log or not os.path.isfile(self.server_log):
-            logger.warning("  --archive-server-log: no server log to archive (missing --server-log or file not found)")
-            return
-        gz_path = os.path.join(self._output_dir, SERVER_LOG_GZ_FILE_NAME)
-        with open(self.server_log, "rb") as source_file, gzip.open(gz_path, "wb") as gzip_file:
-            shutil.copyfileobj(source_file, gzip_file)
 
     @staticmethod
     def _apply_level_defaults(args: argparse.Namespace, explicit_args: Set[str]) -> None:

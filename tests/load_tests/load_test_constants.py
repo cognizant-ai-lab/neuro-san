@@ -83,11 +83,8 @@ HISTORY_FILE_NAME: str = "history.jsonl"
 HISTORY_UNKNOWN_FILE_NAME: str = "history_unknown.jsonl"
 HISTORY_THRESHOLDS_SECONDS: Tuple[int, int] = (70, 300)
 
-# Files in each run directory. Older runs named the run log (stdout.log) load_test.log.
+# Files in each run directory. LEGACY_RUN_LOG_FILE_NAME is the other run log name the rebuild reads.
 RAW_RESULTS_FILE_NAME: str = "raw_results.json"
-
-# The gzipped copy of the server log in a run or round output directory.
-SERVER_LOG_GZ_FILE_NAME: str = "server.log.gz"
 PROGRESS_LOG_FILE_NAME: str = "progress.log"
 SERVER_TOKENS_LOG_FILE_NAME: str = "server_tokens.log"
 STDOUT_LOG_FILE_NAME: str = "stdout.log"
