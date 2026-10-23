@@ -14,11 +14,14 @@
 #
 # END COPYRIGHT
 
+from logging import LogRecord
+from types import SimpleNamespace
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from unittest import TestCase
+from unittest.mock import patch
 
 from psutil import Process
 
@@ -27,7 +30,7 @@ from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 class TestResourceMonitor(TestCase):
     """
-    Unit tests for ResourceMonitor: CPU cores in use and the keys of a process snapshot.
+    Unit tests for ResourceMonitor: CPU cores in use, the keys of a process snapshot and the system memory text.
     """
 
     def test_cores_in_use(self) -> None:
@@ -58,3 +61,54 @@ class TestResourceMonitor(TestCase):
         No process gives no snapshot.
         """
         self.assertIsNone(ResourceMonitor.snapshot(None))
+
+    def test_system_memory_text(self) -> None:
+        """
+        The heartbeat system memory part shows used memory in MB and free memory in GB.
+        """
+        memory_stats: SimpleNamespace = TestResourceMonitor._fake_memory_stats()
+
+        memory_text: str = ResourceMonitor.system_memory_text(memory_stats)
+
+        self.assertEqual("  sysmem: 75% (6144 MB used / 2.0 GB free)", memory_text)
+
+    def test_log_system_memory(self) -> None:
+        """
+        The system memory log line names its label and shows MB used, GB free and GB total.
+        """
+        memory_stats: SimpleNamespace = TestResourceMonitor._fake_memory_stats()
+
+        with patch("tests.load_tests.monitoring.resource_monitor.virtual_memory", return_value=memory_stats):
+            with self.assertLogs("tests.load_tests.monitoring.resource_monitor", level="INFO") as captured:
+                ResourceMonitor.log_system_memory("BEFORE")
+
+        messages: List[str] = TestResourceMonitor._messages(captured.records)
+        expected_line: str = "  System BEFORE: 75% used (6144 MB used / 2.0 GB free / 8.0 GB total)"
+        self.assertEqual([expected_line], messages)
+
+    @staticmethod
+    def _fake_memory_stats() -> SimpleNamespace:
+        """
+        Build a stand-in for psutil.virtual_memory(): 8 GB total, 2 GB available, 75% used.
+
+        :return: Object with the total, available and percent attributes
+        """
+        total_bytes: int = 8 * ResourceMonitor.ONE_GIGABYTE
+        available_bytes: int = 2 * ResourceMonitor.ONE_GIGABYTE
+        memory_stats: SimpleNamespace = SimpleNamespace(total=total_bytes, available=available_bytes, percent=75.0)
+        return memory_stats
+
+    @staticmethod
+    def _messages(records: List[LogRecord]) -> List[str]:
+        """
+        Return the formatted message of each captured log record.
+
+        :param records: The log records captured by assertLogs()
+        :return: One message per record
+        """
+        messages: List[str] = []
+        record: LogRecord
+        # Keep only the message text, without the level and logger name.
+        for record in records:
+            messages.append(record.getMessage())
+        return messages

@@ -33,9 +33,7 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from tests.load_tests.confirm import Confirm
-from tests.load_tests.load_test_constants import LEVEL_MIN
-from tests.load_tests.load_test_constants import SOCKET_CHECK_TIMEOUT_SECONDS
-from tests.load_tests.load_test_constants import STALE_LOG_THRESHOLD_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -107,7 +105,7 @@ class ServerChecker:
         extractor: Optional[DictionaryExtractor] = None
         server_version: Optional[str] = None
         try:
-            with urlopen(url, timeout=SOCKET_CHECK_TIMEOUT_SECONDS) as response:
+            with urlopen(url, timeout=LoadTestConstants.SOCKET_CHECK_TIMEOUT_SECONDS) as response:
                 response_bytes = response.read()
                 response_text = response_bytes.decode("utf-8")
                 payload = loads(response_text)
@@ -167,7 +165,7 @@ class ServerChecker:
         if server_log == "auto":
             return None
 
-        if level == LEVEL_MIN and not server_log:
+        if level == LoadTestConstants.LEVEL_MIN and not server_log:
             return None
 
         if not server_log:
@@ -194,7 +192,7 @@ class ServerChecker:
         age_seconds: float = time() - modification_time
         # Whole minutes, e.g. 150.7 seconds -> 2 minutes
         age_minutes: int = int(age_seconds / ServerChecker.SECONDS_PER_MINUTE)
-        if age_seconds > STALE_LOG_THRESHOLD_SECONDS:
+        if age_seconds > LoadTestConstants.STALE_LOG_THRESHOLD_SECONDS:
             return age_minutes
         return None
 

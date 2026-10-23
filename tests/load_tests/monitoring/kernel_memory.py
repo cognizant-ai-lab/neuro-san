@@ -124,16 +124,16 @@ class KernelMemory:
 
         if log:
             KernelMemory.LOGGER.info("\n  Kernel memory breakdown:")
-            KernelMemory.LOGGER.info("    Server RSS:       %.0fM", rss_megabytes)
-            KernelMemory.LOGGER.info("    Kernel stacks:    %.0fM", kernel_stacks_megabytes)
-            KernelMemory.LOGGER.info("    Page tables:      %.0fM", page_tables_megabytes)
-            KernelMemory.LOGGER.info("    Slab cache:       %.0fM", slab_megabytes)
-            KernelMemory.LOGGER.info("    Page cache:       %.0fM", page_cache_megabytes)
-            KernelMemory.LOGGER.info("    TCP buffers:      %.0fM", tcp_buffers_megabytes)
+            KernelMemory.LOGGER.info("    Server RSS:       %.0f MB", rss_megabytes)
+            KernelMemory.LOGGER.info("    Kernel stacks:    %.0f MB", kernel_stacks_megabytes)
+            KernelMemory.LOGGER.info("    Page tables:      %.0f MB", page_tables_megabytes)
+            KernelMemory.LOGGER.info("    Slab cache:       %.0f MB", slab_megabytes)
+            KernelMemory.LOGGER.info("    Page cache:       %.0f MB", page_cache_megabytes)
+            KernelMemory.LOGGER.info("    TCP buffers:      %.0f MB", tcp_buffers_megabytes)
             KernelMemory.LOGGER.info("    %s", KernelMemory.KERNEL_TOTAL_LINE)
-            KernelMemory.LOGGER.info("    Accounted:        %.0fM", accounted_megabytes)
-            KernelMemory.LOGGER.info("    Unaccounted:      %.0fM", unaccounted_megabytes)
-            KernelMemory.LOGGER.info("    System total:     %.0fM (used + cache)", system_used_megabytes)
+            KernelMemory.LOGGER.info("    Accounted:        %.0f MB", accounted_megabytes)
+            KernelMemory.LOGGER.info("    Unaccounted:      %.0f MB", unaccounted_megabytes)
+            KernelMemory.LOGGER.info("    System total:     %.0f MB (used + cache)", system_used_megabytes)
 
         breakdown: Dict[str, float] = {
             "server_rss_mb": rss_megabytes,

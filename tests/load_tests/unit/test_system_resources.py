@@ -32,7 +32,7 @@ class TestSystemResources(TestCase):
         """
         row_text: str = SystemResources._format_memory_row({"mem_pct": 50.0, "mem_avail_gb": 7.5}, 16.0)
 
-        self.assertEqual("8192M used / 7.5G free (50% used)", row_text)
+        self.assertEqual("8192 MB used / 7.5 GB free (50% used)", row_text)
 
     def test_memory_row_without_free_memory(self) -> None:
         """
@@ -40,4 +40,4 @@ class TestSystemResources(TestCase):
         """
         row_text: str = SystemResources._format_memory_row({"mem_pct": 50.0, "mem_avail_gb": None}, 16.0)
 
-        self.assertEqual("8192M used / n/a free (50% used)", row_text)
+        self.assertEqual("8192 MB used / n/a free (50% used)", row_text)

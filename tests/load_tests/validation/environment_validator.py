@@ -22,7 +22,7 @@ from typing import Optional
 
 import psutil
 
-from tests.load_tests.load_test_constants import SOCKET_CHECK_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -59,10 +59,11 @@ class EnvironmentValidator:
 
         :param host: Server host name or address
         :param port: TCP port to check
-        :return: True if a connection succeeds within SOCKET_CHECK_TIMEOUT_SECONDS, False otherwise
+        :return: True if a connection succeeds within LoadTestConstants.SOCKET_CHECK_TIMEOUT_SECONDS,
+            False otherwise
         """
         try:
-            with socket.create_connection((host, port), timeout=SOCKET_CHECK_TIMEOUT_SECONDS):
+            with socket.create_connection((host, port), timeout=LoadTestConstants.SOCKET_CHECK_TIMEOUT_SECONDS):
                 return True
         except (ConnectionRefusedError, OSError):
             return False
