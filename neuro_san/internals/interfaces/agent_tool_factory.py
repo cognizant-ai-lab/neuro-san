@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Dict
+from typing import List
 
 from abc import abstractmethod
 
@@ -68,9 +69,11 @@ class AgentToolFactory:
         raise NotImplementedError
 
     @abstractmethod
-    def get_agent_tool_path(self) -> str:
+    def get_agent_tool_paths(self) -> List[str]:
         """
-        :return: The path under which tools for this registry should be looked for.
+        :return: The paths under which tools for this registry should be looked for,
+                 one per AGENT_TOOL_PATH root, in the order the roots are listed.
+                 Each path is a dotted module path ending with the agent network name.
         """
         raise NotImplementedError
 

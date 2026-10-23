@@ -69,7 +69,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                     Subclasses can pass in their own lookup table if desired,
                     making the extension of the library easier.
         """
-        self.class_to_llm_policy_type: Dict[str, LlmPolicy] = class_to_llm_policy_type
+        self.class_to_llm_policy_type: Dict[str, Type[LlmPolicy]] = class_to_llm_policy_type
         if self.class_to_llm_policy_type is None:
             self.class_to_llm_policy_type = {
                 "anthropic": AnthropicLlmPolicy,

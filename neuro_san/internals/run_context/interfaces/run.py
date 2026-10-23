@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
 from typing import List
 
 from neuro_san.internals.run_context.interfaces.tool_call import ToolCall
@@ -46,5 +47,14 @@ class Run:
     def model_dump_json(self) -> str:
         """
         :return: This object as a JSON string
+        """
+        raise NotImplementedError
+
+    def get_tool_message(self) -> Any:
+        """
+        This is used when the function->tool adaptor wants to
+        know what the most recent message was from the tool as
+        its output.
+        :return: The tool message comprising the tool output
         """
         raise NotImplementedError

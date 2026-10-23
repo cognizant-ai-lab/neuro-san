@@ -20,9 +20,9 @@ from typing import Awaitable
 from typing import Dict
 from typing import List
 
-from asyncio import Task
 from asyncio import TimeoutError as AsyncTimeout
 from asyncio import wait_for
+from asyncio import Future
 from contextvars import Context
 from contextvars import ContextVar
 from contextvars import copy_context
@@ -165,14 +165,14 @@ class LangChainTokenCounter:
         timed_out: bool = False
         with get_llm_token_callback(llm_infos) as callback:
             # Create a new context for different ContextVar values
-            # and use the create_task() to run within that context.
+            # and use the create_future() to run within that context.
             new_context: Context = copy_context()
-            task: Task = new_context.run(self.create_task, awaitable)
+            future: Future = new_context.run(self.create_future, awaitable)
             try:
-                retval = await wait_for(task, max_execution_seconds)
+                retval = await wait_for(future, max_execution_seconds)
             except AsyncTimeout:
-                # Per docs for wait_for(), the task is already cancelled, so the
-                # task's own final journal.write_message(AIMessage(...)) never ran.
+                # Per docs for wait_for(), the future is already cancelled, so the
+                # wrapped Awaitable's own final journal.write_message(AIMessage(...)) never ran.
                 # Synthesize that final AIMessage here — before report() below — so
                 # the journal order matches the normal-completion path:
                 #   streamed events -> final AIMessage -> token accounting.
@@ -198,21 +198,24 @@ class LangChainTokenCounter:
 
         return retval
 
-    def create_task(self, awaitable: Awaitable) -> Task:
+    def create_future(self, awaitable: Awaitable) -> Future:
         """
         Riffed from:
         https://stackoverflow.com/questions/78659844/async-version-of-context-run-for-context-vars-in-python-asyncio
+
+        :param awaitable: The awaitable to run
+        :return: A Future
         """
         executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
         origin_str: str = ORIGIN_INFO.get()
-        task: Task = executor.create_task(awaitable, origin_str)
+        future: Future = executor.create_task(awaitable, origin_str)
 
         if self.debug:
             # Print to be sure we have a different callback object.
             oai_call: LlmTokenCallbackHandler = llm_token_callback_var.get()
             print(f"origin is {origin_str} callback var is {id(oai_call)}")
 
-        return task
+        return future
 
     async def report(self, callback: LlmTokenCallbackHandler, time_taken_in_seconds: float):
         """

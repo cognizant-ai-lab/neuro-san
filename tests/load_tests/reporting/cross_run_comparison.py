@@ -25,10 +25,10 @@ from typing import Optional
 from typing import Set
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
 from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
@@ -174,14 +174,13 @@ class CrossRunComparison:
             SensitiveLogger(logger).error("Could not read %s: %s", json_path, "the file is not a JSON object ({...})")
             return None
 
-        aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
+        raw_results_extractor: DictionaryExtractor = DictionaryExtractor(raw_results)
         stages: List[Dict[str, Any]] = raw_results.get("stage_summaries", [])
         # The run's peak RSS is the largest stage peak, starting from the first stage, or 0 with no stages.
         peak_rss_megabytes: float = 0
         if stages:
             first_stage: Dict[str, Any] = stages[0]
             peak_rss_megabytes = first_stage.get("peak_server_rss", 0)
-        # Gather every stage's results, and keep the largest stage peak server RSS.
         all_results: List[Dict[str, Any]] = []
         stage: Dict[str, Any]
         # Gather the results of every stage and track the largest server RSS.
@@ -196,18 +195,18 @@ class CrossRunComparison:
             if result.get("status") == STATUS_CREATED:
                 created_results.append(result)
 
-        agent: str = raw_results.get("config", {}).get("agent", "unknown")
+        total_requests: int = raw_results_extractor.get("aggregates.total_requests", 0)
 
         run_metrics: Dict[str, Any] = {
-            "agent": agent,
+            "agent": raw_results_extractor.get("config.agent", "unknown"),
             "folder": folder_name,
-            "num_requests": raw_results.get("config", {}).get("num_requests", aggregates.get("total_requests", 0)),
-            "wall_time_seconds": aggregates.get("total_elapsed_seconds", 0),
+            "num_requests": raw_results_extractor.get("config.num_requests", total_requests),
+            "wall_time_seconds": raw_results_extractor.get("aggregates.total_elapsed_seconds", 0),
             "average_success_seconds": CrossRunComparison._avg(created_results, "elapsed"),
             "average_first_response_seconds": CrossRunComparison._avg(created_results, "time_to_first_response"),
             "peak_rss_megabytes": peak_rss_megabytes,
-            "succeeded": aggregates.get("passed", 0),
-            "failed": aggregates.get("failed", 0),
+            "succeeded": raw_results_extractor.get("aggregates.passed", 0),
+            "failed": raw_results_extractor.get("aggregates.failed", 0),
             "fail_breakdown": CrossRunComparison._classify_failures(all_results),
         }
         return run_metrics
@@ -286,9 +285,9 @@ class CrossRunComparison:
         :param runs: One agent's runs sorted by num_requests; the first is the baseline
         :param agent_name: Agent name shown in the table title
         """
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Folder", "Requests", "Succeeded",
@@ -354,18 +353,21 @@ class CrossRunComparison:
         :return: The 4 cells, in table order
         """
         average_success_seconds: float = run.get("average_success_seconds", 0)
+        average_success_text: str = Formatters.fmt_duration(average_success_seconds)
         average_success_delta: Optional[float] = deltas.get("average_success_seconds")
         first_response_seconds: float = run.get("average_first_response_seconds", 0)
+        first_response_text: str = Formatters.fmt_duration(first_response_seconds)
         first_response_delta: Optional[float] = deltas.get("average_first_response_seconds")
         peak_rss_megabytes: float = run.get("peak_rss_megabytes", 0)
+        peak_rss_text: str = Formatters.format_rss(peak_rss_megabytes)
         peak_rss_delta: Optional[float] = deltas.get("peak_rss_megabytes")
         failed: int = run.get("failed", 0)
         num_requests: int = run.get("num_requests", 0)
         fail_breakdown: Dict[str, int] = run.get("fail_breakdown", {})
         cells: List[str] = [
-            CrossRunComparison._fmt_optional(average_success_seconds, average_success_delta),
-            CrossRunComparison._fmt_time_to_first_response(first_response_seconds, first_response_delta),
-            CrossRunComparison._fmt_rss(peak_rss_megabytes, peak_rss_delta),
+            CrossRunComparison._value_or_dash(average_success_seconds, average_success_text, average_success_delta),
+            CrossRunComparison._value_or_dash(first_response_seconds, first_response_text, first_response_delta),
+            CrossRunComparison._value_or_dash(peak_rss_megabytes, peak_rss_text, peak_rss_delta),
             CrossRunComparison._fmt_failed(failed, num_requests, fail_breakdown),
         ]
         return cells
@@ -506,43 +508,19 @@ class CrossRunComparison:
         return f"{formatted_value} ({sign}{delta_percentage:.0f}%)"
 
     @staticmethod
-    def _fmt_optional(duration_seconds: float, delta_percentage: Optional[float]) -> str:
+    def _value_or_dash(measured_value: float, formatted_value: str, delta_percentage: Optional[float]) -> str:
         """
-        Format a duration, showing a dash when data is missing.
+        Format one metric cell: a dash when the metric is missing, else the value with its percent change.
 
-        :param duration_seconds: Duration in seconds; 0 when unknown
-        :param delta_percentage: Percent change against the baseline run, or None
-        :return: The formatted duration, or a dash when value is 0
+        :param measured_value: The metric (seconds or megabytes); 0 or less when the run has no value
+        :param formatted_value: measured_value formatted for display, e.g. '45s' or '512M'
+        :param delta_percentage: Percent change from the baseline run, or None for the baseline itself
+        :return: e.g. '45s (+12%)', or an em dash when measured_value is 0 or less
         """
-        if duration_seconds <= 0:
+        if measured_value <= 0:
+            # "\u2014" draws "—", the dash shown for a missing value.
             return "\u2014"
-        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
-
-    @staticmethod
-    def _fmt_time_to_first_response(duration_seconds: float, delta_percentage: Optional[float]) -> str:
-        """
-        Format time to first response, showing a dash when data is missing.
-
-        :param duration_seconds: Average time to first response in seconds; 0 when unknown
-        :param delta_percentage: Percent change against the baseline run, or None
-        :return: The formatted value, or a dash when value is 0
-        """
-        if duration_seconds <= 0:
-            return "\u2014"
-        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
-
-    @staticmethod
-    def _fmt_rss(rss_megabytes: float, delta_percentage: Optional[float]) -> str:
-        """
-        Format peak RSS, showing a dash when data is missing.
-
-        :param rss_megabytes: Peak RSS in megabytes; 0 when unknown
-        :param delta_percentage: Percent change against the baseline run, or None
-        :return: The formatted RSS, or a dash when value is 0
-        """
-        if rss_megabytes <= 0:
-            return "\u2014"
-        return CrossRunComparison._val_with_delta(Formatters.format_rss(rss_megabytes), delta_percentage)
+        return CrossRunComparison._val_with_delta(formatted_value, delta_percentage)
 
     @staticmethod
     def _fmt_failed(count: int, total: int, breakdown: Dict[str, int]) -> str:

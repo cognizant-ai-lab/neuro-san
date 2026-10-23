@@ -21,7 +21,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)
@@ -42,6 +42,9 @@ class ResourceReporter:
     """
 
     def __init__(self) -> None:
+        """
+        Start with no server or client resource rows.
+        """
         self._resource_rows: List[ServerResourceRow] = []
         self._client_rows: List[ClientResourceRow] = []
 
@@ -161,7 +164,7 @@ class ResourceReporter:
             "Threads", "Thread Delta", "Conns", "Children",
         ]
         rows: List[List[str]] = self._combined_server_rows() + self._combined_client_rows()
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         if total_server_calls > 0:
             logger.info(
                 "  RESOURCE ANALYSIS (%s client requests, %s server calls)",
@@ -169,7 +172,7 @@ class ResourceReporter:
             )
         else:
             logger.info("  RESOURCE ANALYSIS (%s total requests)", total_client_requests)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         TableFormatter.log_table(header, rows)
         self._log_resource_deltas()
         self._log_client_deltas()

@@ -303,6 +303,10 @@ look like this:
 
     <your_repo>/coded_tools/<your_agent_name>/<your_coded_tool>.py
 
+Like `PYTHONPATH`, `AGENT_TOOL_PATH` can list several roots, searched in order.
+A root can also be a Python module path such as `neuro_san.coded_tools`.
+See [class](docs/agent_hocon_reference.md#class-1) for details.
+
 ## Creating Clients
 
 To create clients, follow the [instructions](docs/clients.md) here.
