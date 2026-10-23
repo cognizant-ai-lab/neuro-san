@@ -91,6 +91,9 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
     usage examples.
     """
 
+    # 60 "#" characters: the line around the round header.
+    ROUND_HEADER_LINE: str = "############################################################"
+
     def __init__(self, args) -> None:
         """
         Initialize the load test CLI with parsed arguments.
@@ -156,9 +159,9 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         # Run every stage once per round.
         for round_num in range(1, self.args.num_rounds + 1):
             if self.args.num_rounds > 1:
-                logger.info("\n%s", "#" * 60)
+                logger.info("\n%s", LoadTestCli.ROUND_HEADER_LINE)
                 logger.info("  ROUND %s of %s", round_num, self.args.num_rounds)
-                logger.info("#" * 60)
+                logger.info("%s", LoadTestCli.ROUND_HEADER_LINE)
 
             stage_idx: int
             num_concurrent: int
@@ -257,7 +260,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         stage_workers = self.args.max_workers if not self.args.ramp else actual_requests
 
-        logger.info("\n%s", "=" * 60)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         if self.args.ramp:
             stage_label = f"[STAGE {stage_num}] {actual_requests} requests (max {stage_workers} workers)"
             if self.args.num_rounds > 1:
@@ -267,7 +270,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             if self.args.num_rounds > 1:
                 stage_label += f" (round {round_num})"
         logger.info("  %s", stage_label)
-        logger.info("=" * 60)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if actual_requests < num_concurrent:
             logger.info("  (Capped from %s to %s by --max-requests)", num_concurrent, actual_requests)
@@ -485,22 +488,17 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         before_client: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_process)
         if before_client:
-            logger.info(
-                "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
-                before_client.get("rss_megabytes"),
-                before_client.get("cpu_percent"),
-            )
+            client_rss_megabytes: float = before_client.get("rss_megabytes")
+            client_cpu_percent: float = before_client.get("cpu_percent")
+            logger.info("  Client BEFORE: RSS %.1fM, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
 
         virtual_memory_stats: Any = psutil.virtual_memory()
         used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
         used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        logger.info(
-            "  System BEFORE: %.0f%% used"
-            " (%.0fM used / %.1fG free / %.1fG total)",
-            virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes,
-        )
+        logger.info("  System BEFORE: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
+                    virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes)
         before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {
             "server": before_server,
             "client": before_client,
@@ -717,9 +715,9 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         label: str = "OUTPUT FILES"
         if has_failures:
             label = "OUTPUT FILES (with failures)"
-        logger.info("\n%s", "=" * 60)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  %s", label)
-        logger.info("=" * 60)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         logger.info("  Directory:   %s", self._output_dir)
         json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):

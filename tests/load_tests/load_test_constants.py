@@ -49,9 +49,6 @@ RETRY_ERROR_TYPES: List[str] = ["RateLimitError", "APIError", "KeyError", "Value
 # Console labels for retry types whose key alone reads poorly.
 RETRY_LABELS: Dict[str, str] = {"ProviderRetry": "Provider SDK retries"}
 
-# Console formatting
-SEPARATOR_WIDTH: int = 60
-
 # Default configuration
 LOCAL_HOSTS: Set[str] = {"localhost", "127.0.0.1", "::1"}
 # Server port when --https is set and --port is not given
