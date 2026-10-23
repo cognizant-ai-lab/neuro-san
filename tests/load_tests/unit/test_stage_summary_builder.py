@@ -136,9 +136,9 @@ class TestStageSummaryBuilder(TestCase):
         """
         summary: Dict[str, Any] = self._build_summary(
             True,
-            {"threads": 10, "rss": 100.0},
-            {"threads": 12, "rss": 120.0},
-            {"rss": 50.0},
+            {"threads": 10, "rss_megabytes": 100.0},
+            {"threads": 12, "rss_megabytes": 120.0},
+            {"rss_megabytes": 50.0},
             {"memory_percent": 40.0, "available_gigabytes": 8.0},
             {"mem_avail_gb": 7.5, "cpu_pct": 20.0, "threads": 300},
         )
@@ -153,6 +153,7 @@ class TestStageSummaryBuilder(TestCase):
         """
         Server snapshots are left out when monitor_resources is False.
         """
-        summary: Dict[str, Any] = self._build_summary(False, {"threads": 10, "rss": 100.0}, None, None, None, None)
+        before_server: Dict[str, Any] = {"threads": 10, "rss_megabytes": 100.0}
+        summary: Dict[str, Any] = self._build_summary(False, before_server, None, None, None, None)
         self.assertNotIn("before_threads", summary)
         self.assertNotIn("before_server_rss", summary)

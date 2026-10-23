@@ -119,7 +119,7 @@ class TestHistoryRecorder(TestCase):
                 {"duration_seconds": 2.0, "start_ts": 10.0, "finish_ts": 12.0},
                 {"duration_seconds": 4.0, "start_ts": 11.0, "finish_ts": 15.0},
             ]
-            recorder.append_server_record(None, 2, 2, 6.0, {"rss": 2048.0}, None, primary_pairs, None, None)
+            recorder.append_server_record(None, 2, 2, 6.0, {"rss_megabytes": 2048.0}, None, primary_pairs, None, None)
             records: List[Dict[str, Any]] = self._read_records(os.path.join(base, "history_unknown.jsonl"))
         record: Dict[str, Any] = records[0]
         self.assertEqual(record.get("mode"), "server-only")

@@ -15,7 +15,12 @@
 # END COPYRIGHT
 
 import logging
-import os
+from os import getcwd
+from os import listdir
+from os.path import isabs
+from os.path import isdir
+from os.path import isfile
+from os.path import join
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -23,7 +28,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-import psutil
+from psutil import virtual_memory
 
 from tests.load_tests.load_test_constants import DEFAULT_STAGES
 from tests.load_tests.load_test_constants import LEVEL_ADV
@@ -66,7 +71,7 @@ class InputValidator:
         (e.g. 'basic/hello_world'), not by absolute path.
         """
         agent: str = self._args.agent
-        if os.path.isabs(agent):
+        if isabs(agent):
             logger.error(
                 """ERROR: --agent appears to be a filesystem path:
   %s
@@ -100,14 +105,14 @@ Then use:
         if not parent_dir:
             return []
 
-        if not os.path.isabs(parent_dir):
+        if not isabs(parent_dir):
             project_root: Optional[str] = ProjectPaths.resolve_project_root(self._args.project_root)
-            parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)
+            parent_dir = join(project_root or getcwd(), parent_dir)
 
         agent_base_name: str = ProjectPaths.agent_base_name(self._args.agent)
-        hocon_dir: str = os.path.join(parent_dir, agent_base_name)
+        hocon_dir: str = join(parent_dir, agent_base_name)
 
-        if not os.path.isdir(hocon_dir):
+        if not isdir(hocon_dir):
             logger.error(
                 """ERROR: no hocon fixtures directory for agent '%s':
   Expected: %s
@@ -119,9 +124,9 @@ Then use:
         hocon_files: List[str] = []
         file_name: str
         # Keep the *.hocon files of the directory.
-        for file_name in os.listdir(hocon_dir):
-            file_path: str = os.path.join(hocon_dir, file_name)
-            if file_name.endswith(".hocon") and os.path.isfile(file_path):
+        for file_name in listdir(hocon_dir):
+            file_path: str = join(hocon_dir, file_name)
+            if file_name.endswith(".hocon") and isfile(file_path):
                 hocon_files.append(file_path)
         hocon_files.sort()
         if not hocon_files:
@@ -422,10 +427,11 @@ server log to fall back on:
         :param num_requests: Requests that may run at once
         :return: Warning text, or None when available memory looks sufficient
         """
-        virtual_memory_stats: Any = psutil.virtual_memory()
+        virtual_memory_stats: Any = virtual_memory()
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         per_request_megabytes: int = 2
-        needed_gigabytes: float = (num_requests * per_request_megabytes) / 1024
+        needed_megabytes: int = num_requests * per_request_megabytes
+        needed_gigabytes: float = needed_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
         if needed_gigabytes > available_gigabytes * 0.8:
             total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:
