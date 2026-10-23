@@ -335,7 +335,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         settled_client = None
         if monitor_resources:
             if peak_client_rss is not None:
-                peak_client = {"rss": peak_client_rss}
+                peak_client = {"rss_megabytes": peak_client_rss}
             settled_client = ResourceMonitor.snapshot(client_process)
 
         counts = OutputValidator.count_results(results)
@@ -490,8 +490,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if before_client:
             logger.info(
                 "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
-                before_client.get("rss"),
-                before_client.get("cpu"),
+                before_client.get("rss_megabytes"),
+                before_client.get("cpu_percent"),
             )
 
         virtual_memory_stats: Any = psutil.virtual_memory()

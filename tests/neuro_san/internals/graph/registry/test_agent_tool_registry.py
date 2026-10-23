@@ -14,10 +14,13 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+import os
+
 from typing import Any
 from typing import Dict
 
 from unittest import TestCase
+from unittest.mock import patch
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
@@ -52,3 +55,13 @@ class TestAgentToolRegistry(TestCase):
         """
         registry: AgentToolRegistry = self.make_registry()
         self.assertEqual(registry.get_network_name(), self.NETWORK_NAME)
+
+    def test_get_agent_tool_paths_come_from_the_factory(self) -> None:
+        """
+        The registry hands out the tool paths its factory read from AGENT_TOOL_PATH,
+        so an activation asking the registry searches the roots the operator listed.
+        """
+        with patch.dict(os.environ, {"AGENT_TOOL_PATH": "neuro_san.coded_tools"}):
+            registry: AgentToolRegistry = self.make_registry()
+
+        self.assertEqual(registry.get_agent_tool_paths(), ["neuro_san.coded_tools.deep.math_guy"])
