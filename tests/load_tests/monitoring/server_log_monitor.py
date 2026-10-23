@@ -904,11 +904,9 @@ class ServerLogMonitor:
             logger.info("  All %s/%s requests received by server (%.1fs)", count, expected_count, elapsed_seconds)
         snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_process)
         if snapshot:
-            logger.info(
-                "  Client AFTER: RSS %.1fM, CPU %.1f%%",
-                snapshot.get("rss_megabytes"),
-                snapshot.get("cpu_percent"),
-            )
+            client_rss_megabytes: float = snapshot.get("rss_megabytes")
+            client_cpu_percent: float = snapshot.get("cpu_percent")
+            logger.info("  Client AFTER: RSS %.1fM, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
         virtual_memory_stats: Any = psutil.virtual_memory()
         used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
         used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
