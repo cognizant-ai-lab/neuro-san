@@ -101,6 +101,9 @@ class AbstractClassActivation(AbstractCallableActivation):
         self.journal: Journal = self.run_context.get_journal()
         self.full_name: str = Origination.get_full_name_from_origin(self.run_context.get_origin())
         self.logger: Logger = getLogger(self.full_name)
+        # Exception messages and tracebacks can carry sensitive details, so log them
+        # through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE env var setting.
+        self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
 
         # One of these per CodedTool
         self.reservationist: Reservationist = None
@@ -328,11 +331,8 @@ Check these things:
             except (ValueError, AttributeError) as exception:
                 # Move on to the next root, but keep a trace of why this one failed,
                 # as only the last root's exception reaches the caller.
-                # Exception messages can carry sensitive details, so log them through
-                # a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE env var setting.
-                sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
-                sensitive_logger.debug("Class `%s` in module `%s` not found under `%s`: %s",
-                                       class_name, module_name, one_agent_tool_path, exception)
+                self.sensitive_logger.debug("Class `%s` in module `%s` not found under `%s`: %s",
+                                            class_name, module_name, one_agent_tool_path, exception)
                 last_exception = exception
 
         # Re-raise the last exception so the caller knows resolution failed
@@ -504,8 +504,9 @@ This can lead to performance problems when running within a server. Consider por
             # Log it and return an error string.
             tool_error = True
             retval = f"Error: {str(exception)}"
-            self.logger.error("Error invoking CodedTool %s: %s", coded_tool.__class__.__name__, str(exception))
-            self.logger.error(traceback.format_exc())
+            self.sensitive_logger.error("Error invoking CodedTool %s: %s",
+                                        coded_tool.__class__.__name__, str(exception))
+            self.sensitive_logger.error(traceback.format_exc())
 
         retval_dict: Dict[str, Any] = {
             "tool_end": True,
