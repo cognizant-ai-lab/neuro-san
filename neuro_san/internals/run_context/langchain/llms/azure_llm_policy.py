@@ -20,7 +20,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
 from typing import Type
 
 from logging import Logger
@@ -78,7 +77,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     V1_PATH: str = "/openai/v1"
 
     # llm_config keys of the dated Azure API that the v1 API has no use for.
-    LEGACY_KEYS: Tuple[str, ...] = ("openai_api_version", "openai_api_type", "model_version")
+    LEGACY_KEYS: List[str] = ["openai_api_version", "openai_api_type", "model_version"]
 
     # Process-wide so the legacy-key warning appears once, not once per agent instantiation.
     legacy_keys_warned: bool = False

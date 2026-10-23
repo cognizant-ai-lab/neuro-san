@@ -259,9 +259,11 @@ class LangChainRunContext(RunContext):
                 tool: Union[BaseTool | List[BaseTool]] = await factory.create_base_tool(tool_name)
                 if tool is not None:
                     if isinstance(tool, List):
-                        self.tools.extend(tool)
+                        tool_list: List[BaseTool] = tool
+                        self.tools.extend(tool_list)
                     else:
-                        self.tools.append(tool)
+                        base_tool: BaseTool = tool
+                        self.tools.append(base_tool)
 
         if not self.chat_history:
             # Write instructions as the first message in the journal.
