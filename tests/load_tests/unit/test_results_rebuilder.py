@@ -19,8 +19,11 @@ import os
 import time
 from argparse import Namespace
 from functools import partial
+from json import dumps
 from logging import Logger
+from shutil import rmtree
 from tempfile import TemporaryDirectory
+from tempfile import mkdtemp
 from typing import Any
 from typing import Dict
 from typing import List
@@ -49,11 +52,21 @@ from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
 
+# These tests call deliberately-internal helpers directly; suppress
+# protected-access warnings file-wide.
+# pylint: disable=protected-access
 class TestResultsRebuilder(TestCase):
     """
+    Unit tests for ResultsRebuilder: the agent, statuses, per-request durations and aggregates it rebuilds.
+
     A real client-only load-test run writes stdout.log, progress.log and requests/. With raw_results.json deleted,
     ResultsRebuilder rebuilds the same agent, statuses and per-request durations from those files.
     Only the agent call and the server port check are patched.
+
+    A rebuilt run is often the only surviving record of an interrupted run, so its headline numbers have to mean
+    what they say, and a request must come back with the status the run actually reported. A timed-out or killed
+    request usually printed a reservation_id before the client gave up, so partial output must not be read as
+    evidence that the request succeeded.
     """
 
     AGENT: str = "hello_world"
@@ -66,11 +79,15 @@ class TestResultsRebuilder(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Let INFO lines reach the run log, as they do when load_test_cli runs from the command line.
+        Let INFO lines reach the run log, as they do when load_test_cli runs from the command line,
+        and create a run directory with a requests/ folder, removed again after each test.
         """
         root_logger: Logger = logging.getLogger()
         self.addCleanup(root_logger.setLevel, root_logger.level)
         root_logger.setLevel(logging.INFO)
+        self._scratch_run_dir: str = mkdtemp()
+        self.addCleanup(rmtree, self._scratch_run_dir)
+        os.makedirs(os.path.join(self._scratch_run_dir, "requests"))
 
     def test_json_profile_run_rebuilds_five_passed(self) -> None:
         """
@@ -123,6 +140,101 @@ class TestResultsRebuilder(TestCase):
         rebuilt_statuses.sort()
         expected_statuses: List[str] = [STATUS_CREATED, STATUS_CREATED, STATUS_FAILED, STATUS_KILLED, STATUS_TIMEOUT]
         self.assertEqual(expected_statuses, rebuilt_statuses)
+
+    def test_average_latency_is_the_mean_request_time(self) -> None:
+        """
+        Latency averages the requests, not the run.
+
+        Requests overlap, so dividing the slowest request by the
+        request count would shrink the average by the concurrency
+        factor and make a slow run look fast.
+        """
+        aggregates: Dict[str, Any] = self._build_run({1: 30.0, 2: 30.0, 3: 30.0})
+
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
+
+    def test_average_latency_reflects_uneven_requests(self) -> None:
+        """
+        The mean is taken over every request's own elapsed time.
+        """
+        aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
+
+        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
+
+    def test_total_elapsed_is_the_slowest_request(self) -> None:
+        """
+        Total elapsed still stands in for the run's wall clock.
+        """
+        aggregates: Dict[str, Any] = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
+
+        self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)
+
+    def test_partial_output_does_not_promote_a_timeout(self) -> None:
+        """
+        A TIMEOUT with a reservation_id stays a TIMEOUT.
+        """
+        self._write_request(1)
+        self._write_log("Request 1: TIMEOUT (61.00s (1m))\n")
+
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_TIMEOUT)
+
+    def test_partial_output_does_not_promote_a_kill(self) -> None:
+        """
+        A KILLED request with a reservation_id stays KILLED.
+        """
+        self._write_request(1)
+        self._write_log("Request 1: KILLED (5.00s)\n")
+
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_KILLED)
+
+    def test_partial_output_alone_is_not_success(self) -> None:
+        """
+        With no log line, partial output is not counted as passing.
+        """
+        self._write_request(1)
+        self._write_log("")
+
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+        self.assertEqual(result.get("status", ""), STATUS_FAILED)
+
+    def test_successful_request_is_still_rebuilt_as_created(self) -> None:
+        """
+        The normal case is unaffected.
+        """
+        self._write_request(1)
+        self._write_log("Request 1: CREATED (3.00s)\n")
+
+        result: Dict[str, Any] = self._rebuild().get("request-1", {})
+
+        self.assertEqual(result.get("status", ""), STATUS_CREATED)
+        self.assertEqual(result.get("elapsed", 0.0), 3.0)
+
+    def test_each_reported_status_is_preserved(self) -> None:
+        """
+        CREATED, FAILED, TIMEOUT and KILLED all survive a rebuild.
+        """
+        status: str
+        # Each reported status comes back unchanged.
+        for status in [STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED]:
+            with self.subTest(status=status):
+                self.assertEqual(ResultsRebuilder._resolve_status({"status": status}), status)
+
+    def test_missing_log_line_counts_as_failed(self) -> None:
+        """
+        A request never seen to finish is a failure, not a success.
+
+        Failures past FAILURE_LOG_LIMIT are never printed, so an absent
+        log line is the normal case for a heavily failing run.
+        """
+        self.assertEqual(ResultsRebuilder._resolve_status({}), STATUS_FAILED)
+
+    def test_unrecognized_status_counts_as_failed(self) -> None:
+        """
+        An unknown status word is never promoted to success.
+        """
+        self.assertEqual(ResultsRebuilder._resolve_status({"status": "WEIRD"}), STATUS_FAILED)
 
     def _run_and_rebuild(self, extra_args: List[str], statuses: Dict[str, str],
                          run_log_name: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -254,3 +366,71 @@ class TestResultsRebuilder(TestCase):
             self.assertAlmostEqual(result.get("elapsed"), rebuilt_result.get("elapsed"),
                                    delta=TestResultsRebuilder.DURATION_TOLERANCE_SECONDS, msg=request_id)
             self.assertGreaterEqual(rebuilt_result.get("elapsed"), shortest_seconds, request_id)
+
+    def _build_run(self, elapsed_seconds_by_id: Dict[int, float]) -> Dict[str, Any]:
+        """
+        Rebuild a run of successful requests with the given timings.
+
+        :param elapsed_seconds_by_id: Elapsed seconds per request id
+        :return: The "aggregates" dictionary read back from raw_results.json, with keys such as
+            "avg_latency_seconds" and "total_elapsed_seconds"
+        """
+        log_text: str = ""
+        request_id: int
+        elapsed_seconds: float
+        # Write the response file and the progress line of each request.
+        for request_id, elapsed_seconds in elapsed_seconds_by_id.items():
+            self._write_request(request_id)
+            log_text += f"Request {request_id}: CREATED ({elapsed_seconds:.2f}s)\n"
+        self._write_log(log_text)
+
+        ResultsRebuilder(self._scratch_run_dir).run()
+
+        json_path: str = os.path.join(self._scratch_run_dir, RAW_RESULTS_FILE_NAME)
+        raw_results_file = EasyJsonPersistence(full_ref=json_path, must_exist=True)
+        raw_results: Dict[str, Any] = raw_results_file.restore()
+        aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
+        return aggregates
+
+    def _write_request(self, request_id: int) -> None:
+        """
+        Write stdout for a request that got as far as reserving.
+
+        :param request_id: Request id used in the file name and reservation id
+        """
+        path: str = os.path.join(self._scratch_run_dir, "requests", f"request_{request_id}_stdout.txt")
+        response: Dict[str, str] = {
+            "reservation_id": f"abc-{request_id}",
+            "agent_network_name": "music_nerd",
+        }
+        response_line: str = dumps(response)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(response_line + "\n")
+
+    def _write_log(self, text: str) -> None:
+        """
+        Write the run log the rebuild reads timing from.
+
+        :param text: Log text to write
+        """
+        path: str = os.path.join(self._scratch_run_dir, LEGACY_RUN_LOG_FILE_NAME)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+
+    def _rebuild(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Rebuild the run and return results keyed by request id.
+
+        :return: A dictionary from each result's "request_id" (such as "request-1") to that request's result
+        """
+        rebuilder: ResultsRebuilder = ResultsRebuilder(self._scratch_run_dir)
+        requests_dir: str = os.path.join(self._scratch_run_dir, "requests")
+        timing: Dict[int, Dict[str, Any]] = rebuilder._parse_timing()
+        results: List[Dict[str, Any]] = rebuilder._scan_requests(requests_dir, timing)
+        results_by_request_id: Dict[str, Dict[str, Any]] = {}
+        result: Dict[str, Any]
+        # Key each result by its request id.
+        for result in results:
+            request_id: str = result.get("request_id")
+            results_by_request_id[request_id] = result
+        return results_by_request_id

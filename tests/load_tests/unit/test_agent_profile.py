@@ -16,11 +16,13 @@
 # END COPYRIGHT
 from unittest import TestCase
 
+from typing_extensions import override
+
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 
-class TestAgentProfilePrompt(TestCase):
+class TestAgentProfile(TestCase):
     """
     Unit tests for AgentProfile.get_prompt().
 
@@ -28,6 +30,7 @@ class TestAgentProfilePrompt(TestCase):
     hits, so a wrong answer here silently changes what is measured.
     """
 
+    @override
     def setUp(self) -> None:
         """
         Build a profile with a two-prompt pool.
