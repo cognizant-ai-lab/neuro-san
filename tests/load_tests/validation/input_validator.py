@@ -148,7 +148,7 @@ Then use:
         if self._args.ramp:
             if self._args.stages is not None:
                 stages: List[int] = []
-                stage_text: str
+                stage_text: str = ""
                 try:
                     # Parse each non-empty comma-separated value.
                     for stage_text in self._args.stages.split(","):

@@ -127,6 +127,8 @@ class StageSummaryBuilder:
             "has_server_log": has_server_log,
             "has_tokens": has_tokens,
         }
+        # The *_server_rss and *_client_rss values are in MB. The keys keep their names without a unit: saved
+        # runs hold them, and cross_run_comparison.py and summary_file_writer.py read them from old runs too.
         if monitor_resources:
             if before_server:
                 summary_entry["before_threads"] = before_server.get("threads")

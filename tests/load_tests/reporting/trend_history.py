@@ -70,7 +70,7 @@ class TrendHistory:
         if not records:
             logger.info("No usable records in %s", history_path)
             return
-        record: Dict[str, Any]
+        record: Dict[str, Any] = {}
         if self._agent_filter:
             # Keep only the records for the agents in the filter.
             matching_records: List[Dict[str, Any]] = []

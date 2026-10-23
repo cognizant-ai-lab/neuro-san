@@ -29,6 +29,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
 from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import REQUESTS_DIR_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.load_test_constants import STATUS_FAILED
 from tests.load_tests.load_test_constants import STATUS_KILLED
@@ -82,7 +83,7 @@ class ResultsRebuilder:
         rebuild every subdirectory that has requests/ but is missing
         raw_results.json.
         """
-        requests_dir: str = os.path.join(self._output_dir, "requests")
+        requests_dir: str = os.path.join(self._output_dir, REQUESTS_DIR_NAME)
         json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isdir(requests_dir):
             if os.path.isfile(json_path) and self._force:
@@ -105,7 +106,7 @@ class ResultsRebuilder:
             sub_dir: str = os.path.join(self._output_dir, entry)
             if not os.path.isdir(sub_dir):
                 continue
-            requests_dir: str = os.path.join(sub_dir, "requests")
+            requests_dir: str = os.path.join(sub_dir, REQUESTS_DIR_NAME)
             json_path: str = os.path.join(sub_dir, RAW_RESULTS_FILE_NAME)
             if not os.path.isdir(requests_dir):
                 continue
@@ -126,7 +127,7 @@ class ResultsRebuilder:
         """
         Rebuild raw_results.json for a single run directory.
         """
-        requests_dir: str = os.path.join(self._output_dir, "requests")
+        requests_dir: str = os.path.join(self._output_dir, REQUESTS_DIR_NAME)
         if not os.path.isdir(requests_dir):
             logger.error("No requests/ directory in %s", self._output_dir)
             return

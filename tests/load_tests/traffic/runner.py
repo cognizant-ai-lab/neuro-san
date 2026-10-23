@@ -43,6 +43,7 @@ from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
 from tests.load_tests.load_test_constants import FAILURE_LOG_LIMIT
 from tests.load_tests.load_test_constants import FAILURE_REASON_LINE_LIMIT
 from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import REQUESTS_DIR_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.load_test_constants import STATUS_FAILED
 from tests.load_tests.load_test_constants import STATUS_KILLED
@@ -551,7 +552,7 @@ class TrafficRunner:
         elapsed_seconds: float = 0.0
         remaining_seconds: float = 0.0
         wait_slice_seconds: float = 0.0
-        future: Future
+        future: Optional[Future] = None
         while pending_futures:
             if cancel_event.is_set():
                 interrupted = True
@@ -730,7 +731,7 @@ class TrafficRunner:
         """
         if not output_dir:
             return
-        requests_dir: str = os.path.join(output_dir, "requests")
+        requests_dir: str = os.path.join(output_dir, REQUESTS_DIR_NAME)
         os.makedirs(requests_dir, exist_ok=True)
         stdout_path: str = os.path.join(requests_dir, f"request_{request_id}_stdout.txt")
         with open(stdout_path, "w", encoding="utf-8") as stdout_file:

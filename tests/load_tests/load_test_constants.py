@@ -23,7 +23,6 @@ import re
 from typing import Dict
 from typing import List
 from typing import Set
-from typing import Tuple
 
 
 # Result status constants
@@ -78,7 +77,10 @@ STALE_LOG_THRESHOLD_SECONDS: int = 300
 # configurable) so data points stay comparable across every run.
 HISTORY_FILE_NAME: str = "history.jsonl"
 HISTORY_UNKNOWN_FILE_NAME: str = "history_unknown.jsonl"
-HISTORY_THRESHOLDS_SECONDS: Tuple[int, int] = (70, 300)
+HISTORY_SHORT_THRESHOLD_SECONDS: int = 70
+HISTORY_LONG_THRESHOLD_SECONDS: int = 300
+# Both thresholds, shortest first: the order of the history columns.
+HISTORY_THRESHOLDS_SECONDS: List[int] = [HISTORY_SHORT_THRESHOLD_SECONDS, HISTORY_LONG_THRESHOLD_SECONDS]
 
 # Files in each run directory. LEGACY_RUN_LOG_FILE_NAME is the other run log name the rebuild reads.
 RAW_RESULTS_FILE_NAME: str = "raw_results.json"
@@ -86,6 +88,8 @@ PROGRESS_LOG_FILE_NAME: str = "progress.log"
 SERVER_TOKENS_LOG_FILE_NAME: str = "server_tokens.log"
 STDOUT_LOG_FILE_NAME: str = "stdout.log"
 LEGACY_RUN_LOG_FILE_NAME: str = "load_test.log"
+# Folder in each run directory with one stdout (and stderr) file per request.
+REQUESTS_DIR_NAME: str = "requests"
 
 
 # Heartbeat

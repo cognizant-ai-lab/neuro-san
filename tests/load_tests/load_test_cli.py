@@ -43,6 +43,7 @@ from tests.load_tests.load_test_constants import LEVEL_ADV
 from tests.load_tests.load_test_constants import LEVEL_MIN
 from tests.load_tests.load_test_constants import LOCAL_HOSTS
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
+from tests.load_tests.load_test_constants import REQUESTS_DIR_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.load_test_constants import STATUS_FAILED
 from tests.load_tests.load_test_constants import STATUS_KILLED
@@ -153,7 +154,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         stage_summaries: List[Dict[str, Any]] = []
         global_offset: int = 0
         total_sent: int = 0
-        test_start_seconds: float = time.time()
+        test_start_seconds: float = time.perf_counter()
 
         round_num: int
         # Run every stage once per round.
@@ -211,20 +212,20 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         return stage_summaries
 
-    def _total_timeout_reached(self, test_start) -> bool:
+    def _total_timeout_reached(self, test_start: float) -> bool:
         """
         Check if total-timeout has been exceeded.
 
         Logs a warning when the elapsed time since
         test_start reaches --total-timeout (0 means disabled).
 
-        :param test_start: time.time() at the start of the test
+        :param test_start: time.perf_counter() at the start of the test
         :return: True when the total timeout is reached
         """
         limit_seconds: float = self.args.total_timeout
         if limit_seconds <= 0:
             return False
-        elapsed_seconds: float = time.time() - test_start
+        elapsed_seconds: float = time.perf_counter() - test_start
         if elapsed_seconds < limit_seconds:
             return False
         logger.warning(
@@ -514,13 +515,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             client_cpu_percent: float = before_client.get("cpu_percent")
             logger.info("  Client BEFORE: RSS %.1fM, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
 
-        virtual_memory_stats: Any = psutil.virtual_memory()
-        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
-        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        logger.info("  System BEFORE: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
-                    virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes)
+        ResourceMonitor.log_system_memory("BEFORE")
         before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {
             "server": before_server,
             "client": before_client,
@@ -747,7 +742,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
-        requests_dir: str = os.path.join(self._output_dir, "requests")
+        requests_dir: str = os.path.join(self._output_dir, REQUESTS_DIR_NAME)
         if os.path.isdir(requests_dir):
             logger.info("  Requests:    %s", requests_dir)
         stdout_log_path: Optional[str] = self._run_log.get_path()
@@ -1078,7 +1073,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         except (ValueError, OSError):
             return None
 
-    def _export_raw_json(self, stage_summaries, *, exit_code) -> None:
+    def _export_raw_json(self, stage_summaries: List[Dict[str, Any]], exit_code: int) -> None:
         """
         Save all test data as a single raw_results.json file.
 
@@ -1160,18 +1155,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 "total_cost_usd": round(total_cost, 6),
             },
             "stage_summaries": stage_summaries,
-            "resource_rows": [
-                {"before": row[1], "after": row[2]}
-                for row in self.resource_reporter.get_resource_rows()
-            ],
-            "client_resource_rows": [
-                {
-                    "before": row[1],
-                    "peak": row[2],
-                    "settled": row[3],
-                }
-                for row in self.resource_reporter.get_client_rows()
-            ],
+            "resource_rows": self.resource_reporter.get_resource_snapshots(),
+            "client_resource_rows": self.resource_reporter.get_client_snapshots(),
         }
         json_metadata: Dict[str, Any] = JsonMetadata.build()
         raw_data.update(json_metadata)

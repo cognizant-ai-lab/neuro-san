@@ -604,7 +604,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :param line: The progress line
         :param force: Write the line even when this tick would be skipped
         """
-        if force or tick_count == 1 or tick_count % CONSOLE_INTERVAL_TICKS == 0:
+        if (force
+                or tick_count == 1
+                or tick_count % CONSOLE_INTERVAL_TICKS == 0):
             if not self._console_started:
                 sys.stdout.write("\n")
                 self._console_started = True

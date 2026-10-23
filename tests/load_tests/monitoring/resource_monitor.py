@@ -24,6 +24,7 @@ from psutil import AccessDenied
 from psutil import NoSuchProcess
 from psutil import Process
 from psutil import process_iter
+from psutil import virtual_memory
 
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -158,3 +159,19 @@ class ResourceMonitor:
         child_count: int = resource_snapshot.get("children")
         logger.info("  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s", label,
                     rss_megabytes, file_descriptor_count, thread_count, connection_count, cpu_percent, child_count)
+
+    @staticmethod
+    def log_system_memory(label: str) -> None:
+        """
+        Log the system memory: percent used, then used, free and total.
+
+        :param label: Label after "System", e.g. "BEFORE"
+        """
+        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        virtual_memory_stats: Any = virtual_memory()
+        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
+        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
+        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
+        logger.info("  System %s: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
+                    label, virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes)

@@ -529,7 +529,7 @@ class ServerLogMonitor:
                 validation_errors: List[str] = ServerLogMonitor._parse_validation_errors(error_list_text)
                 entry.get("errors").extend(validation_errors)
         results: List[Dict[str, Any]] = []
-        validation_entry: Dict[str, object]
+        validation_entry: Dict[str, object] = {}
         request_ids: List[str] = []
         # Collect the request ids, then sort them.
         # pylint: disable=consider-iterating-dictionary
@@ -907,10 +907,4 @@ class ServerLogMonitor:
             client_rss_megabytes: float = snapshot.get("rss_megabytes")
             client_cpu_percent: float = snapshot.get("cpu_percent")
             logger.info("  Client AFTER: RSS %.1fM, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
-        virtual_memory_stats: Any = psutil.virtual_memory()
-        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
-        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        logger.info("  System RECEIVED: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
-                    virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes)
+        ResourceMonitor.log_system_memory("RECEIVED")
