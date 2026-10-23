@@ -94,8 +94,8 @@ class ServerLogTailer:
                     finished = self._tail_step(server_log_file, round_values, tail_state)
         except KeyboardInterrupt:
             tail_state["interrupted"] = True
-            # "\u2014" is an em dash; the message prints it, so "-" would change the output.
-            self.logger.info("\n  Interrupted \u2014 reporting partial results...")
+            # The em dash "—" matches the other interrupt messages; plain "-" would change the output.
+            self.logger.info("\n  Interrupted — reporting partial results...")
         tail_result: Dict[str, Any] = self._tail_result(tail_state)
         return tail_result
 

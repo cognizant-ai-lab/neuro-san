@@ -189,10 +189,11 @@ class SummaryFileWriter:
                     peak_rss_megabytes = stage_peak_rss_megabytes
         if peak_rss_megabytes is None:
             return
+        # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(
             f"  Server RSS: {Formatters.format_rss(start_rss_megabytes or 0)} start"
-            f" \u2192 {Formatters.format_rss(peak_rss_megabytes)} peak"
-            f" \u2192 {Formatters.format_rss(end_rss_megabytes or 0)} end"
+            f" → {Formatters.format_rss(peak_rss_megabytes)} peak"
+            f" → {Formatters.format_rss(end_rss_megabytes or 0)} end"
         )
 
     def _write_client_rss_trajectory(self, lines: List[str]) -> None:
@@ -219,10 +220,11 @@ class SummaryFileWriter:
                     peak_rss_megabytes = stage_peak_rss_megabytes
         if peak_rss_megabytes is None:
             return
+        # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(
             f"  Client RSS: {Formatters.format_rss(start_rss_megabytes or 0)} start"
-            f" \u2192 {Formatters.format_rss(peak_rss_megabytes)} peak"
-            f" \u2192 {Formatters.format_rss(end_rss_megabytes or 0)} end"
+            f" → {Formatters.format_rss(peak_rss_megabytes)} peak"
+            f" → {Formatters.format_rss(end_rss_megabytes or 0)} end"
         )
 
     def _write_sys_mem_trajectory(self, lines: List[str]) -> None:
@@ -263,9 +265,10 @@ class SummaryFileWriter:
         peak_detail: str = (
             f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes:.1f}G free / {total_gigabytes:.1f}G)"
         )
+        # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(
-            f"  System memory: {start_memory_percentage:.0f}% start \u2192 {peak_detail}"
-            f" \u2192 {end_memory_percentage:.0f}% end"
+            f"  System memory: {start_memory_percentage:.0f}% start → {peak_detail}"
+            f" → {end_memory_percentage:.0f}% end"
         )
 
     def _write_validation_summary(self, lines: List[str]) -> None:
@@ -610,10 +613,10 @@ class SummaryFileWriter:
         sub_agent: Dict[str, Any]
         # One tree line per sub-agent.
         for index, sub_agent in enumerate(sub_agents):
-            # "\u2514\u2500" draws "└─" (last sub-agent), "\u251c\u2500" draws "├─" (the others).
-            prefix: str = "\u251c\u2500"
+            # Box-drawing "└─" marks the last sub-agent and "├─" the others; ASCII "+-" would change the summary text.
+            prefix: str = "├─"
             if index == len(sub_agents) - 1:
-                prefix = "\u2514\u2500"
+                prefix = "└─"
             name: str = sub_agent.get("agent", "?")
             duration_seconds: float = sub_agent.get("duration_seconds", 0)
             lines.append(f"      {prefix} {name:<23s} {duration_seconds:6.1f}s")
