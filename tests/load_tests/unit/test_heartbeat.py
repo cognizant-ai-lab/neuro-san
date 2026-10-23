@@ -17,7 +17,6 @@
 import os
 import threading
 import time
-from argparse import Namespace
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
@@ -26,13 +25,15 @@ from neuro_san.message.processors.basic_message_processor import BasicMessagePro
 from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
 from tests.load_tests.load_test_constants import STATUS_CREATED
 from tests.load_tests.monitoring.heartbeat import Heartbeat
-from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestHelpers
 
 
 class TestHeartbeat(TestCase):
     """
+    Unit tests for Heartbeat: its progress.log lines, its failed-request count and its peak readings.
+
     Heartbeat writes its progress lines to progress.log without removing the request lines TrafficRunner writes there.
     """
 
@@ -40,12 +41,7 @@ class TestHeartbeat(TestCase):
         """
         A request line TrafficRunner writes before the heartbeat opens progress.log is still there, next to the tick.
         """
-        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
-        args: Namespace = Namespace(
-            same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
-            chat_filter="maximal", request_timeout=5.0, idle_timeout=5.0, include_tokens=False,
-        )
-        runner: TrafficRunner = TrafficRunner(args, profile, threading.Event())
+        runner: TrafficRunner = TrafficRunnerTestHelpers.create_runner()
         processor: BasicMessageProcessor = BasicMessageProcessor()
         request_result: AgentRequestResult = AgentRequestResult(STATUS_CREATED, processor, "hi", 0.1, {})
         with TemporaryDirectory() as output_dir:
@@ -55,16 +51,35 @@ class TestHeartbeat(TestCase):
             heartbeat: Heartbeat = Heartbeat(None, output_dir=output_dir)
             start_seconds: float = time.perf_counter()
             # With every event already set, progress_heartbeat() writes one tick and returns.
-            stop_event: threading.Event = self._set_event()
-            ready_event: threading.Event = self._set_event()
-            fires_done_event: threading.Event = self._set_event()
-            server_dead_event: threading.Event = self._set_event()
+            stop_event: threading.Event = TestHeartbeat._set_event()
+            ready_event: threading.Event = TestHeartbeat._set_event()
+            fires_done_event: threading.Event = TestHeartbeat._set_event()
+            server_dead_event: threading.Event = TestHeartbeat._set_event()
             heartbeat.progress_heartbeat([], 1, start_seconds, stop_event, ready_event, fires_done_event,
                                          server_dead_event)
             with open(os.path.join(output_dir, PROGRESS_LOG_FILE_NAME), encoding="utf-8") as progress_log:
                 progress_text: str = progress_log.read()
         self.assertIn("Request 1: CREATED", progress_text)
         self.assertIn("[progress] 0 of 1 completed", progress_text)
+
+    def test_heartbeat_failed_request_count(self) -> None:
+        """
+        The heartbeat's failed count starts at 0 and goes up by one per failed request.
+        """
+        heartbeat: Heartbeat = Heartbeat(None)
+        self.assertEqual(0, heartbeat.get_failed_request_count())
+        heartbeat.count_failed_request()
+        heartbeat.count_failed_request()
+        self.assertEqual(2, heartbeat.get_failed_request_count())
+
+    def test_peaks_ignore_zero_and_lower_readings(self) -> None:
+        """
+        A peak is only kept for a reading above zero and above the peak so far.
+        """
+        self.assertFalse(Heartbeat.is_new_peak(0, None))
+        self.assertTrue(Heartbeat.is_new_peak(5, None))
+        self.assertFalse(Heartbeat.is_new_peak(5, 5))
+        self.assertTrue(Heartbeat.is_new_peak(6.5, 5))
 
     @staticmethod
     def _set_event() -> threading.Event:

@@ -30,78 +30,18 @@ from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
-# Real fixtures, not mocks: tests/fixtures/load_tests/<agent>/*.hocon
-PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
 
-
-class TestAgentProfileHoconPrompts(TestCase):
+class TestAgentProfileFactory(TestCase):
     """
-    Unit tests for AgentProfileFactory.create(..., hocon_files=...).
+    Unit tests for AgentProfileFactory.create(), from hocon files and from the JSON profile.
 
     With hocon files the whole profile (prompts, success_fields,
     failure_patterns, estimated_tokens_per_request) comes from them;
     the JSON profile is not read.
     """
 
-    @staticmethod
-    def _fixture_hocons(agent: str) -> List[str]:
-        """
-        Sorted hocon paths under the default fixtures dir for one agent.
-
-        :param agent: Agent name, also the fixtures subfolder
-        :return: Sorted *.hocon paths in that subfolder
-        """
-        return sorted(glob.glob(TOP_LEVEL_DIR.get_file_in_basis(
-            os.path.join("..", DEFAULT_FIXTURES_HOCON_DIR, agent, "*.hocon"),
-        )))
-
-    @classmethod
-    def _load_fixtures(cls, agent: str) -> AgentProfile:
-        """
-        Load the profile from the checked-in fixtures of one agent.
-
-        :param agent: Agent name, also the fixtures subfolder
-        :return: Profile built from that agent's fixture hocons
-        """
-        return cls._load(agent, cls._fixture_hocons(agent))
-
-    @staticmethod
-    def _load(agent: str, hocon_files: List[str]) -> AgentProfile:
-        """
-        Load the profile from the given hocons.
-
-        :param agent: Agent name passed to AgentProfileFactory
-        :param hocon_files: Test-case hocon paths to read prompts from
-        :return: Profile built from those hocons
-        """
-        return AgentProfileFactory().create(agent, project_root=PROJECT_ROOT, hocon_files=hocon_files)
-
-    @staticmethod
-    def _write_hocon(folder: str, name: str, agent: str, texts: List[str], **extra: Any) -> str:
-        """
-        Write a minimal test-case hocon (JSON is valid hocon) and return its path.
-
-        :param folder: Directory to write the file in
-        :param name: File name
-        :param agent: Value of the test case's agent key
-        :param texts: One interaction per text
-        :param extra: Extra or replacement top-level test-case keys, such as failure_patterns or interactions
-        :return: Path of the written file
-        """
-        path: str = os.path.join(folder, name)
-        interactions: List[Dict[str, str]] = []
-        text: str
-        # One interaction per text.
-        for text in texts:
-            interactions.append({"text": text})
-        test_case: Dict[str, Any] = {
-            "agent": agent,
-            "interactions": interactions,
-        }
-        test_case.update(extra)
-        with open(path, "w", encoding="utf-8") as file_handle:
-            json.dump(test_case, file_handle)
-        return path
+    # Real fixtures, not mocks: tests/fixtures/load_tests/<agent>/*.hocon
+    PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
 
     def test_prompts_come_from_hocon_files(self) -> None:
         """
@@ -157,7 +97,8 @@ class TestAgentProfileHoconPrompts(TestCase):
         """
         A JSON profile's success_fields turn into sly_data not_value checks.
         """
-        profile: AgentProfile = AgentProfileFactory().create("agent_network_designer", project_root=PROJECT_ROOT)
+        profile: AgentProfile = AgentProfileFactory().create("agent_network_designer",
+                                                             project_root=TestAgentProfileFactory.PROJECT_ROOT)
         self.assertEqual(
             profile.get_response(0),
             {"sly_data": {"agent_reservations": {"not_value": ""}, "agent_network_name": {"not_value": ""}}},
@@ -253,3 +194,66 @@ class TestAgentProfileHoconPrompts(TestCase):
             with self.assertRaises(LoadTestAbortError) as caught:
                 self._load("hello_world", [path])
         self.assertEqual(caught.exception.get_exit_code(), 1)
+
+    @staticmethod
+    def _fixture_hocons(agent: str) -> List[str]:
+        """
+        Sorted hocon paths under the default fixtures dir for one agent.
+
+        :param agent: Agent name, also the fixtures subfolder
+        :return: Sorted *.hocon paths in that subfolder
+        """
+        return sorted(glob.glob(TOP_LEVEL_DIR.get_file_in_basis(
+            os.path.join("..", DEFAULT_FIXTURES_HOCON_DIR, agent, "*.hocon"),
+        )))
+
+    @classmethod
+    def _load_fixtures(cls, agent: str) -> AgentProfile:
+        """
+        Load the profile from the checked-in fixtures of one agent.
+
+        :param agent: Agent name, also the fixtures subfolder
+        :return: Profile built from that agent's fixture hocons
+        """
+        return cls._load(agent, cls._fixture_hocons(agent))
+
+    @staticmethod
+    def _load(agent: str, hocon_files: List[str]) -> AgentProfile:
+        """
+        Load the profile from the given hocons.
+
+        :param agent: Agent name passed to AgentProfileFactory
+        :param hocon_files: Test-case hocon paths to read prompts from
+        :return: Profile built from those hocons
+        """
+        factory: AgentProfileFactory = AgentProfileFactory()
+        profile: AgentProfile = factory.create(agent, project_root=TestAgentProfileFactory.PROJECT_ROOT,
+                                               hocon_files=hocon_files)
+        return profile
+
+    @staticmethod
+    def _write_hocon(folder: str, name: str, agent: str, texts: List[str], **extra: Any) -> str:
+        """
+        Write a minimal test-case hocon (JSON is valid hocon) and return its path.
+
+        :param folder: Directory to write the file in
+        :param name: File name
+        :param agent: Value of the test case's agent key
+        :param texts: One interaction per text
+        :param extra: Extra or replacement top-level test-case keys, such as failure_patterns or interactions
+        :return: Path of the written file
+        """
+        path: str = os.path.join(folder, name)
+        interactions: List[Dict[str, str]] = []
+        text: str
+        # One interaction per text.
+        for text in texts:
+            interactions.append({"text": text})
+        test_case: Dict[str, Any] = {
+            "agent": agent,
+            "interactions": interactions,
+        }
+        test_case.update(extra)
+        with open(path, "w", encoding="utf-8") as file_handle:
+            json.dump(test_case, file_handle)
+        return path
