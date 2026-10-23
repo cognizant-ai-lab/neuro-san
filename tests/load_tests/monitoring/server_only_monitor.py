@@ -14,8 +14,7 @@
 #
 # END COPYRIGHT
 
-# gzip.open and re.compile stay module-qualified: a specific import would hide the builtins open and compile.
-import gzip
+# re.compile stays module-qualified: a specific import would hide the builtin compile.
 import re
 from argparse import Namespace
 from json import dump
@@ -25,13 +24,11 @@ from logging import INFO
 from logging import Logger
 from logging import getLogger
 from os import makedirs
-from os.path import getsize
 from os.path import isfile
 from os.path import join
 from platform import platform
 from platform import python_version
 from re import Pattern
-from shutil import copyfileobj
 from socket import gethostname
 from time import strftime
 from typing import Any
@@ -45,7 +42,6 @@ from psutil import cpu_percent
 from psutil import virtual_memory
 
 from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SERVER_LOG_GZ_FILE_NAME
 from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
 from tests.load_tests.monitoring.kernel_memory import KernelMemory
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -96,12 +92,9 @@ class ServerOnlyMonitor:
         """
         Interactive server-only monitoring loop.
 
-        Prompts the user for the expected request count, then
-        monitors the server log until all requests arrive (or
-        timeout / Ctrl-C).  After each round, reports results,
-        writes raw_results.json, archives the server log, and
-        loops back for another round.  Only exits on Ctrl-C
-        at the prompt.
+        Prompts the user for the expected request count, then monitors the server log until all requests arrive (or
+        timeout / Ctrl-C). After each round, reports results, writes raw_results.json and loops back for another
+        round. Only exits on Ctrl-C at the prompt.
 
         :param output_base: Base output directory; each round goes under its "server_only" folder
         :return: 0 when the user exits at the prompt
@@ -238,8 +231,6 @@ Waiting for %d request(s) in server log...
 
         after_values: Dict[str, Any] = self._log_after_round(before_values, tail_result)
         self._record_round(round_values, before_values, tail_result, after_values)
-
-        self._archive_server_log_to(round_dir)
 
         round_log_path: str = round_values.get("round_log_path")
         self._log_output_files(round_dir, round_log_path)
@@ -471,11 +462,6 @@ Waiting for %d request(s) in server log...
         json_path: str = join(round_dir, RAW_RESULTS_FILE_NAME)
         if isfile(json_path):
             self.logger.info("  Raw results: %s", json_path)
-        gz_path: str = join(round_dir, SERVER_LOG_GZ_FILE_NAME)
-        size_megabytes: float = 0.0
-        if isfile(gz_path):
-            size_megabytes = getsize(gz_path) / ResourceMonitor.ONE_MEGABYTE
-            self.logger.info("  Server log:  %s (%.1fM)", gz_path, size_megabytes)
         self.logger.info("  Stdout log:  %s", round_log_path)
         self.history_recorder.log_existing_history_files()
 
@@ -648,16 +634,3 @@ Waiting for %d request(s) in server log...
             "server_cpu_seconds_per_request": server_cpu_seconds_per_request,
         }
         return server_cpu_values
-
-    def _archive_server_log_to(self, target_dir: str) -> None:
-        """
-        Gzip the server log into the given directory.
-
-        :param target_dir: Directory for the gzipped server log
-        """
-        server_log: Optional[str] = self.args.server_log
-        if not server_log or not isfile(server_log):
-            return
-        gz_path: str = join(target_dir, SERVER_LOG_GZ_FILE_NAME)
-        with open(server_log, "rb") as source_file, gzip.open(gz_path, "wb") as gzip_file:
-            copyfileobj(source_file, gzip_file)
