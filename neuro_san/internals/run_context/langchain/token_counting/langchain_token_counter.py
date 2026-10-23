@@ -292,6 +292,7 @@ class LangChainTokenCounter:
         request_reporting["token_accounting"] = main_accounting
         total_token_accounting: Dict[str, Any] = copy(network_token_dict)
         total_token_accounting["models"] = models_token_dict
+        request_reporting["total_token_accounting"] = total_token_accounting
 
         # Figure out whether we are the front man of the main network:
         # * Only front men sit at the root of the origin path (single-element origin).
