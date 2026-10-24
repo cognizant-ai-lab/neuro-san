@@ -90,13 +90,16 @@ class TestToolboxFactory(TestCase):
         }
 
         # Mock user-provided arguments
-        user_args: Dict[str, Any] = {"param2": "user_value", "param3": "extra_value"}
+        user_args: Dict[str, Any] = {
+            "param2": "user_value",
+            "param3": "extra_value"
+        }
 
         with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
             mock_tool_class: MagicMock = MagicMock(spec=BaseTool)
             mock_resolver.return_value = mock_tool_class
 
-            mock_instance: MagicMock = TestToolboxFactory.create_mock_tool()
+            mock_instance: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_tool_class.return_value = mock_instance
 
             tool: BaseTool = self.factory.create_tool_from_toolbox("test_tool", user_args)
@@ -223,7 +226,7 @@ class TestToolboxFactory(TestCase):
             mock_tool_class: MagicMock = MagicMock(spec=BaseTool)
             mock_resolver.return_value = mock_tool_class
 
-            mock_instance: MagicMock = TestToolboxFactory.create_mock_tool()
+            mock_instance: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_tool_class.return_value = mock_instance
 
             # ToolboxFactory logs through logging.warning(), so the record goes to the root logger.
@@ -289,15 +292,18 @@ class TestToolboxFactory(TestCase):
         }
 
         # Mock user-provided arguments
-        user_args: Dict[str, Any] = {"param2": "user_value", "param3": "extra_value"}
+        user_args: Dict[str, Any] = {
+            "param2": "user_value",
+            "param3": "extra_value"
+        }
 
         with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
             mock_toolkit_class: MagicMock = MagicMock(spec=BaseToolkit)
             mock_resolver.return_value = mock_toolkit_class
 
             mock_instance: MagicMock = MagicMock()
-            mock_tool_1: MagicMock = TestToolboxFactory.create_mock_tool()
-            mock_tool_2: MagicMock = TestToolboxFactory.create_mock_tool()
+            mock_tool_1: MagicMock = TestToolboxFactory._create_mock_tool()
+            mock_tool_2: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_tools: List[MagicMock] = [mock_tool_1, mock_tool_2]
             mock_instance.get_tools.return_value = mock_tools
             mock_toolkit_class.return_value = mock_instance
@@ -331,7 +337,10 @@ class TestToolboxFactory(TestCase):
         }
 
         # Mock user-provided arguments
-        user_args: Dict[str, Any] = {"param2": "user_value", "param3": "extra_value"}
+        user_args: Dict[str, Any] = {
+            "param2": "user_value",
+            "param3": "extra_value"
+        }
 
         with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
             # Mock the toolkit class
@@ -343,8 +352,8 @@ class TestToolboxFactory(TestCase):
             mock_toolkit_class.from_tool_api_wrapper.return_value = mock_toolkit_instance
 
             # Mock get_tools() returning a list of tools
-            mock_tool_1: MagicMock = TestToolboxFactory.create_mock_tool()
-            mock_tool_2: MagicMock = TestToolboxFactory.create_mock_tool()
+            mock_tool_1: MagicMock = TestToolboxFactory._create_mock_tool()
+            mock_tool_2: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_toolkit_instance.get_tools.return_value = [mock_tool_1, mock_tool_2]
 
             # Call the factory method
@@ -364,7 +373,7 @@ class TestToolboxFactory(TestCase):
             self.assertEqual(tools, [mock_tool_1, mock_tool_2])
 
     @staticmethod
-    def create_mock_tool() -> MagicMock:
+    def _create_mock_tool() -> MagicMock:
         """
         Creates a mock BaseTool with mock name and tags.
 

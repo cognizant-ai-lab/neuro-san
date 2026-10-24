@@ -47,7 +47,7 @@ class MockBranchActivationTool(CodedTool):
         :param agent_tool_spec: The dictionary describing the JSON agent tool
         :param sly_data: A dictionary of private data that does not go to the LLM
         """
-        self.init_params: Dict[str, Any] = {
+        self._init_params: Dict[str, Any] = {
             "parent_run_context": parent_run_context,
             "factory": factory,
             "args": args,
@@ -61,7 +61,7 @@ class MockBranchActivationTool(CodedTool):
 
         :return: A dictionary of the parameters passed to the constructor, keyed by parameter name
         """
-        return self.init_params
+        return self._init_params
 
     @override
     async def async_invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:

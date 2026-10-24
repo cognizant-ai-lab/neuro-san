@@ -18,6 +18,8 @@
 from typing import Any
 from typing import Dict
 
+from typing_extensions import override
+
 from neuro_san.internals.graph.activations.abstract_class_activation import AbstractClassActivation
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -57,6 +59,7 @@ class ConcreteClassActivation(AbstractClassActivation):
         super().__init__(parent_run_context, factory, args, agent_tool_spec, sly_data)
         self._class_ref: str = class_ref
 
+    @override
     def get_full_class_ref(self) -> str:
         """
         Returns the class reference given to the constructor.

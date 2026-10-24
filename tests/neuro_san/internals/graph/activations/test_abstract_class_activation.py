@@ -301,7 +301,10 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
                 activation: ConcreteClassActivation = ConcreteClassActivation(
                     parent_run_context=self.mock_run_context,
                     factory=self.mock_factory,
-                    args={"origin": existing_origin, "origin_str": "custom_str"},
+                    args={
+                        "origin": existing_origin,
+                        "origin_str": "custom_str"
+                    },
                     agent_tool_spec=self.basic_agent_tool_spec,
                     sly_data={},
                     class_ref="test.Class"
@@ -411,7 +414,7 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         :param original_issubclass: The real issubclass() to call for every other check
         :param checked_class: The class to check
         :param classinfo: The class or tuple of classes to check against
-        :return: True if cls counts as a subclass of classinfo
+        :return: True if checked_class counts as a subclass of classinfo
         """
         if checked_class == MockBranchActivationTool and classinfo == BranchActivation:
             return True
