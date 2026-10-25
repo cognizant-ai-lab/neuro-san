@@ -103,12 +103,16 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         # True where its response_format rule fires (unless the caller said False), else the value above.
         forced_strict: bool = langchain_decides and effective_strict is not False
         written_strict: Optional[bool] = True if forced_strict else effective_strict
-        return super().bind_tools(self.with_strict_on_preformatted(tools, written_strict),
-                                  tool_choice=tool_choice,
-                                  strict=effective_strict,
-                                  parallel_tool_calls=parallel_tool_calls,
-                                  response_format=response_format,
-                                  **kwargs)
+        strict_tools: List[Any] = self.with_strict_on_preformatted(tools, written_strict),
+        runnable: Runnable[LanguageModelInput, AIMessage] = super().bind_tools(
+            strict_tools,
+            tool_choice=tool_choice,
+            strict=effective_strict,
+            parallel_tool_calls=parallel_tool_calls,
+            response_format=response_format,
+            **kwargs
+        )
+        return runnable
 
     @staticmethod
     def with_strict_on_preformatted(tools: Sequence[Any], strict: Optional[bool]) -> List[Any]:
