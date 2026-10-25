@@ -337,7 +337,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
 
         if completion_token_cost is None and prompt_token_cost is None:
             logger: Logger = getLogger(__name__)
-            logger.warning("No price info found for model %s in llm info. Token cost defaults to 0.", model_name)
+            logger.warning("No price info found for model %s in llm info. Token cost defaults to 0. To fix, add "
+                           "price_per_1k_input_tokens and price_per_1k_output_tokens to that model's entry in "
+                           "default_llm_info.hocon or in the AGENT_LLM_INFO_FILE file.", model_name)
 
         # Return total cost
         return (completion_token_cost or 0.0) + (prompt_token_cost or 0.0)

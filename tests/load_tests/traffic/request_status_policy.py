@@ -15,10 +15,7 @@
 # END COPYRIGHT
 
 
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 
 
 class RequestStatusPolicy:
@@ -55,13 +52,14 @@ class RequestStatusPolicy:
         :param elapsed_seconds: Seconds the request took
         :param answer_text: The final chat response text, empty when none
         :param error_text: Traceback text when the request raised, empty otherwise
-        :return: STATUS_TIMEOUT, STATUS_FAILED or STATUS_CREATED
+        :return: LoadTestConstants.STATUS_TIMEOUT, LoadTestConstants.STATUS_FAILED or
+            LoadTestConstants.STATUS_CREATED
         """
         if self.is_timed_out(elapsed_seconds):
-            return STATUS_TIMEOUT
+            return LoadTestConstants.STATUS_TIMEOUT
         if error_text or not answer_text:
-            return STATUS_FAILED
-        return STATUS_CREATED
+            return LoadTestConstants.STATUS_FAILED
+        return LoadTestConstants.STATUS_CREATED
 
     @staticmethod
     def is_failure(status: str) -> bool:
@@ -71,7 +69,8 @@ class RequestStatusPolicy:
         :param status: One of the STATUS_* values
         :return: True for FAILED, TIMEOUT and KILLED
         """
-        return status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED)
+        return status in [LoadTestConstants.STATUS_FAILED, LoadTestConstants.STATUS_TIMEOUT,
+                          LoadTestConstants.STATUS_KILLED]
 
     @staticmethod
     def is_traceback(status: str, response_text: str) -> bool:
@@ -82,4 +81,4 @@ class RequestStatusPolicy:
         :param response_text: Response text of the request
         :return: True for a FAILED status with a response text
         """
-        return status == STATUS_FAILED and bool(response_text)
+        return status == LoadTestConstants.STATUS_FAILED and bool(response_text)

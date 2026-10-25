@@ -21,12 +21,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.load_test_constants import RETRY_ERROR_TYPES
-from tests.load_tests.load_test_constants import RETRY_LABELS
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -51,14 +46,19 @@ class OutputValidator:
         :param results: Request results of the stage
         :return: Count per status; unknown statuses count as failed
         """
-        counts: Dict[str, Any] = {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0}
+        counts: Dict[str, Any] = {
+            LoadTestConstants.STATUS_CREATED: 0,
+            LoadTestConstants.STATUS_FAILED: 0,
+            LoadTestConstants.STATUS_TIMEOUT: 0,
+            LoadTestConstants.STATUS_KILLED: 0,
+        }
         result: Dict[str, Any]
         # Count each result under its status.
         for result in results:
-            status: str = result.get("status", STATUS_FAILED)
+            status: str = result.get("status", LoadTestConstants.STATUS_FAILED)
             # pylint: disable=consider-iterating-dictionary
             if status not in counts.keys():
-                status = STATUS_FAILED
+                status = LoadTestConstants.STATUS_FAILED
             counts[status] = counts.get(status, 0) + 1
         return counts
 
@@ -81,10 +81,10 @@ class OutputValidator:
         :param show_counts: False to log only the Duration/Avg line
         """
         if show_counts:
-            created_count: int = counts.get(STATUS_CREATED, 0)
-            failed_count: int = counts.get(STATUS_FAILED, 0)
-            timeout_count: int = counts.get(STATUS_TIMEOUT, 0)
-            killed_count: int = counts.get(STATUS_KILLED, 0)
+            created_count: int = counts.get(LoadTestConstants.STATUS_CREATED, 0)
+            failed_count: int = counts.get(LoadTestConstants.STATUS_FAILED, 0)
+            timeout_count: int = counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+            killed_count: int = counts.get(LoadTestConstants.STATUS_KILLED, 0)
             logger.info("\n  Requests: %s", actual_requests)
             logger.info("    Created: %s  (success criteria met)", created_count)
             logger.info("    Failed:  %s  (error or crash)", failed_count)
@@ -109,9 +109,9 @@ class OutputValidator:
         logger.info("\n  Retry activity (from server log):")
         error_type: str
         # Log the retry count for each error type.
-        for error_type in RETRY_ERROR_TYPES:
+        for error_type in LoadTestConstants.RETRY_ERROR_TYPES:
             count: int = retries.get(error_type, 0)
-            label: str = RETRY_LABELS.get(error_type, f"{error_type} retries")
+            label: str = LoadTestConstants.RETRY_LABELS.get(error_type, f"{error_type} retries")
             logger.info("    %s: %s", label, count)
         logger.info("    Total retries:  %s", total_retries)
         amplification: float = Formatters.compute_amplification(actual_requests, total_retries)
@@ -242,7 +242,7 @@ class OutputValidator:
         result: Dict[str, Any]
         # Look for a request that did not fail.
         for result in results:
-            if result.get("status") != STATUS_FAILED:
+            if result.get("status") != LoadTestConstants.STATUS_FAILED:
                 all_failed = False
                 break
         if not all_failed:
@@ -298,16 +298,16 @@ class OutputValidator:
         :param counts: Count per status from count_results
         :return: True if any request timed out or was killed
         """
-        timed_out: int = counts.get(STATUS_TIMEOUT, 0)
-        killed: int = counts.get(STATUS_KILLED, 0)
-        timed_out_or_killed: int = timed_out + killed
+        timed_out_count: int = counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+        killed_count: int = counts.get(LoadTestConstants.STATUS_KILLED, 0)
+        timed_out_or_killed: int = timed_out_count + killed_count
         if timed_out_or_killed == 0:
             return False
         abort_reasons: List[str] = []
-        if timed_out:
-            abort_reasons.append(f"{timed_out} timed out")
-        if killed:
-            abort_reasons.append(f"{killed} killed by stage-timeout")
+        if timed_out_count:
+            abort_reasons.append(f"{timed_out_count} timed out")
+        if killed_count:
+            abort_reasons.append(f"{killed_count} killed by stage-timeout")
         logger.warning(
             """
   ABORT: %s — %s.

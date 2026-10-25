@@ -31,10 +31,7 @@ from typing import Optional
 
 from psutil import cpu_count
 
-from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
-from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
-from tests.load_tests.load_test_constants import HISTORY_UNKNOWN_FILE_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger: Logger = logging.getLogger(__name__)
@@ -77,9 +74,9 @@ class HistoryRecorder:
             root, ext = splitext(self._args.history_file)
             unknown_ext: str = ext or ".jsonl"
             return f"{root}_unknown{unknown_ext}"
-        name: str = HISTORY_UNKNOWN_FILE_NAME
+        name: str = LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME
         if successful:
-            name = HISTORY_FILE_NAME
+            name = LoadTestConstants.HISTORY_FILE_NAME
         history_path: str = join(self._output_base, name)
         return history_path
 
@@ -277,7 +274,7 @@ class HistoryRecorder:
         result: Dict[str, Any]
         # Collect the duration and the time to first response of each successful request.
         for result in results:
-            if result.get("status") != STATUS_CREATED:
+            if result.get("status") != LoadTestConstants.STATUS_CREATED:
                 continue
             duration_seconds: float = result.get("elapsed", 0.0)
             durations_seconds.append(duration_seconds)
@@ -300,7 +297,7 @@ class HistoryRecorder:
         """
         threshold_seconds: int
         # Count the requests that completed within each threshold.
-        for threshold_seconds in HISTORY_THRESHOLDS_SECONDS:
+        for threshold_seconds in LoadTestConstants.HISTORY_THRESHOLDS_SECONDS:
             within_count: int = 0
             duration_seconds: float
             # Count the durations at or under this threshold.

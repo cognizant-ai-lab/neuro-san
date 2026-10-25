@@ -21,7 +21,7 @@ from logging import Formatter
 from logging import Logger
 from typing import Optional
 
-from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 
 
 class RunLog:
@@ -44,7 +44,7 @@ class RunLog:
 
         :param output_dir: The run's output directory, which must exist
         """
-        self._log_path = os.path.join(output_dir, STDOUT_LOG_FILE_NAME)
+        self._log_path = os.path.join(output_dir, LoadTestConstants.STDOUT_LOG_FILE_NAME)
         self._log_handler = FileHandler(self._log_path, encoding="utf-8")
         self._log_handler.setLevel(logging.INFO)
         formatter: Formatter = Formatter("%(message)s")

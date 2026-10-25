@@ -26,10 +26,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
@@ -104,9 +101,10 @@ class TestRunnerResponseChecks(TestCase):
         """
         start_wall_clock_seconds: float = time.time()
         answer_processor: BasicMessageProcessor = self._processor("hi")
-        request_result: AgentRequestResult = AgentRequestResult(STATUS_CREATED, answer_processor, "hi", 0.1, {})
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_CREATED, answer_processor,
+                                                                "hi", 0.1, {})
         result: Dict[str, Any] = self._run_one_http(request_result)
-        self.assertEqual(STATUS_CREATED, result.get("status"))
+        self.assertEqual(LoadTestConstants.STATUS_CREATED, result.get("status"))
         self.assertIsNone(result.get("failure_reason"))
         self.assertIsNone(result.get("error"))
         self.assertGreaterEqual(result.get("elapsed"), 0.0)
@@ -118,8 +116,10 @@ class TestRunnerResponseChecks(TestCase):
         A FAILED request whose response text is a traceback reports the traceback's last line.
         """
         traceback: str = "Traceback (most recent call last):\n  File \"x.py\"\nValueError: boom"
-        result: Dict[str, Any] = self._run_one_http(AgentRequestResult(STATUS_FAILED, None, traceback, 0.0, {}))
-        self.assertEqual(STATUS_FAILED, result.get("status"))
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, None, traceback, 0.0,
+                                                                {})
+        result: Dict[str, Any] = self._run_one_http(request_result)
+        self.assertEqual(LoadTestConstants.STATUS_FAILED, result.get("status"))
         self.assertEqual("ValueError: boom", result.get("failure_reason"))
         self.assertEqual("ValueError: boom", result.get("error"))
 
@@ -127,15 +127,17 @@ class TestRunnerResponseChecks(TestCase):
         """
         A FAILED request with no response text reports an empty response.
         """
-        result: Dict[str, Any] = self._run_one_http(AgentRequestResult(STATUS_FAILED, None, "", 0.0, {}))
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, None, "", 0.0, {})
+        result: Dict[str, Any] = self._run_one_http(request_result)
         self.assertEqual("empty response from agent", result.get("failure_reason"))
 
     def test_timed_out_request_has_no_failure_reason(self) -> None:
         """
         A TIMEOUT request keeps its status and has no failure reason.
         """
-        result: Dict[str, Any] = self._run_one_http(AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {}))
-        self.assertEqual(STATUS_TIMEOUT, result.get("status"))
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_TIMEOUT, None, "", 0.0, {})
+        result: Dict[str, Any] = self._run_one_http(request_result)
+        self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, result.get("status"))
         self.assertIsNone(result.get("failure_reason"))
 
     def test_run_stage_collects_every_request(self) -> None:
@@ -169,7 +171,7 @@ class TestRunnerResponseChecks(TestCase):
         result: Dict[str, Any]
         # Every request comes back killed by the stage timeout
         for result in stage.get("results"):
-            self.assertEqual(STATUS_KILLED, result.get("status"))
+            self.assertEqual(LoadTestConstants.STATUS_KILLED, result.get("status"))
             self.assertEqual("Killed by --stage-timeout", result.get("stderr"))
         self.assertFalse(stage.get("server_died"))
         self.assertFalse(stage.get("interrupted"))
@@ -195,8 +197,11 @@ class TestRunnerResponseChecks(TestCase):
         """
         Every request that does not end CREATED is counted once on the heartbeat.
         """
-        statuses: List[Dict[str, Any]] = [{"status": STATUS_CREATED}, {"status": STATUS_FAILED},
-                                          {"status": STATUS_FAILED}]
+        statuses: List[Dict[str, Any]] = [
+            {"status": LoadTestConstants.STATUS_CREATED},
+            {"status": LoadTestConstants.STATUS_FAILED},
+            {"status": LoadTestConstants.STATUS_FAILED},
+        ]
         with patch.object(TrafficRunner, "run_one_http", side_effect=statuses), \
                 patch.object(Heartbeat, "count_failed_request") as count_failed_request:
             TrafficRunnerTestHelpers.create_runner().run_stage(StagePlan(3, 1, 0, None))
@@ -254,7 +259,9 @@ class TestRunnerResponseChecks(TestCase):
         """
         time.sleep(delay_seconds)
         fake_result: Dict[str, Any] = {
-            "request_id": f"request-{request_id}", "status": STATUS_CREATED,
-            "global_request_id": global_request_id, "output_dir": output_dir,
+            "request_id": f"request-{request_id}",
+            "status": LoadTestConstants.STATUS_CREATED,
+            "global_request_id": global_request_id,
+            "output_dir": output_dir,
         }
         return fake_result

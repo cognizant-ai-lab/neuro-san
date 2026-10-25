@@ -27,7 +27,7 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.system_resources import SystemResources
@@ -263,7 +263,7 @@ class SummaryFileWriter:
         if peak_available_gigabytes is None:
             peak_available_gigabytes = 0.0
         peak_detail: str = (
-            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes:.1f}G free / {total_gigabytes:.1f}G)"
+            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB)"
         )
         # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(
@@ -400,7 +400,7 @@ class SummaryFileWriter:
         result: Dict[str, Any]
         # Count the passed requests and collect each request's duration.
         for result in all_results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 passed += 1
             latencies_seconds.append(result.get("elapsed", 0))
         total: int = len(all_results)

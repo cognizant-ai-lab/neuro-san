@@ -25,7 +25,7 @@ from typing import Optional
 from unittest import TestCase
 
 from neuro_san import TOP_LEVEL_DIR
-from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
@@ -204,7 +204,7 @@ class TestAgentProfileFactory(TestCase):
         :return: Sorted *.hocon paths in that subfolder
         """
         return sorted(glob.glob(TOP_LEVEL_DIR.get_file_in_basis(
-            os.path.join("..", DEFAULT_FIXTURES_HOCON_DIR, agent, "*.hocon"),
+            os.path.join("..", LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR, agent, "*.hocon"),
         )))
 
     @classmethod

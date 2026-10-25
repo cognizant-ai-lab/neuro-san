@@ -34,7 +34,7 @@ from psutil import Process
 from psutil import cpu_percent
 from psutil import virtual_memory
 
-from tests.load_tests.load_test_constants import HEARTBEAT_INTERVAL_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -190,7 +190,7 @@ class ServerLogTailer:
         server_text: str = ServerLogTailer._server_text(server_snapshot)
         # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         virtual_memory_stats: Any = heartbeat_values.get("virtual_memory_stats")
-        system_memory_text: str = ServerLogTailer._system_memory_text(virtual_memory_stats)
+        system_memory_text: str = ResourceMonitor.system_memory_text(virtual_memory_stats)
         local_time: struct_time = localtime(now_seconds)
         timestamp: str = strftime("%H:%M:%S", local_time)
         elapsed_whole_seconds: int = int(elapsed_seconds)
@@ -213,7 +213,7 @@ class ServerLogTailer:
         Format the server threads and RSS part of the heartbeat.
 
         :param server_snapshot: Server snapshot, or None when there is no server process
-        :return: "  threads: N  RSS: NM", or "" without a snapshot
+        :return: "  threads: N  RSS: N MB", or "" without a snapshot
         """
         server_text: str = ""
         server_rss_megabytes: float = 0.0
@@ -221,25 +221,8 @@ class ServerLogTailer:
         if server_snapshot:
             server_rss_megabytes = server_snapshot.get("rss_megabytes", 0)
             server_threads = server_snapshot.get("threads", 0)
-            server_text = f"  threads: {server_threads}  RSS: {server_rss_megabytes:.0f}M"
+            server_text = f"  threads: {server_threads}  RSS: {server_rss_megabytes:.0f} MB"
         return server_text
-
-    @staticmethod
-    def _system_memory_text(virtual_memory_stats: Any) -> str:
-        """
-        Format the system memory part of the heartbeat.
-
-        :param virtual_memory_stats: The psutil.virtual_memory() result
-        :return: "  sysmem: N% (NM used / NG free)"
-        """
-        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
-        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        system_memory_text: str = (
-            f"  sysmem: {virtual_memory_stats.percent:.0f}% ({used_megabytes:.0f}M used"
-            f" / {available_gigabytes:.1f}G free)"
-        )
-        return system_memory_text
 
     @staticmethod
     def _progress_text(heartbeat_values: Dict[str, Any]) -> str:
@@ -455,7 +438,7 @@ class ServerLogTailer:
     def _maybe_heartbeat(self, round_values: Dict[str, Any], tail_state: Dict[str, Any], now_perf_seconds: float,
                          elapsed_seconds: float) -> None:
         """
-        Log a heartbeat when HEARTBEAT_INTERVAL_SECONDS have passed since the last one.
+        Log a heartbeat when LoadTestConstants.HEARTBEAT_INTERVAL_SECONDS have passed since the last one.
 
         :param round_values: The round values passed to tail_server_log()
         :param tail_state: The round's counters and peaks; "last_heartbeat_seconds" is updated here
@@ -463,7 +446,7 @@ class ServerLogTailer:
         :param elapsed_seconds: Seconds since the tail started
         """
         last_heartbeat_seconds: float = tail_state.get("last_heartbeat_seconds")
-        if now_perf_seconds - last_heartbeat_seconds < HEARTBEAT_INTERVAL_SECONDS:
+        if now_perf_seconds - last_heartbeat_seconds < LoadTestConstants.HEARTBEAT_INTERVAL_SECONDS:
             return
         log_position: Optional[int] = round_values.get("log_position")
         primary_start_regex: Pattern = round_values.get("primary_start_regex")

@@ -30,8 +30,7 @@ from unittest.mock import patch
 
 from typing_extensions import override
 
-from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 
@@ -139,7 +138,7 @@ class TestCrossRunComparison(TestCase):
         with self.assertLogs("tests.load_tests.reporting.token_log_writer", level="INFO"):
             TokenLogWriter.log_token_summary(results, output_dir=self._dir)
 
-        log_path: str = join(self._dir, SERVER_TOKENS_LOG_FILE_NAME)
+        log_path: str = join(self._dir, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
         loops: List[Dict[str, Any]] = CrossRunComparison._parse_validation_loops(log_path)
 
         self.assertEqual(1, len(loops), loops)
@@ -173,11 +172,11 @@ class TestCrossRunComparison(TestCase):
         A metric above 0 gives its value with the percent change, or the value alone for the baseline run.
         """
         increase_cell: str = CrossRunComparison._value_or_dash(45.0, "45s", 12.0)
-        decrease_cell: str = CrossRunComparison._value_or_dash(512.0, "512M", -20.4)
+        decrease_cell: str = CrossRunComparison._value_or_dash(512.0, "512 MB", -20.4)
         baseline_cell: str = CrossRunComparison._value_or_dash(45.0, "45s", None)
 
         self.assertEqual("45s (+12%)", increase_cell)
-        self.assertEqual("512M (-20%)", decrease_cell)
+        self.assertEqual("512 MB (-20%)", decrease_cell)
         self.assertEqual("45s", baseline_cell)
 
     def _write(self, contents: str) -> str:
@@ -187,7 +186,7 @@ class TestCrossRunComparison(TestCase):
         :param contents: Raw file contents
         :return: Path of the created file
         """
-        path: str = join(self._dir, RAW_RESULTS_FILE_NAME)
+        path: str = join(self._dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(path, "w", encoding="utf-8") as file_handle:
             file_handle.write(contents)
         return path
