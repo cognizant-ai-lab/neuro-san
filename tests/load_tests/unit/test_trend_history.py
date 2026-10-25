@@ -26,7 +26,7 @@ from unittest import TestCase
 
 from typing_extensions import override
 
-from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.trend_history import TrendHistory
 
 
@@ -156,7 +156,7 @@ class TestTrendHistory(TestCase):
 
         :return: Path of the created file
         """
-        path: str = os.path.join(self._output_dir, HISTORY_FILE_NAME)
+        path: str = os.path.join(self._output_dir, LoadTestConstants.HISTORY_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(json.dumps({"agent": "one"}) + "\n")
         return path

@@ -26,8 +26,7 @@ from typing import Set
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
-from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
-from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -70,7 +69,7 @@ class TrendHistory:
         if not records:
             logger.info("No usable records in %s", history_path)
             return
-        record: Dict[str, Any]
+        record: Dict[str, Any] = {}
         if self._agent_filter:
             # Keep only the records for the agents in the filter.
             matching_records: List[Dict[str, Any]] = []
@@ -116,7 +115,7 @@ class TrendHistory:
         """
         if os.path.isfile(self._path):
             return self._path
-        candidate: str = os.path.join(self._path, HISTORY_FILE_NAME)
+        candidate: str = os.path.join(self._path, LoadTestConstants.HISTORY_FILE_NAME)
         if os.path.isfile(candidate):
             return candidate
         return None
@@ -175,10 +174,10 @@ class TrendHistory:
         :return: Column names
         """
         header: List[str] = ["timestamp", "neuro-san", "agent", "mode", "via", "reqs", "done"]
-        threshold: int
+        threshold_seconds: int
         # One column per threshold, e.g. "<30s".
-        for threshold in HISTORY_THRESHOLDS_SECONDS:
-            header.append(f"<{int(threshold)}s")
+        for threshold_seconds in LoadTestConstants.HISTORY_THRESHOLDS_SECONDS:
+            header.append(f"<{int(threshold_seconds)}s")
         header.extend(["first_resp", "avg", "wall", "err", "warn"])
         return header
 
@@ -209,10 +208,10 @@ class TrendHistory:
             str(requests),
             str(completed),
         ]
-        threshold: int
+        threshold_seconds: int
         # One cell per threshold: requests completed within it, or "-".
-        for threshold in HISTORY_THRESHOLDS_SECONDS:
-            threshold_key: str = f"completed_within_{int(threshold)}s"
+        for threshold_seconds in LoadTestConstants.HISTORY_THRESHOLDS_SECONDS:
+            threshold_key: str = f"completed_within_{int(threshold_seconds)}s"
             completed_count: Any = record.get(threshold_key, "-")
             row.append(str(completed_count))
         row.append(TrendHistory._fmt_seconds(record.get("avg_first_response_s")))

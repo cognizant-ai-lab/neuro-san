@@ -37,15 +37,7 @@ from typing_extensions import override
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
-from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
-from tests.load_tests.load_test_constants import LEVEL_MIN
-from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
-from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.load_test_cli import LoadTestCli
 from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
@@ -74,7 +66,8 @@ class TestResultsRebuilder(TestCase):
     ANSWER_SECONDS: float = 0.1
     # The run log prints durations with 2 decimals.
     DURATION_TOLERANCE_SECONDS: float = 0.01
-    FIXTURES_HOCON_DIR: str = TOP_LEVEL_DIR.get_file_in_basis(os.path.join("..", DEFAULT_FIXTURES_HOCON_DIR))
+    FIXTURES_HOCON_DIR: str = TOP_LEVEL_DIR.get_file_in_basis(
+        os.path.join("..", LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR))
 
     @override
     def setUp(self) -> None:
@@ -87,7 +80,7 @@ class TestResultsRebuilder(TestCase):
         root_logger.setLevel(logging.INFO)
         self._scratch_run_dir: str = mkdtemp()
         self.addCleanup(rmtree, self._scratch_run_dir)
-        os.makedirs(os.path.join(self._scratch_run_dir, "requests"))
+        os.makedirs(os.path.join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME))
 
     def test_json_profile_run_rebuilds_five_passed(self) -> None:
         """
@@ -95,7 +88,7 @@ class TestResultsRebuilder(TestCase):
         """
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
-        original, rebuilt = self._run_and_rebuild([], {}, STDOUT_LOG_FILE_NAME)
+        original, rebuilt = self._run_and_rebuild([], {}, LoadTestConstants.STDOUT_LOG_FILE_NAME)
         self._assert_same_run(original, rebuilt, TestResultsRebuilder.REQUEST_COUNT, 0)
 
     def test_hocon_fixture_run_rebuilds_five_passed(self) -> None:
@@ -105,7 +98,7 @@ class TestResultsRebuilder(TestCase):
         extra_args: List[str] = ["--fixtures-hocon-dir", TestResultsRebuilder.FIXTURES_HOCON_DIR]
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
-        original, rebuilt = self._run_and_rebuild(extra_args, {}, STDOUT_LOG_FILE_NAME)
+        original, rebuilt = self._run_and_rebuild(extra_args, {}, LoadTestConstants.STDOUT_LOG_FILE_NAME)
         self._assert_same_run(original, rebuilt, TestResultsRebuilder.REQUEST_COUNT, 0)
 
     def test_legacy_run_log_name_still_rebuilds(self) -> None:
@@ -114,7 +107,7 @@ class TestResultsRebuilder(TestCase):
         """
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
-        original, rebuilt = self._run_and_rebuild([], {}, LEGACY_RUN_LOG_FILE_NAME)
+        original, rebuilt = self._run_and_rebuild([], {}, LoadTestConstants.LEGACY_RUN_LOG_FILE_NAME)
         self._assert_same_run(original, rebuilt, TestResultsRebuilder.REQUEST_COUNT, 0)
 
     def test_failed_timeout_and_killed_stay_distinct(self) -> None:
@@ -122,15 +115,15 @@ class TestResultsRebuilder(TestCase):
         FAILED, TIMEOUT and KILLED requests keep their own status and duration after a rebuild.
         """
         statuses: Dict[str, str] = {
-            "What can you help me with?": STATUS_TIMEOUT,
-            "Tell me something interesting about yourself": STATUS_KILLED,
-            "What is the meaning of hello world in programming?": STATUS_FAILED,
+            "What can you help me with?": LoadTestConstants.STATUS_TIMEOUT,
+            "Tell me something interesting about yourself": LoadTestConstants.STATUS_KILLED,
+            "What is the meaning of hello world in programming?": LoadTestConstants.STATUS_FAILED,
         }
         # --allow-caching sends the profile prompts without a suffix, so each one picks its status.
         extra_args: List[str] = ["--allow-caching"]
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
-        original, rebuilt = self._run_and_rebuild(extra_args, statuses, STDOUT_LOG_FILE_NAME)
+        original, rebuilt = self._run_and_rebuild(extra_args, statuses, LoadTestConstants.STDOUT_LOG_FILE_NAME)
         self._assert_same_run(original, rebuilt, 2, 3)
         rebuilt_statuses: List[str] = []
         result: Dict[str, Any]
@@ -138,7 +131,13 @@ class TestResultsRebuilder(TestCase):
         for result in self._requests_by_id(rebuilt).values():
             rebuilt_statuses.append(result.get("status"))
         rebuilt_statuses.sort()
-        expected_statuses: List[str] = [STATUS_CREATED, STATUS_CREATED, STATUS_FAILED, STATUS_KILLED, STATUS_TIMEOUT]
+        expected_statuses: List[str] = [
+            LoadTestConstants.STATUS_CREATED,
+            LoadTestConstants.STATUS_CREATED,
+            LoadTestConstants.STATUS_FAILED,
+            LoadTestConstants.STATUS_KILLED,
+            LoadTestConstants.STATUS_TIMEOUT,
+        ]
         self.assertEqual(expected_statuses, rebuilt_statuses)
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
@@ -177,7 +176,7 @@ class TestResultsRebuilder(TestCase):
         self._write_log("Request 1: TIMEOUT (61.00s (1m))\n")
 
         result: Dict[str, Any] = self._rebuild().get("request-1", {})
-        self.assertEqual(result.get("status", ""), STATUS_TIMEOUT)
+        self.assertEqual(result.get("status", ""), LoadTestConstants.STATUS_TIMEOUT)
 
     def test_partial_output_does_not_promote_a_kill(self) -> None:
         """
@@ -187,7 +186,7 @@ class TestResultsRebuilder(TestCase):
         self._write_log("Request 1: KILLED (5.00s)\n")
 
         result: Dict[str, Any] = self._rebuild().get("request-1", {})
-        self.assertEqual(result.get("status", ""), STATUS_KILLED)
+        self.assertEqual(result.get("status", ""), LoadTestConstants.STATUS_KILLED)
 
     def test_partial_output_alone_is_not_success(self) -> None:
         """
@@ -197,7 +196,7 @@ class TestResultsRebuilder(TestCase):
         self._write_log("")
 
         result: Dict[str, Any] = self._rebuild().get("request-1", {})
-        self.assertEqual(result.get("status", ""), STATUS_FAILED)
+        self.assertEqual(result.get("status", ""), LoadTestConstants.STATUS_FAILED)
 
     def test_successful_request_is_still_rebuilt_as_created(self) -> None:
         """
@@ -208,7 +207,7 @@ class TestResultsRebuilder(TestCase):
 
         result: Dict[str, Any] = self._rebuild().get("request-1", {})
 
-        self.assertEqual(result.get("status", ""), STATUS_CREATED)
+        self.assertEqual(result.get("status", ""), LoadTestConstants.STATUS_CREATED)
         self.assertEqual(result.get("elapsed", 0.0), 3.0)
 
     def test_each_reported_status_is_preserved(self) -> None:
@@ -217,7 +216,8 @@ class TestResultsRebuilder(TestCase):
         """
         status: str
         # Each reported status comes back unchanged.
-        for status in [STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED]:
+        for status in [LoadTestConstants.STATUS_CREATED, LoadTestConstants.STATUS_FAILED,
+                       LoadTestConstants.STATUS_TIMEOUT, LoadTestConstants.STATUS_KILLED]:
             with self.subTest(status=status):
                 self.assertEqual(ResultsRebuilder._resolve_status({"status": status}), status)
 
@@ -225,16 +225,16 @@ class TestResultsRebuilder(TestCase):
         """
         A request never seen to finish is a failure, not a success.
 
-        Failures past FAILURE_LOG_LIMIT are never printed, so an absent
+        Failures past LoadTestConstants.FAILURE_LOG_LIMIT are never printed, so an absent
         log line is the normal case for a heavily failing run.
         """
-        self.assertEqual(ResultsRebuilder._resolve_status({}), STATUS_FAILED)
+        self.assertEqual(ResultsRebuilder._resolve_status({}), LoadTestConstants.STATUS_FAILED)
 
     def test_unrecognized_status_counts_as_failed(self) -> None:
         """
         An unknown status word is never promoted to success.
         """
-        self.assertEqual(ResultsRebuilder._resolve_status({"status": "WEIRD"}), STATUS_FAILED)
+        self.assertEqual(ResultsRebuilder._resolve_status({"status": "WEIRD"}), LoadTestConstants.STATUS_FAILED)
 
     def _run_and_rebuild(self, extra_args: List[str], statuses: Dict[str, str],
                          run_log_name: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -249,7 +249,7 @@ class TestResultsRebuilder(TestCase):
         argv: List[str] = [
             "load_test_cli", "--agent", TestResultsRebuilder.AGENT,
             "--num-requests", str(TestResultsRebuilder.REQUEST_COUNT), "--client-only",
-            "--level", LEVEL_MIN, "--no-dry-run", "--settle-time", "0",
+            "--level", LoadTestConstants.LEVEL_MIN, "--no-dry-run", "--settle-time", "0",
         ]
         argv.extend(extra_args)
         answer: partial = partial(self._answer, statuses)
@@ -266,12 +266,12 @@ class TestResultsRebuilder(TestCase):
                           return_value=True):
                 LoadTestCli(args).run()
             run_dir: str = self._run_dir(output_base)
-            raw_results_path: str = os.path.join(run_dir, RAW_RESULTS_FILE_NAME)
+            raw_results_path: str = os.path.join(run_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
             raw_results_file = EasyJsonPersistence(full_ref=raw_results_path, must_exist=True)
             original = raw_results_file.restore()
             os.remove(raw_results_path)
-            if run_log_name != STDOUT_LOG_FILE_NAME:
-                stdout_log_path: str = os.path.join(run_dir, STDOUT_LOG_FILE_NAME)
+            if run_log_name != LoadTestConstants.STDOUT_LOG_FILE_NAME:
+                stdout_log_path: str = os.path.join(run_dir, LoadTestConstants.STDOUT_LOG_FILE_NAME)
                 renamed_log_path: str = os.path.join(run_dir, run_log_name)
                 os.rename(stdout_log_path, renamed_log_path)
             ResultsRebuilder(run_dir).run()
@@ -301,7 +301,7 @@ class TestResultsRebuilder(TestCase):
         time.sleep(TestResultsRebuilder.ANSWER_SECONDS)
         processor: BasicMessageProcessor = BasicMessageProcessor()
         processor.process_message({"type": "AI", "text": "Hello there"})
-        status: str = statuses.get(prompt, STATUS_CREATED)
+        status: str = statuses.get(prompt, LoadTestConstants.STATUS_CREATED)
         return AgentRequestResult(status, processor, "Hello there", TestResultsRebuilder.ANSWER_SECONDS, {})
 
     def _run_dir(self, output_base: str) -> str:
@@ -311,7 +311,7 @@ class TestResultsRebuilder(TestCase):
         :param output_base: The --output-dir of the run
         :return: Path of the run directory
         """
-        level_dir: str = os.path.join(output_base, LEVEL_MIN)
+        level_dir: str = os.path.join(output_base, LoadTestConstants.LEVEL_MIN)
         entries: List[str] = os.listdir(level_dir)
         self.assertEqual(1, len(entries))
         return os.path.join(level_dir, entries[0])
@@ -386,7 +386,7 @@ class TestResultsRebuilder(TestCase):
 
         ResultsRebuilder(self._scratch_run_dir).run()
 
-        json_path: str = os.path.join(self._scratch_run_dir, RAW_RESULTS_FILE_NAME)
+        json_path: str = os.path.join(self._scratch_run_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         raw_results_file = EasyJsonPersistence(full_ref=json_path, must_exist=True)
         raw_results: Dict[str, Any] = raw_results_file.restore()
         aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
@@ -398,7 +398,8 @@ class TestResultsRebuilder(TestCase):
 
         :param request_id: Request id used in the file name and reservation id
         """
-        path: str = os.path.join(self._scratch_run_dir, "requests", f"request_{request_id}_stdout.txt")
+        path: str = os.path.join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME,
+                                 f"request_{request_id}_stdout.txt")
         response: Dict[str, str] = {
             "reservation_id": f"abc-{request_id}",
             "agent_network_name": "music_nerd",
@@ -413,7 +414,7 @@ class TestResultsRebuilder(TestCase):
 
         :param text: Log text to write
         """
-        path: str = os.path.join(self._scratch_run_dir, LEGACY_RUN_LOG_FILE_NAME)
+        path: str = os.path.join(self._scratch_run_dir, LoadTestConstants.LEGACY_RUN_LOG_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
 
@@ -424,7 +425,7 @@ class TestResultsRebuilder(TestCase):
         :return: A dictionary from each result's "request_id" (such as "request-1") to that request's result
         """
         rebuilder: ResultsRebuilder = ResultsRebuilder(self._scratch_run_dir)
-        requests_dir: str = os.path.join(self._scratch_run_dir, "requests")
+        requests_dir: str = os.path.join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         timing: Dict[int, Dict[str, Any]] = rebuilder._parse_timing()
         results: List[Dict[str, Any]] = rebuilder._scan_requests(requests_dir, timing)
         results_by_request_id: Dict[str, Dict[str, Any]] = {}

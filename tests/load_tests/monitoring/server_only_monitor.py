@@ -41,8 +41,7 @@ from psutil import cpu_count
 from psutil import cpu_percent
 from psutil import virtual_memory
 
-from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.kernel_memory import KernelMemory
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -148,7 +147,7 @@ class ServerOnlyMonitor:
         output_base: str = round_settings.get("output_base")
         round_dir: str = self._setup_round_output_dir(expected_count, output_base)
         log_position: Optional[int] = self.log_monitor.read_position()
-        round_log_path: str = join(round_dir, STDOUT_LOG_FILE_NAME)
+        round_log_path: str = join(round_dir, LoadTestConstants.STDOUT_LOG_FILE_NAME)
         round_handler: FileHandler = FileHandler(round_log_path, encoding="utf-8")
         round_handler.setLevel(INFO)
         message_formatter: Formatter = Formatter("%(message)s")
@@ -267,15 +266,10 @@ Waiting for %d request(s) in server log...
             ResourceMonitor.log_snapshot("Server BEFORE", before_server)
         # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         before_memory_stats: Any = virtual_memory()
-        before_used_bytes: int = before_memory_stats.total - before_memory_stats.available
-        before_used_megabytes: float = before_used_bytes / ResourceMonitor.ONE_MEGABYTE
         before_available_gigabytes: float = before_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        total_gigabytes: float = before_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        self.logger.info(
-            "  System BEFORE: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
-            before_memory_stats.percent, before_used_megabytes,
-            before_available_gigabytes, total_gigabytes,
-        )
+        # Log through self.logger so the line also goes to this round's log file.
+        before_memory_line: str = ResourceMonitor.system_memory_line("BEFORE", before_memory_stats)
+        self.logger.info("%s", before_memory_line)
         core_count: int = 1
         logical_core_count: Optional[int] = cpu_count()
         if logical_core_count:
@@ -459,7 +453,7 @@ Waiting for %d request(s) in server log...
         self.logger.info("  OUTPUT FILES")
         self.logger.info(Formatters.SEPARATOR_LINE)
         self.logger.info("  Directory:   %s", round_dir)
-        json_path: str = join(round_dir, RAW_RESULTS_FILE_NAME)
+        json_path: str = join(round_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         if isfile(json_path):
             self.logger.info("  Raw results: %s", json_path)
         self.logger.info("  Stdout log:  %s", round_log_path)
@@ -601,7 +595,7 @@ Waiting for %d request(s) in server log...
         raw_data["tool_warnings"] = tool_warning_list
         if kernel_breakdown:
             raw_data["kernel_memory_breakdown"] = kernel_breakdown
-        json_path: str = join(round_dir, RAW_RESULTS_FILE_NAME)
+        json_path: str = join(round_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as json_file:
             dump(raw_data, json_file, indent=2)
 

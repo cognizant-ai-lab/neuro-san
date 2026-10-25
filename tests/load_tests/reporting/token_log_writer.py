@@ -22,7 +22,7 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 
-from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class TokenLogWriter:
         """
         by_request: Dict[str, List[Dict[str, Any]]] = TokenLogWriter._group_network_tokens(network_tokens)
         by_validation: Dict[str, Dict[str, Any]] = TokenLogWriter._group_validation_events(validation_events)
-        path: str = os.path.join(output_dir, SERVER_TOKENS_LOG_FILE_NAME)
+        path: str = os.path.join(output_dir, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
         with open(path, "w", encoding="utf-8") as file_handle:
             result: Dict[str, Any]
             # One file section per request that used tokens.

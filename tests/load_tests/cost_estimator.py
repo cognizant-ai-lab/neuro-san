@@ -50,9 +50,9 @@ class CostEstimator:
         """
         with CostEstimator.price_calculator_lock:
             if CostEstimator.price_calculator is None:
-                llm_factory = DefaultLlmFactory()
+                llm_factory: DefaultLlmFactory = DefaultLlmFactory()
                 llm_factory.load()
-                llm_infos: Dict[str, Any] = llm_factory.llm_infos
+                llm_infos: Dict[str, Any] = llm_factory.get_llm_infos()
                 CostEstimator.price_calculator = LlmTokenCallbackHandler(llm_infos)
         price_calculator: LlmTokenCallbackHandler = CostEstimator.price_calculator
         cost_dollars: float = price_calculator.calculate_token_costs(model, completion_tokens, prompt_tokens)

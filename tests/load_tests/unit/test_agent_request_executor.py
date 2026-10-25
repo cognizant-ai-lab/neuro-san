@@ -25,8 +25,7 @@ from unittest.mock import patch
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
@@ -148,7 +147,7 @@ class TestAgentRequestExecutor(TestCase):
         unused_session: Optional[FakeSession] = None
         result, unused_session = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
 
-        self.assertEqual(result.get_status(), STATUS_TIMEOUT)
+        self.assertEqual(result.get_status(), LoadTestConstants.STATUS_TIMEOUT)
 
     def test_streaming_past_the_cap_stops_early(self) -> None:
         """
@@ -175,7 +174,7 @@ class TestAgentRequestExecutor(TestCase):
         session: Optional[FakeSession] = None
         result, session = self._execute(timeout_seconds=30, message_count=3, message_interval_seconds=0.01)
 
-        self.assertEqual(result.get_status(), STATUS_CREATED)
+        self.assertEqual(result.get_status(), LoadTestConstants.STATUS_CREATED)
         self.assertEqual(result.get_response_text(), "answer")
         self.assertEqual(result.get_processor().get_sly_data().get("reservation_id"), "abc-1")
         self.assertEqual(session.sent, 3)

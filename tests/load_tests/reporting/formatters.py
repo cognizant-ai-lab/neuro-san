@@ -31,12 +31,12 @@ class Formatters:
         Format RSS in human-readable units.
 
         :param rss_megabytes: Resident set size in megabytes
-        :return: e.g. '512M' or '1.5G'
+        :return: e.g. '512 MB' or '1.5 GB'
         """
         if rss_megabytes >= ResourceMonitor.MEGABYTES_PER_GIGABYTE:
             rss_gigabytes: float = rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
-            return f"{rss_gigabytes:.1f}G"
-        return f"{rss_megabytes:.0f}M"
+            return f"{rss_gigabytes:.1f} GB"
+        return f"{rss_megabytes:.0f} MB"
 
     @staticmethod
     def fmt_duration(seconds: float, precision: int = 0) -> str:
