@@ -174,12 +174,16 @@
             }
             "additionalProperties": true
         }
-        # sly_data in allow blocks: a list of key names, a dict mapping
-        # keys to true/false/string-rename, or a plain boolean (true = all)
+        # sly_data in allow blocks: a list of key names (null entries are
+        # tolerated; neuro-san's redactor skips them), a dict mapping keys
+        # to true/false/string-rename, or a plain boolean (true = all)
         "slyDataAllow": {
-            "description": "Either a plain list of allowed sly_data keys, a dict mapping each key to true/false or a rename string, or a boolean (true = allow all)."
+            "description": "A list of keys (null entries skipped), a dict mapping keys to true/false or a rename string, or a boolean."
             "oneOf": [
-                { "$ref": "#/$defs/stringList" }
+                {
+                    "type": "array"
+                    "items": { "type": ["string", "null"] }
+                }
                 {
                     "type": "object"
                     "additionalProperties": { "type": ["boolean", "string"] }

@@ -2,16 +2,35 @@
 
 [`docs/agent_network_schema.hocon`](./agent_network_schema.hocon) is a
 [JSON Schema](https://json-schema.org) (draft 2020-12) describing the shape of a single agent network `.hocon`
-file, as documented in [agent_hocon_reference.md](./agent_hocon_reference.md). It covers every key documented
-there, and is intentionally permissive (`additionalProperties: true` throughout) since real agent networks
-routinely carry CodedTool-, toolbox-, and middleware-specific keys this schema has no way to anticipate.
+file, as documented in [agent_hocon_reference.md](./agent_hocon_reference.md). It is intentionally permissive
+(`additionalProperties: true` throughout) since real agent networks routinely carry CodedTool-, toolbox-, and
+middleware-specific keys this schema has no way to anticipate.
 
-The schema file itself is written in HOCON so that inline `#` comments can explain non-obvious
-fields. It parses to the same dictionary a `.json` version would.
+The schema file itself is written in HOCON so that inline `#` comments can explain non-obvious fields. It
+parses to the same dictionary a `.json` version would.
 
-Its purpose is to let simple scripts catch obvious shape mistakes (a typo'd key name, a `parameters` block
-missing `properties`, an unsupported `type` string) before you ever get to `hocon_validator_cli` or a running
-server.
+## What this schema catches
+
+Running the schema against a parsed agent network reliably flags:
+
+- wrong value types for the keys it names (for example, a string where a number is expected, or `temperature`
+  given a non-numeric value);
+- an unsupported `type` string inside a `parameters`/`sly_data_schema` property;
+- an agent spec missing the required `name` field, or a top-level config missing `tools`;
+- an agent name with disallowed characters (anything outside `[A-Za-z0-9_-]`).
+
+## What it does not catch
+
+Because `additionalProperties: true` is set almost everywhere and most property blocks are optional, the schema
+does **not** catch:
+
+- a typo'd key name (`instuctions` instead of `instructions`) — it is treated as an unknown extra key;
+- a `parameters` block that omits `properties` entirely;
+- missing or wrong values for keys the schema does not model (today this includes `provider_tools` and
+  `function.invocation`, among others).
+
+For those checks, use [`hocon_validator_cli`](./hocon_validator_cli.md), which runs the full neuro-san
+validation chain plus lint warnings.
 
 ## Validate the parsed config, not the raw text
 
@@ -21,29 +40,15 @@ rejects: unquoted keys (`metadata: {`), `#` comments, triple-quoted multi-line s
 JSONC language mode) will likely flag that valid HOCON as a syntax error before it ever gets to check the
 schema.
 
-This schema is meant to be checked against the dictionary pyhocon/leaf-common produce after parsing: the same
-dictionary `AgentNetworkRestorer` hands to neuro-san's own validators. That works regardless of which HOCON
-surface syntax a given file leans on.
+The schema is meant to be checked against the dictionary that falls out of parsing — the same shape neuro-san's
+own validators work on — not the raw HOCON text.
 
-## Usage
+## Load it with key sanitizing enabled
 
-### Script / CI / pre-commit
+When the schema file is parsed back into a dictionary for use with a JSON Schema validator, the HOCON parser
+must be configured to strip the quotes around keys that had to be quoted in the source (`$schema`, `$ref`,
+`$defs`) — load it with key sanitizing enabled (`sanitize_keys=True`). Without it, the `$`-keys come back
+carrying their quotes and the schema silently matches everything.
 
-```python
-from io import BytesIO
-from jsonschema import Draft202012Validator
-from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
-from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
-
-with open("docs/agent_network_schema.hocon", "rb") as f:
-    schema = HoconSerializationFormat(sanitize_keys=True).to_object(BytesIO(f.read()))
-
-restorer = AgentNetworkRestorer(registry_dir=None)
-config = restorer.restore(file_reference="registries/my_agent.hocon").get_config()
-
-for error in Draft202012Validator(schema).iter_errors(config):
-    print(f"{'/'.join(str(p) for p in error.absolute_path)}: {error.message}")
-```
-
-For full validation (including lint checks), use
-[`hocon_validator_cli`](./hocon_validator_cli.md) instead.
+For full validation, use [`hocon_validator_cli`](./hocon_validator_cli.md): it runs the full neuro-san
+validation chain plus the lint warnings described in that document.
