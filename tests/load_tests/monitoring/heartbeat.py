@@ -32,6 +32,7 @@ from typing import Optional
 
 from psutil import Process
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
 from tests.load_tests.monitoring.server_duration_reader import ServerDurationReader
@@ -185,26 +186,13 @@ class Heartbeat:
                 break
 
     @staticmethod
-    def format_elapsed(seconds: int) -> str:
-        """
-        Format seconds with minutes when >= 60.
-
-        :param seconds: Elapsed seconds
-        :return: The formatted duration
-        """
-        if seconds >= 60:
-            # Whole minutes, e.g. 150 seconds -> 2 minutes
-            minutes: int = int(seconds / 60)
-            return f"{seconds}s ({minutes}m)"
-        return f"{seconds}s"
-
-    @staticmethod
     def format_duration_stats(durations: List[float]) -> str:
         """
         Format cumulative min/avg/max over durations.
 
         :param durations: Request durations in seconds
-        :return: The min/avg/max text, or "n/a" when there are no durations yet
+        :return: The min/avg/max text in whole minutes and seconds, e.g. "45s min / 1m 30s avg / 2m 5s max",
+            or "n/a" when there are no durations yet
         """
         if not durations:
             return "n/a"
@@ -216,9 +204,9 @@ class Heartbeat:
         max_seconds: int = int(longest_seconds)
         average_float: float = total_seconds / duration_count
         average_seconds: int = int(average_float)
-        min_text: str = Heartbeat.format_elapsed(min_seconds)
-        average_text: str = Heartbeat.format_elapsed(average_seconds)
-        max_text: str = Heartbeat.format_elapsed(max_seconds)
+        min_text: str = DurationParser.format_minutes_seconds(min_seconds)
+        average_text: str = DurationParser.format_minutes_seconds(average_seconds)
+        max_text: str = DurationParser.format_minutes_seconds(max_seconds)
         duration_stats_text: str = f"{min_text} min / {average_text} avg / {max_text} max"
         return duration_stats_text
 
@@ -267,7 +255,7 @@ class Heartbeat:
         stall_info: str = self._stall_info(done_count, total)
         readings: Dict[str, str] = self._resource_sampler.sample_server_metrics()
         fail_info: str = self._fail_info(done_count)
-        elapsed_text: str = Heartbeat.format_elapsed(elapsed_seconds)
+        elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
         progress_head: str = (f"{done_count} of {total} completed ({percent_done}%{fail_info}) --"
                               f" {elapsed_text} elapsed [{timestamp}]{stall_info}")
         readings["progress_head"] = progress_head
@@ -285,7 +273,7 @@ class Heartbeat:
         in_flight: int = total - done_count
         stall_seconds: Optional[int] = self._stall_tracker.stalled_seconds(done_count, total)
         if stall_seconds is not None:
-            stall_text: str = Heartbeat.format_elapsed(stall_seconds)
+            stall_text: str = DurationParser.format_minutes_seconds(stall_seconds)
             stall_info = f"  !! {in_flight} request(s) stalled for {stall_text}"
         return stall_info
 
