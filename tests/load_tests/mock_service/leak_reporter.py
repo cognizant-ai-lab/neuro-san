@@ -22,6 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -66,10 +67,12 @@ class LeakReporter:
         self.logger.info("  OVERALL RESULTS")
         self.logger.info("%s", Formatters.SEPARATOR_LINE)
         self.logger.info("  Total requests: %s (%s passed, %s failed)", total_requests, passed, failed)
-        self.logger.info("  Total time:     %.2fs", time_seconds)
+        time_text: str = DurationParser.format_minutes_seconds(time_seconds)
+        self.logger.info("  Total time:     %s", time_text)
         if total_requests > 0:
             average_request_seconds: float = time_seconds / total_requests
-            self.logger.info("  Avg per request: %.2fs", average_request_seconds)
+            average_request_text: str = DurationParser.format_minutes_seconds(average_request_seconds)
+            self.logger.info("  Avg per request: %s", average_request_text)
 
         self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
         self.logger.info("  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)",
