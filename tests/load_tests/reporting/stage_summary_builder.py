@@ -36,14 +36,15 @@ class StageSummaryBuilder:
 
         :param stage_values: A dict with
             "stage_num", "round_num", "actual_requests" (number of requests sent in this stage), "counts"
-            (request counts by status), "elapsed" (stage time in seconds), "retries" (retry counts by kind),
+            (request counts by status), "elapsed_seconds" (stage time), "retries" (retry counts by kind),
             "total_retries", "amplification" (server requests per client request), "results" (request results of
             the stage), "server_counts" (request counts from the server log), "disconnections", "server_errors",
             "tool_warnings", "network_tokens" and "validation_events" (from the server log), "has_server_log",
             "has_tokens", "monitor_resources" (True to add the server thread and RSS snapshots), and the optional
-            snapshots and values "before_server", "after_server", "peak_threads", "peak_server_rss", "before_client",
-            "peak_client", "settled_client", "before_system_memory_percent", "after_system_memory_percent",
-            "peak_system_memory", "peak_system_cpu_percent", "before_sys", "after_sys" and "peak_system_threads"
+            snapshots and values "before_server", "after_server", "peak_threads", "peak_server_rss_megabytes",
+            "before_client", "peak_client", "settled_client", "before_system_memory_percent",
+            "after_system_memory_percent", "peak_system_memory", "peak_system_cpu_percent", "before_system",
+            "after_system" and "peak_system_threads"
             (None when not measured)
         :return: A dictionary with "stage", "round", "concurrent", "counts", "elapsed", "retries", "total_retries",
             "amplification", "results", "primary_started", "primary_finished", "total_started", "total_finished",
@@ -57,7 +58,7 @@ class StageSummaryBuilder:
             "round": stage_values.get("round_num"),
             "concurrent": stage_values.get("actual_requests"),
             "counts": stage_values.get("counts"),
-            "elapsed": stage_values.get("elapsed"),
+            "elapsed": stage_values.get("elapsed_seconds"),
             "retries": stage_values.get("retries"),
             "total_retries": stage_values.get("total_retries"),
             "amplification": stage_values.get("amplification"),
@@ -160,7 +161,7 @@ class StageSummaryBuilder:
         before_server: Optional[Dict[str, Any]] = stage_values.get("before_server")
         after_server: Optional[Dict[str, Any]] = stage_values.get("after_server")
         peak_threads: Optional[int] = stage_values.get("peak_threads")
-        peak_server_rss: Optional[float] = stage_values.get("peak_server_rss")
+        peak_server_rss: Optional[float] = stage_values.get("peak_server_rss_megabytes")
         before_client: Optional[Dict[str, Any]] = stage_values.get("before_client")
         settled_client: Optional[Dict[str, Any]] = stage_values.get("settled_client")
         peak_client: Optional[Dict[str, Any]] = stage_values.get("peak_client")
@@ -196,8 +197,8 @@ class StageSummaryBuilder:
         after_system_memory_percent: Optional[float] = stage_values.get("after_system_memory_percent")
         peak_system_memory: Optional[Dict[str, float]] = stage_values.get("peak_system_memory")
         peak_system_cpu_percent: Optional[float] = stage_values.get("peak_system_cpu_percent")
-        before_sys: Optional[Dict[str, float]] = stage_values.get("before_sys")
-        after_sys: Optional[Dict[str, float]] = stage_values.get("after_sys")
+        before_sys: Optional[Dict[str, float]] = stage_values.get("before_system")
+        after_sys: Optional[Dict[str, float]] = stage_values.get("after_system")
         peak_system_threads: Optional[int] = stage_values.get("peak_system_threads")
         if before_system_memory_percent is not None:
             summary_entry["before_sys_mem_pct"] = before_system_memory_percent

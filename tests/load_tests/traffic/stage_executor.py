@@ -47,7 +47,7 @@ from tests.load_tests.traffic.stage_plan import StagePlan
 from tests.load_tests.validation.output_validator import OutputValidator
 
 
-class StageExecutor:  # pylint: disable=too-many-instance-attributes
+class StageExecutor:
     """
     Runs the stages of one load test, round by round, and builds the summary dict of each stage.
     Stops early at the --max-requests cap, at --total-timeout, or when a stage must abort the test.
@@ -65,17 +65,14 @@ class StageExecutor:  # pylint: disable=too-many-instance-attributes
         :param args: Parsed command-line arguments
         :param runner: Traffic runner that sends the requests of a stage
         :param executor_parts: A dict with "profile" (the AgentProfile), "log_monitor" (the ServerLogMonitor, or
-            None), "resource_reporter" (the ResourceReporter), "server_process" (the local server process, or None),
-            "output_dir" (the run's output directory), "probe_result" (result of the dry-run probe, or None) and
-            "server_log" (server log path, or None)
+            None), "resource_reporter" (the ResourceReporter), "server_process" (the local server process, or None)
+            and "output_dir" (the run's output directory)
         """
         self.args: Namespace = args
         self.runner: TrafficRunner = runner
         self.profile: AgentProfile = executor_parts.get("profile")
         self.log_monitor: Optional[ServerLogMonitor] = executor_parts.get("log_monitor")
         self.server_process: Optional[Process] = executor_parts.get("server_process")
-        self.probe_result: Optional[Dict[str, Any]] = executor_parts.get("probe_result")
-        self.server_log: Optional[str] = executor_parts.get("server_log")
         self._output_dir: Optional[str] = executor_parts.get("output_dir")
         collector_parts: Dict[str, Any] = {
             "profile": self.profile,
@@ -85,101 +82,129 @@ class StageExecutor:  # pylint: disable=too-many-instance-attributes
             "output_dir": self._output_dir,
         }
         self._data_collector: StageDataCollector = StageDataCollector(args, collector_parts)
-        self._aborted: bool = False
-        self._interrupted: bool = False
 
-    def run_all_stages(  # pylint: disable=too-many-locals
-            self, stages: List[int], total_cap: int) -> List[Dict[str, Any]]:
+    def run_all_stages(self, run_inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute all stages of the load test, collecting data per stage.
 
-        :param stages: Request count of each stage, in order
-        :param total_cap: Most requests to send in the whole test
-        :return: One summary dict per stage that runs
+        :param run_inputs: A dict with "stages" (request count of each stage, in order), "total_cap" (most requests
+            to send in the whole test), "monitor_resources" (True to take resource snapshots around each stage),
+            "has_server_log" (True when the server log can be read) and "probe_result" (result of the dry-run probe
+            to count in the first stage, or None)
+        :return: A dict with "stage_summaries" (one summary dict per stage that runs), "aborted" (True when a stage
+            or --total-timeout stops the test) and "interrupted" (True when Ctrl-C stops a stage)
         """
-        monitor_resources: bool = (self.args.level != LoadTestConstants.LEVEL_MIN
-                                   or self.args.client_only
-                                   or self.args.server_only)
-        has_server_log: bool = self.server_log is not None
-        probe_result: Optional[Dict[str, Any]] = self.probe_result
+        stages: List[int] = run_inputs.get("stages")
         only_stage: bool = len(stages) == 1 and self.args.num_rounds == 1
-
-        stage_summaries: List[Dict[str, Any]] = []
-        global_offset: int = 0
-        total_sent: int = 0
         test_start_seconds: float = perf_counter()
+        run_state: Dict[str, Any] = {
+            "stages": stages,
+            "total_cap": run_inputs.get("total_cap"),
+            "monitor_resources": run_inputs.get("monitor_resources"),
+            "has_server_log": run_inputs.get("has_server_log"),
+            "probe_result": run_inputs.get("probe_result"),
+            "only_stage": only_stage,
+            "test_start_seconds": test_start_seconds,
+            "total_sent": 0,
+            "stage_summaries": [],
+            "aborted": False,
+            "interrupted": False,
+        }
 
         round_num: int
-        # Run every stage once per round.
+        # Run every stage once per round, until the request cap, the total timeout or a stage stops the test.
         for round_num in range(1, self.args.num_rounds + 1):
             if self.args.num_rounds > 1:
                 StageExecutor.LOGGER.info("\n%s", StageExecutor.ROUND_HEADER_LINE)
                 StageExecutor.LOGGER.info("  ROUND %s of %s", round_num, self.args.num_rounds)
                 StageExecutor.LOGGER.info("%s", StageExecutor.ROUND_HEADER_LINE)
+            keep_running: bool = self._run_round(round_num, run_state)
+            if not keep_running:
+                break
 
-            stage_index: int
-            num_concurrent: int
-            # Run each stage, stopping at the request cap or the total timeout.
-            for stage_index, num_concurrent in enumerate(stages):
-                if total_sent >= total_cap:
-                    total_planned: int = sum(stages) * self.args.num_rounds
-                    StageExecutor.LOGGER.warning(
-                        """
+        stages_outcome: Dict[str, Any] = {
+            "stage_summaries": run_state.get("stage_summaries"),
+            "aborted": run_state.get("aborted"),
+            "interrupted": run_state.get("interrupted"),
+        }
+        return stages_outcome
+
+    def _run_round(self, round_num: int, run_state: Dict[str, Any]) -> bool:
+        """
+        Run the stages of one round.
+
+        :param round_num: Round number, starting at 1
+        :param run_state: The run state dict of run_all_stages(). Its "total_sent", "probe_result",
+            "stage_summaries", "aborted" and "interrupted" values are updated as the stages run.
+        :return: True when the next round can run, False when the request cap, the total timeout or a stage
+            stops the test
+        """
+        stages: List[int] = run_state.get("stages")
+        total_cap: int = run_state.get("total_cap")
+        stage_summaries: List[Dict[str, Any]] = run_state.get("stage_summaries")
+        stage_index: int
+        num_concurrent: int
+        # Run each stage, stopping at the request cap or the total timeout.
+        for stage_index, num_concurrent in enumerate(stages):
+            if not self._can_start_stage(run_state):
+                return False
+
+            total_sent: int = run_state.get("total_sent")
+            remaining: int = total_cap - total_sent
+            actual_requests: int = min(num_concurrent, remaining)
+            # The requests sent by earlier stages come first, so total_sent is also this stage's request offset.
+            stage_inputs: Dict[str, Any] = {
+                "actual_requests": actual_requests,
+                "num_concurrent": num_concurrent,
+                "stage_num": stage_index + 1,
+                "round_num": round_num,
+                "global_offset": total_sent,
+                "monitor_resources": run_state.get("monitor_resources"),
+                "has_server_log": run_state.get("has_server_log"),
+                "probe_result": run_state.get("probe_result"),
+                "only_stage": run_state.get("only_stage"),
+            }
+            stage_result: Dict[str, Any] = self._run_single_stage(stage_inputs)
+
+            run_state["total_sent"] = total_sent + actual_requests
+            if stage_result.get("probe_used"):
+                run_state["probe_result"] = None
+            stage_summary: Dict[str, Any] = stage_result.get("summary")
+            stage_summaries.append(stage_summary)
+            if stage_result.get("interrupted"):
+                run_state["interrupted"] = True
+            if stage_result.get("should_abort"):
+                run_state["aborted"] = True
+                return False
+        return True
+
+    def _can_start_stage(self, run_state: Dict[str, Any]) -> bool:
+        """
+        Check the request cap and the total timeout before a stage.
+
+        :param run_state: The run state dict of run_all_stages(). Its "aborted" value is set when the total timeout
+            is reached.
+        :return: True when the next stage can start, False when the request cap or the total timeout is reached
+        """
+        stages: List[int] = run_state.get("stages")
+        total_cap: int = run_state.get("total_cap")
+        total_sent: int = run_state.get("total_sent")
+        can_start: bool = True
+        if total_sent >= total_cap:
+            total_planned: int = sum(stages) * self.args.num_rounds
+            StageExecutor.LOGGER.warning(
+                """
 WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests completed.
          Use --max-requests %s to run all planned requests.""",
-                        total_cap, total_sent, total_planned, total_planned,
-                    )
-                    return stage_summaries
-
-                if self._total_timeout_reached(test_start_seconds):
-                    self._aborted = True
-                    return stage_summaries
-
-                remaining: int = total_cap - total_sent
-                actual_requests: int = min(num_concurrent, remaining)
-
-                stage_inputs: Dict[str, Any] = {
-                    "actual_requests": actual_requests,
-                    "num_concurrent": num_concurrent,
-                    "stage_num": stage_index + 1,
-                    "round_num": round_num,
-                    "global_offset": global_offset,
-                    "monitor_resources": monitor_resources,
-                    "has_server_log": has_server_log,
-                    "probe_result": probe_result,
-                    "only_stage": only_stage,
-                }
-                stage_result: Dict[str, Any] = self._run_single_stage(stage_inputs)
-                summary: Dict[str, Any] = stage_result.get("summary")
-                probe_used: bool = stage_result.get("probe_used")
-                should_abort: bool = stage_result.get("should_abort")
-
-                global_offset += actual_requests
-                total_sent += actual_requests
-                if probe_used:
-                    probe_result = None
-                stage_summaries.append(summary)
-                if should_abort:
-                    self._aborted = True
-                    return stage_summaries
-
-        return stage_summaries
-
-    def was_aborted(self) -> bool:
-        """
-        Return True when a stage or --total-timeout stopped the test.
-
-        :return: True when the test stops early on an abort
-        """
-        return self._aborted
-
-    def was_interrupted(self) -> bool:
-        """
-        Return True when the traffic runner reports a Ctrl-C during a stage.
-
-        :return: True when a stage is interrupted
-        """
-        return self._interrupted
+                total_cap, total_sent, total_planned, total_planned,
+            )
+            can_start = False
+        else:
+            test_start_seconds: float = run_state.get("test_start_seconds")
+            if self._total_timeout_reached(test_start_seconds):
+                run_state["aborted"] = True
+                can_start = False
+        return can_start
 
     def _total_timeout_reached(self, test_start_seconds: float) -> bool:
         """
@@ -206,8 +231,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         )
         return True
 
-    def _run_single_stage(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-            self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_single_stage(self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute one stage of the load test.
 
@@ -217,51 +241,116 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             take resource snapshots around the stage), "has_server_log" (True when the server log can be read),
             "probe_result" (result of the dry-run probe to count in this stage, or None) and "only_stage" (True when
             this is the only stage)
-        :return: Dict with "summary" (the stage summary dict), "probe_used" (True when probe_result was counted)
-            and "should_abort" (True when the test must stop after this stage)
+        :return: Dict with "summary" (the stage summary dict), "probe_used" (True when probe_result was counted),
+            "should_abort" (True when the test must stop after this stage) and "interrupted" (True when Ctrl-C
+            stops the stage)
+        """
+        stage_start: Dict[str, Any] = self._start_stage(stage_inputs)
+        stage_run: Dict[str, Any] = self._fire_stage(stage_inputs, stage_start)
+        stage_check: Dict[str, Any] = self._check_stage(stage_inputs, stage_start, stage_run)
+        post_stage_data: Dict[str, Any] = {}
+        if not stage_check.get("should_abort"):
+            post_stage_data = self._collect_after_stage(stage_inputs, stage_start, stage_run, stage_check)
+        system_before: Dict[str, Optional[float]] = stage_run.get("system_before")
+        system_after: Dict[str, Optional[float]] = SystemResources.snapshot()
+        stage_values: Dict[str, Any] = {
+            "stage_num": stage_inputs.get("stage_num"),
+            "round_num": stage_inputs.get("round_num"),
+            "actual_requests": stage_inputs.get("actual_requests"),
+            "counts": stage_check.get("counts"),
+            "elapsed_seconds": stage_run.get("total_time_seconds"),
+            "retries": stage_check.get("retries"),
+            "total_retries": stage_check.get("total_retries"),
+            "amplification": stage_check.get("amplification"),
+            "results": stage_run.get("results"),
+            "has_server_log": stage_inputs.get("has_server_log"),
+            "has_tokens": self.args.include_tokens,
+            "monitor_resources": stage_inputs.get("monitor_resources"),
+            "before_server": stage_start.get("before_server"),
+            "peak_threads": stage_run.get("peak_server_threads"),
+            "peak_server_rss_megabytes": stage_run.get("peak_server_rss_megabytes"),
+            "before_client": stage_start.get("before_client"),
+            "peak_client": stage_run.get("peak_client"),
+            "settled_client": stage_run.get("settled_client"),
+            "before_system_memory_percent": system_before.get("mem_pct"),
+            "after_system_memory_percent": system_after.get("mem_pct"),
+            "peak_system_memory": stage_run.get("peak_system_memory"),
+            "peak_system_cpu_percent": stage_run.get("peak_system_cpu_percent"),
+            "before_system": system_before,
+            "after_system": system_after,
+            "peak_system_threads": stage_run.get("peak_system_threads"),
+        }
+        server_log_values: Dict[str, Any] = StageExecutor._server_log_values(post_stage_data)
+        stage_values.update(server_log_values)
+        summary_entry: Dict[str, Any] = StageSummaryBuilder.build_stage_summary(stage_values)
+        stage_result: Dict[str, Any] = {
+            "summary": summary_entry,
+            "probe_used": stage_start.get("probe_used"),
+            "should_abort": stage_check.get("should_abort"),
+            "interrupted": stage_run.get("interrupted"),
+        }
+        return stage_result
+
+    def _stage_workers(self, stage_inputs: Dict[str, Any]) -> int:
+        """
+        Return the most worker threads a stage uses: its request count with --ramp, else --max-workers.
+
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :return: Most worker threads the stage uses
+        """
+        stage_workers: int = self.args.max_workers
+        if self.args.ramp:
+            stage_workers = stage_inputs.get("actual_requests")
+        return stage_workers
+
+    def _log_stage_header(self, stage_inputs: Dict[str, Any], stage_workers: int) -> None:
+        """
+        Log the header of a stage: its request count, worker count and round.
+
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_workers: Most worker threads the stage uses
         """
         actual_requests: int = stage_inputs.get("actual_requests")
         num_concurrent: int = stage_inputs.get("num_concurrent")
         stage_num: int = stage_inputs.get("stage_num")
         round_num: int = stage_inputs.get("round_num")
-        global_offset: int = stage_inputs.get("global_offset")
-        monitor_resources: bool = stage_inputs.get("monitor_resources")
-        has_server_log: bool = stage_inputs.get("has_server_log")
-        probe_result: Optional[Dict[str, Any]] = stage_inputs.get("probe_result")
-        only_stage: bool = stage_inputs.get("only_stage", False)
-
-        stage_workers: int = self.args.max_workers
-        if self.args.ramp:
-            stage_workers = actual_requests
-
         StageExecutor.LOGGER.info("\n%s", Formatters.SEPARATOR_LINE)
-        stage_label: str = ""
+        stage_label: str = f"{actual_requests} requests (max {stage_workers} workers)"
         if self.args.ramp:
-            stage_label = f"[STAGE {stage_num}] {actual_requests} requests (max {stage_workers} workers)"
-            if self.args.num_rounds > 1:
-                stage_label += f" (round {round_num})"
-        else:
-            stage_label = f"{actual_requests} requests (max {stage_workers} workers)"
-            if self.args.num_rounds > 1:
-                stage_label += f" (round {round_num})"
+            stage_label = f"[STAGE {stage_num}] {stage_label}"
+        if self.args.num_rounds > 1:
+            stage_label += f" (round {round_num})"
         StageExecutor.LOGGER.info("  %s", stage_label)
         StageExecutor.LOGGER.info("%s", Formatters.SEPARATOR_LINE)
 
         if actual_requests < num_concurrent:
             StageExecutor.LOGGER.info("  (Capped from %s to %s by --max-requests)", num_concurrent, actual_requests)
 
+    def _start_stage(self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Log the stage header and take the server log position and the resource snapshots before the stage.
+
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :return: Dict with "stage_workers" (most worker threads), "log_position" (server log offset, or None),
+            "client_process" (the client process, or None without resource monitoring), "before_server" and
+            "before_client" (snapshots, or None), "stage_requests" (number of requests to fire, without the probe)
+            and "probe_used" (True when the dry-run probe counts as the first request)
+        """
+        actual_requests: int = stage_inputs.get("actual_requests")
+        monitor_resources: bool = stage_inputs.get("monitor_resources")
+        probe_result: Optional[Dict[str, Any]] = stage_inputs.get("probe_result")
+        stage_workers: int = self._stage_workers(stage_inputs)
+        self._log_stage_header(stage_inputs, stage_workers)
+
         log_position: Optional[int] = None
-        if has_server_log:
+        if stage_inputs.get("has_server_log"):
             log_position = self.log_monitor.read_position()
 
         client_process: Optional[Process] = None
-        before_server: Optional[Dict[str, Any]] = None
-        before_client: Optional[Dict[str, Any]] = None
+        before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {}
         if monitor_resources:
             client_process = Process()
-            before_snapshots: Dict[str, Optional[Dict[str, Any]]] = self._capture_before_snapshots(client_process)
-            before_server = before_snapshots.get("server")
-            before_client = before_snapshots.get("client")
+            before_snapshots = self._capture_before_snapshots(client_process)
 
         self._log_fire_info(actual_requests, monitor_resources, probe_result)
 
@@ -273,94 +362,203 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
+        stage_start: Dict[str, Any] = {
+            "stage_workers": stage_workers,
+            "log_position": log_position,
+            "client_process": client_process,
+            "before_server": before_snapshots.get("server"),
+            "before_client": before_snapshots.get("client"),
+            "stage_requests": stage_requests,
+            "probe_used": probe_used,
+        }
+        return stage_start
+
+    def _fire_stage(self, stage_inputs: Dict[str, Any], stage_start: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Fire the requests of a stage while the server log monitor runs, then take the client snapshots.
+
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_start: The dict from _start_stage()
+        :return: The stage run dict of TrafficRunner.run_stage(), with the probe counted in "results" and
+            "total_time_seconds", plus "system_before" (system snapshot before the requests), "peak_client" (peak
+            client RSS snapshot, or None) and "settled_client" (client snapshot after the stage, or None)
+        """
+        probe_result: Optional[Dict[str, Any]] = stage_inputs.get("probe_result")
+        probe_used: bool = stage_start.get("probe_used")
+        client_process: Optional[Process] = stage_start.get("client_process")
         stop_event: Event = Event()
         monitor: Optional[Thread] = None
-        if has_server_log:
-            monitor_start_seconds: float = perf_counter()
-            primary_start_pattern: str = self.profile.get_primary_start_pattern()
-            monitor = self.log_monitor.start_log_monitor(
-                log_position, stage_requests, monitor_start_seconds, stop_event, client_process=client_process,
-                primary_start_pattern=primary_start_pattern, output_dir=self._output_dir)
+        if stage_inputs.get("has_server_log"):
+            monitor = self._start_log_monitor(stage_start, stop_event)
 
         system_before: Dict[str, Optional[float]] = SystemResources.snapshot()
-        before_system_memory_percent: Optional[float] = system_before.get("mem_pct")
 
-        first_request_number: int = global_offset
+        first_request_number: int = stage_inputs.get("global_offset")
         # The dry-run probe is the first request of the stage.
         if probe_used:
             first_request_number += 1
+        stage_requests: int = stage_start.get("stage_requests")
+        stage_workers: int = stage_start.get("stage_workers")
         plan: StagePlan = StagePlan(stage_requests, stage_workers, first_request_number, self._output_dir)
         stage_run: Dict[str, Any] = self.runner.run_stage(plan, server_process=self.server_process,
                                                           client_process=client_process, log_monitor=self.log_monitor)
-        elapsed_seconds: float = stage_run.get("total_time_seconds")
-        results: List[Dict[str, Any]] = stage_run.get("results")
-        peak_threads: Optional[int] = stage_run.get("peak_server_threads")
-        peak_client_rss_megabytes: Optional[float] = stage_run.get("peak_client_rss_megabytes")
-        peak_server_rss_megabytes: Optional[float] = stage_run.get("peak_server_rss_megabytes")
-        peak_system_memory: Optional[Dict[str, float]] = stage_run.get("peak_system_memory")
-        peak_system_cpu_percent: Optional[float] = stage_run.get("peak_system_cpu_percent")
-        peak_system_threads: Optional[int] = stage_run.get("peak_system_threads")
-        server_died: bool = stage_run.get("server_died")
-        interrupted: bool = stage_run.get("interrupted")
-        if interrupted:
-            self._interrupted = True
-
         if probe_used:
-            results.insert(0, probe_result)
-            elapsed_seconds += probe_result.get("elapsed", 0.0)
+            StageExecutor._count_probe(stage_run, probe_result)
 
         stop_event.set()
         if monitor:
             monitor.join(timeout=LoadTestConstants.THREAD_JOIN_TIMEOUT_SECONDS)
 
-        peak_client: Optional[Dict[str, Any]] = None
-        settled_client: Optional[Dict[str, Any]] = None
-        if monitor_resources:
+        stage_run["system_before"] = system_before
+        stage_run["peak_client"] = None
+        stage_run["settled_client"] = None
+        if stage_inputs.get("monitor_resources"):
+            peak_client_rss_megabytes: Optional[float] = stage_run.get("peak_client_rss_megabytes")
             if peak_client_rss_megabytes is not None:
-                peak_client = {"rss_megabytes": peak_client_rss_megabytes}
-            settled_client = ResourceMonitor.snapshot(client_process)
+                stage_run["peak_client"] = {"rss_megabytes": peak_client_rss_megabytes}
+            stage_run["settled_client"] = ResourceMonitor.snapshot(client_process)
+        return stage_run
 
+    @staticmethod
+    def _count_probe(stage_run: Dict[str, Any], probe_result: Dict[str, Any]) -> None:
+        """
+        Count the dry-run probe as the first request of the stage.
+
+        :param stage_run: The stage run dict of TrafficRunner.run_stage(); its "results" and "total_time_seconds"
+            are updated here
+        :param probe_result: The result of the dry-run probe
+        """
+        stage_results: List[Dict[str, Any]] = stage_run.get("results")
+        stage_results.insert(0, probe_result)
+        stage_time_seconds: float = stage_run.get("total_time_seconds")
+        probe_time_seconds: float = probe_result.get("elapsed", 0.0)
+        stage_run["total_time_seconds"] = stage_time_seconds + probe_time_seconds
+
+    def _start_log_monitor(self, stage_start: Dict[str, Any], stop_event: Event) -> Optional[Thread]:
+        """
+        Start the server log monitor thread of a stage.
+
+        :param stage_start: The dict from _start_stage()
+        :param stop_event: Event that stops the monitor when the stage ends
+        :return: The monitor thread, or None when the server log can't be read
+        """
+        monitor_start_seconds: float = perf_counter()
+        primary_start_pattern: str = self.profile.get_primary_start_pattern()
+        log_position: Optional[int] = stage_start.get("log_position")
+        stage_requests: int = stage_start.get("stage_requests")
+        client_process: Optional[Process] = stage_start.get("client_process")
+        monitor: Optional[Thread] = self.log_monitor.start_log_monitor(
+            log_position, stage_requests, monitor_start_seconds, stop_event, client_process=client_process,
+            primary_start_pattern=primary_start_pattern, output_dir=self._output_dir)
+        return monitor
+
+    def _check_stage(self, stage_inputs: Dict[str, Any], stage_start: Dict[str, Any],
+                     stage_run: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Count the results and the server retries of a stage, log them, and decide if the test must stop.
+
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_start: The dict from _start_stage()
+        :param stage_run: The dict from _fire_stage()
+        :return: Dict with "counts" (result counts), "retries" (retry count per error type), "total_retries",
+            "amplification" (server calls per request) and "should_abort" (True when the test must stop)
+        """
+        results: List[Dict[str, Any]] = stage_run.get("results")
         counts: Dict[str, Any] = OutputValidator.count_results(results)
+        stage_retries: Dict[str, Any] = self._count_stage_retries(stage_inputs, stage_start)
 
-        retries: Dict[str, int] = {}
-        total_retries: int = 0
-        amplification: float = 1.0
-        if has_server_log:
-            retries = self.log_monitor.count_retries_since(log_position)
-            retry_count: int
-            # Add up the retries of every error type.
-            for retry_count in retries.values():
-                total_retries += retry_count
-            amplification = Formatters.compute_amplification(stage_requests, total_retries)
-
-        OutputValidator.log_stage_results(actual_requests, counts, elapsed_seconds,
+        actual_requests: int = stage_inputs.get("actual_requests")
+        total_time_seconds: float = stage_run.get("total_time_seconds")
+        only_stage: bool = stage_inputs.get("only_stage", False)
+        OutputValidator.log_stage_results(actual_requests, counts, total_time_seconds,
                                           timeout_seconds=self.args.request_timeout,
                                           idle_timeout_seconds=self.args.idle_timeout, show_counts=not only_stage)
+        server_died: bool = stage_run.get("server_died")
+        interrupted: bool = stage_run.get("interrupted")
         should_abort: bool = server_died or interrupted
         if not should_abort:
             should_abort = OutputValidator.check_permission_failures(results, self.args.agent)
         if not should_abort:
             should_abort = OutputValidator.check_timeout_abort(counts)
-        post_stage_data: Dict[str, Any] = {}
-        if not should_abort:
-            if has_server_log and stage_requests > 0:
-                OutputValidator.log_retry_activity(retries, total_retries, stage_requests)
-            post_stage_inputs: Dict[str, Any] = {
-                "actual_requests": actual_requests,
-                "monitor_resources": monitor_resources,
-                "has_server_log": has_server_log,
-                "log_position": log_position,
-                "results": results,
-                "before_server": before_server,
-                "before_client": before_client,
-                "peak_client": peak_client,
-                "settled_client": settled_client,
-                "server_log_requests": stage_requests,
-            }
-            post_stage_data = self._data_collector.collect_post_stage_data(post_stage_inputs)
-        system_after: Dict[str, Optional[float]] = SystemResources.snapshot()
-        after_system_memory_percent: Optional[float] = system_after.get("mem_pct")
-        # An aborted stage skips the server log analysis, so its server log values are empty.
+        stage_check: Dict[str, Any] = {
+            "counts": counts,
+            "retries": stage_retries.get("retries"),
+            "total_retries": stage_retries.get("total_retries"),
+            "amplification": stage_retries.get("amplification"),
+            "should_abort": should_abort,
+        }
+        return stage_check
+
+    def _count_stage_retries(self, stage_inputs: Dict[str, Any], stage_start: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Count the server retries of a stage from the server log.
+
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_start: The dict from _start_stage()
+        :return: Dict with "retries" (retry count per error type, empty without a server log), "total_retries" and
+            "amplification" (server calls per request, 1.0 without a server log)
+        """
+        retries: Dict[str, int] = {}
+        total_retries: int = 0
+        amplification: float = 1.0
+        if stage_inputs.get("has_server_log"):
+            log_position: Optional[int] = stage_start.get("log_position")
+            retries = self.log_monitor.count_retries_since(log_position)
+            retry_count: int
+            # Add up the retries of every error type.
+            for retry_count in retries.values():
+                total_retries += retry_count
+            stage_requests: int = stage_start.get("stage_requests")
+            amplification = Formatters.compute_amplification(stage_requests, total_retries)
+        stage_retries: Dict[str, Any] = {
+            "retries": retries,
+            "total_retries": total_retries,
+            "amplification": amplification,
+        }
+        return stage_retries
+
+    def _collect_after_stage(self, stage_inputs: Dict[str, Any], stage_start: Dict[str, Any],
+                             stage_run: Dict[str, Any], stage_check: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Log the retry activity of a stage, then settle, snapshot and analyze the server log.
+
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_start: The dict from _start_stage()
+        :param stage_run: The dict from _fire_stage()
+        :param stage_check: The dict from _check_stage()
+        :return: The dict from StageDataCollector.collect_post_stage_data()
+        """
+        has_server_log: bool = stage_inputs.get("has_server_log")
+        stage_requests: int = stage_start.get("stage_requests")
+        if has_server_log and stage_requests > 0:
+            retries: Dict[str, int] = stage_check.get("retries")
+            total_retries: int = stage_check.get("total_retries")
+            OutputValidator.log_retry_activity(retries, total_retries, stage_requests)
+        post_stage_inputs: Dict[str, Any] = {
+            "actual_requests": stage_inputs.get("actual_requests"),
+            "monitor_resources": stage_inputs.get("monitor_resources"),
+            "has_server_log": has_server_log,
+            "log_position": stage_start.get("log_position"),
+            "results": stage_run.get("results"),
+            "before_server": stage_start.get("before_server"),
+            "before_client": stage_start.get("before_client"),
+            "peak_client": stage_run.get("peak_client"),
+            "settled_client": stage_run.get("settled_client"),
+            "server_log_requests": stage_requests,
+        }
+        post_stage_data: Dict[str, Any] = self._data_collector.collect_post_stage_data(post_stage_inputs)
+        return post_stage_data
+
+    @staticmethod
+    def _server_log_values(post_stage_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Read the server log values of a stage for its summary. An aborted stage skips the server log analysis,
+        so its post_stage_data is empty and its server log values are empty too.
+
+        :param post_stage_data: The dict from _collect_after_stage(), or an empty dict for an aborted stage
+        :return: Dict with "server_counts", "disconnections", "server_errors", "tool_warnings", "network_tokens",
+            "validation_events" and "after_server" (server snapshot after the stage, or None)
+        """
         server_counts: Dict[str, Any] = post_stage_data.get("server_counts", {})
         disconnections: List[Dict[str, str]] = post_stage_data.get("disconnections", [])
         server_errors: List[Dict[str, str]] = post_stage_data.get("server_errors", [])
@@ -368,47 +566,16 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         network_tokens: List[Dict[str, Any]] = post_stage_data.get("network_tokens", [])
         validation_events: List[Dict[str, Any]] = post_stage_data.get("validation_events", [])
         after_server: Optional[Dict[str, Any]] = post_stage_data.get("after_server")
-        stage_values: Dict[str, Any] = {
-            "stage_num": stage_num,
-            "round_num": round_num,
-            "actual_requests": actual_requests,
-            "counts": counts,
-            "elapsed": elapsed_seconds,
-            "retries": retries,
-            "total_retries": total_retries,
-            "amplification": amplification,
-            "results": results,
+        server_log_values: Dict[str, Any] = {
             "server_counts": server_counts,
             "disconnections": disconnections,
             "server_errors": server_errors,
             "tool_warnings": tool_warnings,
             "network_tokens": network_tokens,
             "validation_events": validation_events,
-            "has_server_log": has_server_log,
-            "has_tokens": self.args.include_tokens,
-            "monitor_resources": monitor_resources,
-            "before_server": before_server,
             "after_server": after_server,
-            "peak_threads": peak_threads,
-            "peak_server_rss": peak_server_rss_megabytes,
-            "before_client": before_client,
-            "peak_client": peak_client,
-            "settled_client": settled_client,
-            "before_system_memory_percent": before_system_memory_percent,
-            "after_system_memory_percent": after_system_memory_percent,
-            "peak_system_memory": peak_system_memory,
-            "peak_system_cpu_percent": peak_system_cpu_percent,
-            "before_sys": system_before,
-            "after_sys": system_after,
-            "peak_system_threads": peak_system_threads,
         }
-        summary_entry: Dict[str, Any] = StageSummaryBuilder.build_stage_summary(stage_values)
-        stage_result: Dict[str, Any] = {
-            "summary": summary_entry,
-            "probe_used": probe_used,
-            "should_abort": should_abort,
-        }
-        return stage_result
+        return server_log_values
 
     def _capture_before_snapshots(self, client_process: Process) -> Dict[str, Optional[Dict[str, Any]]]:
         """

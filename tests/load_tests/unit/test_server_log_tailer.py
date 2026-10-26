@@ -16,6 +16,8 @@
 # END COPYRIGHT
 # re.compile stays module-qualified: a specific import would hide the builtin compile.
 import re
+from itertools import chain
+from itertools import repeat
 from argparse import Namespace
 from os.path import join
 from shutil import rmtree
@@ -25,6 +27,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from unittest import TestCase
+from unittest.mock import patch
 
 from typing_extensions import override
 
@@ -111,6 +114,27 @@ class TestServerLogTailer(TestCase):
         ]
         durations_seconds: List[float] = ServerLogTailer.positive_durations(pairs)
         self.assertEqual(durations_seconds, [1.5, 2])
+
+    def test_heartbeat_prints_minutes_and_seconds(self) -> None:
+        """
+        The server-only heartbeat line prints the time waited as minutes and seconds: 105 seconds is "1m 45s".
+        """
+        self._write_log([])
+        # The fake clock starts the round at 0 and reads 105 seconds on every later call.
+        clock_readings: chain = chain([0.0], repeat(105.0))
+        with patch("tests.load_tests.monitoring.server_log_tailer.perf_counter", side_effect=clock_readings):
+            with self.assertLogs(level="INFO") as captured:
+                self._tail(expected_count=1, stage_timeout_seconds=30)
+        heartbeat_lines: List[str] = []
+        line: str
+        # Keep the heartbeat lines.
+        for line in captured.output:
+            if "[heartbeat]" in line:
+                heartbeat_lines.append(line)
+        heartbeat_count: int = len(heartbeat_lines)
+        self.assertEqual(heartbeat_count, 1)
+        first_line: str = heartbeat_lines[0]
+        self.assertIn("[heartbeat] 1m 45s [", first_line)
 
     def _write_log(self, lines: List[str]) -> None:
         """

@@ -49,7 +49,7 @@ class TestStageSummaryBuilder(TestCase):
             "round_num": 2,
             "actual_requests": 3,
             "counts": {"ok": 3},
-            "elapsed": 1.5,
+            "elapsed_seconds": 1.5,
             "retries": {},
             "total_retries": 0,
             "amplification": 1.0,
@@ -66,10 +66,10 @@ class TestStageSummaryBuilder(TestCase):
             "before_server": before_server,
             "after_server": after_server,
             "peak_threads": None,
-            "peak_server_rss": None,
+            "peak_server_rss_megabytes": None,
             "before_client": before_client,
             "peak_system_memory": peak_system_memory,
-            "after_sys": after_sys,
+            "after_system": after_sys,
         })
         return summary
 

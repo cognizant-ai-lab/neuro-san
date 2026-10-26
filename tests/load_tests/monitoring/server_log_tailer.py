@@ -82,7 +82,7 @@ class ServerLogTailer:
             snapshot), "peak_threads", "peak_sys_mem_pct", "elapsed_seconds", "interrupted" (True on Ctrl-C),
             "peak_sys_cpu_percent", "avg_sys_cpu_percent" and "peak_sys_threads"
         """
-        tail_state: Dict[str, Any] = self._new_tail_state(round_values)
+        tail_state: Dict[str, Any] = ServerLogTailer._new_tail_state(round_values)
         log_position: Optional[int] = round_values.get("log_position")
         finished: bool = False
         # Prime the non-blocking system CPU counter.
@@ -97,7 +97,7 @@ class ServerLogTailer:
             tail_state["interrupted"] = True
             # The em dash "—" matches the other interrupt messages; plain "-" would change the output.
             self.logger.info("\n  Interrupted — reporting partial results...")
-        tail_result: Dict[str, Any] = self._tail_result(tail_state)
+        tail_result: Dict[str, Any] = ServerLogTailer._tail_result(tail_state)
         return tail_result
 
     def snapshot_server(self) -> Optional[Dict[str, Any]]:
@@ -332,7 +332,7 @@ class ServerLogTailer:
         phase: int = tail_state.get("phase")
         elapsed_seconds: float = 0.0
         if phase == 1 and received_count >= expected_count:
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             self.logger.info(
                 "\n  All %d request(s) received (%.1fs). Monitoring until processing completes...",
                 expected_count, elapsed_seconds,
@@ -378,7 +378,7 @@ class ServerLogTailer:
             received_count += 1
             tail_state["received_count"] = received_count
             timestamp = ServerLogTailer._timestamp_now()
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             if received_count <= ServerLogTailer.LOG_LIMIT_REQUESTS or received_count == expected_count:
                 self.logger.info(
                     "  [server] request %d/%d received [%s] (+%.1fs)",
@@ -389,7 +389,7 @@ class ServerLogTailer:
             completed_count += 1
             tail_state["completed_count"] = completed_count
             timestamp = ServerLogTailer._timestamp_now()
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             total_requests = expected_count
             if phase == 2:
                 total_requests = received_count

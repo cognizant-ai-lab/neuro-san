@@ -204,16 +204,18 @@ class TestRunOutputWriter(TestCase):
         would suggest.
         """
         aggregates: Dict[str, Any] = self._export([30.0] * 10)
+        avg_latency_seconds: float = aggregates.get("avg_latency_seconds", 0.0)
 
-        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 30.0)
+        self.assertEqual(avg_latency_seconds, 30.0)
 
     def test_average_latency_reflects_uneven_requests(self) -> None:
         """
         The mean is taken over every request's own elapsed time.
         """
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
+        avg_latency_seconds: float = aggregates.get("avg_latency_seconds", 0.0)
 
-        self.assertEqual(aggregates.get("avg_latency_seconds", 0.0), 3.0)
+        self.assertEqual(avg_latency_seconds, 3.0)
 
     def test_wall_clock_total_is_reported_separately(self) -> None:
         """
@@ -221,5 +223,8 @@ class TestRunOutputWriter(TestCase):
         """
         aggregates: Dict[str, Any] = self._export([1.0, 2.0, 6.0])
 
-        self.assertEqual(aggregates.get("total_elapsed_seconds", 0.0), 6.0)
-        self.assertEqual(aggregates.get("total_requests", 0), 3)
+        total_elapsed_seconds: float = aggregates.get("total_elapsed_seconds", 0.0)
+        total_requests: int = aggregates.get("total_requests", 0)
+
+        self.assertEqual(total_elapsed_seconds, 6.0)
+        self.assertEqual(total_requests, 3)

@@ -129,41 +129,14 @@ class RunOutputWriter:
         makedirs(self._output_dir, exist_ok=True)
         self._run_log.open(self._output_dir)
 
-    def export_raw_json(  # pylint: disable=too-many-locals
-            self, stage_summaries: List[Dict[str, Any]], exit_code: int) -> None:
+    def export_raw_json(self, stage_summaries: List[Dict[str, Any]], exit_code: int) -> None:
         """
         Save all test data as a single raw_results.json file.
 
         :param stage_summaries: One summary dict per stage
         :param exit_code: Exit code of the test
         """
-        all_results: List[Dict[str, Any]] = RunOutputWriter.collect_stage_results(stage_summaries)
-
-        total_tokens: int = 0
-        costs: List[float] = []
-        latencies: List[float] = []
-        passed: int = 0
-        result: Dict[str, Any]
-        # Collect the tokens, cost, latency and pass count of every request.
-        for result in all_results:
-            total_tokens += result.get("total_tokens", 0)
-            costs.append(result.get("cost_usd", 0.0))
-            latencies.append(result.get("elapsed", 0))
-            if result.get("status") == LoadTestConstants.STATUS_CREATED:
-                passed += 1
-        # Float totals use sum() over the collected lists, so the stored totals match main to the last digit.
-        total_cost: float = sum(costs)
-        stage_elapsed: List[float] = []
-        summary: Dict[str, Any]
-        # Collect the elapsed time of every stage.
-        for summary in stage_summaries:
-            stage_elapsed.append(summary.get("elapsed", 0))
-        total_elapsed: float = sum(stage_elapsed)
-        total_requests: int = len(all_results)
-        avg_latency: float = 0
-        if total_requests:
-            avg_latency = sum(latencies) / total_requests
-
+        aggregates: Dict[str, Any] = RunOutputWriter._build_aggregates(stage_summaries)
         verdict: str = "FAILED"
         if exit_code == 0:
             verdict = "PASSED"
@@ -205,15 +178,7 @@ class RunOutputWriter:
                 "server_log": self.args.server_log,
                 "estimated_tokens_per_request": self.profile.get_estimated_tokens_per_request(),
             },
-            "aggregates": {
-                "total_requests": total_requests,
-                "passed": passed,
-                "failed": total_requests - passed,
-                "total_elapsed_seconds": round(total_elapsed, 2),
-                "avg_latency_seconds": round(avg_latency, 2),
-                "total_tokens": total_tokens,
-                "total_cost_usd": round(total_cost, 6),
-            },
+            "aggregates": aggregates,
             "stage_summaries": stage_summaries,
             "resource_rows": self.resource_reporter.get_resource_snapshots(),
             "client_resource_rows": self.resource_reporter.get_client_snapshots(),
@@ -311,3 +276,74 @@ class RunOutputWriter:
             stage_results: List[Dict[str, Any]] = summary.get("results", [])
             all_results.extend(stage_results)
         return all_results
+
+    @staticmethod
+    def _build_aggregates(stage_summaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Add up the request counts, time, latency, tokens and cost of the whole test.
+
+        :param stage_summaries: One summary dict per stage
+        :return: The "aggregates" dict of raw_results.json: "total_requests", "passed", "failed",
+            "total_elapsed_seconds", "avg_latency_seconds", "total_tokens" and "total_cost_usd"
+        """
+        all_results: List[Dict[str, Any]] = RunOutputWriter.collect_stage_results(stage_summaries)
+        request_totals: Dict[str, Any] = RunOutputWriter._add_up_requests(all_results)
+        stage_elapsed: List[float] = []
+        summary: Dict[str, Any]
+        # Collect the elapsed time of every stage.
+        for summary in stage_summaries:
+            summary_elapsed_seconds: float = summary.get("elapsed", 0)
+            stage_elapsed.append(summary_elapsed_seconds)
+        total_elapsed: float = sum(stage_elapsed)
+        total_requests: int = request_totals.get("total_requests")
+        passed: int = request_totals.get("passed")
+        avg_latency_seconds: float = request_totals.get("avg_latency_seconds")
+        total_cost_usd: float = request_totals.get("total_cost_usd")
+        aggregates: Dict[str, Any] = {
+            "total_requests": total_requests,
+            "passed": passed,
+            "failed": total_requests - passed,
+            "total_elapsed_seconds": round(total_elapsed, 2),
+            "avg_latency_seconds": round(avg_latency_seconds, 2),
+            "total_tokens": request_totals.get("total_tokens"),
+            "total_cost_usd": round(total_cost_usd, 6),
+        }
+        return aggregates
+
+    @staticmethod
+    def _add_up_requests(all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Add up the tokens, cost, latency and pass count of every request.
+
+        :param all_results: The request results of every stage
+        :return: Dict with "total_requests", "passed", "total_tokens", "total_cost_usd" and "avg_latency_seconds"
+            (0 without requests)
+        """
+        total_tokens: int = 0
+        costs: List[float] = []
+        latencies: List[float] = []
+        passed: int = 0
+        result: Dict[str, Any]
+        # Collect the tokens, cost, latency and pass count of every request.
+        for result in all_results:
+            total_tokens += result.get("total_tokens", 0)
+            cost_usd: float = result.get("cost_usd", 0.0)
+            costs.append(cost_usd)
+            elapsed_seconds: float = result.get("elapsed", 0)
+            latencies.append(elapsed_seconds)
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
+                passed += 1
+        # Float totals use sum(), which adds floats with compensation; a += loop can differ in the last digit.
+        total_cost: float = sum(costs)
+        total_requests: int = len(all_results)
+        avg_latency: float = 0
+        if total_requests:
+            avg_latency = sum(latencies) / total_requests
+        request_totals: Dict[str, Any] = {
+            "total_requests": total_requests,
+            "passed": passed,
+            "total_tokens": total_tokens,
+            "total_cost_usd": total_cost,
+            "avg_latency_seconds": avg_latency,
+        }
+        return request_totals

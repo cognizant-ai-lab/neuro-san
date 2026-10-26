@@ -64,8 +64,7 @@ class StageDataCollector:
         self.server_process: Optional[Process] = collector_parts.get("server_process")
         self._output_dir: Optional[str] = collector_parts.get("output_dir")
 
-    def collect_post_stage_data(  # pylint: disable=too-many-locals
-            self, post_stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def collect_post_stage_data(self, post_stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Settle, snapshot and analyze the server log after a stage.
 
@@ -81,43 +80,19 @@ class StageDataCollector:
             stage, or None)
         """
         actual_requests: int = post_stage_inputs.get("actual_requests")
-        monitor_resources: bool = post_stage_inputs.get("monitor_resources")
         has_server_log: bool = post_stage_inputs.get("has_server_log")
-        log_position: Optional[int] = post_stage_inputs.get("log_position")
-        results: List[Dict[str, Any]] = post_stage_inputs.get("results")
-        before_server: Optional[Dict[str, Any]] = post_stage_inputs.get("before_server")
-        before_client: Optional[Dict[str, Any]] = post_stage_inputs.get("before_client")
-        peak_client: Optional[Dict[str, Any]] = post_stage_inputs.get("peak_client")
-        settled_client: Optional[Dict[str, Any]] = post_stage_inputs.get("settled_client")
         server_log_requests: Optional[int] = post_stage_inputs.get("server_log_requests")
         after_server: Optional[Dict[str, Any]] = None
-
-        if monitor_resources or has_server_log:
-            sleep(self.args.settle_time)
-            settle_end_seconds: float = time()
-            settle_end_local: struct_time = localtime(settle_end_seconds)
-            settle_end: str = strftime("%H:%M:%S", settle_end_local)
-            settle_text: str = DurationParser.format_minutes_seconds(self.args.settle_time)
-            StageDataCollector.LOGGER.info("\n  Settle: waited %s for server cleanup [%s]", settle_text, settle_end)
-
-            after_server = self.snapshot_server_process()
-            if after_server:
-                ResourceMonitor.log_snapshot("Server AFTER", after_server)
-            elif not self.args.client_only:
-                StageDataCollector.LOGGER.info("  Server AFTER: not available (server not running)")
+        if post_stage_inputs.get("monitor_resources") or has_server_log:
+            after_server = self._settle_and_snapshot()
 
         log_requests: int = actual_requests
         if server_log_requests is not None:
             log_requests = server_log_requests
-        post_stage_data: Dict[str, Any] = self._analyze_server_log(has_server_log, log_position, results=results,
-                                                                   actual_requests=log_requests)
-
-        if before_server and after_server:
-            self.resource_reporter.add_resource_row(f"{actual_requests}", before_server, after_server)
-
-        if before_client and settled_client:
-            self.resource_reporter.add_client_row(f"{actual_requests}", before_client, peak_client, settled_client)
-
+        log_position: Optional[int] = post_stage_inputs.get("log_position")
+        results: List[Dict[str, Any]] = post_stage_inputs.get("results")
+        post_stage_data: Dict[str, Any] = self._analyze_server_log(has_server_log, log_position, results, log_requests)
+        self._add_resource_rows(post_stage_inputs, after_server)
         post_stage_data["after_server"] = after_server
         return post_stage_data
 
@@ -132,9 +107,47 @@ class StageDataCollector:
             server_snapshot = ResourceMonitor.snapshot(self.server_process)
         return server_snapshot
 
-    def _analyze_server_log(  # pylint: disable=too-many-locals
-            self, has_server_log: bool, log_position: Optional[int], results: List[Dict[str, Any]],
-            actual_requests: int) -> Dict[str, Any]:
+    def _settle_and_snapshot(self) -> Optional[Dict[str, Any]]:
+        """
+        Wait --settle-time for the server to clean up, then take and log the server snapshot.
+
+        :return: The server snapshot after the stage, or None when it is not available
+        """
+        sleep(self.args.settle_time)
+        settle_end_seconds: float = time()
+        settle_end_local: struct_time = localtime(settle_end_seconds)
+        settle_end: str = strftime("%H:%M:%S", settle_end_local)
+        settle_text: str = DurationParser.format_minutes_seconds(self.args.settle_time)
+        StageDataCollector.LOGGER.info("\n  Settle: waited %s for server cleanup [%s]", settle_text, settle_end)
+
+        after_server: Optional[Dict[str, Any]] = self.snapshot_server_process()
+        if after_server:
+            ResourceMonitor.log_snapshot("Server AFTER", after_server)
+        elif not self.args.client_only:
+            StageDataCollector.LOGGER.info("  Server AFTER: not available (server not running)")
+        return after_server
+
+    def _add_resource_rows(self, post_stage_inputs: Dict[str, Any], after_server: Optional[Dict[str, Any]]) -> None:
+        """
+        Add the server and client resource rows of a stage when their snapshots are available.
+
+        :param post_stage_inputs: The dict of collect_post_stage_data()
+        :param after_server: Server snapshot after the stage, or None
+        """
+        actual_requests: int = post_stage_inputs.get("actual_requests")
+        stage_label: str = f"{actual_requests}"
+        before_server: Optional[Dict[str, Any]] = post_stage_inputs.get("before_server")
+        before_client: Optional[Dict[str, Any]] = post_stage_inputs.get("before_client")
+        settled_client: Optional[Dict[str, Any]] = post_stage_inputs.get("settled_client")
+        if before_server and after_server:
+            self.resource_reporter.add_resource_row(stage_label, before_server, after_server)
+
+        if before_client and settled_client:
+            peak_client: Optional[Dict[str, Any]] = post_stage_inputs.get("peak_client")
+            self.resource_reporter.add_client_row(stage_label, before_client, peak_client, settled_client)
+
+    def _analyze_server_log(self, has_server_log: bool, log_position: Optional[int], results: List[Dict[str, Any]],
+                            actual_requests: int) -> Dict[str, Any]:
         """
         Analyze the server log of a stage, or report that it is not available.
 
@@ -145,65 +158,57 @@ class StageDataCollector:
         :return: Dict with "server_counts" (request counts from the log) and "disconnections", "server_errors",
             "tool_warnings", "network_tokens" and "validation_events" (lists of dicts, empty without a server log)
         """
-        server_counts: Dict[str, Any] = {}
-        disconnections: List[Dict[str, str]] = []
-        server_errors: List[Dict[str, str]] = []
-        tool_warnings: List[Dict[str, str]] = []
-        network_tokens: List[Dict[str, Any]] = []
-        validation_events: List[Dict[str, Any]] = []
+        server_log_analysis: Dict[str, Any] = {
+            "server_counts": {},
+            "disconnections": [],
+            "server_errors": [],
+            "tool_warnings": [],
+            "network_tokens": [],
+            "validation_events": [],
+        }
         if has_server_log:
-            primary_start_pattern: str = self.profile.get_primary_start_pattern()
-            primary_finish_pattern: str = self.profile.get_primary_finish_pattern()
-            server_counts = self.log_monitor.count_requests_since(log_position, primary_start_pattern,
-                                                                  primary_finish_pattern)
-            disconnections = self.log_monitor.scan_disconnections_since(log_position,
-                                                                        primary_start_pattern=primary_start_pattern)
-            token_data: Dict[str, Dict[str, Any]] = self.log_monitor.parse_token_accounting_since(log_position)
-            stage_results: List[Dict[str, Any]] = []
-            request_result: Dict[str, Any]
-            # Keep every result except request-0, the dry-run probe.
-            for request_result in results:
-                if request_result.get("request_id") != "request-0":
-                    stage_results.append(request_result)
-            if token_data:
-                result: Dict[str, Any]
-                # Keep the client token counts of each request under client_* keys.
-                for result in stage_results:
-                    result["client_total_tokens"] = result.get("total_tokens", 0)
-                    result["client_prompt_tokens"] = result.get("prompt_tokens", 0)
-                    result["client_completion_tokens"] = result.get("completion_tokens", 0)
-                    result["client_llm_calls"] = result.get("llm_calls", 0)
-            StageSummaryBuilder.attach_token_data(stage_results, token_data)
-            network_tokens = self.log_monitor.parse_per_network_tokens_since(log_position)
-            validation_events = self.log_monitor.parse_validation_events_since(log_position)
-            StageSummaryBuilder.enrich_failure_reasons(results, validation_events)
-            if token_data:
-                StageDataCollector.LOGGER.info("\n  Token usage (from server log):")
-                TokenLogWriter.log_token_summary(
-                    results, output_dir=self._output_dir,
-                    network_tokens=network_tokens,
-                    validation_events=validation_events,
-                )
-            OutputValidator.log_disconnections(disconnections)
-            server_errors = self.log_monitor.scan_server_errors_since(log_position)
-            OutputValidator.log_server_errors(server_errors)
-            tool_warnings = self.log_monitor.scan_tool_warnings_since(log_position)
-            OutputValidator.log_tool_warnings(tool_warnings)
-            OutputValidator.log_server_validation(server_counts, actual_requests, self.args.agent)
+            server_log_analysis = self._analyze_stage_log(log_position, results, actual_requests)
         else:
-            has_token_data: bool = False
-            request_result: Dict[str, Any]
-            # Look for any result that has client token counts.
-            for request_result in results:
-                if request_result.get("total_tokens"):
-                    has_token_data = True
-                    break
-            if has_token_data:
-                token_source: str = "HTTP token_accounting"
-                StageDataCollector.LOGGER.info("\n  Token usage (from %s):", token_source)
-                TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)
+            StageDataCollector._log_client_token_usage(results, self._output_dir)
             if self.args.level != LoadTestConstants.LEVEL_MIN:
                 StageDataCollector.LOGGER.info("\n  Server-side validation: not available (no --server-log)")
+        return server_log_analysis
+
+    def _analyze_stage_log(self, log_position: Optional[int], results: List[Dict[str, Any]],
+                           actual_requests: int) -> Dict[str, Any]:
+        """
+        Read the request counts, disconnections, tokens, validation events, errors and tool warnings of a stage
+        from the server log, and log them.
+
+        :param log_position: Server log offset where the stage started, or None
+        :param results: Request results of the stage
+        :param actual_requests: Number of stage requests expected in the server log
+        :return: The dict of _analyze_server_log()
+        """
+        primary_start_pattern: str = self.profile.get_primary_start_pattern()
+        primary_finish_pattern: str = self.profile.get_primary_finish_pattern()
+        server_counts: Dict[str, Any] = self.log_monitor.count_requests_since(log_position, primary_start_pattern,
+                                                                              primary_finish_pattern)
+        disconnections: List[Dict[str, str]] = self.log_monitor.scan_disconnections_since(
+            log_position, primary_start_pattern=primary_start_pattern)
+        token_data: Dict[str, Dict[str, Any]] = self.log_monitor.parse_token_accounting_since(log_position)
+        StageDataCollector._attach_token_data(results, token_data)
+        network_tokens: List[Dict[str, Any]] = self.log_monitor.parse_per_network_tokens_since(log_position)
+        validation_events: List[Dict[str, Any]] = self.log_monitor.parse_validation_events_since(log_position)
+        StageSummaryBuilder.enrich_failure_reasons(results, validation_events)
+        if token_data:
+            StageDataCollector.LOGGER.info("\n  Token usage (from server log):")
+            TokenLogWriter.log_token_summary(
+                results, output_dir=self._output_dir,
+                network_tokens=network_tokens,
+                validation_events=validation_events,
+            )
+        OutputValidator.log_disconnections(disconnections)
+        server_errors: List[Dict[str, str]] = self.log_monitor.scan_server_errors_since(log_position)
+        OutputValidator.log_server_errors(server_errors)
+        tool_warnings: List[Dict[str, str]] = self.log_monitor.scan_tool_warnings_since(log_position)
+        OutputValidator.log_tool_warnings(tool_warnings)
+        OutputValidator.log_server_validation(server_counts, actual_requests, self.args.agent)
         server_log_analysis: Dict[str, Any] = {
             "server_counts": server_counts,
             "disconnections": disconnections,
@@ -213,3 +218,47 @@ class StageDataCollector:
             "validation_events": validation_events,
         }
         return server_log_analysis
+
+    @staticmethod
+    def _attach_token_data(results: List[Dict[str, Any]], token_data: Dict[str, Dict[str, Any]]) -> None:
+        """
+        Keep the client token counts under client_* keys, then attach the server log token counts.
+
+        :param results: Request results of the stage
+        :param token_data: Token counts from the server log, by request id
+        """
+        stage_results: List[Dict[str, Any]] = []
+        request_result: Dict[str, Any]
+        # Keep every result except request-0, the dry-run probe.
+        for request_result in results:
+            if request_result.get("request_id") != "request-0":
+                stage_results.append(request_result)
+        if token_data:
+            result: Dict[str, Any]
+            # Keep the client token counts of each request under client_* keys.
+            for result in stage_results:
+                result["client_total_tokens"] = result.get("total_tokens", 0)
+                result["client_prompt_tokens"] = result.get("prompt_tokens", 0)
+                result["client_completion_tokens"] = result.get("completion_tokens", 0)
+                result["client_llm_calls"] = result.get("llm_calls", 0)
+        StageSummaryBuilder.attach_token_data(stage_results, token_data)
+
+    @staticmethod
+    def _log_client_token_usage(results: List[Dict[str, Any]], output_dir: Optional[str]) -> None:
+        """
+        Log the client token usage of a stage when there is no server log.
+
+        :param results: Request results of the stage
+        :param output_dir: The run's output directory
+        """
+        has_token_data: bool = False
+        request_result: Dict[str, Any]
+        # Look for any result that has client token counts.
+        for request_result in results:
+            if request_result.get("total_tokens"):
+                has_token_data = True
+                break
+        if has_token_data:
+            token_source: str = "HTTP token_accounting"
+            StageDataCollector.LOGGER.info("\n  Token usage (from %s):", token_source)
+            TokenLogWriter.log_token_summary(results, output_dir=output_dir)

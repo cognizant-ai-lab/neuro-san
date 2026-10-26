@@ -130,20 +130,27 @@ class TestDurationParser(TestCase):
         """
         A time under a minute prints as seconds only, and zero is "0s".
         """
-        self.assertEqual(DurationParser.format_minutes_seconds(45), "45s")
-        self.assertEqual(DurationParser.format_minutes_seconds(0), "0s")
+        under_a_minute_text: str = DurationParser.format_minutes_seconds(45)
+        zero_text: str = DurationParser.format_minutes_seconds(0)
+        self.assertEqual(under_a_minute_text, "45s")
+        self.assertEqual(zero_text, "0s")
 
     def test_format_minutes_seconds_over_a_minute(self) -> None:
         """
         105 seconds prints as "1m 45s", 120 seconds as "2m 0s" and 1205 seconds as "20m 5s".
         """
-        self.assertEqual(DurationParser.format_minutes_seconds(105), "1m 45s")
-        self.assertEqual(DurationParser.format_minutes_seconds(120), "2m 0s")
-        self.assertEqual(DurationParser.format_minutes_seconds(1205), "20m 5s")
+        minutes_and_seconds_text: str = DurationParser.format_minutes_seconds(105)
+        whole_minutes_text: str = DurationParser.format_minutes_seconds(120)
+        twenty_minutes_text: str = DurationParser.format_minutes_seconds(1205)
+        self.assertEqual(minutes_and_seconds_text, "1m 45s")
+        self.assertEqual(whole_minutes_text, "2m 0s")
+        self.assertEqual(twenty_minutes_text, "20m 5s")
 
     def test_format_minutes_seconds_rounds_to_whole_seconds(self) -> None:
         """
         A fraction rounds to the nearest second: 59.6 is "1m 0s" and 59.4 is "59s".
         """
-        self.assertEqual(DurationParser.format_minutes_seconds(59.6), "1m 0s")
-        self.assertEqual(DurationParser.format_minutes_seconds(59.4), "59s")
+        rounded_up_text: str = DurationParser.format_minutes_seconds(59.6)
+        rounded_down_text: str = DurationParser.format_minutes_seconds(59.4)
+        self.assertEqual(rounded_up_text, "1m 0s")
+        self.assertEqual(rounded_down_text, "59s")
