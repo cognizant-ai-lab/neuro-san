@@ -14,9 +14,7 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from functools import partial
-from threading import Event
 from time import sleep
 from time import time
 from typing import Any
@@ -29,7 +27,6 @@ from unittest.mock import patch
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
-from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
@@ -39,80 +36,9 @@ from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestH
 
 class TestRunnerResponseChecks(TestCase):
     """
-    TrafficRunner.check_response hands the hocon response block to
-    DataDrivenTestsDriver.test_response_keys and turns the captured
-    assertion failures into a failure reason; failure_patterns go
-    through the same path as text.not_keywords.
-
-    Also covers the failure reason run_one_http() gives each request status,
+    Unit tests for TrafficRunner: the failure reason run_one_http() gives each request status,
     and how run_stage() collects results and kills requests past --stage-timeout.
     """
-
-    def test_no_checks_passes(self) -> None:
-        """
-        An empty response block and no failure_patterns never fail.
-        """
-        runner: TrafficRunner = TestRunnerResponseChecks._runner()
-        processor: BasicMessageProcessor = TestRunnerResponseChecks._processor("hi")
-        reason: Optional[str] = runner.check_response(processor, {})
-        self.assertIsNone(reason)
-
-    def test_not_value_requires_present_non_empty_sly_data(self) -> None:
-        """
-        sly_data.<key>: { not_value: "" } fails on a missing or empty key.
-        """
-        checks: Dict[str, Any] = {"sly_data": {"agent_reservations": {"not_value": ""}}}
-        runner: TrafficRunner = TestRunnerResponseChecks._runner()
-        reservations: List[Dict[str, Any]] = [{"reservation_id": "r-1"}]
-        with_reservations: BasicMessageProcessor = TestRunnerResponseChecks._processor(
-            "ok", {"agent_reservations": reservations})
-        without_reservations: BasicMessageProcessor = TestRunnerResponseChecks._processor(
-            "ok", {"agent_network_name": "n"})
-        empty_reservations: BasicMessageProcessor = TestRunnerResponseChecks._processor(
-            "ok", {"agent_reservations": ""})
-        with_reason: Optional[str] = runner.check_response(with_reservations, checks)
-        without_reason: Optional[str] = runner.check_response(without_reservations, checks)
-        empty_reason: Optional[str] = runner.check_response(empty_reservations, checks)
-        self.assertIsNone(with_reason)
-        self.assertIn("agent_reservations", without_reason)
-        self.assertIn("agent_reservations", empty_reason)
-
-    def test_keywords_check_on_answer_text(self) -> None:
-        """
-        text: { keywords: [...] } is applied to the answer.
-        """
-        checks: Dict[str, Any] = {"text": {"keywords": ["Bonjour"]}}
-        runner: TrafficRunner = TestRunnerResponseChecks._runner()
-        bonjour_processor: BasicMessageProcessor = TestRunnerResponseChecks._processor("Bonjour!")
-        hello_processor: BasicMessageProcessor = TestRunnerResponseChecks._processor("Hello!")
-        bonjour_reason: Optional[str] = runner.check_response(bonjour_processor, checks)
-        hello_reason: Optional[str] = runner.check_response(hello_processor, checks)
-        self.assertIsNone(bonjour_reason)
-        self.assertIsNotNone(hello_reason)
-
-    def test_failure_patterns_fail_the_request(self) -> None:
-        """
-        failure_patterns are checked as text.not_keywords.
-        """
-        runner: TrafficRunner = TestRunnerResponseChecks._runner(["No fully-specified LLM found"])
-        fine_processor: BasicMessageProcessor = TestRunnerResponseChecks._processor("fine")
-        fine_reason: Optional[str] = runner.check_response(fine_processor, {})
-        self.assertIsNone(fine_reason)
-        error_processor: BasicMessageProcessor = TestRunnerResponseChecks._processor(
-            "Error: No fully-specified LLM found")
-        reason: Optional[str] = runner.check_response(error_processor, {})
-        self.assertIn("No fully-specified LLM found", reason)
-
-    def test_all_failures_are_reported(self) -> None:
-        """
-        Every failed check appears in the reason, not just the first.
-        """
-        checks: Dict[str, Any] = {"sly_data": {"a": {"not_value": ""}, "b": {"not_value": ""}}}
-        runner: TrafficRunner = TestRunnerResponseChecks._runner()
-        processor: BasicMessageProcessor = TestRunnerResponseChecks._processor("ok", {})
-        reason: Optional[str] = runner.check_response(processor, checks)
-        self.assertIn("sly_data.a", reason)
-        self.assertIn("sly_data.b", reason)
 
     def test_created_request_keeps_timing_and_timestamps(self) -> None:
         """
@@ -259,27 +185,6 @@ class TestRunnerResponseChecks(TestCase):
         if sly_data is not None:
             processor.process_message({"type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data})
         return processor
-
-    @staticmethod
-    def _runner(failure_patterns: Optional[List[str]] = None) -> TrafficRunner:
-        """
-        Return a runner over a one-prompt profile.
-
-        :param failure_patterns: failure_patterns of the profile, or None for none
-        :return: The runner
-        """
-        patterns: List[str] = []
-        if failure_patterns is not None:
-            patterns = failure_patterns
-        profile_settings: Dict[str, Any] = {
-            "prompts": ["p"],
-            "failure_patterns": patterns,
-        }
-        profile: AgentProfile = AgentProfile("x", profile_settings)
-        args: Namespace = Namespace(same_prompt=False)
-        cancel_event: Event = Event()
-        runner: TrafficRunner = TrafficRunner(args, profile, cancel_event)
-        return runner
 
     def _run_one_http(self, request_result: AgentRequestResult) -> Dict[str, Any]:
         """

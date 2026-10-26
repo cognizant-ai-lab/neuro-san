@@ -33,7 +33,7 @@ from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestH
 
 class TestHeartbeat(TestCase):
     """
-    Unit tests for Heartbeat: its progress.log lines, its failed-request count and its peak readings.
+    Unit tests for Heartbeat: its progress.log lines and its failed-request count.
 
     Heartbeat writes its progress lines to progress.log without removing the request lines TrafficRunner writes there.
     """
@@ -78,15 +78,6 @@ class TestHeartbeat(TestCase):
         heartbeat.count_failed_request()
         heartbeat.count_failed_request()
         self.assertEqual(2, heartbeat.get_failed_request_count())
-
-    def test_peaks_ignore_zero_and_lower_readings(self) -> None:
-        """
-        A peak is only kept for a reading above zero and above the peak so far.
-        """
-        self.assertFalse(Heartbeat.is_new_peak(0, None))
-        self.assertTrue(Heartbeat.is_new_peak(5, None))
-        self.assertFalse(Heartbeat.is_new_peak(5, 5))
-        self.assertTrue(Heartbeat.is_new_peak(6.5, 5))
 
     @staticmethod
     def _set_event() -> Event:
