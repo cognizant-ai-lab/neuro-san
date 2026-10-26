@@ -34,6 +34,7 @@ from psutil import Process
 from psutil import cpu_percent
 from psutil import virtual_memory
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -64,7 +65,7 @@ class ServerLogTailer:
         self.server_log: Optional[str] = args.server_log
         self.server_process: Optional[Process] = server_process
         self.log_monitor: Optional[ServerLogMonitor] = log_monitor
-        self.logger: Logger = getLogger(__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def tail_server_log(self, round_values: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -81,7 +82,7 @@ class ServerLogTailer:
             snapshot), "peak_threads", "peak_sys_mem_pct", "elapsed_seconds", "interrupted" (True on Ctrl-C),
             "peak_sys_cpu_percent", "avg_sys_cpu_percent" and "peak_sys_threads"
         """
-        tail_state: Dict[str, Any] = self._new_tail_state(round_values)
+        tail_state: Dict[str, Any] = ServerLogTailer._new_tail_state(round_values)
         log_position: Optional[int] = round_values.get("log_position")
         finished: bool = False
         # Prime the non-blocking system CPU counter.
@@ -96,7 +97,7 @@ class ServerLogTailer:
             tail_state["interrupted"] = True
             # The em dash "—" matches the other interrupt messages; plain "-" would change the output.
             self.logger.info("\n  Interrupted — reporting partial results...")
-        tail_result: Dict[str, Any] = self._tail_result(tail_state)
+        tail_result: Dict[str, Any] = ServerLogTailer._tail_result(tail_state)
         return tail_result
 
     def snapshot_server(self) -> Optional[Dict[str, Any]]:
@@ -194,7 +195,7 @@ class ServerLogTailer:
         local_time: struct_time = localtime(now_seconds)
         timestamp: str = strftime("%H:%M:%S", local_time)
         elapsed_whole_seconds: int = int(elapsed_seconds)
-        elapsed_text: str = Heartbeat.format_elapsed(elapsed_whole_seconds)
+        elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_whole_seconds)
         progress_text: str = ServerLogTailer._progress_text(heartbeat_values)
         system_cpu_text: str = ServerLogTailer._system_cpu_text(heartbeat_values)
         self.logger.info(
@@ -331,10 +332,11 @@ class ServerLogTailer:
         phase: int = tail_state.get("phase")
         elapsed_seconds: float = 0.0
         if phase == 1 and received_count >= expected_count:
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
+            all_received_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
             self.logger.info(
-                "\n  All %d request(s) received (%.1fs). Monitoring until processing completes...",
-                expected_count, elapsed_seconds,
+                "\n  All %d request(s) received (%s). Monitoring until processing completes...",
+                expected_count, all_received_text,
             )
             phase = 2
             tail_state["phase"] = phase
@@ -377,26 +379,28 @@ class ServerLogTailer:
             received_count += 1
             tail_state["received_count"] = received_count
             timestamp = ServerLogTailer._timestamp_now()
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             if received_count <= ServerLogTailer.LOG_LIMIT_REQUESTS or received_count == expected_count:
+                received_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
                 self.logger.info(
-                    "  [server] request %d/%d received [%s] (+%.1fs)",
+                    "  [server] request %d/%d received [%s] (+%s)",
                     received_count, expected_count,
-                    timestamp, elapsed_seconds,
+                    timestamp, received_text,
                 )
         if primary_finish_regex.search(line):
             completed_count += 1
             tail_state["completed_count"] = completed_count
             timestamp = ServerLogTailer._timestamp_now()
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             total_requests = expected_count
             if phase == 2:
                 total_requests = received_count
             if completed_count <= ServerLogTailer.LOG_LIMIT_REQUESTS or completed_count == total_requests:
+                completed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
                 self.logger.info(
-                    "  [server] request %d/%d completed [%s] (+%.1fs)",
+                    "  [server] request %d/%d completed [%s] (+%s)",
                     completed_count, total_requests,
-                    timestamp, elapsed_seconds,
+                    timestamp, completed_text,
                 )
 
     def _sample_resources(self, tail_state: Dict[str, Any]) -> None:

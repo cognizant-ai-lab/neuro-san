@@ -37,6 +37,7 @@ from typing import TextIO
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from psutil import Process
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 
@@ -67,7 +68,7 @@ class ArrivalWatcher:
         self._stop_event: Event = arrival_settings.get("stop_event")
         self._client_process: Optional[Process] = arrival_settings.get("client_process")
         self._primary_start_regex: re.Pattern = re.compile(primary_start_pattern)
-        self._progress_logger: Logger = ArrivalWatcher._get_progress_logger()
+        self._progress_logger: Logger = self._get_progress_logger()
 
     def start(self, server_log: str, position: int, output_dir: Optional[str] = None) -> Thread:
         """
@@ -141,8 +142,9 @@ class ArrivalWatcher:
             now_seconds: float = perf_counter()
             timestamp: str = strftime("%H:%M:%S", localtime())
             delta_seconds: float = now_seconds - self._fire_time_seconds
+            delta_text: str = DurationParser.format_minutes_seconds(delta_seconds)
             detail: str = (f"  [server] {agent_label} request {count}/{self._expected_count} received"
-                           f" [{timestamp}] (+{delta_seconds:.1f}s)")
+                           f" [{timestamp}] (+{delta_text})")
             if use_dots:
                 receipt_file.write(detail + "\n")
                 receipt_file.flush()
@@ -162,8 +164,9 @@ class ArrivalWatcher:
         """
         if use_dots:
             self._progress_logger.info("\n")
-            self.logger.info("  All %s/%s requests received by server (%.1fs)", count, self._expected_count,
-                             elapsed_seconds)
+            elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
+            self.logger.info("  All %s/%s requests received by server (%s)", count, self._expected_count,
+                             elapsed_text)
         snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self._client_process)
         if snapshot:
             client_rss_megabytes: float = snapshot.get("rss_megabytes")
@@ -172,8 +175,7 @@ class ArrivalWatcher:
                              client_cpu_percent)
         ResourceMonitor.log_system_memory("RECEIVED")
 
-    @staticmethod
-    def _get_progress_logger() -> Logger:
+    def _get_progress_logger(self) -> Logger:
         """
         Get the logger for the console progress dots, set up on first use.
 
@@ -182,7 +184,7 @@ class ArrivalWatcher:
 
         :return: The progress logger
         """
-        progress_logger: Logger = getLogger(__name__ + ".progress")
+        progress_logger: Logger = getLogger(self.__class__.__name__ + ".progress")
         progress_logger.propagate = False
         if not progress_logger.handlers:
             progress_handler: StreamHandler = StreamHandler(stdout)
