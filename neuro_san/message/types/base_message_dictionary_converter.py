@@ -455,8 +455,8 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             # These guys cannot be in chat history as langchain will not recognize them.
             return False
         if isinstance(base_message, (ToolMessage, AgentToolResultMessage)):
-            # Tool results do not enter the chat history on their own. They go in next
-            # to the tool call that asked for them, once the turn is complete
+            # Tool results do not enter the chat history on their own. After each step
+            # of the agent graph, they go in next to the tool call that asked for them
             # (see RunContextRunnable.record_tool_exchange).
             return False
         return True
