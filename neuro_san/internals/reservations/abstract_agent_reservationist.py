@@ -22,6 +22,8 @@ from typing import Union
 from asyncio import Event
 from time import time
 
+from leaf_common.utils.map import Map
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -56,14 +58,14 @@ class AbstractAgentReservationist(Reservationist):
         :return: A new Reservation object corresponding to the request.
         """
         actual_lifetime: float = min(lifetime_in_seconds, self.max_lifetime_in_seconds)
-        reservation = AgentReservation(actual_lifetime, prefix=prefix)
+        reservation: AgentReservation = AgentReservation(actual_lifetime, prefix=prefix)
         return reservation
 
     async def deploy(self,
-                     deployment_dict: Dict[Reservation,
-                                           Dict[Union[str, Event],
-                                                Dict[AgentReservation,
-                                                     Dict[str, Any]]]],
+                     deployment_dict: Map[Reservation,
+                                          Map[Union[Event, str],
+                                              Map[AgentReservation,
+                                                  Dict[str, Any]]]],
                      confirmation: bool = False) -> Event:
         """
         Deploy multiple Reservations.
@@ -92,7 +94,7 @@ class AbstractAgentReservationist(Reservationist):
         """
         event.set()
 
-    async def deploy_together(self, deployment_dict: Dict[AgentReservation, Dict[str, Any]],
+    async def deploy_together(self, deployment_dict: Map[AgentReservation, Dict[str, Any]],
                               source: str,
                               max_lifetime_in_seconds: float):
         """
@@ -104,16 +106,21 @@ class AbstractAgentReservationist(Reservationist):
         # Get a timestamp as a basis of coordinated expiration.
         use_now: float = time()
 
-        reservations_dict: Dict[Reservation, Dict[str, Any]] = {}
+        reservations_dict: Map[Reservation, Dict[str, Any]] = {}
+        reservation: AgentReservation = None
+        agent_spec: Dict[str, Any] = None
         for reservation, agent_spec in deployment_dict.items():
 
+            use_reservation: AgentReservation = reservation
+
             # For each reservation in the block, set a consistent expiration time
-            reservation.set_expiration_from(use_now, max_lifetime_in_seconds)
+            use_reservation.set_expiration_from(use_now, max_lifetime_in_seconds)
 
             # Put together a dictionary of reservations -> agent specs
             reservations_dict[reservation] = agent_spec
 
         # Deploy locally.
+        storage: ReservationsStorage = None
         for storage in self.reservations_storage:
             # This can synchronously lock
             await storage.add_reservations(reservations_dict, source)

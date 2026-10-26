@@ -16,4 +16,6 @@
 
 
 class RequestTimeoutError(Exception):
-    """Raised inside a streamed request to abandon it once it has outrun --request-timeout."""
+    """
+    Raised inside a streamed request to abandon it once it has outrun --request-timeout.
+    """

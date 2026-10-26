@@ -155,7 +155,7 @@ Display type for clients. Options:
 
 These tools extend from the `CodedTool` class.
 
-#### [`class`](./agent_hocon_reference.md#class)
+#### [`class`](./agent_hocon_reference.md#class-1)
 
 Fully qualified class name in the format `tool_module.ToolClass`. The `class` must point to a module available in your
 `AGENT_TOOL_PATH` and server `PYTHONPATH`. When the `AGENT_TOOL_PATH_ONLY` environment variable is `true`,

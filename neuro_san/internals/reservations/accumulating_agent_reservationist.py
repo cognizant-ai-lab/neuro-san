@@ -22,6 +22,8 @@ from typing import Union
 from asyncio import Event
 from json import dumps
 
+from leaf_common.utils.map import Map
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
@@ -42,7 +44,7 @@ class AccumulatingAgentReservationist(Reservationist):
 
         # Creating Reservations can be done outside the with-statement
         reservation: Reservation = await reservationist.reserve()
-        deployments: Dict[Reservation, Dict[str, Any]] = {
+        deployments: Map[Reservation, Dict[str, Any]] = {
             reservation: my_agent_spec,
             ...
         }
@@ -68,7 +70,7 @@ class AccumulatingAgentReservationist(Reservationist):
         """
         self.max_lifetime_in_seconds: float = max_lifetime_in_seconds
         self.agent_name: str = agent_name
-        self.deployments: Dict[Union[Event, str], Dict[Reservation, Dict[str, Any]]] = {}
+        self.deployments: Map[Union[Event, str], Map[Reservation, Dict[str, Any]]] = {}
         self._supporting_reservationist: Reservationist = supporting_reservationist
         self._supporting_reservation: Reservation = None
         self._external_networks: List[str] = None
@@ -86,7 +88,7 @@ class AccumulatingAgentReservationist(Reservationist):
         actual_lifetime: float = min(lifetime_in_seconds, self.max_lifetime_in_seconds)
         if prefix is not None and len(prefix) > 0:
             self.validate_id(prefix)
-        reservation = AgentReservation(actual_lifetime, prefix)
+        reservation: AgentReservation = AgentReservation(actual_lifetime, prefix)
 
         return reservation
 
@@ -112,7 +114,7 @@ class AccumulatingAgentReservationist(Reservationist):
         self.deployments = {}
         self._supporting_reservation = await self._supporting_reservationist.reserve(prefix=self.agent_name)
 
-    async def deploy(self, deployment_dict: Dict[Reservation, Dict[str, Any]], confirmation: bool = False) -> Event:
+    async def deploy(self, deployment_dict: Map[Reservation, Dict[str, Any]], confirmation: bool = False) -> Event:
         """
         Deploy multiple Reservations.
 
@@ -130,15 +132,19 @@ class AccumulatingAgentReservationist(Reservationist):
 
         # Do some validation here
         errors: Dict[str, List[str]] = {}
+        reservation: Reservation = None
+        agent_network_spec: Dict[str, Any] = None
         for reservation, agent_network_spec in deployment_dict.items():
 
+            use_reservation: Reservation = reservation
+
             # Validate the reservation id
-            key: str = reservation.get_reservation_id()
+            key: str = use_reservation.get_reservation_id()
             self.validate_id(key)
 
             # Validate what is being reserved.
             # Currently, we are assuming everything is an agent network
-            validator = ManifestNetworkValidator(
+            validator: ManifestNetworkValidator = ManifestNetworkValidator(
                 external_network_names=self._external_networks,
                 mcp_servers=self._mcp_servers,
                 network_name=key)
@@ -152,7 +158,7 @@ class AccumulatingAgentReservationist(Reservationist):
                              f"{dumps(errors, indent=4, sort_keys=True)}")
 
         event: Event = None
-        key: Union[str, Event] = None
+        key: Union[Event, str] = None
         if confirmation:
             # Create an async.Event. This will be the key for the dictionary
             event = Event()
@@ -163,14 +169,14 @@ class AccumulatingAgentReservationist(Reservationist):
             key = first_res.get_reservation_id()
             # event is already None
 
-        entry: Dict[Union[str, Event], Dict[Reservation, Dict[str, Any]]] = {
+        entry: Map[Union[Event, str], Map[Reservation, Dict[str, Any]]] = {
             key: deployment_dict
         }
         self.deployments.update(entry)
 
         return event
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """
         Python context manager protocol exit point.
         This is what gets called when you exit a with-statement.
@@ -199,6 +205,7 @@ class AccumulatingAgentReservationist(Reservationist):
             raise ValueError("Reservation id is empty")
 
         invalid_chars: str = "/: "
+        invalid_char: str = None
         for invalid_char in invalid_chars:
             if invalid_char in test_id:
                 # Probably more characters to look for w/rt url validity.

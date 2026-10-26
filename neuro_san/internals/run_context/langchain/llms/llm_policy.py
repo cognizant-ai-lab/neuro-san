@@ -139,7 +139,7 @@ class LlmPolicy(EnvironmentConfiguration):
             # We will handle this in the None-client case below.
             client = None
 
-        model_name: Optional[str] = self.get_model_name(config)
+        model_name: Optional[str] = LlmPolicy.get_model_name(config)
 
         llm: BaseLanguageModel = self.create_llm(config, model_name, client)
         if client is None:

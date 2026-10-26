@@ -14,9 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
 
 from neuro_san.service.mcp.interfaces.client_session import ClientSession
 

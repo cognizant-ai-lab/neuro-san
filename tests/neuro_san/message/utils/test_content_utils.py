@@ -26,6 +26,9 @@ from unittest import TestCase
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 
+from neuro_san.message.content_blocks.content_blocks_format import ContentBlocksFormat
+from neuro_san.message.content_blocks.content_blocks_format_registry import ContentBlocksFormatRegistry
+from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 from neuro_san.message.utils.content_utils import ContentUtils
 
 from tests.neuro_san.message.content_fixtures import ContentFixtures
@@ -48,8 +51,10 @@ class TestContentUtils(TestCase):
         :return: The list of block type strings, one per block
         """
         types: List[str] = []
+        # Collect the type of each block.
+        block: Dict[str, Any] = None
         for block in blocks:
-            types.append(block["type"])
+            types.append(block.get("type"))
         return types
 
     # --- flatten_to_text
@@ -117,46 +122,19 @@ class TestContentUtils(TestCase):
 
     # --- standard_blocks
 
-    def test_standard_blocks_translates_anthropic_thinking(self):
+    def test_standard_blocks_is_the_format_view(self) -> None:
         """
-        Provider-native thinking must standardize to a reasoning block with
-        the signature preserved in extras (it must round-trip for multi-turn
-        thinking + tool use).
+        standard_blocks is a funnel: the block view of the message in the
+        format the message is in, made JSON-safe. Which blocks a provider
+        shape becomes is the format's business and is tested with the format.
         """
-        blocks = ContentUtils.standard_blocks(ContentFixtures.anthropic_thinking_first())
-        self.assertEqual(self._block_types(blocks), ["reasoning", "text"])
-        self.assertEqual(blocks[0]["reasoning"], "Let me reason this through.")
-        self.assertEqual(blocks[0]["extras"]["signature"], "sig-abc")
-
-    def test_standard_blocks_excludes_tool_call_blocks(self):
-        """
-        The content_blocks property merges .tool_calls into the view; those
-        must be excluded or every existing Anthropic tool-calling deployment
-        would start emitting content_blocks in Phase 2 (parity break).
-        """
-        blocks = ContentUtils.standard_blocks(ContentFixtures.anthropic_tool_use())
-        self.assertEqual(self._block_types(blocks), ["text"])
-
-    def test_standard_blocks_explodes_openai_reasoning_summary(self):
-        """
-        OpenAI Responses reasoning items standardize to reasoning blocks.
-        """
-        blocks = ContentUtils.standard_blocks(ContentFixtures.openai_responses_reasoning())
-        types = [block["type"] for block in blocks]
-        self.assertIn("reasoning", types)
-        self.assertIn("text", types)
-        reasoning = [block for block in blocks if block["type"] == "reasoning"]
-        self.assertEqual(reasoning[0].get("reasoning"), "thought one")
-
-    def test_standard_blocks_passes_v1_content_through(self):
-        """
-        Content already in v1 form (output_version="v1") must pass through
-        untranslated - reasoning stays reasoning, not non_standard.
-        """
-        blocks = ContentUtils.standard_blocks(ContentFixtures.v1_reasoning_blocks())
+        message: AIMessage = ContentFixtures.anthropic_thinking_first()
+        default_format: ContentBlocksFormat = ContentBlocksFormatRegistry.get_default()
+        blocks: List[Dict[str, Any]] = ContentUtils.standard_blocks(message)
+        self.assertEqual(blocks, ContentUtils.to_json_safe(default_format.blocks_of(message)))
         self.assertEqual(self._block_types(blocks), ["reasoning", "text"])
 
-    def test_standard_blocks_output_is_json_safe(self):
+    def test_standard_blocks_output_is_json_safe(self) -> None:
         """
         Bytes in block payloads become base64 strings so the wire path's
         to_json_safe (which nulls bytes) can never destroy them.
@@ -165,30 +143,16 @@ class TestContentUtils(TestCase):
             {"type": "text", "text": "with bytes"},
             {"type": "image", "base64": b"raw-bytes", "mime_type": "image/png"},
         ])
-        blocks = ContentUtils.standard_blocks(message)
+        blocks: List[Dict[str, Any]] = ContentUtils.standard_blocks(message)
         json.dumps(blocks)
-        image = [block for block in blocks if block.get("type") == "image"][0]
-        self.assertIsInstance(image["base64"], str)
-
-    # --- is_trivial
-
-    def test_is_trivial(self):
-        """
-        Exactly one text block with no annotations/extras is trivial;
-        anything else is not. Empty annotations/extras do not count, but any
-        other key with a value (an OpenAI Responses "phase") does.
-        """
-        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi"}]))
-        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": [], "extras": {}}]))
-        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": None, "extras": ""}]))
-        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "final_answer"}]))
-        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "commentary"}]))
-        self.assertFalse(ContentUtils.is_trivial([]))
-        self.assertFalse(ContentUtils.is_trivial([{"type": "reasoning", "reasoning": "r"}]))
-        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]))
-        self.assertFalse(
-            ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": [{"type": "citation"}]}]))
-        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "extras": {"signature": "s"}}]))
+        image: Dict[str, Any] = None
+        # Find the image block.
+        block: Dict[str, Any] = None
+        for block in blocks:
+            if block.get("type") == "image":
+                image = block
+                break
+        self.assertIsInstance(image.get("base64"), str)
 
     # --- normalize_content / normalize_message
 
@@ -277,7 +241,7 @@ class TestContentUtils(TestCase):
             "type": "HUMAN",
             "text": "caption",
             "content_blocks": {
-                "format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1,
+                "format": LangchainV1ContentBlocksFormat.NAME,
                 "blocks": [{"type": "text", "text": "from blocks"}],
             },
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
@@ -292,12 +256,27 @@ class TestContentUtils(TestCase):
         an empty repeated field), and with nothing to interpret the format is
         not checked.
         """
-        expected = [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}]
-        empty_wrappers = [
-            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": []},
-            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1},
-            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": None},
-            {"format": "somebody_elses_v2", "blocks": []},
+        expected: List[Dict[str, Any]] = [
+            {
+                "type": "image",
+                "base64": "AAAA",
+                "mime_type": "image/png",
+            },
+        ]
+        empty_wrappers: List[Dict[str, Any]] = [
+            {
+                "format": LangchainV1ContentBlocksFormat.NAME,
+                "blocks": [],
+            },
+            {"format": LangchainV1ContentBlocksFormat.NAME},
+            {
+                "format": LangchainV1ContentBlocksFormat.NAME,
+                "blocks": None,
+            },
+            {
+                "format": "somebody_elses_v2",
+                "blocks": [],
+            },
             {},
         ]
         for wrapper in empty_wrappers:
@@ -329,27 +308,44 @@ class TestContentUtils(TestCase):
         }
         self.assertIsNone(ContentUtils.blocks_from_chat_message(bare_list))
 
-    def test_blocks_from_chat_message_maps_mime_data(self):
+    def test_blocks_from_chat_message_maps_mime_data(self) -> None:
         """
-        The simple-client mime_data shape maps to text + data blocks, with
-        the data-block type chosen from the MIME prefix.
+        The simple-client mime_data shape maps to a text block for the text
+        followed by one data block per entry, in the default format. The
+        shape of each block is tested with the format.
         """
         chat_message = {
             "type": "HUMAN",
             "text": "Describe this image.",
             "mime_data": [
-                {"mime_type": "image/png", "mime_bytes": "aW1n"},
-                {"mime_type": "audio/wav", "mime_bytes": "YXVk"},
-                {"mime_type": "application/pdf", "mime_bytes": "cGRm"},
-                {"mime_type": "text/plain", "mime_bytes": "dHh0"},
+                {
+                    "mime_type": "image/png",
+                    "mime_bytes": "aW1n",
+                },
+                {
+                    "mime_type": "text/plain",
+                    "mime_bytes": "dHh0",
+                },
             ],
         }
-        blocks = ContentUtils.blocks_from_chat_message(chat_message)
-        self.assertEqual(blocks[0], {"type": "text", "text": "Describe this image."})
-        self.assertEqual(blocks[1], {"type": "image", "base64": "aW1n", "mime_type": "image/png"})
-        self.assertEqual(blocks[2], {"type": "audio", "base64": "YXVk", "mime_type": "audio/wav"})
-        self.assertEqual(blocks[3], {"type": "file", "base64": "cGRm", "mime_type": "application/pdf"})
-        self.assertEqual(blocks[4], {"type": "text-plain", "mime_type": "text/plain", "base64": "dHh0"})
+        blocks: List[Dict[str, Any]] = ContentUtils.blocks_from_chat_message(chat_message)
+        expected: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "Describe this image.",
+            },
+            {
+                "type": "image",
+                "base64": "aW1n",
+                "mime_type": "image/png",
+            },
+            {
+                "type": "text-plain",
+                "mime_type": "text/plain",
+                "base64": "dHh0",
+            },
+        ]
+        self.assertEqual(blocks, expected)
 
     def test_flatten_matches_langchain_text_for_non_string_text_values(self):
         """
@@ -380,25 +376,15 @@ class TestContentUtils(TestCase):
         self.assertEqual(twice.content, once.content)
         self.assertEqual(twice.response_metadata, once.response_metadata)
 
-    def test_utils_handle_message_chunks(self):
+    def test_utils_handle_message_chunks(self) -> None:
         """
-        Chunk messages neither crash the projections nor leak
-        tool_call_chunk blocks into the standardized view.
+        Chunk messages do not crash the text projection.
         """
         chunk = AIMessageChunk(content=[
             {"type": "text", "text": "partial", "index": 0},
             {"type": "tool_call_chunk", "name": "f", "args": '{"x"', "id": "c1", "index": 1},
         ])
         self.assertEqual(ContentUtils.flatten_to_text(chunk), "partial")
-        self.assertEqual(self._block_types(ContentUtils.standard_blocks(chunk)), ["text"])
-
-    def test_is_trivial_ignores_provider_id_keys(self):
-        """
-        Locked policy: bookkeeping keys (id/index) do not make a text block
-        non-trivial - such messages are plain strings on today's wire, and
-        the collapse deliberately drops those keys.
-        """
-        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "id": "msg_1", "index": 0}]))
 
     def test_wrap_content_blocks(self) -> None:
         """
@@ -406,6 +392,22 @@ class TestContentUtils(TestCase):
         """
         blocks = [{"type": "text", "text": "hi"}]
         self.assertEqual(ContentUtils.wrap_content_blocks(blocks), {"format": "langchain_v1", "blocks": blocks})
+
+    def test_wrap_content_blocks_names_the_given_format(self) -> None:
+        """
+        The wrapper is named after the format passed in, and after the
+        default format when none is.
+        """
+        blocks: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "a",
+            },
+        ]
+        default_format: ContentBlocksFormat = ContentBlocksFormatRegistry.get_default()
+        named: Dict[str, Any] = ContentUtils.wrap_content_blocks(blocks, default_format)
+        self.assertEqual(named.get("format"), default_format.get_name())
+        self.assertEqual(ContentUtils.wrap_content_blocks(blocks), named)
 
     def test_unwrap_content_blocks(self) -> None:
         """
@@ -425,35 +427,17 @@ class TestContentUtils(TestCase):
         self.assertIsNone(ContentUtils.unwrap_content_blocks(blocks))
         self.assertIsNone(ContentUtils.unwrap_content_blocks(42))
 
-    def test_is_empty_value(self) -> None:
+    def test_history_safe_text_references_data_blocks(self) -> None:
         """
-        None, "", [] and {} are empty; anything with content, and other
-        types, are not.
-        """
-        self.assertTrue(ContentUtils.is_empty_value(None))
-        self.assertTrue(ContentUtils.is_empty_value(""))
-        self.assertTrue(ContentUtils.is_empty_value([]))
-        self.assertTrue(ContentUtils.is_empty_value({}))
-        self.assertFalse(ContentUtils.is_empty_value("final_answer"))
-        self.assertFalse(ContentUtils.is_empty_value([{"type": "citation"}]))
-        self.assertFalse(ContentUtils.is_empty_value({"signature": "s"}))
-        self.assertFalse(ContentUtils.is_empty_value(0))
-        self.assertFalse(ContentUtils.is_empty_value(False))
-
-    def test_history_safe_text_references_data_blocks(self):
-        """
-        The assistant-history projection keeps text and replaces data blocks
-        with a short reference - an image-only tool result must not become
-        empty history.
+        List content goes through the default format's history projection,
+        which replaces data blocks with a short reference. Plain strings and
+        None do not reach the format and pass through as text.
         """
         self.assertEqual(ContentUtils.history_safe_text(ContentFixtures.mcp_tool_content()),
                          "Here is the chart.[image attachment: image/png]")
-        image_only = [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}]
-        self.assertEqual(ContentUtils.history_safe_text(image_only), "[image attachment: image/png]")
-        # Plain strings and text-plain inline text pass through.
         self.assertEqual(ContentUtils.history_safe_text("plain"), "plain")
-        self.assertEqual(ContentUtils.history_safe_text(
-            [{"type": "text-plain", "mime_type": "text/plain", "text": "inline doc"}]), "inline doc")
+        self.assertEqual(ContentUtils.history_safe_text(None), "")
+        self.assertEqual(ContentUtils.history_safe_text(AIMessage(content="plain")), "plain")
 
     def test_blocks_from_chat_message_text_only_and_malformed(self):
         """
@@ -481,7 +465,7 @@ class TestContentUtils(TestCase):
             "type": "HUMAN",
             "text": "caption",
             "content_blocks": {
-                "format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1,
+                "format": LangchainV1ContentBlocksFormat.NAME,
                 "blocks": [{"type": "bogus-type", "x": 1}],
             },
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
@@ -505,3 +489,277 @@ class TestContentUtils(TestCase):
         self.assertEqual(safe[2], "plain")
         json.dumps(safe)
         self.assertEqual(blocks[1]["base64"], b"raw")
+
+    # --- restorable_blocks
+
+    def test_content_blocks_format(self) -> None:
+        """
+        A wrapper names its format; anything else, an unknown name included,
+        names none.
+        """
+        wrapper: Dict[str, Any] = {
+            "format": LangchainV1ContentBlocksFormat.NAME,
+            "blocks": [],
+        }
+        self.assertIs(ContentUtils.content_blocks_format(wrapper), ContentBlocksFormatRegistry.get_default())
+        unknown: Dict[str, Any] = {
+            "format": "somebody_elses_v2",
+            "blocks": [],
+        }
+        self.assertIsNone(ContentUtils.content_blocks_format(unknown))
+        self.assertIsNone(ContentUtils.content_blocks_format({"blocks": []}))
+        bare_list: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "hi",
+            },
+        ]
+        self.assertIsNone(ContentUtils.content_blocks_format(bare_list))
+        self.assertIsNone(ContentUtils.content_blocks_format(None))
+
+    def test_restorable_blocks_restores_reasoning_and_text(self) -> None:
+        """
+        A langchain_v1 wrapper whose blocks say more than the text restores
+        to those same block dictionaries, an OpenAI "phase" included.
+        """
+        blocks = [
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+                "extras": {"signature": "sig"},
+            },
+            {
+                "type": "text",
+                "text": "the answer",
+                "phase": "final_answer",
+            },
+        ]
+        chat_message = {
+            "type": "AI",
+            "text": "the answer",
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        restored: List[Dict[str, Any]] = ContentUtils.restorable_blocks(chat_message)
+        self.assertEqual(restored, blocks)
+        self.assertIs(restored[0], blocks[0])
+        self.assertIs(restored[1], blocks[1])
+        self.assertEqual(restored[1].get("phase"), "final_answer")
+
+    def test_restorable_blocks_keeps_reasoning_only_content(self) -> None:
+        """
+        A reasoning-only message has no text to lose, so its block stays.
+        """
+        blocks = [
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+            },
+        ]
+        chat_message = {
+            "type": "AI",
+            "text": "",
+            "content_blocks": ContentUtils.wrap_content_blocks(blocks),
+        }
+        self.assertEqual(ContentUtils.restorable_blocks(chat_message), blocks)
+
+    def test_restorable_blocks_falls_back_to_text(self) -> None:
+        """
+        None means "keep the text as content": no wrapper, an unknown format,
+        a bare list, an empty wrapper, nothing left after the restore, blocks
+        that only repeat the text, and blocks whose text is not the message's
+        text, whether lost, shortened or changed.
+        """
+        text_block = {
+            "type": "text",
+            "text": "the answer",
+        }
+        tool_call = {
+            "type": "tool_call",
+            "name": "lookup",
+            "args": {},
+            "id": "call_1",
+        }
+        cases: Dict[str, Dict[str, Any]] = {
+            "no wrapper": {
+                "type": "AI",
+                "text": "the answer",
+            },
+            "unknown format": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": {
+                    "format": "somebody_elses_v2",
+                    "blocks": [text_block],
+                },
+            },
+            "bare list": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": [text_block],
+            },
+            "empty wrapper": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": ContentUtils.wrap_content_blocks([]),
+            },
+            "only dropped blocks": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": ContentUtils.wrap_content_blocks([tool_call]),
+            },
+            "lone text block": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": ContentUtils.wrap_content_blocks([text_block]),
+            },
+            "tool call plus text": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": ContentUtils.wrap_content_blocks([tool_call, text_block]),
+            },
+            "blocks lost the text": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": ContentUtils.wrap_content_blocks([
+                    {
+                        "type": "reasoning",
+                        "reasoning": "deep",
+                    },
+                ]),
+            },
+            "blocks shortened the text": {
+                "type": "AI",
+                "text": "hello world",
+                "content_blocks": ContentUtils.wrap_content_blocks([
+                    {
+                        "type": "text",
+                        "text": "hello",
+                        "phase": "final_answer",
+                    },
+                ]),
+            },
+            "blocks changed the text": {
+                "type": "AI",
+                "text": "the answer",
+                "content_blocks": ContentUtils.wrap_content_blocks([
+                    {
+                        "type": "text",
+                        "text": "another answer",
+                        "phase": "final_answer",
+                    },
+                ]),
+            },
+            "none": None,
+        }
+        # Each case falls back to the text.
+        label: str = None
+        chat_message: Dict[str, Any] = None
+        for label, chat_message in cases.items():
+            with self.subTest(case=label):
+                self.assertIsNone(ContentUtils.restorable_blocks(chat_message))
+
+    def test_restorable_blocks_holds_reasoning_back_for_chat_history(self) -> None:
+        """
+        A message bound for chat history loses its reasoning blocks. What is
+        left follows the usual rules: a text block with a phase is kept, a
+        plain text block that repeats the text is not, and nothing at all
+        means the text stays.
+        """
+        reasoning = {
+            "type": "reasoning",
+            "reasoning": "deep",
+            "extras": {"signature": "sig"},
+        }
+        phased = {
+            "type": "text",
+            "text": "the answer",
+            "phase": "final_answer",
+        }
+        plain = {
+            "type": "text",
+            "text": "the answer",
+        }
+
+        with_phase = {
+            "type": "AI",
+            "text": "the answer",
+            "content_blocks": ContentUtils.wrap_content_blocks([reasoning, phased]),
+        }
+        self.assertEqual(ContentUtils.restorable_blocks(with_phase, for_chat_history=True), [phased])
+        self.assertEqual(ContentUtils.restorable_blocks(with_phase), [reasoning, phased])
+
+        with_plain = {
+            "type": "AI",
+            "text": "the answer",
+            "content_blocks": ContentUtils.wrap_content_blocks([reasoning, plain]),
+        }
+        self.assertIsNone(ContentUtils.restorable_blocks(with_plain, for_chat_history=True))
+
+        reasoning_only = {
+            "type": "AI",
+            "text": "",
+            "content_blocks": ContentUtils.wrap_content_blocks([reasoning]),
+        }
+        self.assertIsNone(ContentUtils.restorable_blocks(reasoning_only, for_chat_history=True))
+
+    def test_restorable_blocks_drops_attachments(self) -> None:
+        """
+        Data blocks are not sent back to a model yet, so they are dropped.
+        A text block plus an attachment leaves only the text, which the
+        message already has, and an attachment-only message keeps its text.
+        """
+        with_text = [
+            {
+                "type": "text",
+                "text": "see",
+            },
+            {
+                "type": "image",
+                "base64": "aW1hZ2UtYnl0ZXM=",
+                "mime_type": "image/png",
+            },
+        ]
+        chat_message = {
+            "type": "HUMAN",
+            "text": "see",
+            "content_blocks": ContentUtils.wrap_content_blocks(with_text),
+        }
+        self.assertIsNone(ContentUtils.restorable_blocks(chat_message))
+
+        attachment_only = [
+            {
+                "type": "image",
+                "base64": "aW1hZ2UtYnl0ZXM=",
+                "mime_type": "image/png",
+            },
+        ]
+        chat_message = {
+            "type": "HUMAN",
+            "text": "",
+            "content_blocks": ContentUtils.wrap_content_blocks(attachment_only),
+        }
+        self.assertIsNone(ContentUtils.restorable_blocks(chat_message))
+
+        with_reasoning = [
+            {
+                "type": "reasoning",
+                "reasoning": "deep",
+            },
+            {
+                "type": "text",
+                "text": "see",
+            },
+            {
+                "type": "image",
+                "base64": "aW1hZ2UtYnl0ZXM=",
+                "mime_type": "image/png",
+            },
+        ]
+        chat_message = {
+            "type": "AI",
+            "text": "see",
+            "content_blocks": ContentUtils.wrap_content_blocks(with_reasoning),
+        }
+        restored: List[Dict[str, Any]] = ContentUtils.restorable_blocks(chat_message)
+        self.assertEqual(restored, with_reasoning[:2])
+        self.assertNotIn("aW1hZ2UtYnl0ZXM=", json.dumps(restored))

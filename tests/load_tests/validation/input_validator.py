@@ -15,7 +15,12 @@
 # END COPYRIGHT
 
 import logging
-import os
+from os import getcwd
+from os import listdir
+from os.path import isabs
+from os.path import isdir
+from os.path import isfile
+from os.path import join
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -23,13 +28,13 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-import psutil
+from psutil import virtual_memory
 
-from tests.load_tests.config import DEFAULT_STAGES
-from tests.load_tests.config import LEVEL_ADV
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.confirm import Confirm
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.project_paths import ProjectPaths
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
@@ -65,7 +70,7 @@ class InputValidator:
         (e.g. 'basic/hello_world'), not by absolute path.
         """
         agent: str = self._args.agent
-        if os.path.isabs(agent):
+        if isabs(agent):
             logger.error(
                 """ERROR: --agent appears to be a filesystem path:
   %s
@@ -99,14 +104,14 @@ Then use:
         if not parent_dir:
             return []
 
-        if not os.path.isabs(parent_dir):
+        if not isabs(parent_dir):
             project_root: Optional[str] = ProjectPaths.resolve_project_root(self._args.project_root)
-            parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)
+            parent_dir = join(project_root or getcwd(), parent_dir)
 
         agent_base_name: str = ProjectPaths.agent_base_name(self._args.agent)
-        hocon_dir: str = os.path.join(parent_dir, agent_base_name)
+        hocon_dir: str = join(parent_dir, agent_base_name)
 
-        if not os.path.isdir(hocon_dir):
+        if not isdir(hocon_dir):
             logger.error(
                 """ERROR: no hocon fixtures directory for agent '%s':
   Expected: %s
@@ -115,12 +120,14 @@ Then use:
             )
             raise LoadTestAbortError(1)
 
-        hocon_files: List[str] = sorted(
-            os.path.join(hocon_dir, file_name)
-            for file_name in os.listdir(hocon_dir)
-            if file_name.endswith(".hocon")
-            and os.path.isfile(os.path.join(hocon_dir, file_name))
-        )
+        hocon_files: List[str] = []
+        file_name: str
+        # Keep the *.hocon files of the directory.
+        for file_name in listdir(hocon_dir):
+            file_path: str = join(hocon_dir, file_name)
+            if file_name.endswith(".hocon") and isfile(file_path):
+                hocon_files.append(file_path)
+        hocon_files.sort()
         if not hocon_files:
             logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
             raise LoadTestAbortError(1)
@@ -132,7 +139,7 @@ Then use:
         Return the list of concurrency stages to run.
 
         If --ramp is set and --stages provided, parse the CSV.
-        If --ramp is set without --stages, use DEFAULT_STAGES.
+        If --ramp is set without --stages, use LoadTestConstants.DEFAULT_STAGES.
         Otherwise return a single-stage list from --num-requests.
 
         :return: Requests per stage
@@ -140,23 +147,30 @@ Then use:
         if self._args.ramp:
             if self._args.stages is not None:
                 stages: List[int] = []
+                stage_text: str = ""
                 try:
-                    stages = [
-                        int(stage_text.strip())
-                        for stage_text in self._args.stages.split(",")
-                        if stage_text.strip()
-                    ]
+                    # Parse each non-empty comma-separated value.
+                    for stage_text in self._args.stages.split(","):
+                        if stage_text.strip():
+                            stages.append(int(stage_text.strip()))
                 except ValueError as value_error:
                     logger.error(
                         "--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
                         self._args.stages,
                     )
                     raise LoadTestAbortError(1) from value_error
-                if not stages or any(stage <= 0 for stage in stages):
+                has_non_positive: bool = False
+                stage: int
+                # Look for a stage that is zero or negative.
+                for stage in stages:
+                    if stage <= 0:
+                        has_non_positive = True
+                        break
+                if not stages or has_non_positive:
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     raise LoadTestAbortError(1)
                 return stages
-            return list(DEFAULT_STAGES)
+            return list(LoadTestConstants.DEFAULT_STAGES)
         if self._args.num_requests <= 0:
             logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
             raise LoadTestAbortError(1)
@@ -181,7 +195,8 @@ Then use:
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def confirm_cost(self, stages: List[int], total_cap_requests: int, runner: TrafficRunner,
-                     output_dir: Optional[str] = None, stale_log_age: Optional[int] = None) -> Optional[Dict[str, Any]]:
+                     output_dir: Optional[str] = None,
+                     stale_log_age_minutes: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
@@ -198,7 +213,7 @@ Then use:
         :param total_cap_requests: Most requests to send, from resolve_max_requests
         :param runner: Traffic runner used to fire the probe request
         :param output_dir: Directory for the probe's output files, or None
-        :param stale_log_age: Minutes since the server log was last modified when it looks stale, or None
+        :param stale_log_age_minutes: Minutes since the server log was last modified when it looks stale, or None
         :return: The probe result, or None when no probe was run
         """
         total_planned_requests: int = sum(stages) * self._args.num_rounds
@@ -207,12 +222,12 @@ Then use:
         self._print_summary_header(stages, total_planned_requests, capped_requests)
 
         warnings: List[str] = []
-        if self._args.no_dry_run or self._args.level == LEVEL_ADV:
+        if self._args.no_dry_run or self._args.level == LoadTestConstants.LEVEL_ADV:
             warnings = self._collect_warnings(capped_requests=capped_requests,
                                               total_planned_requests=total_planned_requests,
-                                              stale_log_age_minutes=stale_log_age)
+                                              stale_log_age_minutes=stale_log_age_minutes)
             self._print_warnings(warnings)
-            logger.info("=" * SEPARATOR_WIDTH)
+            logger.info("%s", Formatters.SEPARATOR_LINE)
             return None
 
         probe_result: Dict[str, Any] = {}
@@ -220,22 +235,23 @@ Then use:
         probe_result, probe_measurements = self._run_cost_probe(runner, output_dir)
 
         remaining_requests: int = max(capped_requests - 1, 0)
-        estimated_stage_duration_seconds: float = self._estimate_stage_duration(probe_measurements.get("elapsed", 0),
+        probe_elapsed_seconds: float = probe_measurements.get("elapsed_seconds", 0)
+        estimated_stage_duration_seconds: float = self._estimate_stage_duration(probe_elapsed_seconds,
                                                                                 remaining_requests)
         logger.info(
             "  Estimated stage duration: ~%ss (%.1fs x %s requests)",
             int(estimated_stage_duration_seconds),
-            probe_measurements.get("elapsed", 0),
+            probe_elapsed_seconds,
             remaining_requests,
         )
 
         warnings = self._collect_warnings(
             capped_requests=capped_requests,
             total_planned_requests=total_planned_requests,
-            stale_log_age_minutes=stale_log_age,
+            stale_log_age_minutes=stale_log_age_minutes,
             estimated_stage_duration_seconds=estimated_stage_duration_seconds,
             probe_tokens=probe_measurements.get("tokens", 0),
-            probe_cost_dollars=probe_measurements.get("cost", 0.0),
+            probe_cost_dollars=probe_measurements.get("cost_dollars", 0.0),
             probe_model=probe_measurements.get("model", "unknown"),
         )
         self._print_warnings(warnings)
@@ -246,7 +262,7 @@ Then use:
        --no-dry-run does not auto-adjust timeouts.""",
         )
 
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
             logger.info("Aborted by user.")
@@ -263,34 +279,40 @@ Then use:
         :param capped_requests: Requests after the --max-requests cap
         """
         args: Namespace = self._args
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  PRE-RUN SUMMARY")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         logger.info("  Agent:    %s", args.agent)
         logger.info("  Level:    %s", args.level)
         if args.ramp:
             logger.info("  Stages:   %s", stages)
+        round_suffix: str = ""
+        if args.num_rounds > 1:
+            round_suffix = "s"
         logger.info(
             "  Requests: %s x %s round%s = %s total",
             args.num_requests,
             args.num_rounds,
-            "s" if args.num_rounds > 1 else "",
+            round_suffix,
             total_planned_requests,
         )
         if capped_requests < total_planned_requests:
             logger.info("  Capped:   %s (--max-requests)", capped_requests)
         logger.info("  Workers:  %s (concurrent)", args.max_workers)
+        # Whole minutes, rounded down, e.g. 150s -> 2m.
+        request_timeout_minutes: int = int(args.request_timeout / 60)
+        idle_timeout_minutes: int = int(args.idle_timeout / 60)
+        stage_timeout_minutes: int = int(args.stage_timeout / 60)
         logger.info(
             "  Timeouts: --request-timeout %ss (%sm) / --idle-timeout %ss (%sm) / --stage-timeout %ss (%sm)",
-            args.request_timeout, args.request_timeout // 60,
-            args.idle_timeout, args.idle_timeout // 60,
-            args.stage_timeout, args.stage_timeout // 60,
+            args.request_timeout, request_timeout_minutes,
+            args.idle_timeout, idle_timeout_minutes,
+            args.stage_timeout, stage_timeout_minutes,
         )
         if args.total_timeout > 0:
-            logger.info(
-                "            --total-timeout %ss (%sm)",
-                args.total_timeout, args.total_timeout // 60,
-            )
+            # Whole minutes, rounded down, e.g. 150s -> 2m.
+            total_timeout_minutes: int = int(args.total_timeout / 60)
+            logger.info("            --total-timeout %ss (%sm)", args.total_timeout, total_timeout_minutes)
         else:
             logger.info("            --total-timeout disabled")
         SystemResources.log_prerun()
@@ -344,8 +366,7 @@ Then use:
         if not self._args.ramp and max_workers < num_requests:
             warnings.append(f"--max-workers ({max_workers}) < --num-requests ({num_requests}): requests run in batches")
 
-        if (estimated_stage_duration_seconds is not None
-                and estimated_stage_duration_seconds > self._args.stage_timeout):
+        if estimated_stage_duration_seconds is not None and estimated_stage_duration_seconds > self._args.stage_timeout:
             stage_timeout_seconds: int = self._args.stage_timeout
             warnings.append(
                 f"""Estimated stage duration ~{int(estimated_stage_duration_seconds)}s exceeds --stage-timeout \
@@ -405,14 +426,16 @@ server log to fall back on:
         :param num_requests: Requests that may run at once
         :return: Warning text, or None when available memory looks sufficient
         """
-        virtual_memory_stats: Any = psutil.virtual_memory()
-        available_gigabytes: float = virtual_memory_stats.available / (1024 ** 3)
+        virtual_memory_stats: Any = virtual_memory()
+        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         per_request_megabytes: int = 2
-        needed_gigabytes: float = (num_requests * per_request_megabytes) / 1024
+        needed_megabytes: int = num_requests * per_request_megabytes
+        needed_gigabytes: float = needed_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
         if needed_gigabytes > available_gigabytes * 0.8:
+            total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:
-     Estimated need: ~{needed_gigabytes:.1f}G ({num_requests} x ~{per_request_megabytes}MB per request)
-     Available: {available_gigabytes:.1f}G / {virtual_memory_stats.total / (1024 ** 3):.1f}G total
+     Estimated need: ~{needed_gigabytes:.1f} GB ({num_requests} x ~{per_request_megabytes} MB per request)
+     Available: {available_gigabytes:.1f} GB / {total_gigabytes:.1f} GB total
      Consider fewer concurrent workers or a larger instance"""
             return memory_warning
         return None
@@ -450,7 +473,8 @@ server log to fall back on:
 
         :param runner: Traffic runner used to fire the probe request
         :param output_dir: Directory for the probe's output files, or None
-        :return: (probe_result, probe_measurements), where probe_measurements holds tokens, cost, model and elapsed
+        :return: (probe_result, probe_measurements), where probe_measurements holds tokens, cost_dollars, model and
+            elapsed_seconds
         """
         logger.info("\n  Running 1 dry-run probe to measure actual cost...")
 
@@ -472,8 +496,8 @@ server log to fall back on:
 
         probe_measurements: Dict[str, Any] = {
             "tokens": probe_tokens,
-            "cost": probe_cost_dollars,
+            "cost_dollars": probe_cost_dollars,
             "model": probe_model,
-            "elapsed": probe_elapsed_seconds,
+            "elapsed_seconds": probe_elapsed_seconds,
         }
         return probe_result, probe_measurements

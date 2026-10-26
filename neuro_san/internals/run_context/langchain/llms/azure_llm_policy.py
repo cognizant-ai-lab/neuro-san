@@ -20,7 +20,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
 from typing import Type
 
 from logging import Logger
@@ -78,7 +77,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     V1_PATH: str = "/openai/v1"
 
     # llm_config keys of the dated Azure API that the v1 API has no use for.
-    LEGACY_KEYS: Tuple[str, ...] = ("openai_api_version", "openai_api_type", "model_version")
+    LEGACY_KEYS: List[str] = ["openai_api_version", "openai_api_type", "model_version"]
 
     # Process-wide so the legacy-key warning appears once, not once per agent instantiation.
     legacy_keys_warned: bool = False
@@ -128,7 +127,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         default_headers: Dict[str, str] = self.build_default_headers(config)
         # The deployment is checked here for the same reason: create_llm() would only find it
         # missing once this client exists.
-        self.resolve_deployment_name(config, self.get_model_name(config))
+        self.resolve_deployment_name(config, AzureLlmPolicy.get_model_name(config))
 
         self.create_http_client(config)
 
@@ -318,9 +317,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         """
         trimmed: str = azure_endpoint.strip().rstrip("/")
         # Tolerate an endpoint that already carries the v1 path, as Azure's own quickstarts show it.
-        if trimmed.endswith(self.V1_PATH):
+        if trimmed.endswith(AzureLlmPolicy.V1_PATH):
             return trimmed + "/"
-        return trimmed + self.V1_PATH + "/"
+        return trimmed + AzureLlmPolicy.V1_PATH + "/"
 
     def resolve_credential(self, config: Dict[str, Any]) -> str:
         """
@@ -426,7 +425,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         """
         legacy_present: List[str] = []
         key: str = None
-        for key in self.LEGACY_KEYS:
+        for key in AzureLlmPolicy.LEGACY_KEYS:
             # null and "" are the neutral values the class defaults carry; only a real value counts.
             if config.get(key):
                 legacy_present.append(key)

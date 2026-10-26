@@ -21,12 +21,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.config import RETRY_ERROR_TYPES
-from tests.load_tests.config import RETRY_LABELS
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -51,20 +46,26 @@ class OutputValidator:
         :param results: Request results of the stage
         :return: Count per status; unknown statuses count as failed
         """
-        counts: Dict[str, Any] = {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0}
+        counts: Dict[str, Any] = {
+            LoadTestConstants.STATUS_CREATED: 0,
+            LoadTestConstants.STATUS_FAILED: 0,
+            LoadTestConstants.STATUS_TIMEOUT: 0,
+            LoadTestConstants.STATUS_KILLED: 0,
+        }
         result: Dict[str, Any]
         # Count each result under its status.
         for result in results:
-            status: str = result.get("status", STATUS_FAILED)
-            if status not in counts:
-                status = STATUS_FAILED
+            status: str = result.get("status", LoadTestConstants.STATUS_FAILED)
+            # pylint: disable=consider-iterating-dictionary
+            if status not in counts.keys():
+                status = LoadTestConstants.STATUS_FAILED
             counts[status] = counts.get(status, 0) + 1
         return counts
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed_seconds: float, timeout: float,
-                          idle_timeout: float, show_counts: bool = True) -> None:
+    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed_seconds: float, timeout_seconds: float,
+                          idle_timeout_seconds: float, show_counts: bool = True) -> None:
         """
         Log per-stage summary of request results.
 
@@ -75,28 +76,26 @@ class OutputValidator:
         :param actual_requests: Requests sent in the stage
         :param counts: Count per status from count_results
         :param elapsed_seconds: Stage wall time in seconds
-        :param timeout: --request-timeout in seconds, shown in the timed-out line
-        :param idle_timeout: --idle-timeout in seconds, shown in the killed line
+        :param timeout_seconds: --request-timeout in seconds, shown in the timed-out line
+        :param idle_timeout_seconds: --idle-timeout in seconds, shown in the killed line
         :param show_counts: False to log only the Duration/Avg line
         """
         if show_counts:
+            created_count: int = counts.get(LoadTestConstants.STATUS_CREATED, 0)
+            failed_count: int = counts.get(LoadTestConstants.STATUS_FAILED, 0)
+            timeout_count: int = counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+            killed_count: int = counts.get(LoadTestConstants.STATUS_KILLED, 0)
             logger.info("\n  Requests: %s", actual_requests)
-            logger.info("    Created: %s  (success criteria met)", counts.get(STATUS_CREATED, 0))
-            logger.info("    Failed:  %s  (error or crash)", counts.get(STATUS_FAILED, 0))
-            logger.info("    Timed out: %s  (hit %ss hard cap)", counts.get(STATUS_TIMEOUT, 0), timeout)
-            logger.info(
-                "    Killed:  %s  (no output for %ss, presumed hanging)",
-                counts.get(STATUS_KILLED, 0), idle_timeout,
-            )
-        average_seconds_per_request: float = (
-            elapsed_seconds / actual_requests
-            if actual_requests else 0
-        )
-        logger.info(
-            "  Duration: %s | Avg: %s per request",
-            Formatters.fmt_duration(elapsed_seconds, precision=2),
-            Formatters.fmt_duration(average_seconds_per_request, precision=2),
-        )
+            logger.info("    Created: %s  (success criteria met)", created_count)
+            logger.info("    Failed:  %s  (error or crash)", failed_count)
+            logger.info("    Timed out: %s  (hit %ss hard cap)", timeout_count, timeout_seconds)
+            logger.info("    Killed:  %s  (no output for %ss, presumed hanging)", killed_count, idle_timeout_seconds)
+        average_seconds_per_request: float = 0
+        if actual_requests:
+            average_seconds_per_request = elapsed_seconds / actual_requests
+        elapsed_text: str = Formatters.fmt_duration(elapsed_seconds, precision=2)
+        average_text: str = Formatters.fmt_duration(average_seconds_per_request, precision=2)
+        logger.info("  Duration: %s | Avg: %s per request", elapsed_text, average_text)
 
     @staticmethod
     def log_retry_activity(retries: Dict[str, int], total_retries: int, actual_requests: int) -> None:
@@ -110,9 +109,9 @@ class OutputValidator:
         logger.info("\n  Retry activity (from server log):")
         error_type: str
         # Log the retry count for each error type.
-        for error_type in RETRY_ERROR_TYPES:
+        for error_type in LoadTestConstants.RETRY_ERROR_TYPES:
             count: int = retries.get(error_type, 0)
-            label: str = RETRY_LABELS.get(error_type, f"{error_type} retries")
+            label: str = LoadTestConstants.RETRY_LABELS.get(error_type, f"{error_type} retries")
             logger.info("    %s: %s", label, count)
         logger.info("    Total retries:  %s", total_retries)
         amplification: float = Formatters.compute_amplification(actual_requests, total_retries)
@@ -146,9 +145,9 @@ class OutputValidator:
         total_started: int = server_counts.get("total_started")
         total_finished: int = server_counts.get("total_finished")
         internal_calls: int = total_started - primary_started
-        match_label: str = (
-            "OK" if primary_started >= actual_requests else "MISMATCH"
-        )
+        match_label: str = "MISMATCH"
+        if primary_started >= actual_requests:
+            match_label = "OK"
         logger.info("\n  Server-side validation (from server log):")
         logger.info("    %s received:  %s/%s  (%s)", agent_name, primary_started, actual_requests, match_label)
         logger.info("    %s completed: %s/%s", agent_name, primary_finished, actual_requests)
@@ -170,17 +169,17 @@ class OutputValidator:
         """
         if not disconnections:
             return
-        logger.warning("\n  Client disconnections detected: %s", len(disconnections))
+        disconnection_count: int = len(disconnections)
+        logger.warning("\n  Client disconnections detected: %s", disconnection_count)
         disconnection: Dict[str, str]
         # Log one line for each disconnected request.
         for disconnection in disconnections:
             agent: str = disconnection.get("agent", "unknown")
             request_id: str = disconnection.get("request_id", "unknown")
             client_request: Optional[str] = disconnection.get("client_request")
-            label: str = (
-                f"{client_request}/{request_id}" if client_request
-                else request_id
-            )
+            label: str = request_id
+            if client_request:
+                label = f"{client_request}/{request_id}"
             logger.warning("    %s: %s still running at disconnect", label, agent)
 
     @staticmethod
@@ -239,19 +238,28 @@ class OutputValidator:
         """
         if not results:
             return False
-        all_failed: bool = all(
-            result.get("status") == STATUS_FAILED for result in results
-        )
+        all_failed: bool = True
+        result: Dict[str, Any]
+        # Look for a request that did not fail.
+        for result in results:
+            if result.get("status") != LoadTestConstants.STATUS_FAILED:
+                all_failed = False
+                break
         if not all_failed:
             return False
         permission_keywords: List[str] = ["permissions", "permission", "not found"]
-        has_permission_error: bool = any(
-            any(
-                keyword in (result.get("error") or "").lower()
-                for keyword in permission_keywords
-            )
-            for result in results
-        )
+        has_permission_error: bool = False
+        keyword: str
+        # Look for a permissions keyword in the error of any request.
+        for result in results:
+            error_text: str = (result.get("error") or "").lower()
+            # Check each keyword against the error text.
+            for keyword in permission_keywords:
+                if keyword in error_text:
+                    has_permission_error = True
+                    break
+            if has_permission_error:
+                break
         if not has_permission_error:
             return False
         if "/" in agent_name:
@@ -290,16 +298,16 @@ class OutputValidator:
         :param counts: Count per status from count_results
         :return: True if any request timed out or was killed
         """
-        timed_out: int = counts.get(STATUS_TIMEOUT, 0)
-        killed: int = counts.get(STATUS_KILLED, 0)
-        timed_out_or_killed: int = timed_out + killed
+        timed_out_count: int = counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+        killed_count: int = counts.get(LoadTestConstants.STATUS_KILLED, 0)
+        timed_out_or_killed: int = timed_out_count + killed_count
         if timed_out_or_killed == 0:
             return False
         abort_reasons: List[str] = []
-        if timed_out:
-            abort_reasons.append(f"{timed_out} timed out")
-        if killed:
-            abort_reasons.append(f"{killed} killed by stage-timeout")
+        if timed_out_count:
+            abort_reasons.append(f"{timed_out_count} timed out")
+        if killed_count:
+            abort_reasons.append(f"{killed_count} killed by stage-timeout")
         logger.warning(
             """
   ABORT: %s — %s.

@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Factory that builds an AgentProfile from a JSON profile or test-case hocons."""
-
 import logging
 import os
 from typing import Any
@@ -36,7 +34,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 class AgentProfileFactory:
     """
-    Builds AgentProfile instances.
+    Builds AgentProfile instances from a JSON profile or from test-case hocons.
 
     Policy lives here (where the profile comes from, how hocons map to
     profile settings, validation); AgentProfile itself only carries data.
@@ -152,9 +150,10 @@ Aborting.""",
 
         # Search in the built-in profiles directory next to this module
         profiles_dir: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+        profile_names: List[str] = [agent_name, agent_base]
         name: str
         # Check the full agent name, then its base name
-        for name in (agent_name, agent_base):
+        for name in profile_names:
             candidate = os.path.join(profiles_dir, f"{name}.json")
             searched.append(candidate)
             if os.path.isfile(candidate):
@@ -164,7 +163,7 @@ Aborting.""",
         resolved_root: Optional[str] = ProjectPaths.resolve_project_root(project_root)
         if resolved_root:
             # Check the full agent name, then its base name, under the project root
-            for name in (agent_name, agent_base):
+            for name in profile_names:
                 candidate = os.path.normpath(os.path.join(
                     resolved_root, "tests", "load_tests",
                     "prompts", "profiles", f"{name}.json",
@@ -173,6 +172,11 @@ Aborting.""",
                 if os.path.isfile(candidate):
                     return candidate
 
+        searched_lines: List[str] = []
+        searched_path: str
+        # One "  - <path>" line per searched path.
+        for searched_path in searched:
+            searched_lines.append(f"  - {searched_path}\n")
         logger.error(
             """No profile found for agent '%s'.
 Searched:
@@ -180,7 +184,7 @@ Searched:
 Create a profile JSON or use --profile-path to specify one.
 Aborting.""",
             agent_name,
-            "".join(f"  - {searched_path}\n" for searched_path in searched),
+            "".join(searched_lines),
         )
         raise LoadTestAbortError(1)
 
@@ -265,7 +269,8 @@ Aborting.""",
         """
         test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
         hocon_agent: str = test_case.get("agent", "")
-        if hocon_agent not in (agent_name, ProjectPaths.agent_base_name(agent_name)):
+        expected_agents: List[str] = [agent_name, ProjectPaths.agent_base_name(agent_name)]
+        if hocon_agent not in expected_agents:
             logger.error(
                 """Hocon agent does not match --agent.
   File: %s
@@ -276,18 +281,26 @@ Aborting.""",
             )
             raise LoadTestAbortError(1)
         interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
-        if len(interactions) > 1:
+        interaction_count: int = len(interactions)
+        if interaction_count > 1:
             logger.error(
                 """Load-test hocon must have exactly one interaction.
   File: %s
   Interactions: %d
 Aborting.""",
-                path, len(interactions),
+                path, interaction_count,
             )
             raise LoadTestAbortError(1)
-        interaction: Dict[str, Any] = interactions[0] if interactions else {}
+        interaction: Dict[str, Any] = {}
+        if interactions:
+            interaction = interactions[0]
         response: Any = interaction.get("response", {})
-        sly_checks: Any = response.get("sly_data", {}) if isinstance(response, dict) else None
+        sly_checks: Any = None
+        bad_value: Any = response
+        if isinstance(response, dict):
+            response_dict: Dict[str, Any] = response
+            sly_checks = response_dict.get("sly_data", {})
+            bad_value = sly_checks
         if not isinstance(sly_checks, dict):
             logger.error(
                 """response and response.sly_data must be maps of field -> check \
@@ -295,7 +308,7 @@ Aborting.""",
   File: %s
   Got: %r
 Aborting.""",
-                path, sly_checks if isinstance(response, dict) else response,
+                path, bad_value,
             )
             raise LoadTestAbortError(1)
         return test_case

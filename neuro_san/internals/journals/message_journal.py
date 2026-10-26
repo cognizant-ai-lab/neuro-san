@@ -89,3 +89,12 @@ class MessageJournal(Journal):
         # taken here ends up being harmless in the synchronous request case (like for gRPC) because
         # we would only be blocking our own event loop.
         await self.hopper.put(outgoing_dict, synchronous=True)
+
+    async def write_message_if_next_not_dupe(self, message: BaseMessage):
+        """
+        Writes a BaseMessage entry into the wrapped_journal
+        and appends to the chat history as long as the next message does not have the same content.
+
+        :param message: The BaseMessage instance to write to the wrapped_journal
+        """
+        raise NotImplementedError

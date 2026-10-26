@@ -37,6 +37,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
@@ -54,7 +55,7 @@ API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
                                         ])
 
 
-class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
+class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangChainLlmFactory):
     """
     Factory class for LLM operations
 
@@ -321,7 +322,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # The two-key limit is what lets a sparse user overlay such as
         # {"claude-fable": {"model_info_url": ...}} keep behaving as an alias.
         is_alias: bool = len(llm_entry.keys()) <= 2 and use_model_name is not None
-        resolved_entry: Dict[str, Any] = self.llm_infos.get(use_model_name) if is_alias else llm_entry
+        resolved_entry: Dict[str, Any] = llm_entry
+        if is_alias:
+            resolved_entry = self.llm_infos.get(use_model_name)
         return resolved_entry, use_model_name
 
     def _resolve_llm_entry(self, model_name: str) -> Tuple[Dict[str, Any], str]:
@@ -368,7 +371,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         # Full entries can carry a "use_model_name" of their own (e.g. azure-gpt-4o -> gpt-4o-2024-08-06).
         # This mirrors how create_full_llm_config() fills in model_name when no class is given.
-        return llm_entry.get("use_model_name", use_model_name)
+        resolved: str = llm_entry.get("use_model_name", use_model_name)
+        return resolved
 
     def get_chat_class_args(self, chat_class_name: str, use_model_name: str = None) -> Dict[str, Any]:
         """
@@ -396,8 +400,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         extends: str = chat_class.get("extends")
         if extends is not None:
             # If this class extends another, get its args too.
+            # The overlay wins, so this class's own args override the inherited ones.
             extends_args: Dict[str, Any] = self.get_chat_class_args(extends, use_model_name)
-            args = self.overlayer.overlay(args, extends_args)
+            args = self.overlayer.overlay(extends_args, args)
 
         return args
 
@@ -572,7 +577,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # This fallback only applies when the user provides a non-default class path
         # and factory resolution failed.
         class_path: str = config.get("class")
-        default_llm_classes: Set[str] = set(self.llm_infos.get("classes"))
+        classes_value: List[str] = self.llm_infos.get("classes")
+        default_llm_classes: Set[str] = set(classes_value)
         if (
             llm_resources is None
             and found_exception is not None
@@ -821,3 +827,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             main_llm_resources.add_fallback_resources(fallback_llm_resources)
 
         return main_llm_resources
+
+    def get_llm_infos(self) -> Dict[str, Any]:
+        """
+        :return: A dictionary mapping llm names to their descriptions.
+        """
+        return self.llm_infos

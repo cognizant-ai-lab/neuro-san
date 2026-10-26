@@ -17,8 +17,12 @@
 
 from typing import Any
 from typing import List
+from typing import Optional
 
-from os import environ
+from logging import getLogger
+from logging import Logger
+
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class SessionUtil:
@@ -26,26 +30,50 @@ class SessionUtil:
     Static utility class with common session policy.
     """
 
+    MAX_AGENTS_ENV_VAR: str = "MAX_AGENTS_FROM_EXTERNAL_SERVER"
+
+    @staticmethod
+    def get_max_agents() -> int:
+        """
+        Reads the MAX_AGENTS_FROM_EXTERNAL_SERVER environment variable.
+        Unset, blank, 0 or negative means "no limit".  A non-integer also means "no limit" and logs a warning.
+
+        :return: The limit, or 0 for no limit
+        """
+        max_agents_str: Optional[str] = Env.getenv(SessionUtil.MAX_AGENTS_ENV_VAR)
+        if max_agents_str is None or max_agents_str.strip() == "":
+            return 0
+
+        max_agents: int = 0
+        try:
+            max_agents = int(max_agents_str)
+        except ValueError:
+            logger: Logger = getLogger(SessionUtil.__name__)
+            logger.warning("Ignoring %s=%r: not an integer, so no limit is applied to server listings",
+                           SessionUtil.MAX_AGENTS_ENV_VAR, max_agents_str)
+            return 0
+
+        # A negative value means unlimited, same as 0.
+        return max(max_agents, 0)
+
     @staticmethod
     def limit_agents_list(agents_list: List[Any]) -> List[Any]:
         """
-        Limit the number of agents to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER environment variable,
-        if that is set. Otherwise, return the full list of agents.
+        Limits a list of agents/tools from a server to at most MAX_AGENTS_FROM_EXTERNAL_SERVER entries.
+        Server JSON can hold anything, so a non-list is returned unchanged.
 
-        :param agents_list: List of agents
-        :return: Potentially limited list of agents
+        :param agents_list: List of agents/tools as returned by the server
+        :return: The same list, or just its first MAX_AGENTS_FROM_EXTERNAL_SERVER entries (a warning is logged)
         """
-        use_agents_list: List[Any] = agents_list
+        if not isinstance(agents_list, list):
+            return agents_list
 
-        max_agents: int = 0
-        max_agents_str: str = environ.get("MAX_AGENTS_FROM_EXTERNAL_SERVER")
-        if max_agents_str is not None:
-            try:
-                max_agents = int(max_agents_str)
-            except ValueError:
-                max_agents = 0
+        max_agents: int = SessionUtil.get_max_agents()
+        if max_agents <= 0 or len(agents_list) <= max_agents:
+            return agents_list
 
-        if max_agents > 0:
-            use_agents_list = use_agents_list[:max_agents]
-
+        logger: Logger = getLogger(SessionUtil.__name__)
+        logger.warning("%s=%d: considering only the first %d of the %d entries the server listed",
+                       SessionUtil.MAX_AGENTS_ENV_VAR, max_agents, max_agents, len(agents_list))
+        use_agents_list: List[Any] = agents_list[:max_agents]
         return use_agents_list

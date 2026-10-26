@@ -25,13 +25,9 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.config import SEPARATOR_WIDTH
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
-from tests.load_tests.reporting.system_resources import SysSnapshot
+from tests.load_tests.reporting.system_resources import SystemSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -65,16 +61,23 @@ class SummaryReporter:
 
         :param is_ramp: True to label each row by stage, False by round
         """
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        title: str = "RAMP-UP SUMMARY" if is_ramp else "ROUND SUMMARY"
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        title: str = "ROUND SUMMARY"
+        if is_ramp:
+            title = "RAMP-UP SUMMARY"
         logger.info("  %s", title)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
-        has_server_counts: bool = any(
-            summary.get("primary_started") is not None
-            for summary in self._summaries
-        )
-        first_col: str = "Stage" if is_ramp else "Round"
+        has_server_counts: bool = False
+        summary: Dict[str, Any]
+        # Look for a stage that has server-side request counts.
+        for summary in self._summaries:
+            if summary.get("primary_started") is not None:
+                has_server_counts = True
+                break
+        first_col: str = "Round"
+        if is_ramp:
+            first_col = "Stage"
         header: List[str] = [
             first_col, "Concurrent", "Created", "Failed",
             "Timeout", "Killed", "Retries", "Amplification",
@@ -82,38 +85,18 @@ class SummaryReporter:
         ]
         if has_server_counts:
             header.extend(["Recv", "Done", "Internal"])
-        rows: List[Tuple[str, ...]] = []
+        rows: List[List[str]] = []
+        # One table row per stage.
         for summary in self._summaries:
-            counts: Dict[str, int] = summary.get("counts", {})
-            row: Tuple[str, ...] = (
-                str(summary.get("stage") if is_ramp
-                    else summary.get("round", summary.get("stage"))),
-                str(summary.get("concurrent")),
-                str(counts.get(STATUS_CREATED, 0)),
-                str(counts.get(STATUS_FAILED, 0)),
-                str(counts.get(STATUS_TIMEOUT, 0)),
-                str(counts.get(STATUS_KILLED, 0)),
-                str(summary.get("total_retries", 0)),
-                f"{summary.get("amplification", 1.0):.2f}x",
-                f"{summary.get("elapsed", 0):.1f}s",
-            )
+            row_label: Any = summary.get("stage")
+            if not is_ramp:
+                row_label = summary.get("round", row_label)
+            row: List[str] = [str(row_label)]
+            stage_cells: List[str] = SummaryReporter._stage_cells(summary)
+            row.extend(stage_cells)
             if has_server_counts:
-                primary_started: Optional[int] = summary.get("primary_started")
-                primary_finished: Optional[int] = summary.get("primary_finished")
-                total_started: Optional[int] = summary.get("total_started")
-                internal: str = (
-                    str(total_started - primary_started)
-                    if primary_started is not None
-                    and total_started is not None
-                    else "-"
-                )
-                row += (
-                    str(primary_started)
-                    if primary_started is not None else "-",
-                    str(primary_finished)
-                    if primary_finished is not None else "-",
-                    internal,
-                )
+                server_cells: List[str] = SummaryReporter._server_count_cells(summary)
+                row.extend(server_cells)
             rows.append(row)
         TableFormatter.log_table(header, rows)
 
@@ -128,20 +111,22 @@ class SummaryReporter:
         total_time_seconds: float = 0.0
         total_retries: int = 0
 
+        summary: Dict[str, Any]
+        # Add up the status counts, time and retries of every stage.
         for summary in self._summaries:
             counts: Dict[str, int] = summary.get("counts", {})
-            total_created += counts.get(STATUS_CREATED, 0)
-            total_failed += counts.get(STATUS_FAILED, 0)
-            total_timeout += counts.get(STATUS_TIMEOUT, 0)
-            total_killed += counts.get(STATUS_KILLED, 0)
+            total_created += counts.get(LoadTestConstants.STATUS_CREATED, 0)
+            total_failed += counts.get(LoadTestConstants.STATUS_FAILED, 0)
+            total_timeout += counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+            total_killed += counts.get(LoadTestConstants.STATUS_KILLED, 0)
             total_time_seconds += summary.get("elapsed", 0)
             total_retries += summary.get("total_retries", 0)
 
         total_sent: int = total_created + total_failed + total_timeout + total_killed
 
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  OVERALL RESULTS")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         if self._neuro_san_version:
             logger.info("  neuro-san version: %s", self._neuro_san_version)
         logger.info("  Total requests: %s", total_sent)
@@ -149,18 +134,19 @@ class SummaryReporter:
         logger.info("    Failed:    %s", total_failed)
         logger.info("    Timed out: %s", total_timeout)
         logger.info("    Killed:    %s", total_killed)
-        logger.info("  Total wall time: %s", Formatters.fmt_duration(total_time_seconds, precision=2))
+        total_time_text: str = Formatters.fmt_duration(total_time_seconds, precision=2)
+        logger.info("  Total wall time: %s", total_time_text)
         self._log_performance_stats()
 
         if total_retries > 0:
-            total_requests: int = sum(
-                stage_summary.get("concurrent", 0)
-                for stage_summary in self._summaries
-            )
-            amplification: float = (
-                (total_requests + total_retries) / total_requests
-                if total_requests > 0 else 1.0
-            )
+            total_requests: int = 0
+            stage_summary: Dict[str, Any]
+            # Add up the requests of every stage.
+            for stage_summary in self._summaries:
+                total_requests += stage_summary.get("concurrent", 0)
+            amplification: float = 1.0
+            if total_requests > 0:
+                amplification = (total_requests + total_retries) / total_requests
             logger.info("\n  Overall retry totals:")
             logger.info("    Total retries:   %s", total_retries)
             logger.info("    Amplification:   %.2fx", amplification)
@@ -185,9 +171,9 @@ class SummaryReporter:
         """
         if client is None and server is None:
             return False
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  LLM & TOKEN USAGE")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         SummaryReporter._log_token_source(f"Client ({client_source})", client)
         SummaryReporter._log_token_source("Server log", server)
         if client is not None and server is not None:
@@ -210,6 +196,8 @@ class SummaryReporter:
         token_counts: List[int] = []
         prompt_total: int = 0
         completion_total: int = 0
+        entry: Dict[str, Any]
+        # Add up the token fields of each entry that has tokens.
         for entry in entries:
             token_count: int = entry.get("total_tokens", 0) or 0
             if not token_count:
@@ -242,18 +230,18 @@ class SummaryReporter:
         if first_response_stats is not None:
             logger.info(
                 "  Time to first response: %s min / %s avg / %s max",
-                Formatters.fmt_duration(first_response_stats.get("min", 0)),
-                Formatters.fmt_duration(first_response_stats.get("avg", 0)),
-                Formatters.fmt_duration(first_response_stats.get("max", 0)),
+                Formatters.fmt_duration(first_response_stats.get("min_seconds", 0)),
+                Formatters.fmt_duration(first_response_stats.get("avg_seconds", 0)),
+                Formatters.fmt_duration(first_response_stats.get("max_seconds", 0)),
             )
 
         request_duration_stats: Optional[Dict[str, float]] = self._request_duration_stats()
         if request_duration_stats is not None:
             logger.info(
                 "  Request duration: %s min / %s avg / %s max",
-                Formatters.fmt_duration(request_duration_stats.get("min", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("avg", 0)),
-                Formatters.fmt_duration(request_duration_stats.get("max", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("min_seconds", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("avg_seconds", 0)),
+                Formatters.fmt_duration(request_duration_stats.get("max_seconds", 0)),
             )
 
         self._log_validation_summary()
@@ -329,7 +317,11 @@ class SummaryReporter:
 
         :return: True if any result has client_total_tokens
         """
+        summary: Dict[str, Any]
+        # Look for any result that carries a client token copy.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # Stop at the first result with client tokens.
             for result in summary.get("results", []):
                 if "client_total_tokens" in result:
                     return True
@@ -343,7 +335,11 @@ class SummaryReporter:
         :return: Token stats from aggregate_token_entries, or None when no result has tokens
         """
         entries: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # One token entry per request of every stage.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # Read the token fields with the given prefix.
             for result in summary.get("results", []):
                 entries.append({
                     "total_tokens": result.get(
@@ -371,7 +367,7 @@ class SummaryReporter:
             self._sys_edge_snapshot("after"),
         )
 
-    def _sys_edge_snapshot(self, edge: str) -> Optional[SysSnapshot]:
+    def _sys_edge_snapshot(self, edge: str) -> Optional[SystemSnapshot]:
         """
         Build the before/after whole-system snapshot across stages.
 
@@ -383,12 +379,14 @@ class SummaryReporter:
         :return: The snapshot, or None when no stage has system data
         """
         prefix: str = f"{edge}_sys_"
-        chosen_snapshot: Optional[SysSnapshot] = None
+        chosen_snapshot: Optional[SystemSnapshot] = None
+        summary: Dict[str, Any]
+        # Find the first ("before") or last ("after") stage with system data.
         for summary in self._summaries:
             memory_percentage: Optional[float] = summary.get(prefix + "mem_pct")
             if memory_percentage is None:
                 continue
-            snapshot: SysSnapshot = {
+            snapshot: SystemSnapshot = {
                 "mem_pct": memory_percentage,
                 "mem_avail_gb": summary.get(prefix + "mem_avail_gb"),
                 "cpu_pct": summary.get(prefix + "cpu"),
@@ -399,7 +397,7 @@ class SummaryReporter:
             chosen_snapshot = snapshot
         return chosen_snapshot
 
-    def _sys_peak_snapshot(self) -> Optional[SysSnapshot]:
+    def _sys_peak_snapshot(self) -> Optional[SystemSnapshot]:
         """
         Build the whole-system peak snapshot (per-metric max).
 
@@ -409,20 +407,28 @@ class SummaryReporter:
         peak_available_gigabytes: Optional[float] = None
         peak_cpu_percentage: Optional[float] = None
         peak_threads: Optional[int] = None
+        summary: Dict[str, Any]
+        # Keep the largest value of each system metric.
         for summary in self._summaries:
             memory_percentage: Optional[float] = summary.get("peak_sys_mem_pct")
             if (memory_percentage is not None
-                    and (peak_memory_percentage is None or memory_percentage > peak_memory_percentage)):
+                    and (peak_memory_percentage is None
+                         or memory_percentage > peak_memory_percentage)):
                 peak_memory_percentage = memory_percentage
                 peak_available_gigabytes = summary.get("peak_sys_mem_avail_gb")
             cpu_percentage: Optional[float] = summary.get("peak_sys_cpu")
-            if cpu_percentage is not None and (peak_cpu_percentage is None or cpu_percentage > peak_cpu_percentage):
+            if (cpu_percentage is not None
+                    and (peak_cpu_percentage is None
+                         or cpu_percentage > peak_cpu_percentage)):
                 peak_cpu_percentage = cpu_percentage
             threads: Optional[int] = summary.get("peak_sys_threads")
             if (threads is not None
-                    and (peak_threads is None or threads > peak_threads)):
+                    and (peak_threads is None
+                         or threads > peak_threads)):
                 peak_threads = threads
-        if peak_memory_percentage is None and peak_cpu_percentage is None and peak_threads is None:
+        if (peak_memory_percentage is None
+                and peak_cpu_percentage is None
+                and peak_threads is None):
             return None
         return {
             "mem_pct": peak_memory_percentage,
@@ -435,18 +441,22 @@ class SummaryReporter:
         """
         Compute min/avg/max elapsed time across requests.
 
-        :return: min, avg and max elapsed seconds; None when there are no results
+        :return: "min_seconds", "avg_seconds" and "max_seconds" of the elapsed time; None when there are no results
         """
         durations_seconds: List[float] = []
+        summary: Dict[str, Any]
+        # Collect the elapsed time of every request.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # One duration per request of the stage.
             for result in summary.get("results", []):
                 durations_seconds.append(result.get("elapsed", 0))
         if not durations_seconds:
             return None
         return {
-            "min": min(durations_seconds),
-            "avg": sum(durations_seconds) / len(durations_seconds),
-            "max": max(durations_seconds),
+            "min_seconds": min(durations_seconds),
+            "avg_seconds": sum(durations_seconds) / len(durations_seconds),
+            "max_seconds": max(durations_seconds),
         }
 
     def _log_model_distribution(self) -> None:
@@ -460,26 +470,31 @@ class SummaryReporter:
         """
         model_counts: Counter = Counter()
         fallback_requests: int = 0
+        summary: Dict[str, Any]
+        result: Dict[str, Any]
+        model_name: str
+        # Count the models of every request in every stage.
         for summary in self._summaries:
+            # Count the models each request of the stage used.
             for result in summary.get("results", []):
                 all_models: List[str] = result.get("all_models", [])
                 model: Optional[str] = result.get("model")
                 if all_models:
+                    # Count every model the request used, fallbacks included.
                     for model_name in all_models:
-                        model_counts[model_name] += 1
+                        model_counts[model_name] = model_counts.get(model_name, 0) + 1
                     if len(all_models) > 1:
                         fallback_requests += 1
                 elif model and model != "unknown":
-                    model_counts[model] += 1
+                    model_counts[model] = model_counts.get(model, 0) + 1
         if not model_counts:
             return
-        logger.info(
-            "  LLM models: %s",
-            ", ".join(
-                f"{model_name} ({count})" for model_name, count in
-                model_counts.most_common()
-            ),
-        )
+        model_parts: List[str] = []
+        count: int
+        # One "model (N)" part per model, most used first.
+        for model_name, count in model_counts.most_common():
+            model_parts.append(f"{model_name} ({count})")
+        logger.info("  LLM models: %s", ", ".join(model_parts))
         if fallback_requests > 0:
             logger.info("    Fallback LLM used: %s request(s)", fallback_requests)
 
@@ -487,13 +502,15 @@ class SummaryReporter:
         """
         Compute min/avg/max time-to-first-response.
 
-        :return: Dictionary with "min", "avg" and "max" in seconds over the
+        :return: Dictionary with "min_seconds", "avg_seconds" and "max_seconds" over the
                  requests that received a first response; None when none did
         """
         first_response_seconds: List[float] = []
         summary: Dict[str, Any]
+        # Collect the time to first response of every request.
         for summary in self._summaries:
             result: Dict[str, Any]
+            # Keep only the requests that got a first response.
             for result in summary.get("results", []):
                 time_to_first_response_seconds: float = result.get("time_to_first_response", 0)
                 if time_to_first_response_seconds > 0:
@@ -501,9 +518,9 @@ class SummaryReporter:
         if not first_response_seconds:
             return None
         return {
-            "min": min(first_response_seconds),
-            "avg": sum(first_response_seconds) / len(first_response_seconds),
-            "max": max(first_response_seconds),
+            "min_seconds": min(first_response_seconds),
+            "avg_seconds": sum(first_response_seconds) / len(first_response_seconds),
+            "max_seconds": max(first_response_seconds),
         }
 
     def _log_validation_summary(self) -> None:
@@ -513,15 +530,18 @@ class SummaryReporter:
         all_events: List[Dict[str, Any]] = self._collect_validation_events()
         if not all_events:
             return
-        total_cycles: int = sum(
-            event.get("fix_cycles", 0) for event in all_events
-        )
-        total_requests: int = sum(
-            stage_summary.get("concurrent", 0) for stage_summary in self._summaries
-        )
+        total_requests: int = 0
+        stage_summary: Dict[str, Any]
+        # Add up the requests of every stage.
+        for stage_summary in self._summaries:
+            total_requests += stage_summary.get("concurrent", 0)
         affected: int = len(all_events)
+        total_cycles: int = 0
         all_errors: List[str] = []
+        event: Dict[str, Any]
+        # Add up the fix cycles and collect the errors of every validation event.
         for event in all_events:
+            total_cycles += event.get("fix_cycles", 0)
             all_errors.extend(event.get("errors", []))
         logger.info(
             "\n  Validation: %s of %s requests needed fixes (%s fix cycles total)",
@@ -537,10 +557,18 @@ class SummaryReporter:
 
         :param events: Validation events from every stage
         """
-        fix_request_ids: Set[str] = {event.get("request_id") for event in events}
+        fix_request_ids: Set[str] = set()
+        event: Dict[str, Any]
+        # Collect the request id of each validation event.
+        for event in events:
+            fix_request_ids.add(event.get("request_id"))
         durations_with_fixes_seconds: List[float] = []
         durations_without_fixes_seconds: List[float] = []
+        summary: Dict[str, Any]
+        result: Dict[str, Any]
+        # Split the request durations into requests with and without fixes.
         for summary in self._summaries:
+            # One duration per request of the stage.
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")
                 elapsed_seconds: float = result.get("elapsed", 0)
@@ -568,9 +596,12 @@ class SummaryReporter:
         """
         counts: Counter = Counter(all_errors)
         top: List[Tuple[str, int]] = counts.most_common(3)
-        parts: List[str] = [
-            f"{error} ({count}x)" for error, count in top
-        ]
+        parts: List[str] = []
+        error: str
+        count: int
+        # One "error (Nx)" part per top error.
+        for error, count in top:
+            parts.append(f"{error} ({count}x)")
         logger.info("    %s errors found: %s", len(all_errors), ", ".join(parts))
 
     def _collect_validation_events(self) -> List[Dict[str, Any]]:
@@ -580,6 +611,60 @@ class SummaryReporter:
         :return: Validation events from every stage, in stage order
         """
         events: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Gather the validation events of every stage.
         for summary in self._summaries:
             events.extend(summary.get("validation_events", []))
         return events
+
+    @staticmethod
+    def _stage_cells(summary: Dict[str, Any]) -> List[str]:
+        """
+        Build the cells from Workers to Duration of one summary table row.
+
+        :param summary: One stage or round summary
+        :return: Workers, the 4 status counts, retries, amplification and duration
+        """
+        counts: Dict[str, int] = summary.get("counts", {})
+        concurrent: Optional[int] = summary.get("concurrent")
+        created_count: int = counts.get(LoadTestConstants.STATUS_CREATED, 0)
+        failed_count: int = counts.get(LoadTestConstants.STATUS_FAILED, 0)
+        timeout_count: int = counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+        killed_count: int = counts.get(LoadTestConstants.STATUS_KILLED, 0)
+        total_retries: int = summary.get("total_retries", 0)
+        amplification: float = summary.get("amplification", 1.0)
+        elapsed_seconds: float = summary.get("elapsed", 0)
+        cells: List[str] = [
+            str(concurrent),
+            str(created_count),
+            str(failed_count),
+            str(timeout_count),
+            str(killed_count),
+            str(total_retries),
+            f"{amplification:.2f}x",
+            f"{elapsed_seconds:.1f}s",
+        ]
+        return cells
+
+    @staticmethod
+    def _server_count_cells(summary: Dict[str, Any]) -> List[str]:
+        """
+        Build the Recv, Done and Internal cells of one summary table row.
+
+        :param summary: One stage or round summary
+        :return: Primary requests started, primary requests finished and internal calls, "-" when a count is missing
+        """
+        primary_started: Optional[int] = summary.get("primary_started")
+        primary_finished: Optional[int] = summary.get("primary_finished")
+        total_started: Optional[int] = summary.get("total_started")
+        primary_started_text: str = "-"
+        if primary_started is not None:
+            primary_started_text = str(primary_started)
+        primary_finished_text: str = "-"
+        if primary_finished is not None:
+            primary_finished_text = str(primary_finished)
+        internal: str = "-"
+        if primary_started is not None and total_started is not None:
+            internal = str(total_started - primary_started)
+        cells: List[str] = [primary_started_text, primary_finished_text, internal]
+        return cells

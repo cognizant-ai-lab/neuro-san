@@ -18,10 +18,11 @@
 from __future__ import annotations
 
 from typing import Any
-from typing import Dict
 from typing import List
 
 from asyncio import Event
+
+from leaf_common.utils.map import Map
 
 from neuro_san.interfaces.reservation import Reservation
 
@@ -39,7 +40,7 @@ class Reservationist:
 
         # Creating Reservations can be done outside the with-statement
         reservation: Reservation = await reservationist.reserve()
-        deployments: Dict[Reservation, Dict[str, Any]] = {
+        deployments: Map[Reservation, Dict[str, Any]] = {
             reservation: my_agent_spec,
             ...
         }
@@ -72,7 +73,7 @@ class Reservationist:
         This is what gets called when you enter a with-statement.
         """
 
-    async def deploy(self, deployment_dict: Dict[Reservation, Any], confirmation: bool = False) -> Event:
+    async def deploy(self, deployment_dict: Map[Reservation, Any], confirmation: bool = False) -> Event:
         """
         Deploy multiple Reservations.
 
@@ -108,7 +109,7 @@ class Reservationist:
                 that the deployment is complete, or None, depending on the value passed
                 for confirmation.
         """
-        deployment_dict: Dict[Reservation, Any] = {reservation: deployment}
+        deployment_dict: Map[Reservation, Any] = {reservation: deployment}
         event: Event = await self.deploy(deployment_dict, confirmation=confirmation)
         return event
 

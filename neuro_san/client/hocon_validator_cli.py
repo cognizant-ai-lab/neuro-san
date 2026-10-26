@@ -19,7 +19,9 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import argparse
+from argparse import ArgumentParser
+from argparse import Namespace
+from argparse import RawDescriptionHelpFormatter
 import copy
 import json
 import os
@@ -59,7 +61,7 @@ class HoconValidatorCli:
         """
         Constructor
         """
-        self.args = None
+        self.args: Namespace = None
 
     def main(self) -> int:
         """
@@ -70,7 +72,7 @@ class HoconValidatorCli:
         self.parse_args()
 
         abs_file_path: str = os.path.abspath(self.args.hocon_file)
-        restorer = AgentNetworkRestorer(registry_dir=self.args.registry_dir)
+        restorer: AgentNetworkRestorer = AgentNetworkRestorer(registry_dir=self.args.registry_dir)
 
         try:
             raw_config: Dict[str, Any] = self.parse_file(abs_file_path, restorer)
@@ -85,32 +87,29 @@ class HoconValidatorCli:
             return 2
 
         resolved_config: Dict[str, Any] = self.resolve_config(raw_config)
-        errors: List[str] = self.collect_errors(restorer, resolved_config, abs_file_path)
-        lint = LintNetworkValidator(raw_config=raw_config)
+
+        # Duplicate agent names are a structural failure, not a validation one,
+        # so they short-circuit with exit code 2 to match the server's load path.
+        duplicate_error: str = self.check_duplicate_agents(restorer, resolved_config, abs_file_path)
+        if duplicate_error:
+            print(f"Error: {duplicate_error}", file=sys.stderr)
+            return 2
+
+        errors: List[str] = self.collect_errors(resolved_config)
+        lint: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
         unused_warnings: List[str] = lint.find_unused_commondefs()
         placeholder_warnings: List[str] = lint.find_unresolved_placeholders(resolved_config)
         return self.report_results(resolved_config, errors, unused_warnings, placeholder_warnings)
 
-    def collect_errors(
-        self,
-        restorer: AgentNetworkRestorer,
-        resolved_config: Dict[str, Any],
-        file_path: str,
-    ) -> List[str]:
+    def collect_errors(self, resolved_config: Dict[str, Any]) -> List[str]:
         """
-        Run every hard check (schema, references, duplicate names) and
-        return the combined list of error messages.
+        Run hard schema/reference checks and return the error messages.
 
-        :param restorer: The AgentNetworkRestorer used for the duplicate check
         :param resolved_config: The resolved config to validate
-        :param file_path: The HOCON file path (used in duplicate-name messages)
-        :return: Combined list of error messages, empty if nothing failed
+        :return: List of error messages, empty if nothing failed
         """
         validator: DictionaryValidator = self.create_validator()
         errors: List[str] = validator.validate(resolved_config)
-        duplicate_error: str = self.check_duplicate_agents(restorer, resolved_config, file_path)
-        if duplicate_error:
-            errors.append(duplicate_error)
         return errors
 
     def report_results(
@@ -152,7 +151,7 @@ class HoconValidatorCli:
         if all_warnings:
             self._print_lint_warnings(all_warnings)
         if self.args.verbose:
-            self._print_network_summary(resolved_config)
+            self.print_network_summary(resolved_config)
         return 0
 
     @staticmethod
@@ -206,6 +205,8 @@ class HoconValidatorCli:
         Trigger AgentNetwork's duplicate-name detection by building a
         network from the resolved config. Returns the duplicate-name
         message if the build raises, or an empty string if it passes.
+        The underlying message is wrapped in triple-quoted text that
+        starts with a newline, so it is stripped before being returned.
 
         :param restorer: The AgentNetworkRestorer that owns the agent mapper
         :param resolved_config: The filter-chain-applied config
@@ -215,7 +216,7 @@ class HoconValidatorCli:
         try:
             restorer.create_network(resolved_config, file_path)
         except ValueError as exception:
-            return str(exception)
+            return str(exception).strip()
         return ""
 
     @staticmethod
@@ -229,9 +230,9 @@ class HoconValidatorCli:
         """
         Parse command line arguments.
         """
-        arg_parser = argparse.ArgumentParser(
+        arg_parser: ArgumentParser = ArgumentParser(
             description="Validate a HOCON agent network configuration file.",
-            formatter_class=argparse.RawDescriptionHelpFormatter,
+            formatter_class=RawDescriptionHelpFormatter,
             epilog="""
 Examples:
   python -m neuro_san.client.hocon_validator_cli registries/hello_world.hocon
@@ -321,8 +322,7 @@ Examples:
         network_name: str = os.path.basename(self.args.hocon_file)
         return ManifestNetworkValidator(external_agents, mcp_servers, network_name=network_name)
 
-    @staticmethod
-    def _print_network_summary(config: Dict[str, Any]):
+    def print_network_summary(self, config: Dict[str, Any]):
         """
         Print a summary of the agent network.
 

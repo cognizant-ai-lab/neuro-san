@@ -25,6 +25,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
+from neuro_san.internals.run_context.langchain.llms.closeable_client import CloseableClient
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -116,7 +117,9 @@ class AnthropicLlmPolicy(LlmPolicy):
 
         if anthropic_async_client is not None:
             with suppress(Exception):
-                await anthropic_async_client.aclose()
+                # Use something that has an aclose
+                closeable_client: CloseableClient = anthropic_async_client
+                await closeable_client.aclose()
 
         # Let's not do this again, shall we?
         self.llm = None

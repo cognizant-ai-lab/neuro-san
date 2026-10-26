@@ -272,7 +272,8 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             message = f"Parameter name '{field_name}' must not start with an underscore."
         elif field_name == "model_config":
             message = "Parameter name 'model_config' is reserved by pydantic for model configuration."
-        elif field_name.startswith(("model_dump", "model_validate")) and hasattr(BaseModel, field_name):
+        elif (field_name.startswith("model_dump") or field_name.startswith("model_validate")) \
+                and hasattr(BaseModel, field_name):
             message = f"Parameter name '{field_name}' shadows a pydantic BaseModel method."
 
         if message is not None:
@@ -302,7 +303,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             raise ToolSpecError(f"Field '{field_name}' has a non-string 'type' ({type_from_dict!r}). "
                                 "Union type lists are not supported; use a single type name.")
 
-        field_type: Type = self.TYPE_LOOKUP.get(type_from_dict)
+        field_type: Type = BaseModelDictionaryConverter.TYPE_LOOKUP.get(type_from_dict)
 
         # Pydantic v1 rejected the None annotation that resulted from an
         # unrecognized type string, but pydantic v2 accepts None as NoneType,

@@ -14,14 +14,13 @@
 #
 # END COPYRIGHT
 
-"""Path helpers shared by the load test framework."""
-
 import os
 from typing import Optional
 
 
 class ProjectPaths:
-    """Resolves locations relative to the neuro-san project root.
+    """
+    Resolves locations relative to the neuro-san project root.
 
     Used by both the profile loader (JSON profiles) and the input
     validator (hocon fixtures) so the lookup rules live in one place.
@@ -29,7 +28,8 @@ class ProjectPaths:
 
     @staticmethod
     def resolve_project_root(project_root: Optional[str] = None) -> Optional[str]:
-        """Resolve the project root directory.
+        """
+        Resolve the project root directory.
 
         Priority: explicit --project-root -> first entry in PYTHONPATH.
         Returns None when neither yields an existing directory.
@@ -50,7 +50,8 @@ class ProjectPaths:
 
     @staticmethod
     def agent_base_name(agent_name: str) -> str:
-        """Strip any registry prefix from an agent name.
+        """
+        Strip any registry prefix from an agent name.
 
         basic/hello_world -> hello_world. Profile files and fixture
         folders are keyed by this base name.

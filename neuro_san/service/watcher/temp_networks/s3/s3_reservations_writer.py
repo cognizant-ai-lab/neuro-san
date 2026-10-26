@@ -29,6 +29,7 @@ from logging import getLogger
 from logging import Logger
 
 from leaf_common.resolution.resolver_util import ResolverUtil
+from leaf_common.utils.map import Map
 
 # Lazily resolve here because this is one of the first places the import happens
 AioBaseClient: Type[Any] = ResolverUtil.create_type("aiobotocore.client.AioBaseClient",
@@ -84,8 +85,7 @@ class S3ReservationsWriter:
 
         self.s3_async_client_worker = AwsAsyncClientWorker(self.name, "s3")
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                               source: str = None):
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         """
         Add reservations to S3 storage.
         Main entry point.
@@ -139,7 +139,7 @@ class S3ReservationsWriter:
         await self.s3_async_client_worker.retry_with_new_client(work_function, source=source)
 
     async def add_all_reservations(self,
-                                   reservations_dict: Dict[Reservation, Dict[str, Any]],
+                                   reservations_dict: Map[Reservation, Dict[str, Any]],
                                    source: str,
                                    async_aws_client: AioBaseClient = None):
         """

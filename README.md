@@ -1,6 +1,6 @@
 # Neuro SAN Data-Driven Agents
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/cognizant-ai-lab/neuro-san)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/cognizant-ai-lab/neuro-san)
 
 **Neuro AI system of agent networks (Neuro SAN)** is a library for building data-driven multi-agent networks
 which can be run as a library, or served up via an HTTP server.
@@ -302,6 +302,10 @@ That is, if you added a new coded tool to your agent, its file path would
 look like this:
 
     <your_repo>/coded_tools/<your_agent_name>/<your_coded_tool>.py
+
+Like `PYTHONPATH`, `AGENT_TOOL_PATH` can list several roots, searched in order.
+A root can also be a Python module path such as `neuro_san.coded_tools`.
+See [class](docs/agent_hocon_reference.md#class-1) for details.
 
 ## Creating Clients
 

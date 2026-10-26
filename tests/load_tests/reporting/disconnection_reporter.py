@@ -19,7 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -44,16 +44,22 @@ class DisconnectionReporter:
         Log aggregate client disconnection report.
         """
         all_disconnections: List[Dict[str, Any]] = []
+        index: int
+        stage: Dict[str, Any]
+        disconnection: Dict[str, Any]
+        # Collect the disconnections of every stage.
         for index, stage in enumerate(self._summaries):
+            # Copy each disconnection and add its batch number.
             for disconnection in stage.get("disconnections") or []:
                 disconnection_copy: Dict[str, Any] = dict(disconnection)
                 disconnection_copy.update({"batch": index + 1})
                 all_disconnections.append(disconnection_copy)
         if not all_disconnections:
             return
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  CLIENT DISCONNECTIONS (%s detected in server log)", len(all_disconnections))
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
+        # One log line per disconnection.
         for disconnection in all_disconnections:
             logger.info(
                 "  Batch %s: %s — %s still processing at disconnect",

@@ -17,6 +17,7 @@
 
 from typing import Dict
 from typing import List
+from typing import Set
 
 from logging import getLogger
 from logging import Logger
@@ -40,7 +41,7 @@ class AgentNetworkStorage(AgentStorageSource):
     def __init__(self):
         self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self.lock = Lock()
+        self.lock: Lock = Lock()
         self.listeners: List[AgentStateListener] = []
 
     def add_listener(self, listener: AgentStateListener):
@@ -72,6 +73,7 @@ class AgentNetworkStorage(AgentStorageSource):
 
         # Notify listeners about this state change:
         # do it outside of internal lock
+        listener: AgentStateListener = None
         for listener in self.listeners:
             if is_new:
                 listener.agent_added(agent_name, self)
@@ -87,10 +89,11 @@ class AgentNetworkStorage(AgentStorageSource):
         Replace agents networks with a new collection.
         Previous state could be empty.
         """
-        current_agents = set(self.agents_table.keys())
-        new_agents = set(agent_networks.keys())
+        current_agents: Set[str] = set(self.agents_table.keys())
+        new_agents: Set[str] = set(agent_networks.keys())
         # Remove agents which are not in the new collection:
-        agents_to_remove = current_agents - new_agents
+        agents_to_remove: Set[str] = current_agents - new_agents
+        agent_name: str = None
         for agent_name in agents_to_remove:
             self.remove_agent_network(agent_name)
         # Now add (or possibly replace) agents from new collection:
@@ -109,6 +112,7 @@ class AgentNetworkStorage(AgentStorageSource):
 
         # Notify listeners about this state change:
         # do it outside of internal lock
+        listener: AgentStateListener = None
         for listener in self.listeners:
             listener.agent_removed(agent_name, self)
         # We can log id(None) if necessary - that's a legal value

@@ -30,6 +30,7 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
+from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -143,17 +144,19 @@ flag to your invocation.
         if llm_resources is None:
             raise ValueError("Unable to create LLM from llm_config (missing required configuration and/or sly_data).")
         if isinstance(llm_resources, dict):
+            llm_resources_dict: Dict[str, Any] = llm_resources
             # For now, do not worry about the "construction_errors" or "api_key_errors" keys.
             # These are very likely to already be handled by the front man.
-            required_sly_data: List[str] = llm_resources.get("required_sly_data_errors", [])
+            required_sly_data: List[str] = llm_resources_dict.get("required_sly_data_errors", [])
             required: str = "\n".join(sorted(required_sly_data))
             raise ValueError(
                 "LLM operation for this agent requires at least one of the following set in sly_data.llm_config:\n"
                 f"{required}\n"
             )
 
-        self.lingerers.append(llm_resources)
+        typed_llm_resources: LlmResources = llm_resources
+        self.lingerers.append(typed_llm_resources)
 
-        model: Any = llm_resources.get_model()
+        model: Any = typed_llm_resources.get_model()
 
         return model

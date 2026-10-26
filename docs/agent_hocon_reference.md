@@ -229,61 +229,6 @@ to use LLMs from various providers.
 | OpenAI                     | OPENAI_API_KEY                                                     |
 | OpenRouter                 | OPENROUTER_API_KEY                                                 |
 
-Azure OpenAI also needs the deployment to call: give it as `deployment_name` in the llm_config or set the
-`AZURE_OPENAI_DEPLOYMENT_NAME` environment variable. How the deployment, the OpenAI `model_name` and token
-pricing relate is covered under [Azure OpenAI](./llm_info_hocon_reference.md#azure-openai) in the llm info
-reference.
-
-For the Bedrock-based entries you can either set explicit credentials via
-`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`
-for temporary credentials), or point at a named profile in `~/.aws/credentials`
-via `AWS_PROFILE`. Both classes resolve credentials through the standard AWS
-credential chain, so SSO, EC2 instance roles, IMDS, and `AWS_DEFAULT_REGION` /
-`AWS_REGION` env vars all work the same way they do for any boto3 / anthropic-SDK
-call.
-
-**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
-are aliases that automatically reference the latest versions of their respective Anthropic model lines.
-This aliasing is recommended because Anthropic frequently deprecates older model versions. The aliases
-resolve whether or not you also set `"class": "anthropic"`. For information
-on current models and deprecation schedules, see the
-[Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
-
-**OpenRouter Model Names:** [OpenRouter](https://openrouter.ai/) is a unified API gateway that fronts
-hundreds of models from many providers (OpenAI, Anthropic, Google, Meta, etc.) behind a single endpoint.
-With the `openrouter` class, the `model_name` follows OpenRouter's `provider/model` convention, e.g.
-`anthropic/claude-sonnet-4-5` or `openai/gpt-4o`. OpenRouter also exposes "meta-router" models such as
-`openrouter/free` and `openrouter/auto` that select an underlying model at request time based on the
-capabilities the request needs (image understanding, tool calling, structured outputs, etc.). Because
-the underlying model is not known ahead of time for these routers, their `max_output_tokens` is left
-unset in `default_llm_info.hocon` — see the
-[llm_info_hocon_reference](./llm_info_hocon_reference.md#max_output_tokens) for what that means in practice.
-This integration requires the [`langchain-openrouter`](https://docs.langchain.com/oss/python/integrations/chat/openrouter)
-package, which neuro-san lazy-installs on first use.
-
-**Anthropic Claude on Bedrock — pick the right class:** AWS Bedrock can host Anthropic Claude models
-under two different langchain classes, and neuro-san wires up both:
-
-- `anthropic-bedrock` (recommended for Claude) — built on the `anthropic` SDK's
-  `AnthropicBedrock` / `AsyncAnthropicBedrock` clients. Fully async, and exposes
-  `ChatAnthropic`'s full parameter surface (`thinking`, `effort`, `mcp_servers`,
-  `context_management`, …).
-- `bedrock` — the legacy boto3-based `ChatBedrock`. Synchronous and serializes concurrent
-  calls inside a worker, and does not expose the Anthropic-specific knobs above. Reach for it
-  only when you need a non-Anthropic Bedrock model (Amazon Nova, Mistral, Meta Llama, AI21,
-  Cohere, etc.).
-
-Bedrock addresses Claude models by cross-region inference profile id with a region prefix
-(`global.`, `us.`, `eu.`, `apac.`), e.g. `global.anthropic.claude-opus-4-8` or
-`us.anthropic.claude-opus-4-8`. The short aliases in `default_llm_info.hocon`
-(`bedrock-claude-opus`, `bedrock-claude-sonnet`, `bedrock-claude-haiku`) all resolve to the
-`global.` profile; swap the prefix on both the alias's `use_model_name` and the target entry
-key to pin to a geographic region. See
-[AWS cross-region inference docs](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html)
-for the trade-offs. The `anthropic-bedrock` class is provided by the
-[`langchain-aws[anthropic]`](https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock)
-extra, which neuro-san lazy-installs on first use.
-
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
@@ -823,16 +768,23 @@ If the agent is called `math_guy` and the class is valued as `calculator.Calcula
 The python file math_guy/calculator.py under `AGENT_TOOL_PATH` is expected to have
 a class called Calculator which implements the CodedTool interface.
 
+Like `PYTHONPATH`, `AGENT_TOOL_PATH` can list several roots, searched in order. A root can also be a
+Python module path such as `neuro_san.coded_tools`, for coded tools installed as a package. For example:
+
+```bash
+export AGENT_TOOL_PATH=<top-level>/coded_tools:neuro_san.coded_tools
+```
+
 > [!IMPORTANT]
 > Loading a class imports its module, and importing a module executes the module's top-level code.
 > Because agent network hocon files can name classes to load, hocon files and coded tools are
-> code-equivalent: anyone who can write to the registry directory or `AGENT_TOOL_PATH` can
+> code-equivalent: anyone who can write to the registry directory or an `AGENT_TOOL_PATH` root can
 > effectively run code as the server process. Restrict write access to both locations, review
 > registry changes as you would code changes, and prefer least-privilege deployments.
 >
 > Setting the `AGENT_TOOL_PATH_ONLY` environment variable to `true` (default `false`) hardens the
 > CodedTool `class` path specifically: fully-qualified references are no longer resolved, so a
-> CodedTool `class` resolves only under the `AGENT_TOOL_PATH` hierarchy described above and cannot
+> CodedTool `class` resolves only under the `AGENT_TOOL_PATH` roots described above and cannot
 > import an arbitrary module elsewhere on the `PYTHONPATH`. The same flag governs shared coded
 > tools referenced through the [toolbox](#toolbox). It does **not** restrict other class references
 > an agent network can make — `llm_config.class`, middleware classes, and langchain toolbox tool

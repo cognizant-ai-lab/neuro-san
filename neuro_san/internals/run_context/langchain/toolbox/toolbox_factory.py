@@ -156,6 +156,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             self.toolbox_infos = toolbox_infos
             self.loaded = True
 
+    # pylint: disable=too-many-locals
     def create_tool_from_toolbox(
             self,
             tool_name: str,
@@ -216,23 +217,26 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         instance: Union[BaseTool, BaseToolkit] = callable_obj(**final_args)
 
         # If the instantiated class has "get_tools()", assume it's a toolkit and return a list of tools
-        if hasattr(instance, "get_tools") and callable(instance.get_tools):
-            toolkit: List[BaseTool] = instance.get_tools()
-            tool: BaseTool = None
-            for tool in toolkit:
-                if agent_name:
-                    # Prefix the name of the agent to each tool
-                    tool.name = f"{agent_name}_{tool.name}"
-                # Add "langchain_tool" tags so journal callback can idenitify it
-                tool.tags = ["langchain_tool"]
-            return toolkit
+        if hasattr(instance, "get_tools"):
+            base_toolkit: BaseToolkit = instance
+            if callable(base_toolkit.get_tools):
+                toolkit: List[BaseTool] = base_toolkit.get_tools()
+                tool: BaseTool = None
+                for tool in toolkit:
+                    if agent_name:
+                        # Prefix the name of the agent to each tool
+                        tool.name = f"{agent_name}_{tool.name}"
+                    # Add "langchain_tool" tags so journal callback can idenitify it
+                    tool.tags = ["langchain_tool"]
+                return toolkit
 
+        base_tool: BaseTool = instance
         if agent_name:
             # Replace langchain tool's name with agent name
-            instance.name = agent_name
+            base_tool.name = agent_name
         # Add "langchain_tool" tags so journal callback can idenitify it
-        instance.tags = ["langchain_tool"]
-        return instance
+        base_tool.tags = ["langchain_tool"]
+        return base_tool
 
     def _require_tool_info(self, tool_name: str) -> Dict[str, Any]:
         """
@@ -250,7 +254,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         """
         tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
         if tool_info is None:
-            if tool_name in self.REMOVED_TOOLS:
+            if tool_name in ToolboxFactory.REMOVED_TOOLS:
                 raise self._removed_tool_error(tool_name)
             sources: str = "the default toolbox info file"
             if self.toolbox_info_file:
@@ -261,7 +265,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
 
         if "class" not in tool_info:
-            if tool_name in self.REMOVED_TOOLS:
+            if tool_name in ToolboxFactory.REMOVED_TOOLS:
                 # A user toolbox file that overrides only part of a removed
                 # entry has no "class", because the bundled default does not
                 # define removed tools.
@@ -372,7 +376,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                 just like create_tool_from_toolbox().
         """
         tool_info: Dict[str, Any] = self._require_tool_info(tool_name)
-        return tool_info.get("class")
+        found_class: str = tool_info.get("class")
+        return found_class
 
     def get_tool_info(self, tool_name: str) -> Dict[str, Any]:
         """

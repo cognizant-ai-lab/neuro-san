@@ -42,16 +42,18 @@ class DirectAgentStorageUtil:
                         Default value is "public".
         :return: An AgentNetworkStorage populated from the Registry Manifest
         """
-        network_storage = AgentNetworkStorage()
+        network_storage: AgentNetworkStorage = AgentNetworkStorage()
 
         if manifest_networks is None:
-            manifest_restorer = RegistryManifestRestorer()
+            manifest_restorer: RegistryManifestRestorer = RegistryManifestRestorer()
             manifest_networks = manifest_restorer.restore()
 
         storage_networks: Dict[str, AgentNetwork] = manifest_networks.get(storage_type)
         if storage_networks is None:
             return None
 
+        agent_name: str = None
+        agent_network: AgentNetwork = None
         for agent_name, agent_network in storage_networks.items():
             network_storage.add_agent_network(agent_name, agent_network)
 

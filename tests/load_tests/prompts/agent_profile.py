@@ -14,21 +14,14 @@
 #
 # END COPYRIGHT
 
-"""
-Agent profile — agent-specific prompts and response checks.
-
-Built by AgentProfileFactory; this class only carries the data.
-"""
-
-import logging
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
-
-logger: logging.Logger = logging.getLogger(__name__)
 
 
 class AgentProfile:
@@ -52,7 +45,7 @@ class AgentProfile:
     <fixtures-hocon-dir>/<agent>/*.hocon (one prompt + response per file).
 
     Use: TrafficRunner takes the prompt and response checks for each
-    request; LoadTestOrchestrator takes the log patterns and token
+    request; LoadTestCli takes the log patterns and token
     estimate.
     """
 
@@ -63,8 +56,17 @@ class AgentProfile:
         :param agent_name: Name of the agent under test
         :param profile: The profile as a dict with the keys listed in the class docstring
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.agent_name: str = agent_name
         self._profile: Dict[str, Any] = profile
+
+    def get_agent_name(self) -> str:
+        """
+        Return the name of the agent under test.
+
+        :return: The --agent name this profile was built for
+        """
+        return self.agent_name
 
     def get_prompts(self) -> List[str]:
         """
@@ -145,14 +147,16 @@ class AgentProfile:
         """
         prompts: List[str] = self.get_prompts()
         if not prompts:
-            logger.error(
+            self.logger.error(
                 """Agent profile '%s' has an empty prompts list.
   Add at least one prompt to the profile JSON.
   Aborting.""",
                 self.agent_name,
             )
             raise LoadTestAbortError(1)
-        base_prompt: str = prompts[self._pool_index(request_id, same_prompt, len(prompts))]
+        prompt_count: int = len(prompts)
+        prompt_index: int = AgentProfile._pool_index(request_id, same_prompt, prompt_count)
+        base_prompt: str = prompts[prompt_index]
         if allow_caching:
             return base_prompt
         # The suffix makes every prompt unique, so no cache along the
@@ -171,7 +175,10 @@ class AgentProfile:
         responses: List[Dict[str, Any]] = self.get_responses()
         if not responses:
             return {}
-        return responses[self._pool_index(request_id, same_prompt, len(responses))]
+        response_count: int = len(responses)
+        response_index: int = AgentProfile._pool_index(request_id, same_prompt, response_count)
+        response: Dict[str, Any] = responses[response_index]
+        return response
 
     @staticmethod
     def _pool_index(request_id: int, same_prompt: bool, pool_size: int) -> int:

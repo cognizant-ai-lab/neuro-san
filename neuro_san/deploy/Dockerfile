@@ -171,7 +171,9 @@ ENV AGENT_LLM_INFO_FILE=""
 ENV AGENT_TOOLBOX_INFO_FILE=""
 
 # Where to find the classes for CodedTool class implementations
-# that are used by specific agent networks.
+# that are used by specific agent networks.  Like PYTHONPATH, AGENT_TOOL_PATH
+# can list several roots, searched in order.  A root can also be a Python
+# module path, for example neuro_san.coded_tools.
 ENV AGENT_TOOL_PATH="${APP_SOURCE}/coded_tools"
 
 # Where to find the configuration file for Python logging.
@@ -444,7 +446,7 @@ ENV LEAF_LOG_SENSITIVE="false"
 # of an arbitrary installed module through a CodedTool class reference.
 # Note this does not restrict other class references an agent network can make
 # (llm_config.class, middleware classes, langchain toolbox tool classes).  See
-# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#class
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#class-1
 # The coded tools shipped with neuro-san resolve fine under this restriction,
 # so this sample container turns the hardening on.  If your own agent networks
 # use fully-qualified CodedTool class references, migrate them to the

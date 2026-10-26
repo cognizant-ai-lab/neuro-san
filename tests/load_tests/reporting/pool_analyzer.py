@@ -14,22 +14,21 @@
 #
 # END COPYRIGHT
 
-"""Analyzes executor thread pool reuse across load test stages."""
-
 import logging
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class PoolAnalyzer:
-    """Analyzes executor thread pool reuse across load test stages.
+    """
+    Analyzes executor thread pool reuse across load test stages.
 
     Holds the collected stage summaries for analysis.
     """
@@ -44,32 +43,39 @@ class PoolAnalyzer:
 
     # pylint: disable=too-many-locals
     def log_pool_reuse_analysis(self) -> None:
-        """Log executor pool reuse analysis across stages."""
-        stages_with_data: List[Dict[str, Any]] = [
-            stage_summary for stage_summary in self._summaries
-            if stage_summary.get("before_threads") is not None
-            and stage_summary.get("after_threads") is not None
-            and stage_summary.get("total_started") is not None
-            and stage_summary.get("total_started") > 0
-        ]
+        """
+        Log executor pool reuse analysis across stages.
+        """
+        stages_with_data: List[Dict[str, Any]] = []
+        stage_summary: Dict[str, Any]
+        # Keep the stages that have both thread counts and at least one server call.
+        for stage_summary in self._summaries:
+            if stage_summary.get("before_threads") is None or stage_summary.get("after_threads") is None:
+                continue
+            total_started: Optional[int] = stage_summary.get("total_started")
+            if total_started is not None and total_started > 0:
+                stages_with_data.append(stage_summary)
         if not stages_with_data:
             return
 
         base_threads: int = stages_with_data[0].get("before_threads")
 
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  EXECUTOR POOL REUSE ANALYSIS")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Batch", "Server Calls", "New Threads",
             "Peak Threads", "Reused", "Reuse%",
             "Pool Avail", "Exec/Req",
         ]
-        rows: List[tuple] = []
+        rows: List[List[str]] = []
         total_new_threads: int = 0
         reuse_percentages: List[float] = []
 
+        index: int
+        stage: Dict[str, Any]
+        # One table row per stage.
         for index, stage in enumerate(stages_with_data):
             batch_number: int = index + 1
             server_calls: int = stage.get("total_started")
@@ -78,22 +84,23 @@ class PoolAnalyzer:
             new_threads: int = max(after_threads - before_threads, 0)
             total_new_threads += new_threads
             reused: int = max(server_calls - new_threads, 0)
-            reuse_percentage: float = (
-                (reused / server_calls * 100.0)
-                if server_calls > 0 else 0.0
-            )
+            reuse_percentage: float = 0.0
+            if server_calls > 0:
+                reuse_percentage = reused / server_calls * 100.0
             reuse_percentages.append(reuse_percentage)
             pool_available_threads: int = max(before_threads - base_threads, 0)
 
             primary_requests: int = stage.get("primary_started") or stage.get("concurrent")
-            executors_per_request: float = (
-                server_calls / primary_requests if primary_requests > 0 else 0.0
-            )
+            executors_per_request: float = 0.0
+            if primary_requests > 0:
+                executors_per_request = server_calls / primary_requests
 
             peak_threads: Optional[int] = stage.get("peak_threads")
-            peak_threads_text: str = str(peak_threads) if peak_threads is not None else "-"
+            peak_threads_text: str = "-"
+            if peak_threads is not None:
+                peak_threads_text = str(peak_threads)
 
-            rows.append((
+            row: List[str] = [
                 str(batch_number),
                 str(server_calls),
                 f"+{new_threads}",
@@ -102,7 +109,8 @@ class PoolAnalyzer:
                 f"{reuse_percentage:.1f}%",
                 str(pool_available_threads),
                 f"{executors_per_request:.1f}",
-            ))
+            ]
+            rows.append(row)
 
         TableFormatter.log_table(header, rows)
 

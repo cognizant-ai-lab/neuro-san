@@ -14,45 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Standalone OpenAI-compatible HTTP proxy for neuro-san that RECORDS a session
-against a real external LLM host and PLAYS it back offline -- for free and
-deterministically.
 
-Modes:
-    record    -- forward every request to the external host (endpoint + key
-                 from environment variables), relay the real response back to
-                 neuro-san, and tee it into a cassette file on disk.
-    playback  -- serve responses from the cassette by matching the canonical
-                 request signature. No network, no tokens, no cost. A request
-                 with no recorded match fails hard with HTTP 504.
-    hybrid    -- like playback, but a cache miss falls through to the real host
-                 (when one is configured), records the result into the current
-                 cassette, and returns it -- a self-healing cassette. With no
-                 upstream configured, a miss behaves like plain playback (504).
-
-Endpoints (OpenAI wire-compatible):
-    POST /v1/chat/completions   (honors stream=true via SSE)
-    GET  /v1/models
-    GET  /healthz               (liveness probe)
-
-External LLM host (record mode, and hybrid-mode misses) is configured via
-environment variables:
-    RECORD_PLAYBACK_UPSTREAM_BASE_URL   e.g. "https://api.openai.com/v1"
-    RECORD_PLAYBACK_UPSTREAM_API_KEY    bearer credential for that host
-
-Point a neuro-san agent network at this proxy exactly like a real endpoint. The
-`openai` class defaults to the Responses API and this proxy only implements
-`/v1/chat/completions`, so pin Chat Completions with use_responses_api = false:
-
-    llm_config {
-        class = "openai"
-        model_name = "gpt-4.1"
-        openai_api_base = "http://localhost:8899/v1"
-        openai_api_key = "not-needed"
-        use_responses_api = false
-    }
-"""
 from __future__ import annotations
 
 import argparse
@@ -76,10 +38,45 @@ from tests.record_playback_llm_server.upstream_client import UpstreamClient
 
 class RecordPlaybackLlmServer:
     """
-    Entry point that wires the record/playback proxy together: parses CLI
-    flags, reads the external-host configuration from the environment,
-    constructs the shared ProxyState, builds the Tornado application, and
-    runs the asyncio event loop.
+    Entry point for a standalone OpenAI-compatible HTTP proxy for neuro-san that
+    RECORDS a session against a real external LLM host and PLAYS it back offline --
+    for free and deterministically. It parses CLI flags, reads the external-host
+    configuration from the environment, constructs the shared ProxyState, builds
+    the Tornado application, and runs the asyncio event loop.
+
+    Modes:
+        record    -- forward every request to the external host (endpoint + key
+                     from environment variables), relay the real response back to
+                     neuro-san, and tee it into a cassette file on disk.
+        playback  -- serve responses from the cassette by matching the canonical
+                     request signature. No network, no tokens, no cost. A request
+                     with no recorded match fails hard with HTTP 504.
+        hybrid    -- like playback, but a cache miss falls through to the real host
+                     (when one is configured), records the result into the current
+                     cassette, and returns it -- a self-healing cassette. With no
+                     upstream configured, a miss behaves like plain playback (504).
+
+    Endpoints (OpenAI wire-compatible):
+        POST /v1/chat/completions   (honors stream=true via SSE)
+        GET  /v1/models
+        GET  /healthz               (liveness probe)
+
+    External LLM host (record mode, and hybrid-mode misses) is configured via
+    environment variables:
+        RECORD_PLAYBACK_UPSTREAM_BASE_URL   e.g. "https://api.openai.com/v1"
+        RECORD_PLAYBACK_UPSTREAM_API_KEY    bearer credential for that host
+
+    Point a neuro-san agent network at this proxy exactly like a real endpoint. The
+    `openai` class defaults to the Responses API and this proxy only implements
+    `/v1/chat/completions`, so pin Chat Completions with use_responses_api = false:
+
+        llm_config {
+            class = "openai"
+            model_name = "gpt-4.1"
+            openai_api_base = "http://localhost:8899/v1"
+            openai_api_key = "not-needed"
+            use_responses_api = false
+        }
     """
 
     ENV_UPSTREAM_BASE_URL: str = "RECORD_PLAYBACK_UPSTREAM_BASE_URL"

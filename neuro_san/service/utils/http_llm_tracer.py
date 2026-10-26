@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details.
-"""
+
 from typing import Any
 from typing import AsyncIterator
 from typing import Callable

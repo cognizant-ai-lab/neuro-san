@@ -18,7 +18,12 @@
 from typing import Any
 from typing import Dict
 
+from abc import abstractmethod
 
+from leaf_common.utils.interface import interface
+
+
+@interface
 class ContextTypeLlmFactory:
     """
     Interface for Factory classes creating LLM BaseLanguageModels
@@ -46,6 +51,7 @@ class ContextTypeLlmFactory:
                                     the model description in this class.
     """
 
+    @abstractmethod
     def load(self):
         """
         Goes through the process of loading any user extensions and/or configuration
@@ -53,6 +59,7 @@ class ContextTypeLlmFactory:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def create_llm(self, config: Dict[str, Any], sly_data: Dict[str, Any] = None) -> Any:
         """
         Create an llm instance BaseLanguageModel from the fully-specified llm config.
@@ -68,6 +75,7 @@ class ContextTypeLlmFactory:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
                                   sly_data: Dict[str, Any] = None,
                                   num_fallbacks: int = None) -> Any:
@@ -78,5 +86,12 @@ class ContextTypeLlmFactory:
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
         :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
         :return: An LLM instance native to the context type that deals with fallback specifications.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_llm_infos(self) -> Dict[str, Any]:
+        """
+        :return: A dictionary mapping llm names to their descriptions.
         """
         raise NotImplementedError

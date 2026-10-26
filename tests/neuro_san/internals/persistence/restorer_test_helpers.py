@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Helpers shared by the restorer test files in this directory.
-"""
+
 from typing import Any
 from typing import Dict
 
@@ -26,7 +24,11 @@ from neuro_san.internals.persistence.abstract_async_config_restorer import Abstr
 
 
 class ConcreteRestorer(AbstractAsyncConfigRestorer):
-    """Minimal concrete subclass – inherits all behaviour from the abstract base."""
+    """
+    Minimal concrete subclass - inherits all behaviour from the abstract base.
+
+    Shared by the restorer test files in this directory.
+    """
 
 
 # The dictionary the valid.json and valid.hocon fixture files deserialize to.

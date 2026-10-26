@@ -14,34 +14,27 @@
 #
 # END COPYRIGHT
 
-import json
+from json import JSONDecodeError
 import logging
-import os
+from os import listdir
+from os.path import isfile
+from os.path import join
+# Whole module: "from re import compile" would hide the built-in compile().
 import re
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
-from typing import Tuple
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
-from tests.load_tests.config import SEPARATOR_WIDTH
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
-
-_NORMAL_LLM_CALLS: int = 4
-_LOOP_THRESHOLD: int = 10
-_SERVER_TOKEN_RE: re.Pattern = re.compile(
-    r"(request-\d+):\s*([\d,]+)\s*tokens"
-    r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
-    r"\s*(\d+)\s*LLM call\(s\),"
-    r"\s*model=([^\s]+)",
-)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -50,6 +43,20 @@ class CrossRunComparison:
     """
     Scans a base directory for raw_results.json files and logs a comparison table across runs.
     """
+
+    NORMAL_LLM_CALLS: int = 4
+    LOOP_THRESHOLD: int = 10
+    # A per-request line that TokenLogWriter writes to server_tokens.log, e.g.
+    # "request-3: 1,234 tokens (1,000 prompt + 234 completion), 4 LLM call(s), model=gpt-4o-mini, agent=hello_world
+    # [1.2s CREATED]".
+    # Groups: 1 request id, 2 total tokens, 3 prompt tokens, 4 completion tokens, 5 LLM calls, 6 model (up to the
+    # comma before "agent=").
+    SERVER_TOKEN_RE: re.Pattern = re.compile(
+        r"(request-\d+):\s*([\d,]+)\s*tokens"
+        r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
+        r"\s*(\d+)\s*LLM call\(s\),"
+        r"\s*model=([^\s,]+)",
+    )
 
     def __init__(self, base_dir: str, agent_filter: Optional[List[str]] = None, baseline_requests: int = 0,
                  run_filter: Optional[List[str]] = None) -> None:
@@ -62,9 +69,13 @@ class CrossRunComparison:
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
         self._base_dir: str = base_dir
-        self._agent_filter: Set[str] = set(agent_filter) if agent_filter else set()
+        self._agent_filter: Set[str] = set()
+        if agent_filter:
+            self._agent_filter = set(agent_filter)
         self._baseline_requests: int = baseline_requests
-        self._run_filter: Set[str] = set(run_filter) if run_filter else set()
+        self._run_filter: Set[str] = set()
+        if run_filter:
+            self._run_filter = set(run_filter)
 
     def run(self) -> None:
         """
@@ -75,24 +86,35 @@ class CrossRunComparison:
             logger.info("No raw_results.json files found in %s", self._base_dir)
             return
         groups: Dict[str, List[Dict[str, Any]]] = self._group_by_agent(all_runs)
+        agent_name: str
+        run_metrics: Dict[str, Any]
+        # One comparison table per agent, in name order.
         for agent_name in sorted(groups):
-            runs: List[Dict[str, Any]] = (
-                groups[agent_name]
-                if self._run_filter
-                else self._deduplicate(groups[agent_name])
-            )
+            runs: List[Dict[str, Any]] = groups.get(agent_name)
+            if not self._run_filter:
+                runs = self._deduplicate(runs)
             if self._baseline_requests > 0:
-                # Keep only the runs with at least the baseline number of requests.
                 baseline_runs: List[Dict[str, Any]] = []
+                # Keep only the runs with at least the baseline number of requests.
                 for run_metrics in runs:
                     if run_metrics.get("num_requests", 0) >= self._baseline_requests:
                         baseline_runs.append(run_metrics)
                 runs = baseline_runs
-            runs.sort(key=lambda run_metrics: run_metrics.get("num_requests", 0))
+            runs.sort(key=self._num_requests_of)
             if not runs:
                 continue
             self._log_table(runs, agent_name)
             self._log_validation_loops(runs)
+
+    @staticmethod
+    def _num_requests_of(run_metrics: Dict[str, Any]) -> int:
+        """
+        Sort key: the number of requests of a run.
+
+        :param run_metrics: Metrics of one run
+        :return: The run's "num_requests", 0 if missing
+        """
+        return run_metrics.get("num_requests", 0)
 
     def _collect_runs(self) -> List[Dict[str, Any]]:
         """
@@ -101,12 +123,13 @@ class CrossRunComparison:
         :return: Metrics for each run folder that has a readable raw_results.json
         """
         runs: List[Dict[str, Any]] = []
-        for entry in os.listdir(self._base_dir):
-            if (self._run_filter
-                    and entry not in self._run_filter):
+        entry: str
+        # Collect the metrics of each run folder that has a raw results file.
+        for entry in listdir(self._base_dir):
+            if self._run_filter and entry not in self._run_filter:
                 continue
-            json_path: str = os.path.join(self._base_dir, entry, "raw_results.json")
-            if not os.path.isfile(json_path):
+            json_path: str = join(self._base_dir, entry, LoadTestConstants.RAW_RESULTS_FILE_NAME)
+            if not isfile(json_path):
                 continue
             metrics: Optional[Dict[str, Any]] = self._extract_metrics(json_path, entry)
             if metrics is not None:
@@ -122,12 +145,12 @@ class CrossRunComparison:
         :return: One run per num_requests, the one whose folder name sorts last
         """
         by_count: Dict[int, Dict[str, Any]] = {}
+        run: Dict[str, Any]
+        # Keep the newest run folder for each request count.
         for run in runs:
             count: int = run.get("num_requests", 0)
             existing: Optional[Dict[str, Any]] = by_count.get(count)
-            if (existing is None
-                    or run.get("folder", "")
-                    > existing.get("folder", "")):
+            if existing is None or run.get("folder", "") > existing.get("folder", ""):
                 by_count[count] = run
         return list(by_count.values())
 
@@ -144,7 +167,7 @@ class CrossRunComparison:
         raw_results: Optional[Dict[str, Any]] = None
         try:
             raw_results = EasyJsonPersistence(full_ref=json_path, must_exist=True).restore()
-        except (json.JSONDecodeError, OSError) as error:
+        except (JSONDecodeError, OSError) as error:
             SensitiveLogger(logger).error("Could not read %s: %s", json_path, error)
             return None
         if raw_results is None:
@@ -152,36 +175,39 @@ class CrossRunComparison:
             SensitiveLogger(logger).error("Could not read %s: %s", json_path, "the file is not a JSON object ({...})")
             return None
 
-        aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
+        raw_results_extractor: DictionaryExtractor = DictionaryExtractor(raw_results)
         stages: List[Dict[str, Any]] = raw_results.get("stage_summaries", [])
-        # Gather every stage's results, and each stage's peak server RSS.
+        # The run's peak RSS is the largest stage peak, starting from the first stage, or 0 with no stages.
+        peak_rss_megabytes: float = 0
+        if stages:
+            first_stage: Dict[str, Any] = stages[0]
+            peak_rss_megabytes = first_stage.get("peak_server_rss", 0)
         all_results: List[Dict[str, Any]] = []
-        peak_rss_values_megabytes: List[float] = []
         stage: Dict[str, Any]
+        # Gather the results of every stage and track the largest server RSS.
         for stage in stages:
             all_results.extend(stage.get("results", []))
-            peak_rss_values_megabytes.append(stage.get("peak_server_rss", 0))
+            stage_peak_rss_megabytes: float = stage.get("peak_server_rss", 0)
+            peak_rss_megabytes = max(peak_rss_megabytes, stage_peak_rss_megabytes)
         created_results: List[Dict[str, Any]] = []
         result: Dict[str, Any]
         # Keep only the results of successful requests.
         for result in all_results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 created_results.append(result)
 
-        agent: str = raw_results.get("config", {}).get("agent", "unknown")
+        total_requests: int = raw_results_extractor.get("aggregates.total_requests", 0)
 
-        # The run's peak RSS is the largest stage peak, or 0 with no stages.
-        peak_rss_megabytes: float = max(peak_rss_values_megabytes, default=0)
         run_metrics: Dict[str, Any] = {
-            "agent": agent,
+            "agent": raw_results_extractor.get("config.agent", "unknown"),
             "folder": folder_name,
-            "num_requests": raw_results.get("config", {}).get("num_requests", aggregates.get("total_requests", 0)),
-            "wall_time": aggregates.get("total_elapsed_seconds", 0),
-            "avg_success": CrossRunComparison._avg(created_results, "elapsed"),
-            "time_to_first_response_avg": CrossRunComparison._avg(created_results, "time_to_first_response"),
-            "peak_rss": peak_rss_megabytes,
-            "succeeded": aggregates.get("passed", 0),
-            "failed": aggregates.get("failed", 0),
+            "num_requests": raw_results_extractor.get("config.num_requests", total_requests),
+            "wall_time_seconds": raw_results_extractor.get("aggregates.total_elapsed_seconds", 0),
+            "average_success_seconds": CrossRunComparison._avg(created_results, "elapsed"),
+            "average_first_response_seconds": CrossRunComparison._avg(created_results, "time_to_first_response"),
+            "peak_rss_megabytes": peak_rss_megabytes,
+            "succeeded": raw_results_extractor.get("aggregates.passed", 0),
+            "failed": raw_results_extractor.get("aggregates.failed", 0),
             "fail_breakdown": CrossRunComparison._classify_failures(all_results),
         }
         return run_metrics
@@ -195,21 +221,22 @@ class CrossRunComparison:
         :return: Failure category to count; "other" is added only when a reason matches no category
         """
         counts: Dict[str, int] = {"empty_llm": 0, "validation": 0, "incomplete": 0, "no_token_data": 0}
+        result: Dict[str, Any]
+        # Count the failed requests by failure kind.
         for result in all_results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 continue
             reason: str = result.get("failure_reason", "") or ""
             if "empty LLM response" in reason:
-                counts["empty_llm"] += 1
+                counts["empty_llm"] = counts.get("empty_llm", 0) + 1
             elif "validation fix cycle" in reason:
-                counts["validation"] += 1
+                counts["validation"] = counts.get("validation", 0) + 1
             elif "incomplete response" in reason:
-                counts["incomplete"] += 1
+                counts["incomplete"] = counts.get("incomplete", 0) + 1
             elif "no token data" in reason:
-                counts["no_token_data"] += 1
+                counts["no_token_data"] = counts.get("no_token_data", 0) + 1
             else:
-                counts.setdefault("other", 0)
-                counts["other"] += 1
+                counts["other"] = counts.get("other", 0) + 1
         return counts
 
     @staticmethod
@@ -223,6 +250,8 @@ class CrossRunComparison:
         """
         # Keep only the values above 0.
         values: List[float] = []
+        result: Dict[str, Any]
+        # Collect the positive values of the field.
         for result in results:
             field_value: float = result.get(key, 0)
             if field_value > 0:
@@ -240,10 +269,11 @@ class CrossRunComparison:
         :return: Agent name to its runs, limited to agent_filter when set
         """
         groups: Dict[str, List[Dict[str, Any]]] = {}
+        run: Dict[str, Any]
+        # Group the runs by agent, leaving out agents the filter excludes.
         for run in runs:
             agent: str = run.get("agent", "unknown")
-            if (self._agent_filter
-                    and agent not in self._agent_filter):
+            if self._agent_filter and agent not in self._agent_filter:
                 continue
             groups.setdefault(agent, []).append(run)
         return groups
@@ -256,9 +286,9 @@ class CrossRunComparison:
         :param runs: One agent's runs sorted by num_requests; the first is the baseline
         :param agent_name: Agent name shown in the table title
         """
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Folder", "Requests", "Succeeded",
@@ -267,47 +297,81 @@ class CrossRunComparison:
             "First resp avg", "Peak RSS",
             "Failed requests",
         ]
-        rows: List[Tuple[str, ...]] = []
+        rows: List[List[str]] = []
         metric_keys: List[str] = [
-            "num_requests", "wall_time",
-            "avg_success",
-            "time_to_first_response_avg", "peak_rss",
+            "num_requests", "wall_time_seconds",
+            "average_success_seconds",
+            "average_first_response_seconds", "peak_rss_megabytes",
             "failed",
         ]
-        baseline: Optional[Dict[str, Any]] = runs[0] if runs else None
+        baseline: Optional[Dict[str, Any]] = None
+        if runs:
+            baseline = runs[0]
+        run: Dict[str, Any]
+        # One table row per run; each run after the first shows its change from the first.
         for run in runs:
-            baseline_metrics: Optional[Dict[str, Any]] = baseline if run is not baseline else None
+            baseline_metrics: Optional[Dict[str, Any]] = None
+            if run is not baseline:
+                baseline_metrics = baseline
             deltas: Dict[str, float] = CrossRunComparison._compute_deltas(baseline_metrics, run, metric_keys)
-            rows.append((
-                run.get("folder", ""),
-                CrossRunComparison._val_with_delta(
-                    str(run.get("num_requests", 0)),
-                    deltas.get("num_requests"),
-                ),
-                str(run.get("succeeded", 0)),
-                CrossRunComparison._val_with_delta(
-                    Formatters.fmt_duration(run.get("wall_time", 0)),
-                    deltas.get("wall_time"),
-                ),
-                CrossRunComparison._fmt_optional(
-                    run.get("avg_success", 0),
-                    deltas.get("avg_success"),
-                ),
-                CrossRunComparison._fmt_time_to_first_response(
-                    run.get("time_to_first_response_avg", 0),
-                    deltas.get("time_to_first_response_avg"),
-                ),
-                CrossRunComparison._fmt_rss(
-                    run.get("peak_rss", 0),
-                    deltas.get("peak_rss"),
-                ),
-                CrossRunComparison._fmt_failed(
-                    run.get("failed", 0),
-                    run.get("num_requests", 0),
-                    run.get("fail_breakdown", {}),
-                ),
-            ))
+            row: List[str] = CrossRunComparison._leading_cells(run, deltas)
+            trailing_cells: List[str] = CrossRunComparison._trailing_cells(run, deltas)
+            row.extend(trailing_cells)
+            rows.append(row)
         TableFormatter.log_table(header, rows)
+
+    @staticmethod
+    def _leading_cells(run: Dict[str, Any], deltas: Dict[str, float]) -> List[str]:
+        """
+        Build the Folder, Requests, Succeeded and Wall Time cells of one comparison table row.
+
+        :param run: Metrics of one run
+        :param deltas: Change of each metric from the first run, in percent
+        :return: The 4 cells, in table order
+        """
+        num_requests: int = run.get("num_requests", 0)
+        num_requests_text: str = str(num_requests)
+        num_requests_delta: Optional[float] = deltas.get("num_requests")
+        succeeded: int = run.get("succeeded", 0)
+        wall_time_seconds: float = run.get("wall_time_seconds", 0)
+        wall_time_text: str = Formatters.fmt_duration(wall_time_seconds)
+        wall_time_delta: Optional[float] = deltas.get("wall_time_seconds")
+        cells: List[str] = [
+            run.get("folder", ""),
+            CrossRunComparison._val_with_delta(num_requests_text, num_requests_delta),
+            str(succeeded),
+            CrossRunComparison._val_with_delta(wall_time_text, wall_time_delta),
+        ]
+        return cells
+
+    @staticmethod
+    def _trailing_cells(run: Dict[str, Any], deltas: Dict[str, float]) -> List[str]:
+        """
+        Build the Avg success, First resp avg, Peak RSS and Failed requests cells of one comparison table row.
+
+        :param run: Metrics of one run
+        :param deltas: Change of each metric from the first run, in percent
+        :return: The 4 cells, in table order
+        """
+        average_success_seconds: float = run.get("average_success_seconds", 0)
+        average_success_text: str = Formatters.fmt_duration(average_success_seconds)
+        average_success_delta: Optional[float] = deltas.get("average_success_seconds")
+        first_response_seconds: float = run.get("average_first_response_seconds", 0)
+        first_response_text: str = Formatters.fmt_duration(first_response_seconds)
+        first_response_delta: Optional[float] = deltas.get("average_first_response_seconds")
+        peak_rss_megabytes: float = run.get("peak_rss_megabytes", 0)
+        peak_rss_text: str = Formatters.format_rss(peak_rss_megabytes)
+        peak_rss_delta: Optional[float] = deltas.get("peak_rss_megabytes")
+        failed: int = run.get("failed", 0)
+        num_requests: int = run.get("num_requests", 0)
+        fail_breakdown: Dict[str, int] = run.get("fail_breakdown", {})
+        cells: List[str] = [
+            CrossRunComparison._value_or_dash(average_success_seconds, average_success_text, average_success_delta),
+            CrossRunComparison._value_or_dash(first_response_seconds, first_response_text, first_response_delta),
+            CrossRunComparison._value_or_dash(peak_rss_megabytes, peak_rss_text, peak_rss_delta),
+            CrossRunComparison._fmt_failed(failed, num_requests, fail_breakdown),
+        ]
+        return cells
 
     def _log_validation_loops(self, runs: List[Dict[str, Any]]) -> None:
         """
@@ -315,9 +379,11 @@ class CrossRunComparison:
 
         :param runs: Runs whose server_tokens.log is checked
         """
+        run: Dict[str, Any]
+        # Log the validation loops of each run folder.
         for run in runs:
             folder: str = run.get("folder", "")
-            log_path: str = os.path.join(self._base_dir, folder, "server_tokens.log")
+            log_path: str = join(self._base_dir, folder, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
             loops: List[Dict[str, Any]] = self._parse_validation_loops(log_path)
             if not loops:
                 continue
@@ -329,23 +395,25 @@ class CrossRunComparison:
         Parse server_tokens.log for validation loop requests.
 
         :param log_path: Path to a run's server_tokens.log
-        :return: One entry per request with at least _LOOP_THRESHOLD LLM calls; empty when the file is missing
+        :return: One entry per request with at least LOOP_THRESHOLD LLM calls; empty when the file is missing
         """
-        if not os.path.isfile(log_path):
+        if not isfile(log_path):
             return []
         loops: List[Dict[str, Any]] = []
         with open(log_path, "r", encoding="utf-8") as file_handle:
+            line: str
+            # Keep each request whose LLM call count reaches LOOP_THRESHOLD.
             for line in file_handle:
-                match: Optional[re.Match] = _SERVER_TOKEN_RE.search(line)
+                match: Optional[re.Match] = CrossRunComparison.SERVER_TOKEN_RE.search(line)
                 if not match:
                     continue
                 llm_calls: int = int(match.group(5))
-                if llm_calls < _LOOP_THRESHOLD:
+                if llm_calls < CrossRunComparison.LOOP_THRESHOLD:
                     continue
                 prompt_tokens: int = int(match.group(3).replace(",", ""))
                 completion_tokens: int = int(match.group(4).replace(",", ""))
                 model: str = match.group(6)
-                retries: int = llm_calls - _NORMAL_LLM_CALLS
+                retries: int = llm_calls - CrossRunComparison.NORMAL_LLM_CALLS
                 cost_dollars: float = CostEstimator.estimate(prompt_tokens, completion_tokens, model)
                 loop_entry: Dict[str, Any] = {
                     "request_id": match.group(1),
@@ -372,6 +440,8 @@ class CrossRunComparison:
         total_retries: int = 0
         total_tokens: int = 0
         total_cost_dollars: float = 0.0
+        loop_entry: Dict[str, Any]
+        # Add up the retries, tokens and cost of all loop entries.
         for loop_entry in loops:
             total_retries += loop_entry.get("retries", 0)
             total_tokens += loop_entry.get("total_tokens", 0)
@@ -379,7 +449,8 @@ class CrossRunComparison:
         logger.info("")
         logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
         logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
-        for loop_entry in sorted(loops, key=lambda x: x.get("retries", 0), reverse=True):
+        # One line per validation-loop request, most retries first.
+        for loop_entry in sorted(loops, key=CrossRunComparison._retries_of, reverse=True):
             logger.info(
                 "    %s: %s retries, %s tokens ($%.2f)",
                 loop_entry.get("request_id", ""),
@@ -387,6 +458,16 @@ class CrossRunComparison:
                 f"{loop_entry.get("total_tokens", 0):,}",
                 loop_entry.get("cost_usd", 0.0),
             )
+
+    @staticmethod
+    def _retries_of(loop_entry: Dict[str, Any]) -> int:
+        """
+        Sort key: the number of retries of a validation-loop request.
+
+        :param loop_entry: One validation-loop entry
+        :return: The entry's "retries", 0 if missing
+        """
+        return loop_entry.get("retries", 0)
 
     @staticmethod
     def _compute_deltas(previous_metrics: Optional[Dict[str, Any]], current_metrics: Dict[str, Any],
@@ -402,6 +483,8 @@ class CrossRunComparison:
         if previous_metrics is None:
             return {}
         deltas: Dict[str, float] = {}
+        key: str
+        # Percent change of each metric that has a previous value.
         for key in keys:
             previous_value: float = previous_metrics.get(key, 0)
             current_value: float = current_metrics.get(key, 0)
@@ -420,47 +503,25 @@ class CrossRunComparison:
         """
         if delta_percentage is None:
             return formatted_value
-        sign: str = "+" if delta_percentage >= 0 else ""
+        sign: str = ""
+        if delta_percentage >= 0:
+            sign = "+"
         return f"{formatted_value} ({sign}{delta_percentage:.0f}%)"
 
     @staticmethod
-    def _fmt_optional(duration_seconds: float, delta_percentage: Optional[float]) -> str:
+    def _value_or_dash(measured_value: float, formatted_value: str, delta_percentage: Optional[float]) -> str:
         """
-        Format a duration, showing a dash when data is missing.
+        Format one metric cell: a dash when the metric is missing, else the value with its percent change.
 
-        :param duration_seconds: Duration in seconds; 0 when unknown
-        :param delta_percentage: Percent change against the baseline run, or None
-        :return: The formatted duration, or a dash when value is 0
+        :param measured_value: The metric (seconds or megabytes); 0 or less when the run has no value
+        :param formatted_value: measured_value formatted for display, e.g. '45s' or '512 MB'
+        :param delta_percentage: Percent change from the baseline run, or None for the baseline itself
+        :return: e.g. '45s (+12%)', or '-' when measured_value is 0 or less
         """
-        if duration_seconds <= 0:
-            return "\u2014"
-        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
-
-    @staticmethod
-    def _fmt_time_to_first_response(duration_seconds: float, delta_percentage: Optional[float]) -> str:
-        """
-        Format time to first response, showing a dash when data is missing.
-
-        :param duration_seconds: Average time to first response in seconds; 0 when unknown
-        :param delta_percentage: Percent change against the baseline run, or None
-        :return: The formatted value, or a dash when value is 0
-        """
-        if duration_seconds <= 0:
-            return "\u2014"
-        return CrossRunComparison._val_with_delta(Formatters.fmt_duration(duration_seconds), delta_percentage)
-
-    @staticmethod
-    def _fmt_rss(rss_megabytes: float, delta_percentage: Optional[float]) -> str:
-        """
-        Format peak RSS, showing a dash when data is missing.
-
-        :param rss_megabytes: Peak RSS in megabytes; 0 when unknown
-        :param delta_percentage: Percent change against the baseline run, or None
-        :return: The formatted RSS, or a dash when value is 0
-        """
-        if rss_megabytes <= 0:
-            return "\u2014"
-        return CrossRunComparison._val_with_delta(Formatters.format_rss(rss_megabytes), delta_percentage)
+        if measured_value <= 0:
+            # Plain "-", the missing-value cell of the other load-test tables.
+            return "-"
+        return CrossRunComparison._val_with_delta(formatted_value, delta_percentage)
 
     @staticmethod
     def _fmt_failed(count: int, total: int, breakdown: Dict[str, int]) -> str:
@@ -481,18 +542,22 @@ class CrossRunComparison:
         base: str = f"{count} ({percentage}%)"
         if not breakdown:
             return base
-        labels: Tuple[Tuple[str, str], ...] = (
-            ("empty_llm", "empty LLM"),
-            ("validation", "validation"),
-            ("incomplete", "incomplete"),
-            ("no_token_data", "no token data"),
-            ("other", "other"),
-        )
+        labels_by_key: Dict[str, str] = {
+            "empty_llm": "empty LLM",
+            "validation": "validation",
+            "incomplete": "incomplete",
+            "no_token_data": "no token data",
+            "other": "other",
+        }
         parts: List[str] = []
-        for key, label in labels:
+        key: str
+        label: str
+        # One "<count> <label>" part per failure category that has any, in the order above.
+        for key, label in labels_by_key.items():
             value: int = breakdown.get(key, 0)
             if value:
                 parts.append(f"{value} {label}")
         if not parts:
             return base
-        return f"{base}: {", ".join(parts)}"
+        parts_text: str = ", ".join(parts)
+        return f"{base}: {parts_text}"

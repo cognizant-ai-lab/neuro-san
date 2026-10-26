@@ -21,6 +21,8 @@ from typing import Union
 from asyncio import Event
 from asyncio import get_running_loop
 
+from leaf_common.utils.map import Map
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
@@ -63,10 +65,10 @@ class ServiceAgentReservationist(Reservationist, LingeringResource):
         return reservation
 
     async def deploy(self,
-                     deployment_dict: Dict[Reservation,
-                                           Dict[Union[str, Event],
-                                                Dict[AgentReservation,
-                                                     Dict[str, Any]]]],
+                     deployment_dict: Map[Reservation,
+                                          Map[Union[Event, str],
+                                              Map[AgentReservation,
+                                                  Dict[str, Any]]]],
                      confirmation: bool = False) -> Event:
         """
         Deploy multiple Reservations.
@@ -91,7 +93,7 @@ class ServiceAgentReservationist(Reservationist, LingeringResource):
 
         for reservation, value in deployment_dict.items():
 
-            to_deploy: Dict[Union[str, Event], Dict[AgentReservation, Dict[str, Any]]] = value
+            to_deploy: Map[Union[str, Event], Map[AgentReservation, Dict[str, Any]]] = value
             for key, value in to_deploy.items():
 
                 # Prepare basic information to put on the queue.

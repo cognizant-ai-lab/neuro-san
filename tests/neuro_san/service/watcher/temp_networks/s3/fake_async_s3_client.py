@@ -14,18 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-In-memory stand-in for a boto3 S3 client used by the
-S3ReservationsStorage unit tests. Implements only the methods
-the storage actually calls, storing object bodies in a dict
-keyed by S3 object key. Method signatures use boto3's
-PascalCase keyword arguments so the storage's call sites work
-unchanged.
-
-Pytest's default test-file pattern is test_*.py, so this file
-(which does not start with "test_") is not collected as a test
-module.
-"""
 
 from tests.neuro_san.service.watcher.temp_networks.s3.fake_s3_client import FakeS3Client
 
@@ -36,6 +24,9 @@ class FakeAsyncS3Client:
     methods that S3ReservationsStorage actually calls, storing object bodies
     in a dict keyed by S3 object key. Method signatures use boto3's PascalCase
     keyword arguments so the storage's call sites work unchanged.
+
+    Pytest's default test-file pattern is test_*.py, so this file (which does not
+    start with "test_") is not collected as a test module.
     """
 
     def __init__(self, fake_s3_client: FakeS3Client):

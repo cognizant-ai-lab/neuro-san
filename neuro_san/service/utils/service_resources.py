@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class definition for comments.
-"""
+
 import os
 import sys
 import stat

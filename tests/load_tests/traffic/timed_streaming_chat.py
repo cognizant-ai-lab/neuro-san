@@ -61,6 +61,8 @@ class TimedStreamingChat:
         :return: The wrapped session's chat responses, unchanged
         :raises RequestTimeoutError: When a message arrives after the cap
         """
+        chat_response: Dict[str, Any]
+        # Time each message, then pass it on unchanged.
         for chat_response in self._streaming_chat(request_dict):
             elapsed_seconds: float = time.perf_counter() - self._start_seconds
             if self._time_to_first_response_seconds is None:

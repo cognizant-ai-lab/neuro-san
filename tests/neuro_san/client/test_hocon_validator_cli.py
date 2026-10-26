@@ -145,8 +145,8 @@ class TestHoconValidatorCli(unittest.TestCase):
         exit_code, _ = self._run_cli_on_hocon(hocon_content)
         self.assertEqual(exit_code, 1)
 
-    def test_duplicate_agent_name_returns_one(self):
-        """A HOCON with two agents sharing a name returns exit code 1."""
+    def test_duplicate_agent_name_returns_two(self):
+        """A HOCON with two agents sharing a name is a structural failure (exit 2)."""
         hocon_content: str = """
         {
             tools: [
@@ -163,9 +163,12 @@ class TestHoconValidatorCli(unittest.TestCase):
             ]
         }
         """
-        exit_code, output = self._run_cli_on_hocon(hocon_content)
-        self.assertEqual(exit_code, 1)
-        self.assertIn("duplicate entry", output)
+        # Duplicate names go to stderr; collect it alongside stdout
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            exit_code, _ = self._run_cli_on_hocon(hocon_content)
+        self.assertEqual(exit_code, 2)
+        self.assertIn("duplicate entry", stderr.getvalue())
 
     def test_external_agents_flag(self):
         """--external-agents allows references to external agents."""

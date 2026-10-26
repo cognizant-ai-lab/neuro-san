@@ -120,13 +120,22 @@ class ChatHistoryMessageProcessor(MessageProcessor):
 
         :param chat_message_dict: The ChatMessage dictionary to transform
         :return: A shallow copy of the dictionary with its text escaped,
-                or None if the message carries no text at all
+                or None if the message carries no text at all.
+                A message that carries content_blocks keeps its text as it is,
+                so that the text still matches its blocks.
         """
         transformed: Dict[str, Any] = copy(chat_message_dict)
         text: Any = transformed.get("text")
 
         if text is None:
             return None
+
+        if transformed.get("content_blocks") is not None:
+            # A block message is rebuilt from its blocks, and the blocks are
+            # used only while the text equals their flattened text. History
+            # reaches the model as messages, not through a template, so the
+            # text is safe without escaping.
+            return transformed
 
         if not isinstance(text, str):
             # Brace escaping only applies to str text. Every dict reaching this

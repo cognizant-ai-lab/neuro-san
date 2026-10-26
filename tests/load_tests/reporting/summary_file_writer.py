@@ -14,11 +14,9 @@
 #
 # END COPYRIGHT
 
-"""Write a human-readable summary.txt for load test results."""
-
 import logging
-import os
-import time
+from os.path import join
+from time import strftime
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -29,16 +27,17 @@ from typing import Tuple
 
 from collections import Counter
 
-import psutil
-
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
+from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
+from tests.load_tests.reporting.system_resources import SystemResources
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class SummaryFileWriter:
-    """Writes a human-readable summary.txt to the output directory.
+    """
+    Writes a human-readable summary.txt to the output directory.
 
     Collects data from stage summaries and optional server timing
     to produce a single text file for quick review.
@@ -70,7 +69,7 @@ class SummaryFileWriter:
         self._write_completion_timeline(lines)
         self._write_server_timing(lines)
 
-        path: str = os.path.join(output_dir, "summary.txt")
+        path: str = join(output_dir, "summary.txt")
         with open(path, "w", encoding="utf-8") as file_handle:
             file_handle.write("\n".join(lines) + "\n")
         logger.info("  Summary:     %s", path)
@@ -82,21 +81,23 @@ class SummaryFileWriter:
 
         :param lines: Summary lines, appended to in place
         """
-        total_requests: int = sum(
-            len(stage_summary.get("results", []))
-            for stage_summary in self._summaries
-        )
-        total_elapsed_seconds: float = sum(
-            stage_summary.get("elapsed", 0) for stage_summary in self._summaries
-        )
+        total_requests: int = 0
+        # Floats are collected for sum(), which rounds better than a += loop, so the totals match the old code.
+        stage_durations_seconds: List[float] = []
+        stage_summary: Dict[str, Any]
+        # Add up the requests and collect the wall time of every stage.
+        for stage_summary in self._summaries:
+            total_requests += len(stage_summary.get("results", []))
+            stage_durations_seconds.append(stage_summary.get("elapsed", 0))
+        total_elapsed_seconds: float = sum(stage_durations_seconds)
         agent: str = self._args.agent
-        date_text: str = time.strftime("%Y-%m-%d %H:%M")
+        date_text: str = strftime("%Y-%m-%d %H:%M")
         request_count: int = self._args.num_requests
         round_count: int = self._args.num_rounds
         workers: int = self._args.max_workers
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  LOAD TEST SUMMARY")
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append(f"  Agent:       {agent}")
         lines.append(f"  Date:        {date_text} UTC")
         lines.append(f"  Requests:    {request_count} x {round_count} round(s) = {total_requests} total")
@@ -110,11 +111,31 @@ class SummaryFileWriter:
                 f" / {Formatters.fmt_duration(average_first_response_seconds)} avg"
                 f" / {Formatters.fmt_duration(max(first_response_seconds))} max"
             )
-        durations_seconds: List[float] = [
-            result.get("elapsed", 0)
-            for stage_summary in self._summaries
-            for result in stage_summary.get("results", [])
-        ]
+        self._write_request_stats(lines)
+        self._write_rss_trajectory(lines)
+        self._write_client_rss_trajectory(lines)
+        self._write_sys_mem_trajectory(lines)
+        self._write_validation_summary(lines)
+        lines.append("")
+
+    def _write_request_stats(self, lines: List[str]) -> None:
+        """
+        Write the min/avg/max request duration and LLM call count lines.
+
+        :param lines: Summary lines, appended to in place
+        """
+        durations_seconds: List[float] = []
+        llm_calls: List[int] = []
+        stage_summary: Dict[str, Any]
+        # Go through the requests of every stage.
+        for stage_summary in self._summaries:
+            result: Dict[str, Any]
+            # Collect each request's duration, and its LLM call count when it made any calls.
+            for result in stage_summary.get("results", []):
+                durations_seconds.append(result.get("elapsed", 0))
+                call_count: int = result.get("llm_calls", 0)
+                if call_count > 0:
+                    llm_calls.append(call_count)
         if durations_seconds:
             average_duration_seconds: float = sum(durations_seconds) / len(durations_seconds)
             lines.append(
@@ -122,20 +143,9 @@ class SummaryFileWriter:
                 f" / {Formatters.fmt_duration(average_duration_seconds)} avg"
                 f" / {Formatters.fmt_duration(max(durations_seconds))} max"
             )
-        llm_calls: List[int] = [
-            result.get("llm_calls", 0)
-            for stage_summary in self._summaries
-            for result in stage_summary.get("results", [])
-            if result.get("llm_calls", 0) > 0
-        ]
         if llm_calls:
             average_calls: int = round(sum(llm_calls) / len(llm_calls))
             lines.append(f"  LLM calls: {min(llm_calls)} min / {average_calls} avg / {max(llm_calls)} max")
-        self._write_rss_trajectory(lines)
-        self._write_client_rss_trajectory(lines)
-        self._write_sys_mem_trajectory(lines)
-        self._write_validation_summary(lines)
-        lines.append("")
 
     def _time_to_first_response_values(self) -> List[float]:
         """
@@ -145,8 +155,10 @@ class SummaryFileWriter:
         """
         first_response_seconds: List[float] = []
         summary: Dict[str, Any]
+        # Collect the time to first response of every request.
         for summary in self._summaries:
             result: Dict[str, Any]
+            # Keep only the requests that got a first response.
             for result in summary.get("results", []):
                 time_to_first_response_seconds: float = result.get("time_to_first_response", 0)
                 if time_to_first_response_seconds > 0:
@@ -162,6 +174,8 @@ class SummaryFileWriter:
         start_rss_megabytes: Optional[float] = None
         end_rss_megabytes: Optional[float] = None
         peak_rss_megabytes: Optional[float] = None
+        summary: Dict[str, Any]
+        # Track the first, last and peak server RSS over the stages.
         for summary in self._summaries:
             before_rss_megabytes: Optional[float] = summary.get("before_server_rss")
             after_rss_megabytes: Optional[float] = summary.get("after_server_rss")
@@ -175,10 +189,11 @@ class SummaryFileWriter:
                     peak_rss_megabytes = stage_peak_rss_megabytes
         if peak_rss_megabytes is None:
             return
+        # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(
             f"  Server RSS: {Formatters.format_rss(start_rss_megabytes or 0)} start"
-            f" \u2192 {Formatters.format_rss(peak_rss_megabytes)} peak"
-            f" \u2192 {Formatters.format_rss(end_rss_megabytes or 0)} end"
+            f" → {Formatters.format_rss(peak_rss_megabytes)} peak"
+            f" → {Formatters.format_rss(end_rss_megabytes or 0)} end"
         )
 
     def _write_client_rss_trajectory(self, lines: List[str]) -> None:
@@ -190,6 +205,8 @@ class SummaryFileWriter:
         start_rss_megabytes: Optional[float] = None
         end_rss_megabytes: Optional[float] = None
         peak_rss_megabytes: Optional[float] = None
+        summary: Dict[str, Any]
+        # Track the first, last and peak client RSS over the stages.
         for summary in self._summaries:
             before_rss_megabytes: Optional[float] = summary.get("before_client_rss")
             after_rss_megabytes: Optional[float] = summary.get("after_client_rss")
@@ -203,10 +220,11 @@ class SummaryFileWriter:
                     peak_rss_megabytes = stage_peak_rss_megabytes
         if peak_rss_megabytes is None:
             return
+        # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(
             f"  Client RSS: {Formatters.format_rss(start_rss_megabytes or 0)} start"
-            f" \u2192 {Formatters.format_rss(peak_rss_megabytes)} peak"
-            f" \u2192 {Formatters.format_rss(end_rss_megabytes or 0)} end"
+            f" → {Formatters.format_rss(peak_rss_megabytes)} peak"
+            f" → {Formatters.format_rss(end_rss_megabytes or 0)} end"
         )
 
     def _write_sys_mem_trajectory(self, lines: List[str]) -> None:
@@ -219,6 +237,8 @@ class SummaryFileWriter:
         end_memory_percentage: Optional[float] = None
         peak_memory_percentage: Optional[float] = None
         peak_available_gigabytes: Optional[float] = None
+        summary: Dict[str, Any]
+        # Track the first, last and peak system memory over the stages.
         for summary in self._summaries:
             before_memory_percentage: Optional[float] = summary.get("before_sys_mem_pct")
             after_memory_percentage: Optional[float] = summary.get("after_sys_mem_pct")
@@ -234,13 +254,21 @@ class SummaryFileWriter:
                     peak_available_gigabytes = available_gigabytes
         if peak_memory_percentage is None:
             return
-        total_gigabytes: float = psutil.virtual_memory().total / (1024 ** 3)
+        total_gigabytes: float = SystemResources.total_gigabytes()
+        # Show a missing start, end or free value as 0.
+        if start_memory_percentage is None:
+            start_memory_percentage = 0.0
+        if end_memory_percentage is None:
+            end_memory_percentage = 0.0
+        if peak_available_gigabytes is None:
+            peak_available_gigabytes = 0.0
         peak_detail: str = (
-            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes or 0:.1f}G free / {total_gigabytes:.1f}G)"
+            f"{peak_memory_percentage:.0f}% peak ({peak_available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB)"
         )
+        # The arrow "→" leads from start to peak to end; plain "->" would change the summary text.
         lines.append(
-            f"  System memory: {start_memory_percentage or 0:.0f}% start \u2192 {peak_detail}"
-            f" \u2192 {end_memory_percentage or 0:.0f}% end"
+            f"  System memory: {start_memory_percentage:.0f}% start → {peak_detail}"
+            f" → {end_memory_percentage:.0f}% end"
         )
 
     def _write_validation_summary(self, lines: List[str]) -> None:
@@ -250,31 +278,37 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         """
         all_events: List[Dict[str, Any]] = []
+        total_requests: int = 0
+        summary: Dict[str, Any]
+        # Collect the validation events and add up the requests of every stage.
         for summary in self._summaries:
             all_events.extend(summary.get("validation_events", []))
+            total_requests += summary.get("concurrent", 0)
         if not all_events:
             return
-        total_cycles: int = sum(
-            event.get("fix_cycles", 0) for event in all_events
-        )
-        total_requests: int = sum(
-            stage_summary.get("concurrent", 0) for stage_summary in self._summaries
-        )
+        total_cycles: int = 0
+        all_errors: List[str] = []
+        event: Dict[str, Any]
+        # Add up the fix cycles and collect the errors of every validation event.
+        for event in all_events:
+            total_cycles += event.get("fix_cycles", 0)
+            all_errors.extend(event.get("errors", []))
         affected: int = len(all_events)
         lines.append(
             f"  Validation: {affected} of {total_requests} requests needed fixes ({total_cycles} fix cycles total)"
         )
         self._write_validation_time_impact(lines, all_events)
-        all_errors: List[str] = []
-        for event in all_events:
-            all_errors.extend(event.get("errors", []))
         if all_errors:
             counts: Counter = Counter(all_errors)
             top: List[Tuple[str, int]] = counts.most_common(3)
-            parts: List[str] = [
-                f"{error} ({count}x)" for error, count in top
-            ]
-            lines.append(f"    {len(all_errors)} errors found: {', '.join(parts)}")
+            parts: List[str] = []
+            error: str
+            count: int
+            # One "error (Nx)" part per top error.
+            for error, count in top:
+                parts.append(f"{error} ({count}x)")
+            top_errors_text: str = ", ".join(parts)
+            lines.append(f"    {len(all_errors)} errors found: {top_errors_text}")
 
     def _write_validation_time_impact(self, lines: List[str], events: List[Dict[str, Any]]) -> None:
         """
@@ -283,10 +317,18 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param events: Validation events from every stage
         """
-        fix_request_ids: Set[str] = {event.get("request_id") for event in events}
+        fix_request_ids: Set[str] = set()
+        event: Dict[str, Any]
+        # Collect the request id of each validation event.
+        for event in events:
+            fix_request_ids.add(event.get("request_id"))
         durations_with_fixes_seconds: List[float] = []
         durations_without_fixes_seconds: List[float] = []
+        summary: Dict[str, Any]
+        result: Dict[str, Any]
+        # Split the request durations into requests with and without fixes.
         for summary in self._summaries:
+            # One duration per request of the stage.
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")
                 elapsed_seconds: float = result.get("elapsed", 0)
@@ -311,15 +353,19 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         """
         all_results: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Gather the results of every stage.
         for summary in self._summaries:
             all_results.extend(summary.get("results", []))
         if not all_results:
             return
 
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  REQUEST RESULTS")
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
 
+        result: Dict[str, Any]
+        # One line per request result.
         for result in all_results:
             self._format_result_line(lines, result)
 
@@ -349,15 +395,16 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         :param all_results: Every request result
         """
-        passed: int = sum(
-            1 for result in all_results
-            if result.get("status") == STATUS_CREATED
-        )
+        passed: int = 0
+        latencies_seconds: List[float] = []
+        result: Dict[str, Any]
+        # Count the passed requests and collect each request's duration.
+        for result in all_results:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
+                passed += 1
+            latencies_seconds.append(result.get("elapsed", 0))
         total: int = len(all_results)
         failed: int = total - passed
-        latencies_seconds: List[float] = [
-            result.get("elapsed", 0) for result in all_results
-        ]
         lines.append("")
         lines.append(f"  Overall: {passed}/{total} CREATED, {failed} failed")
         if latencies_seconds:
@@ -375,7 +422,11 @@ class SummaryFileWriter:
         :param lines: Summary lines, appended to in place
         """
         all_latencies_seconds: List[float] = []
+        summary: Dict[str, Any]
+        # Collect the elapsed time of every request.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # One latency per request of the stage.
             for result in summary.get("results", []):
                 all_latencies_seconds.append(result.get("elapsed", 0))
         if not all_latencies_seconds:
@@ -384,11 +435,13 @@ class SummaryFileWriter:
         all_latencies_seconds.sort()
         total: int = len(all_latencies_seconds)
         milestones: List[int] = [50, 60, 70, 80, 90, 95, 100]
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  COMPLETION TIMELINE")
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
 
         previous_count: int = -1
+        percentage: int
+        # One line per percentage milestone, skipping repeated counts.
         for percentage in milestones:
             index: int = min(int(total * percentage / 100 + 0.999999) - 1, total - 1)
             count: int = index + 1
@@ -412,17 +465,17 @@ class SummaryFileWriter:
         :param sorted_latencies_seconds: Request latencies in seconds, sorted in ascending order
         """
         total: int = len(sorted_latencies_seconds)
-        step: int = 50
-        if total <= step:
+        milestones: List[int] = LatencyAnalyzer.count_milestones(total)
+        if not milestones:
             return
-        milestones: List[int] = list(range(step, total, step))
-        if not milestones or milestones[-1] != total:
-            milestones.append(total)
         lines.append("")
         lines.append("  Completion by count:")
+        count: int
+        # One line per count milestone.
         for count in milestones:
             duration_seconds: float = sorted_latencies_seconds[count - 1]
-            lines.append(f"  {count:5d} requests completed by {Formatters.fmt_duration(duration_seconds, precision=1)}")
+            formatted_duration: str = Formatters.fmt_duration(duration_seconds, precision=1)
+            lines.append(f"  {count:5d} requests completed by {formatted_duration}")
 
     def _write_server_timing(self, lines: List[str]) -> None:
         """
@@ -434,20 +487,23 @@ class SummaryFileWriter:
             return
 
         client_results: List[Dict[str, Any]] = self._collect_client_times()
-        by_server_id: Dict[str, list] = {}
+        by_server_id: Dict[str, List[Dict[str, Any]]] = {}
+        entry: Dict[str, Any]
+        # Group the timing entries by server request id.
         for entry in self._server_timing:
-            server_request_id: str = entry.get("request_id", "")
-            by_server_id.setdefault(server_request_id, []).append(entry)
+            entry_request_id: str = entry.get("request_id", "")
+            request_entries: List[Dict[str, Any]] = by_server_id.setdefault(entry_request_id, [])
+            request_entries.append(entry)
 
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
         lines.append("  SERVER TIMING BREAKDOWN")
-        lines.append("=" * 60)
+        lines.append(Formatters.SEPARATOR_LINE)
 
+        server_request_id: str
+        # One timing block per server request, in id order.
         for server_request_id in sorted(by_server_id.keys()):
-            entries: List[Dict[str, Any]] = by_server_id[server_request_id]
-            entries.sort(
-                key=lambda timing_entry: timing_entry.get("start_ts", 0),
-            )
+            entries: List[Dict[str, Any]] = by_server_id.get(server_request_id)
+            entries.sort(key=self._start_ts_of)
             if not entries:
                 continue
             top_start_seconds: float = entries[0].get("start_ts", 0)
@@ -456,6 +512,16 @@ class SummaryFileWriter:
             self._format_request_timing(lines, label, entries, client)
         lines.append("")
 
+    @staticmethod
+    def _start_ts_of(timing_entry: Dict[str, Any]) -> float:
+        """
+        Sort key: the start time of a server timing entry.
+
+        :param timing_entry: One server timing entry
+        :return: The entry's "start_ts", 0 if missing
+        """
+        return timing_entry.get("start_ts", 0)
+
     def _collect_client_times(self) -> List[Dict[str, Any]]:
         """
         Collect client start/end times from all results.
@@ -463,12 +529,18 @@ class SummaryFileWriter:
         :return: id, start and end of each result that has both times
         """
         results: List[Dict[str, Any]] = []
+        summary: Dict[str, Any]
+        # Collect the start and end time of every timed request.
         for summary in self._summaries:
+            result: Dict[str, Any]
+            # Keep the requests that have an id and both times.
             for result in summary.get("results", []):
                 request_id: str = result.get("request_id", "")
                 start_time_seconds: float = result.get("start_time", 0)
                 end_time_seconds: float = result.get("end_time", 0)
-                if request_id and start_time_seconds and end_time_seconds:
+                if (request_id
+                        and start_time_seconds
+                        and end_time_seconds):
                     results.append({"id": request_id, "start": start_time_seconds, "end": end_time_seconds})
         return results
 
@@ -481,6 +553,8 @@ class SummaryFileWriter:
         :param client_results: Client times from _collect_client_times
         :return: The matching client entry, or {} when none matches
         """
+        client: Dict[str, Any]
+        # Return the first client request whose time span holds the server start time.
         for client in client_results:
             if client.get("start", 0) <= server_start_seconds <= client.get("end", 0):
                 return client
@@ -501,18 +575,23 @@ class SummaryFileWriter:
         top_agent: str = top.get("agent", "?")
         client_start_seconds: float = client.get("start", 0)
         client_end_seconds: float = client.get("end", 0)
-        total_duration_seconds: float = (
-            client_end_seconds - client_start_seconds if client_start_seconds and client_end_seconds else 0
-        )
+        total_duration_seconds: float = 0
+        if client_start_seconds and client_end_seconds:
+            total_duration_seconds = client_end_seconds - client_start_seconds
         server_start_seconds: float = top.get("start_ts", 0)
         server_finish_seconds: float = top.get("finish_ts", 0)
         lines.append("")
         lines.append(f"  {request_id} ({total_duration_seconds:.1f}s total):")
-        if client_start_seconds and server_start_seconds and server_start_seconds > client_start_seconds:
+        if (client_start_seconds
+                and server_start_seconds
+                and server_start_seconds > client_start_seconds):
             lines.append(f"    Client -> Server:  {server_start_seconds - client_start_seconds:6.1f}s")
-        lines.append(f"    Server: {top_agent:<25s} {top.get('duration_seconds', 0):6.1f}s")
+        top_duration_seconds: float = top.get("duration_seconds", 0)
+        lines.append(f"    Server: {top_agent:<25s} {top_duration_seconds:6.1f}s")
         SummaryFileWriter._format_sub_agents(lines, entries, top_agent)
-        if client_end_seconds and server_finish_seconds and client_end_seconds > server_finish_seconds:
+        if (client_end_seconds
+                and server_finish_seconds
+                and client_end_seconds > server_finish_seconds):
             lines.append(f"    Server -> Client:  {client_end_seconds - server_finish_seconds:6.1f}s")
 
     @staticmethod
@@ -524,16 +603,20 @@ class SummaryFileWriter:
         :param entries: Server timing entries of the request
         :param top_agent: Name of the top-level agent, left out of the list
         """
-        sub_agents: List[Dict[str, Any]] = [
-            timing_entry for timing_entry in entries
-            if timing_entry.get("agent") != top_agent
-        ]
+        sub_agents: List[Dict[str, Any]] = []
+        timing_entry: Dict[str, Any]
+        # Keep every agent except the top-level one.
+        for timing_entry in entries:
+            if timing_entry.get("agent") != top_agent:
+                sub_agents.append(timing_entry)
+        index: int
+        sub_agent: Dict[str, Any]
+        # One tree line per sub-agent.
         for index, sub_agent in enumerate(sub_agents):
-            prefix: str = (
-                "\u2514\u2500"
-                if index == len(sub_agents) - 1
-                else "\u251c\u2500"
-            )
+            # Box-drawing "└─" marks the last sub-agent and "├─" the others; ASCII "+-" would change the summary text.
+            prefix: str = "├─"
+            if index == len(sub_agents) - 1:
+                prefix = "└─"
             name: str = sub_agent.get("agent", "?")
             duration_seconds: float = sub_agent.get("duration_seconds", 0)
             lines.append(f"      {prefix} {name:<23s} {duration_seconds:6.1f}s")
@@ -547,7 +630,9 @@ class SummaryFileWriter:
         :return: Network name or reservation id, then failure reason; empty when neither is set
         """
         parts: List[str] = []
-        for key in ("agent_network_name", "reservation_id"):
+        key: str
+        # Use the first detail field that has a value.
+        for key in ["agent_network_name", "reservation_id"]:
             value: Optional[str] = result.get(key, "")
             if value:
                 parts.append(str(value))
