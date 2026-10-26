@@ -14,93 +14,18 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-import time
+from time import perf_counter
 from typing import Any
 from typing import Dict
-from typing import Iterator
 from typing import Optional
-from typing import Tuple
 from unittest import TestCase
 from unittest.mock import patch
-
-from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
-
-
-class FakeSession:
-    """
-    Stand-in for HttpServiceAgentSession that streams on a timer.
-    """
-
-    def __init__(self, message_count: int, message_interval_seconds: float, **_kwargs: Any) -> None:
-        """
-        Constructor.
-
-        :param message_count: How many messages to stream
-        :param message_interval_seconds: Seconds between messages
-        :param _kwargs: The real session's constructor arguments, ignored
-        """
-        self._message_count: int = message_count
-        self._message_interval_seconds: float = message_interval_seconds
-        self.sent: int = 0
-
-    def streaming_chat(self, _request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
-        """
-        Yield one message per interval, counting what was consumed.
-
-        :param _request_dict: The streaming_chat request, ignored
-        :return: One AI chat message per interval
-        """
-        _: int
-        # Yield one message per interval, counting each one sent.
-        for _ in range(self._message_count):
-            time.sleep(self._message_interval_seconds)
-            self.sent += 1
-            yield {"response": {"type": "AI", "text": "answer"}}
-
-
-class FakeProcessor:
-    """
-    Stand-in for StreamingInputProcessor that drains the stream.
-    """
-
-    def __init__(self, session: FakeSession, **_kwargs: Any) -> None:
-        """
-        Constructor.
-
-        :param session: The session whose streaming_chat is consumed
-        :param _kwargs: The real processor's constructor arguments, ignored
-        """
-        self._session: FakeSession = session
-
-    def get_message_processor(self) -> BasicMessageProcessor:
-        """
-        :return: A real message processor that has seen the stream's sly_data
-        """
-        processor: BasicMessageProcessor = BasicMessageProcessor()
-        processor.process_message({
-            "type": "AGENT_FRAMEWORK", "chat_context": {},
-            "sly_data": {"reservation_id": "abc-1"},
-        })
-        return processor
-
-    def process_once(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Consume every streamed message, as the real processor does.
-
-        :param state: The request state
-        :return: A copy of the state with the answer filled in
-        """
-        _: Dict[str, Any]
-        # Read the whole stream.
-        for _ in self._session.streaming_chat({}):
-            pass
-        updated: Dict[str, Any] = dict(state)
-        updated["last_chat_response"] = "answer"
-        return updated
+from tests.load_tests.unit.fake_processor import FakeProcessor
+from tests.load_tests.unit.fake_session import FakeSession
 
 
 class TestAgentRequestExecutor(TestCase):
@@ -112,16 +37,61 @@ class TestAgentRequestExecutor(TestCase):
     for the whole run.
     """
 
+    def test_streaming_past_the_cap_is_a_timeout(self) -> None:
+        """
+        A stream that outruns the cap reports TIMEOUT.
+        """
+        run: Dict[str, Any] = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
+        result: AgentRequestResult = run.get("result")
+        status: str = result.get_status()
+
+        self.assertEqual(status, LoadTestConstants.STATUS_TIMEOUT)
+
+    def test_streaming_past_the_cap_stops_early(self) -> None:
+        """
+        The request is abandoned rather than drained to the end.
+
+        Reporting TIMEOUT after draining the whole stream would still
+        label the request correctly, but the worker would stay occupied
+        until the stream ends.
+        """
+        start_seconds: float = perf_counter()
+        run: Dict[str, Any] = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
+        session: FakeSession = run.get("session")
+        elapsed_seconds: float = perf_counter() - start_seconds
+
+        self.assertLess(session.sent, 20)
+        self.assertLess(elapsed_seconds, 20 * 0.05)
+
+    def test_request_within_the_cap_succeeds(self) -> None:
+        """
+        A request that finishes in time is unaffected.
+        """
+        run: Dict[str, Any] = self._execute(timeout_seconds=30, message_count=3, message_interval_seconds=0.01)
+        result: AgentRequestResult = run.get("result")
+        session: FakeSession = run.get("session")
+        status: str = result.get_status()
+        response_text: str = result.get_response_text()
+        sly_data: Dict[str, Any] = result.get_processor().get_sly_data()
+        reservation_id: str = sly_data.get("reservation_id")
+        first_response_seconds: float = result.get_time_to_first_response_seconds()
+
+        self.assertEqual(status, LoadTestConstants.STATUS_CREATED)
+        self.assertEqual(response_text, "answer")
+        self.assertEqual(reservation_id, "abc-1")
+        self.assertEqual(session.sent, 3)
+        self.assertGreater(first_response_seconds, 0.0)
+
     def _execute(
             self, timeout_seconds: float, message_count: int, message_interval_seconds: float,
-    ) -> Tuple[AgentRequestResult, FakeSession]:
+    ) -> Dict[str, Any]:
         """
         Run one request against a stream with the given timing.
 
         :param timeout_seconds: The --request-timeout cap in seconds
         :param message_count: How many messages the fake stream sends
         :param message_interval_seconds: Seconds between fake messages
-        :return: The AgentRequestResult and the FakeSession that produced it
+        :return: A dict with the AgentRequestResult as "result" and the FakeSession that produced it as "session"
         """
         session: FakeSession = FakeSession(message_count=message_count,
                                            message_interval_seconds=message_interval_seconds)
@@ -133,49 +103,17 @@ class TestAgentRequestExecutor(TestCase):
             "tests.load_tests.traffic.agent_request_executor.StreamingInputProcessor",
             FakeProcessor,
         ):
-            result = AgentRequestExecutor.execute_request(
-                "localhost", 30011, "music_nerd", "prompt",
-                timeout_seconds=timeout_seconds, idle_timeout_seconds=60,
-            )
-        return result, session
-
-    def test_streaming_past_the_cap_is_a_timeout(self) -> None:
-        """
-        A stream that outruns the cap reports TIMEOUT.
-        """
-        result: Optional[AgentRequestResult] = None
-        unused_session: Optional[FakeSession] = None
-        result, unused_session = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
-
-        self.assertEqual(result.get_status(), LoadTestConstants.STATUS_TIMEOUT)
-
-    def test_streaming_past_the_cap_stops_early(self) -> None:
-        """
-        The request is abandoned rather than drained to the end.
-
-        Reporting TIMEOUT after draining the whole stream would still
-        label the request correctly, but the worker would stay occupied
-        until the stream ends.
-        """
-        start_seconds: float = time.perf_counter()
-        unused_result: Optional[AgentRequestResult] = None
-        session: Optional[FakeSession] = None
-        unused_result, session = self._execute(timeout_seconds=0.3, message_count=20, message_interval_seconds=0.05)
-        elapsed_seconds: float = time.perf_counter() - start_seconds
-
-        self.assertLess(session.sent, 20)
-        self.assertLess(elapsed_seconds, 20 * 0.05)
-
-    def test_request_within_the_cap_succeeds(self) -> None:
-        """
-        A request that finishes in time is unaffected.
-        """
-        result: Optional[AgentRequestResult] = None
-        session: Optional[FakeSession] = None
-        result, session = self._execute(timeout_seconds=30, message_count=3, message_interval_seconds=0.01)
-
-        self.assertEqual(result.get_status(), LoadTestConstants.STATUS_CREATED)
-        self.assertEqual(result.get_response_text(), "answer")
-        self.assertEqual(result.get_processor().get_sly_data().get("reservation_id"), "abc-1")
-        self.assertEqual(session.sent, 3)
-        self.assertGreater(result.get_time_to_first_response_seconds(), 0.0)
+            request_settings: Dict[str, Any] = {
+                "host": "localhost",
+                "port": 30011,
+                "agent": "music_nerd",
+                "timeout_seconds": timeout_seconds,
+                "idle_timeout_seconds": 60,
+            }
+            executor: AgentRequestExecutor = AgentRequestExecutor()
+            result = executor.execute_request(request_settings, "prompt")
+        run: Dict[str, Any] = {
+            "result": result,
+            "session": session,
+        }
+        return run

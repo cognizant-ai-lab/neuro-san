@@ -14,8 +14,10 @@
 #
 # END COPYRIGHT
 
-import json
-import os
+from json import dumps
+from os import close
+from os import unlink
+from os.path import join
 from shutil import rmtree
 from tempfile import mkdtemp
 from tempfile import mkstemp
@@ -52,8 +54,8 @@ class TestTrendHistory(TestCase):
         file_descriptor: int = 0
         self._history_path: str = ""
         file_descriptor, self._history_path = mkstemp(suffix=".jsonl")
-        os.close(file_descriptor)
-        self.addCleanup(os.unlink, self._history_path)
+        close(file_descriptor)
+        self.addCleanup(unlink, self._history_path)
         self._output_dir: str = mkdtemp()
         self.addCleanup(rmtree, self._output_dir)
 
@@ -61,39 +63,52 @@ class TestTrendHistory(TestCase):
         """
         Every well-formed line becomes one record.
         """
-        self._write(json.dumps({"agent": "one"}) + "\n" + json.dumps({"agent": "two"}) + "\n")
+        history_text: str = dumps({"agent": "one"}) + "\n" + dumps({"agent": "two"}) + "\n"
+        self._write(history_text)
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
 
-        self.assertEqual(TestTrendHistory._agents(records), ["one", "two"])
+        agents: List[str] = TestTrendHistory._agents(records)
+
+        self.assertEqual(agents, ["one", "two"])
 
     def test_truncated_final_line_does_not_lose_earlier_records(self) -> None:
         """
         An interrupted run leaves a partial line; the rest survives.
         """
-        self._write(json.dumps({"agent": "one"}) + "\n" + '{"agent": "two", "requ')
+        history_text: str = dumps({"agent": "one"}) + "\n" + '{"agent": "two", "requ'
+        self._write(history_text)
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
 
-        self.assertEqual(TestTrendHistory._agents(records), ["one"])
+        agents: List[str] = TestTrendHistory._agents(records)
+
+        self.assertEqual(agents, ["one"])
 
     def test_blank_lines_are_skipped(self) -> None:
         """
         Blank lines are not counted as records.
         """
-        self._write("\n" + json.dumps({"agent": "one"}) + "\n\n")
+        history_text: str = "\n" + dumps({"agent": "one"}) + "\n\n"
+        self._write(history_text)
 
-        self.assertEqual(len(TrendHistory._read_records(self._history_path)), 1)
+        records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
+        record_count: int = len(records)
+
+        self.assertEqual(record_count, 1)
 
     def test_non_object_lines_are_skipped(self) -> None:
         """
         Valid JSON that is not an object cannot be a record.
         """
-        self._write("[1, 2, 3]\n" + json.dumps({"agent": "one"}) + "\n")
+        history_text: str = "[1, 2, 3]\n" + dumps({"agent": "one"}) + "\n"
+        self._write(history_text)
 
         records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
 
-        self.assertEqual(TestTrendHistory._agents(records), ["one"])
+        agents: List[str] = TestTrendHistory._agents(records)
+
+        self.assertEqual(agents, ["one"])
 
     def test_unreadable_file_yields_nothing(self) -> None:
         """
@@ -156,7 +171,8 @@ class TestTrendHistory(TestCase):
 
         :return: Path of the created file
         """
-        path: str = os.path.join(self._output_dir, LoadTestConstants.HISTORY_FILE_NAME)
+        path: str = join(self._output_dir, LoadTestConstants.HISTORY_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
-            handle.write(json.dumps({"agent": "one"}) + "\n")
+            history_text: str = dumps({"agent": "one"}) + "\n"
+            handle.write(history_text)
         return path

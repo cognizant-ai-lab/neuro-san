@@ -15,8 +15,9 @@
 # END COPYRIGHT
 
 
-import time
 from functools import partial
+from time import perf_counter
+from time import sleep
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -32,36 +33,6 @@ class TestTimedStreamingChat(TestCase):
     """
     Tests for TimedStreamingChat.
     """
-
-    @staticmethod
-    def _stream(message_count: int, message_interval_seconds: float,
-                _request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
-        """
-        Stand-in for a session's streaming_chat: one message per interval.
-        Bound with functools.partial to the streaming_chat signature.
-
-        :param message_count: How many messages to yield
-        :param message_interval_seconds: Seconds to sleep before each message
-        :param _request_dict: The streaming_chat request, ignored
-        :return: The messages
-        """
-        index: int
-        # Sleep, then yield the next message.
-        for index in range(message_count):
-            time.sleep(message_interval_seconds)
-            yield {"index": index}
-
-    def _wrap(self, timeout_seconds: float, message_count: int, message_interval_seconds: float) -> TimedStreamingChat:
-        """
-        :param timeout_seconds: Cap in seconds passed to the wrapper
-        :param message_count: Messages the fake stream yields
-        :param message_interval_seconds: Seconds between them
-        :return: A wrapper around a fake stream, started now
-        """
-        streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]] = partial(
-            TestTimedStreamingChat._stream, message_count, message_interval_seconds,
-        )
-        return TimedStreamingChat(streaming_chat, time.perf_counter(), timeout_seconds)
 
     def test_passes_messages_through_and_times_the_first(self) -> None:
         """
@@ -93,3 +64,35 @@ class TestTimedStreamingChat(TestCase):
         timed: TimedStreamingChat = self._wrap(timeout_seconds=5.0, message_count=0, message_interval_seconds=0.0)
         self.assertEqual(list(timed.streaming_chat({})), [])
         self.assertEqual(timed.get_time_to_first_response_seconds(), 0.0)
+
+    @staticmethod
+    def _stream(message_count: int, message_interval_seconds: float,
+                _request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+        """
+        Stand-in for a session's streaming_chat: one message per interval.
+        Bound with functools.partial to the streaming_chat signature.
+
+        :param message_count: How many messages to yield
+        :param message_interval_seconds: Seconds to sleep before each message
+        :param _request_dict: The streaming_chat request, ignored
+        :return: The messages
+        """
+        index: int
+        # Sleep, then yield the next message.
+        for index in range(message_count):
+            sleep(message_interval_seconds)
+            yield {"index": index}
+
+    def _wrap(self, timeout_seconds: float, message_count: int, message_interval_seconds: float) -> TimedStreamingChat:
+        """
+        :param timeout_seconds: Cap in seconds passed to the wrapper
+        :param message_count: Messages the fake stream yields
+        :param message_interval_seconds: Seconds between them
+        :return: A wrapper around a fake stream, started now
+        """
+        streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]] = partial(
+            TestTimedStreamingChat._stream, message_count, message_interval_seconds,
+        )
+        start_seconds: float = perf_counter()
+        timed_chat: TimedStreamingChat = TimedStreamingChat(streaming_chat, start_seconds, timeout_seconds)
+        return timed_chat
