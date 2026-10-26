@@ -25,10 +25,7 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
@@ -118,10 +115,10 @@ class SummaryReporter:
         # Add up the status counts, time and retries of every stage.
         for summary in self._summaries:
             counts: Dict[str, int] = summary.get("counts", {})
-            total_created += counts.get(STATUS_CREATED, 0)
-            total_failed += counts.get(STATUS_FAILED, 0)
-            total_timeout += counts.get(STATUS_TIMEOUT, 0)
-            total_killed += counts.get(STATUS_KILLED, 0)
+            total_created += counts.get(LoadTestConstants.STATUS_CREATED, 0)
+            total_failed += counts.get(LoadTestConstants.STATUS_FAILED, 0)
+            total_timeout += counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+            total_killed += counts.get(LoadTestConstants.STATUS_KILLED, 0)
             total_time_seconds += summary.get("elapsed", 0)
             total_retries += summary.get("total_retries", 0)
 
@@ -630,10 +627,10 @@ class SummaryReporter:
         """
         counts: Dict[str, int] = summary.get("counts", {})
         concurrent: Optional[int] = summary.get("concurrent")
-        created_count: int = counts.get(STATUS_CREATED, 0)
-        failed_count: int = counts.get(STATUS_FAILED, 0)
-        timeout_count: int = counts.get(STATUS_TIMEOUT, 0)
-        killed_count: int = counts.get(STATUS_KILLED, 0)
+        created_count: int = counts.get(LoadTestConstants.STATUS_CREATED, 0)
+        failed_count: int = counts.get(LoadTestConstants.STATUS_FAILED, 0)
+        timeout_count: int = counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+        killed_count: int = counts.get(LoadTestConstants.STATUS_KILLED, 0)
         total_retries: int = summary.get("total_retries", 0)
         amplification: float = summary.get("amplification", 1.0)
         elapsed_seconds: float = summary.get("elapsed", 0)

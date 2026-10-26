@@ -30,8 +30,7 @@ from typing import Tuple
 
 from psutil import virtual_memory
 
-from tests.load_tests.load_test_constants import DEFAULT_STAGES
-from tests.load_tests.load_test_constants import LEVEL_ADV
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.project_paths import ProjectPaths
@@ -140,7 +139,7 @@ Then use:
         Return the list of concurrency stages to run.
 
         If --ramp is set and --stages provided, parse the CSV.
-        If --ramp is set without --stages, use DEFAULT_STAGES.
+        If --ramp is set without --stages, use LoadTestConstants.DEFAULT_STAGES.
         Otherwise return a single-stage list from --num-requests.
 
         :return: Requests per stage
@@ -148,7 +147,7 @@ Then use:
         if self._args.ramp:
             if self._args.stages is not None:
                 stages: List[int] = []
-                stage_text: str
+                stage_text: str = ""
                 try:
                     # Parse each non-empty comma-separated value.
                     for stage_text in self._args.stages.split(","):
@@ -171,7 +170,7 @@ Then use:
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     raise LoadTestAbortError(1)
                 return stages
-            return list(DEFAULT_STAGES)
+            return list(LoadTestConstants.DEFAULT_STAGES)
         if self._args.num_requests <= 0:
             logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
             raise LoadTestAbortError(1)
@@ -223,7 +222,7 @@ Then use:
         self._print_summary_header(stages, total_planned_requests, capped_requests)
 
         warnings: List[str] = []
-        if self._args.no_dry_run or self._args.level == LEVEL_ADV:
+        if self._args.no_dry_run or self._args.level == LoadTestConstants.LEVEL_ADV:
             warnings = self._collect_warnings(capped_requests=capped_requests,
                                               total_planned_requests=total_planned_requests,
                                               stale_log_age_minutes=stale_log_age_minutes)
@@ -435,8 +434,8 @@ server log to fall back on:
         if needed_gigabytes > available_gigabytes * 0.8:
             total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:
-     Estimated need: ~{needed_gigabytes:.1f}G ({num_requests} x ~{per_request_megabytes}MB per request)
-     Available: {available_gigabytes:.1f}G / {total_gigabytes:.1f}G total
+     Estimated need: ~{needed_gigabytes:.1f} GB ({num_requests} x ~{per_request_megabytes} MB per request)
+     Available: {available_gigabytes:.1f} GB / {total_gigabytes:.1f} GB total
      Consider fewer concurrent workers or a larger instance"""
             return memory_warning
         return None

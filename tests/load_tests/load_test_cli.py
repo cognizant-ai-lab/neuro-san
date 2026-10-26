@@ -37,17 +37,7 @@ from typing import Set
 
 import psutil
 
-from tests.load_tests.load_test_constants import ADV_NUM_REQUESTS
-from tests.load_tests.load_test_constants import ADV_NUM_ROUNDS
-from tests.load_tests.load_test_constants import LEVEL_ADV
-from tests.load_tests.load_test_constants import LEVEL_MIN
-from tests.load_tests.load_test_constants import LOCAL_HOSTS
-from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
-from tests.load_tests.load_test_constants import THREAD_JOIN_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -143,7 +133,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         :param total_cap: Most requests to send in the whole test
         :return: One summary dict per stage that runs
         """
-        monitor_resources: bool = (self.args.level != LEVEL_MIN
+        monitor_resources: bool = (self.args.level != LoadTestConstants.LEVEL_MIN
                                    or self.args.client_only
                                    or self.args.server_only)
         has_server_log: bool = self.server_log is not None
@@ -153,7 +143,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         stage_summaries: List[Dict[str, Any]] = []
         global_offset: int = 0
         total_sent: int = 0
-        test_start_seconds: float = time.time()
+        test_start_seconds: float = time.perf_counter()
 
         round_num: int
         # Run every stage once per round.
@@ -211,20 +201,20 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         return stage_summaries
 
-    def _total_timeout_reached(self, test_start) -> bool:
+    def _total_timeout_reached(self, test_start: float) -> bool:
         """
         Check if total-timeout has been exceeded.
 
         Logs a warning when the elapsed time since
         test_start reaches --total-timeout (0 means disabled).
 
-        :param test_start: time.time() at the start of the test
+        :param test_start: time.perf_counter() at the start of the test
         :return: True when the total timeout is reached
         """
         limit_seconds: float = self.args.total_timeout
         if limit_seconds <= 0:
             return False
-        elapsed_seconds: float = time.time() - test_start
+        elapsed_seconds: float = time.perf_counter() - test_start
         if elapsed_seconds < limit_seconds:
             return False
         logger.warning(
@@ -340,7 +330,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         stop_event.set()
         if monitor:
-            monitor.join(timeout=THREAD_JOIN_TIMEOUT_SECONDS)
+            monitor.join(timeout=LoadTestConstants.THREAD_JOIN_TIMEOUT_SECONDS)
 
         peak_client: Optional[Dict[str, Any]] = None
         settled_client: Optional[Dict[str, Any]] = None
@@ -512,15 +502,9 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if before_client:
             client_rss_megabytes: float = before_client.get("rss_megabytes")
             client_cpu_percent: float = before_client.get("cpu_percent")
-            logger.info("  Client BEFORE: RSS %.1fM, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
+            logger.info("  Client BEFORE: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
 
-        virtual_memory_stats: Any = psutil.virtual_memory()
-        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
-        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        logger.info("  System BEFORE: %.0f%% used (%.0fM used / %.1fG free / %.1fG total)",
-                    virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes)
+        ResourceMonitor.log_system_memory("BEFORE")
         before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {
             "server": before_server,
             "client": before_client,
@@ -671,7 +655,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 token_source: str = "HTTP token_accounting"
                 logger.info("\n  Token usage (from %s):", token_source)
                 TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)
-            if self.args.level != LEVEL_MIN:
+            if self.args.level != LoadTestConstants.LEVEL_MIN:
                 logger.info("\n  Server-side validation: not available (no --server-log)")
         server_log_analysis: Dict[str, Any] = {
             "server_counts": server_counts,
@@ -732,9 +716,9 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         # Look for a stage with failed, timed-out or killed requests
         for summary in stage_summaries:
             counts: Dict[str, int] = summary.get("counts", {})
-            if (counts.get(STATUS_FAILED, 0) > 0
-                    or counts.get(STATUS_TIMEOUT, 0) > 0
-                    or counts.get(STATUS_KILLED, 0) > 0):
+            if (counts.get(LoadTestConstants.STATUS_FAILED, 0) > 0
+                    or counts.get(LoadTestConstants.STATUS_TIMEOUT, 0) > 0
+                    or counts.get(LoadTestConstants.STATUS_KILLED, 0) > 0):
                 has_failures = True
                 break
         label: str = "OUTPUT FILES"
@@ -744,10 +728,10 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         logger.info("  %s", label)
         logger.info("%s", Formatters.SEPARATOR_LINE)
         logger.info("  Directory:   %s", self._output_dir)
-        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
+        json_path: str = os.path.join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
-        requests_dir: str = os.path.join(self._output_dir, "requests")
+        requests_dir: str = os.path.join(self._output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         if os.path.isdir(requests_dir):
             logger.info("  Requests:    %s", requests_dir)
         stdout_log_path: Optional[str] = self._run_log.get_path()
@@ -763,7 +747,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         Override argparse defaults with level-specific values.
 
         Only applies when the user did not explicitly set the flag.
-        adv: ADV_NUM_REQUESTS requests, ADV_NUM_ROUNDS rounds (stress test).
+        adv: LoadTestConstants.ADV_NUM_REQUESTS requests, LoadTestConstants.ADV_NUM_ROUNDS rounds (stress test).
 
         --full-concurrency matches workers to num-requests so every
         request fires at once.  Otherwise workers stay at the
@@ -773,11 +757,11 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         :param args: Parsed arguments, updated in place
         :param explicit_args: Dest names the user passed on the command line
         """
-        if args.level == LEVEL_ADV:
+        if args.level == LoadTestConstants.LEVEL_ADV:
             if "num_requests" not in explicit_args:
-                args.num_requests = ADV_NUM_REQUESTS
+                args.num_requests = LoadTestConstants.ADV_NUM_REQUESTS
             if "num_rounds" not in explicit_args:
-                args.num_rounds = ADV_NUM_ROUNDS
+                args.num_rounds = LoadTestConstants.ADV_NUM_ROUNDS
 
         if "max_workers" not in explicit_args and args.full_concurrency:
             args.max_workers = args.num_requests
@@ -812,13 +796,13 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         :raises SystemExit: When the arguments don't fit together
         :raises LoadTestAbortError: When the server can't be reached or the --server-log file is not found
         """
-        level = self.args.level
+        level: str = self.args.level
         self.args.include_tokens = not self.args.no_tokens
-        split_mode = self.args.client_only or self.args.server_only
+        split_mode: bool = self.args.client_only or self.args.server_only
         if split_mode:
-            level = LEVEL_MIN
-            self.args.level = LEVEL_MIN
-        elif level == LEVEL_MIN:
+            level = LoadTestConstants.LEVEL_MIN
+            self.args.level = LoadTestConstants.LEVEL_MIN
+        elif level == LoadTestConstants.LEVEL_MIN:
             logger.error(
                 "--level min requires --client-only or "
                 "--server-only. For an all-in-one run use "
@@ -838,15 +822,15 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         elif (self.args.server_log is None
                 and not self.args.client_only
                 and not self.args.server_only
-                and self.args.host in LOCAL_HOSTS
-                and level != LEVEL_MIN):
+                and self.args.host in LoadTestConstants.LOCAL_HOSTS
+                and level != LoadTestConstants.LEVEL_MIN):
             self.args.server_log = EnvironmentValidator.try_auto_detect_server_log(self.args)
-        if (level != LEVEL_MIN
+        if (level != LoadTestConstants.LEVEL_MIN
                 and not self.args.client_only
                 and not self.args.server_only
                 and not self.args.no_server_log
                 and self.args.server_log is None):
-            if self.args.host not in LOCAL_HOSTS:
+            if self.args.host not in LoadTestConstants.LOCAL_HOSTS:
                 logger.error(
                     "--level %s needs a local server to read "
                     "server.log. Use --client-only for a remote "
@@ -876,8 +860,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 )
             )
 
-        is_local = self.args.host in LOCAL_HOSTS
-        monitor_resources = level != LEVEL_MIN or split_mode
+        is_local: bool = self.args.host in LoadTestConstants.LOCAL_HOSTS
+        monitor_resources: bool = level != LoadTestConstants.LEVEL_MIN or split_mode
 
         if self.args.client_only:
             logger.info("Client-only mode: skipping server process detection.")
@@ -1001,7 +985,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 disc_reporter = DisconnectionReporter(stage_summaries)
                 disc_reporter.log_disconnection_summary()
 
-            if level == LEVEL_ADV:
+            if level == LoadTestConstants.LEVEL_ADV:
                 has_server_log = self.server_log is not None
                 if has_server_log:
                     pool_analyzer = PoolAnalyzer(stage_summaries)
@@ -1078,7 +1062,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         except (ValueError, OSError):
             return None
 
-    def _export_raw_json(self, stage_summaries, *, exit_code) -> None:
+    def _export_raw_json(self, stage_summaries: List[Dict[str, Any]], exit_code: int) -> None:
         """
         Save all test data as a single raw_results.json file.
 
@@ -1097,7 +1081,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             total_tokens += result.get("total_tokens", 0)
             costs.append(result.get("cost_usd", 0.0))
             latencies.append(result.get("elapsed", 0))
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 passed += 1
         total_cost: float = sum(costs)
         stage_elapsed: List[float] = []
@@ -1160,22 +1144,12 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 "total_cost_usd": round(total_cost, 6),
             },
             "stage_summaries": stage_summaries,
-            "resource_rows": [
-                {"before": row[1], "after": row[2]}
-                for row in self.resource_reporter.get_resource_rows()
-            ],
-            "client_resource_rows": [
-                {
-                    "before": row[1],
-                    "peak": row[2],
-                    "settled": row[3],
-                }
-                for row in self.resource_reporter.get_client_rows()
-            ],
+            "resource_rows": self.resource_reporter.get_resource_snapshots(),
+            "client_resource_rows": self.resource_reporter.get_client_snapshots(),
         }
         json_metadata: Dict[str, Any] = JsonMetadata.build()
         raw_data.update(json_metadata)
-        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
+        json_path: str = os.path.join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as json_file:
             json.dump(raw_data, json_file, indent=2, default=str)
 
@@ -1202,7 +1176,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         :param stage_summaries: One summary dict per stage
         :param server_chat_timing: Server streaming_chat Start/Finish pairs for the test
         """
-        if self.args.level != LEVEL_ADV:
+        if self.args.level != LoadTestConstants.LEVEL_ADV:
             return
         if not self.args.no_dry_run:
             if not Confirm.ask("\nSave summary.txt?"):
@@ -1223,7 +1197,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         result: Dict[str, Any]
         # Count the requests that passed.
         for result in all_results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 passed += 1
         failed = total - passed
 

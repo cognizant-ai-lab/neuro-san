@@ -19,10 +19,7 @@ from typing import Dict
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.validation.output_validator import OutputValidator
 
 
@@ -40,17 +37,17 @@ class TestCountResults(TestCase):
         Every known status lands in its own bucket.
         """
         counts: Dict[str, Any] = OutputValidator.count_results([
-            {"status": STATUS_CREATED},
-            {"status": STATUS_CREATED},
-            {"status": STATUS_FAILED},
-            {"status": STATUS_TIMEOUT},
-            {"status": STATUS_KILLED},
+            {"status": LoadTestConstants.STATUS_CREATED},
+            {"status": LoadTestConstants.STATUS_CREATED},
+            {"status": LoadTestConstants.STATUS_FAILED},
+            {"status": LoadTestConstants.STATUS_TIMEOUT},
+            {"status": LoadTestConstants.STATUS_KILLED},
         ])
 
-        self.assertEqual(counts.get(STATUS_CREATED), 2)
-        self.assertEqual(counts.get(STATUS_FAILED), 1)
-        self.assertEqual(counts.get(STATUS_TIMEOUT), 1)
-        self.assertEqual(counts.get(STATUS_KILLED), 1)
+        self.assertEqual(counts.get(LoadTestConstants.STATUS_CREATED), 2)
+        self.assertEqual(counts.get(LoadTestConstants.STATUS_FAILED), 1)
+        self.assertEqual(counts.get(LoadTestConstants.STATUS_TIMEOUT), 1)
+        self.assertEqual(counts.get(LoadTestConstants.STATUS_KILLED), 1)
 
     def test_no_results_counts_zero_not_empty(self) -> None:
         """
@@ -58,7 +55,13 @@ class TestCountResults(TestCase):
         """
         counts: Dict[str, Any] = OutputValidator.count_results([])
 
-        self.assertEqual(counts, {STATUS_CREATED: 0, STATUS_FAILED: 0, STATUS_TIMEOUT: 0, STATUS_KILLED: 0})
+        expected_counts: Dict[str, int] = {
+            LoadTestConstants.STATUS_CREATED: 0,
+            LoadTestConstants.STATUS_FAILED: 0,
+            LoadTestConstants.STATUS_TIMEOUT: 0,
+            LoadTestConstants.STATUS_KILLED: 0,
+        }
+        self.assertEqual(counts, expected_counts)
 
     def test_unknown_status_counts_as_failed(self) -> None:
         """
@@ -69,8 +72,8 @@ class TestCountResults(TestCase):
         """
         counts: Dict[str, Any] = OutputValidator.count_results([{"status": "WEIRD"}])
 
-        self.assertEqual(counts.get(STATUS_FAILED), 1)
-        self.assertEqual(counts.get(STATUS_CREATED), 0)
+        self.assertEqual(counts.get(LoadTestConstants.STATUS_FAILED), 1)
+        self.assertEqual(counts.get(LoadTestConstants.STATUS_CREATED), 0)
 
     def test_missing_status_counts_as_failed(self) -> None:
         """
@@ -78,17 +81,17 @@ class TestCountResults(TestCase):
         """
         counts: Dict[str, Any] = OutputValidator.count_results([{}])
 
-        self.assertEqual(counts.get(STATUS_FAILED), 1)
+        self.assertEqual(counts.get(LoadTestConstants.STATUS_FAILED), 1)
 
     def test_totals_match_the_number_of_results(self) -> None:
         """
         No request is lost or double-counted, whatever its status.
         """
         results: List[Dict[str, Any]] = [
-            {"status": STATUS_CREATED},
+            {"status": LoadTestConstants.STATUS_CREATED},
             {"status": "WEIRD"},
             {},
-            {"status": STATUS_TIMEOUT},
+            {"status": LoadTestConstants.STATUS_TIMEOUT},
         ]
 
         counts: Dict[str, Any] = OutputValidator.count_results(results)

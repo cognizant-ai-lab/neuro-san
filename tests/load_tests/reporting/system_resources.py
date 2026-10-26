@@ -148,7 +148,7 @@ class SystemResources:
         system_maximum: str = ""
         user_limit, system_maximum = cls.thread_limits()
         logger.info(
-            "  System RAM: %.1fG (%.1fG available, %.0f%% used)",
+            "  System RAM: %.1f GB (%.1f GB available, %.0f%% used)",
             total_gigabytes, available_gigabytes, memory_stats.percent,
         )
         logger.info("  System CPU: %d cores (%.0f%% in use)", core_count, cpu_percentage)
@@ -231,7 +231,7 @@ class SystemResources:
 
         :param snapshot: System snapshot; log_section passes only one whose "mem_pct" is not None
         :param total_gigabytes: Total system memory in GB
-        :return: e.g. '8192M used / 7.5G free (50% used)', with 'n/a free' when "mem_avail_gb" is None
+        :return: e.g. '8192 MB used / 7.5 GB free (50% used)', with 'n/a free' when "mem_avail_gb" is None
         """
         memory_percentage: Optional[float] = snapshot.get("mem_pct", 0.0)
         available_gigabytes: Optional[float] = snapshot.get("mem_avail_gb", 0.0)
@@ -241,8 +241,8 @@ class SystemResources:
         # A stage summary can have the memory percentage without the free memory.
         free_text: str = "n/a"
         if available_gigabytes is not None:
-            free_text = f"{available_gigabytes:.1f}G"
-        return f"{used_megabytes:.0f}M used / {free_text} free ({memory_percentage:.0f}% used)"
+            free_text = f"{available_gigabytes:.1f} GB"
+        return f"{used_megabytes:.0f} MB used / {free_text} free ({memory_percentage:.0f}% used)"
 
     @staticmethod
     def _format_cpu_row(snapshot: SystemSnapshot, core_count: int) -> str:

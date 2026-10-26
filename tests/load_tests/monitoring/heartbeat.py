@@ -31,8 +31,7 @@ from typing import TextIO
 
 import psutil
 
-from tests.load_tests.load_test_constants import HEARTBEAT_INTERVAL_SECONDS
-from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.reporting.formatters import Formatters
@@ -235,13 +234,13 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
             warning: str = (f"  WARNING: System memory at {virtual_memory_stats.percent:.0f}%"
-                            f" ({available_gigabytes:.1f}G free / {total_gigabytes:.1f}G total) — risk of OOM kill")
+                            f" ({available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB total) — risk of OOM kill")
             logger.warning("%s", warning)
             self._write_to_file(progress_file, warning)
             swap_memory_stats: Any = psutil.swap_memory()
             if swap_memory_stats.total > 0 and swap_memory_stats.used > 0:
                 swap_used_gigabytes: float = swap_memory_stats.used / ResourceMonitor.ONE_GIGABYTE
-                swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f}G"
+                swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f} GB"
                                      " — severe performance impact")
                 logger.warning("%s", swap_warning)
                 self._write_to_file(progress_file, swap_warning)
@@ -276,7 +275,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         progress_file: Optional[TextIO] = self._open_progress_file()
         try:
             while True:
-                stopped: bool = stop_event.wait(timeout=HEARTBEAT_INTERVAL_SECONDS)
+                stopped: bool = stop_event.wait(timeout=LoadTestConstants.HEARTBEAT_INTERVAL_SECONDS)
                 if not stopped and not self._check_server_alive():
                     logger.error("\n  ABORT: Server process is no longer running. Possible OOM kill.")
                     server_dead_event.set()
@@ -337,11 +336,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :return: Dict with "text" (the progress line part), "memory_percent" and "available_gigabytes"
         """
         virtual_memory_stats: Any = psutil.virtual_memory()
-        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        line: str = (f"  sysmem: {virtual_memory_stats.percent:.0f}%"
-                     f" ({used_megabytes:.0f}M used / {available_gigabytes:.1f}G free)")
+        line: str = ResourceMonitor.system_memory_text(virtual_memory_stats)
         system_memory: Dict[str, Any] = {
             "text": line,
             "memory_percent": virtual_memory_stats.percent,
@@ -573,7 +569,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         if not self._output_dir:
             return None
-        path: str = os.path.join(self._output_dir, PROGRESS_LOG_FILE_NAME)
+        path: str = os.path.join(self._output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
         return open(path, "a", encoding="utf-8")
 
     @staticmethod
@@ -604,7 +600,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         :param line: The progress line
         :param force: Write the line even when this tick would be skipped
         """
-        if force or tick_count == 1 or tick_count % CONSOLE_INTERVAL_TICKS == 0:
+        if (force
+                or tick_count == 1
+                or tick_count % CONSOLE_INTERVAL_TICKS == 0):
             if not self._console_started:
                 sys.stdout.write("\n")
                 self._console_started = True
