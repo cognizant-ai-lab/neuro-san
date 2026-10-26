@@ -34,6 +34,7 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from psutil import Process
 
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -105,7 +106,8 @@ class ArrivalWatcher:
             else:
                 self._read_server_log(server_log, position, None)
         except OSError as exc:
-            ArrivalWatcher.LOGGER.debug("Log monitor stopped: %s", exc)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(ArrivalWatcher.LOGGER)
+            sensitive_logger.debug("Log monitor stopped: %s", exc)
 
     def _read_server_log(self, server_log: str, position: int, receipt_file: Optional[TextIO]) -> None:
         """

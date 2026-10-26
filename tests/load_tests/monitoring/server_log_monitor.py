@@ -27,6 +27,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from psutil import Process
 
 from tests.load_tests.load_test_constants import LoadTestConstants
@@ -405,5 +406,6 @@ class ServerLogMonitor:
                 server_log_file.seek(position)
                 return server_log_file.readlines()
         except OSError as exc:
-            ServerLogMonitor.LOGGER.info("Could not read server log for %s: %s", label, exc)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(ServerLogMonitor.LOGGER)
+            sensitive_logger.info("Could not read server log for %s: %s", label, exc)
             return []
