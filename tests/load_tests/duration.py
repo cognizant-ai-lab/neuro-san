@@ -14,7 +14,7 @@
 #
 # END COPYRIGHT
 
-import argparse
+from argparse import ArgumentTypeError
 from typing import Dict
 
 
@@ -38,21 +38,22 @@ class DurationParser:
         """
         text: str = str(value).strip().lower()
         if not text:
-            raise argparse.ArgumentTypeError("empty duration")
+            raise ArgumentTypeError("empty duration")
         unit: int = 1
-        if text[-1] in DurationParser._UNITS:
-            unit = DurationParser._UNITS[text[-1]]
+        # pylint: disable=consider-iterating-dictionary
+        if text[-1] in DurationParser._UNITS.keys():
+            unit = DurationParser._UNITS.get(text[-1])
             text = text[:-1]
         seconds: float = 0.0
         try:
             seconds = float(text) * unit
         except ValueError as exc:
-            raise argparse.ArgumentTypeError(
+            raise ArgumentTypeError(
                 f"invalid duration '{value}': use seconds or a s/m/h "
                 "suffix, e.g. 90s, 20m, 2h"
             ) from exc
         if seconds < 0:
-            raise argparse.ArgumentTypeError(f"duration must be non-negative: '{value}'")
+            raise ArgumentTypeError(f"duration must be non-negative: '{value}'")
         return int(round(seconds))
 
     @staticmethod
@@ -72,4 +73,24 @@ class DurationParser:
             whole_units = int(seconds / unit_seconds)
             if whole_units > 0 and whole_units * unit_seconds == seconds:
                 duration_text = f"{whole_units}{suffix}"
+        return duration_text
+
+    @staticmethod
+    def format_minutes_seconds(seconds: float) -> str:
+        """
+        Return a time waited or taken as minutes and seconds.
+
+        :param seconds: Duration in seconds, e.g. 105
+        :return: The duration text, e.g. "1m 45s" for 105, "2m 0s" for 120, "45s" for 45 and "0.4s" for 0.4
+        """
+        tenths_seconds: float = round(seconds, 1)
+        seconds_per_minute: int = DurationParser._UNITS.get("m")
+        # Under a minute, keep one decimal without a trailing ".0": 0.4 is "0.4s" and 45.0 is "45s".
+        duration_text: str = f"{tenths_seconds:g}s"
+        if tenths_seconds >= seconds_per_minute:
+            whole_seconds: int = round(seconds)
+            # Whole minutes: int() drops the fraction, so 105 seconds is 1 minute.
+            minutes: int = int(whole_seconds / seconds_per_minute)
+            remainder_seconds: int = whole_seconds - minutes * seconds_per_minute
+            duration_text = f"{minutes}m {remainder_seconds}s"
         return duration_text

@@ -30,6 +30,7 @@ from typing import Optional
 
 from psutil import Process
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.mock_service.mock_server_manager import MockServerManager
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.formatters import Formatters
@@ -164,7 +165,8 @@ class MockRoundRunner:
         status: str = "FAIL"
         if succeeded:
             status = "OK"
-        self.logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed_seconds)
+        elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
+        self.logger.info("Request %s: %s (%s)", request_id, status, elapsed_text)
         if not succeeded:
             # Show last line of stderr for quick diagnosis
             stderr_text: str = result.stderr or ""
@@ -203,7 +205,8 @@ class MockRoundRunner:
                 else:
                     failed += 1
         round_seconds: float = perf_counter() - start_seconds
-        self.logger.info("\nResult: %s passed, %s failed in %.2fs", passed, failed, round_seconds)
+        round_text: str = DurationParser.format_minutes_seconds(round_seconds)
+        self.logger.info("\nResult: %s passed, %s failed in %s", passed, failed, round_text)
         round_result: Dict[str, Any] = {
             "passed": passed,
             "failed": failed,
