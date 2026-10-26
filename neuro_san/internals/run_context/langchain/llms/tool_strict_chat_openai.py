@@ -22,6 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Sequence
+from typing import Set
 from typing import Type
 from typing import Union
 
@@ -178,6 +179,61 @@ class ToolStrictChatOpenAI(ChatOpenAI):
     # Below here are static items used stricture only for TypeScript translation.
     #
 
+    # Translations of Python ChatOpenAI keyword arguments to TypeScript keyword arguments
+    RENAMED: Dict[str, str] = {
+        "model_name": "model",
+        "model": "model",
+        "temperature": "temperature",
+        "max_tokens": "maxTokens",
+        "top_p": "topP",
+        "presence_penalty": "presencePenalty",
+        "frequency_penalty": "frequencyPenalty",
+        "logit_bias": "logitBias",
+        "logprobs": "logprobs",
+        "top_logprobs": "topLogprobs",
+        "seed": "seed",
+        "stop": "stop",
+        "request_timeout": "timeout",
+        "max_retries": "maxRetries",
+        "reasoning": "reasoning",
+        "reasoning_effort": "reasoningEffort",
+        "verbosity": "verbosity",
+        "use_responses_api": "useResponsesApi",
+        "streaming": "streaming",
+        "stream_usage": "streamUsage",
+        "verbose": "verbose",
+        "openai_api_key": "apiKey",
+        "api_key": "apiKey",
+        # The default strict value for function tools, which the generated
+        # ToolStrictChatOpenAI reads back as its tool_strict.
+        "tool_strict": "supportsStrictToolCalling",
+    }
+
+    # Options which need to be nested in the TypeScript configuration
+    NESTED: Dict[str, str] = {
+        "openai_api_base": "baseURL",
+        "base_url": "baseURL",
+        "openai_organization": "organization",
+        "organization": "organization",
+    }
+
+    DROPPED: Set[str] = set([
+        "async_client",
+        "root_async_client",
+        "client",
+        "http_client",
+        "openai_proxy",
+        "tiktoken_model_name",
+    ])
+
+    OPTIONS_KEY_TO_ENV_VAR: Dict[str, str] = {
+        "apiKey": "OPENAI_API_KEY",
+    }
+
+    NESTED_KEY_TO_ENV_VAR: Dict[str, str] = {
+        "baseURL": "OPENAI_API_BASE",
+    }
+
     @staticmethod
     def kwargs_constructor(kwargs: Dict[str, Any]) -> ToolStrictChatOpenAI:
         """
@@ -186,7 +242,14 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         :param kwargs: The keyword arguments to pass to the constructor
         :return: A ToolStrictChatOpenAI
         """
-        translate_options: TranslateOptions = TranslateOptions()
+        translate_options: TranslateOptions = TranslateOptions(
+            ToolStrictChatOpenAI.RENAMED,
+            ToolStrictChatOpenAI.NESTED,
+            "configuration",
+            ToolStrictChatOpenAI.DROPPED,
+            ToolStrictChatOpenAI.OPTIONS_KEY_TO_ENV_VAR,
+            ToolStrictChatOpenAI.NESTED_KEY_TO_ENV_VAR
+        )
         translated: Dict[str, Any] = translate_options.translate(kwargs)
         instance: ToolStrictChatOpenAI = ToolStrictChatOpenAI(**translated)
         return instance

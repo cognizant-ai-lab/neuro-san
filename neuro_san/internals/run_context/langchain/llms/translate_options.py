@@ -31,17 +31,19 @@ class TranslateOptions:
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, renamed: Dict[str, str] = None,
                  nested: Dict[str, str] = None,
+                 nest_to: str = None,
                  dropped: Set[str] = None,
                  options_key_to_env_var: Dict[str, str] = None,
-                 configuration_key_to_env_var: Dict[str, str] = None):
+                 nested_key_to_env_var: Dict[str, str] = None):
         """
         Constructor
 
         :param renamed: The renamed fields
         :param nested: The nested fields
+        :param nest_to: The options field that the nested fields nest to
         :param dropped: The dropped fields
         :param options_key_to_env_var: The options key to env var
-        :param configuration_key_to_env_var: The configuration key to env var
+        :param nested_key_to_env_var: The configuration key to env var
         """
         self.renamed: Dict[str, str] = renamed
         if self.renamed is None:
@@ -51,6 +53,8 @@ class TranslateOptions:
         if self.nested is None:
             self.nested = {}
 
+        self.nest_to: str = nest_to
+
         self.dropped: Set[str] = dropped
         if self.dropped is None:
             self.dropped = set()
@@ -59,9 +63,9 @@ class TranslateOptions:
         if self.options_key_to_env_var is None:
             self.options_key_to_env_var = {}
 
-        self.configuration_key_to_env_var: Dict[str, str] = configuration_key_to_env_var
-        if self.configuration_key_to_env_var is None:
-            self.configuration_key_to_env_var = {}
+        self.nested_key_to_env_var: Dict[str, str] = nested_key_to_env_var
+        if self.nested_key_to_env_var is None:
+            self.nested_key_to_env_var = {}
 
     @staticmethod
     def is_set(value: Any) -> bool:
@@ -92,7 +96,7 @@ class TranslateOptions:
             use_kwargs = {}
 
         options: Dict[str, Any] = {}
-        configuration: Dict[str, Any] = {}
+        nested_dict: Dict[str, Any] = {}
 
         key: str = None
         value: Any = None
@@ -103,7 +107,7 @@ class TranslateOptions:
 
             nested_key: str = self.nested.get(key)
             if nested_key:
-                configuration[nested_key] = value
+                nested_dict[nested_key] = value
                 continue
 
             renamed_key: str = self.renamed.get(key)
@@ -113,9 +117,9 @@ class TranslateOptions:
             # Anything else is a python-only argument, and dropping it is the point.
 
         options = self.translate_dict_from_env(options, self.options_key_to_env_var)
-        configuration = self.translate_dict_from_env(configuration, self.configuration_key_to_env_var)
-        if len(configuration.keys()) > 0:
-            options["configuration"] = configuration
+        nested_dict = self.translate_dict_from_env(nested_dict, self.nested_key_to_env_var)
+        if len(nested_dict.keys()) > 0:
+            options[self.nest_to] = nested_dict
 
         return options
 
