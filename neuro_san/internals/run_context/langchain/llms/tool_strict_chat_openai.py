@@ -187,6 +187,6 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         :return: A ToolStrictChatOpenAI
         """
         translate_options: TranslateOptions = TranslateOptions()
-        translated: Dict[str, Any] = translate_options(kwargs)
+        translated: Dict[str, Any] = translate_options.translate(kwargs)
         instance: ToolStrictChatOpenAI = ToolStrictChatOpenAI(**translated)
         return instance

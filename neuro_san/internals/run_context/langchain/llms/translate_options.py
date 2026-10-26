@@ -23,7 +23,12 @@ from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 
 class TranslateOptions:
+    """
+    Utility class for translating keyword arguments from a few dictionaries and sets.
+    This is used largely for TypeScript translations.
+    """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, renamed: Dict[str, str] = None,
                  nested: Dict[str, str] = None,
                  dropped: Set[str] = None,
@@ -47,7 +52,7 @@ class TranslateOptions:
             self.nested = {}
 
         self.dropped: Set[str] = dropped
-        if self.droppe is None:
+        if self.dropped is None:
             self.dropped = set()
 
         self.options_key_to_env_var: Dict[str, str] = options_key_to_env_var
@@ -75,6 +80,12 @@ class TranslateOptions:
         return True
 
     def translate(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Do the translation
+
+        :param kwargs: The keyword arguments
+        :return: The translated keyword arguments
+        """
 
         use_kwargs: Dict[str, Any] = kwargs
         if use_kwargs is None:
@@ -110,7 +121,15 @@ class TranslateOptions:
 
     @staticmethod
     def translate_dict_from_env(source: Dict[str, Any], key_to_env_var: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Potentially add missing values to a dictionary from environment vars.
 
+        :param source: The source dictionary
+        :param key_to_env_var: The key to env var mapping
+        :return: The translated dictionary
+        """
+        # Loop through the source and set any unset values from the env,
+        # based on the key_to_env_var mapping, as long as the env var is set too.
         env_var_name: str = None
         for key, env_var_name in key_to_env_var.items():
             value = source.get(key)
