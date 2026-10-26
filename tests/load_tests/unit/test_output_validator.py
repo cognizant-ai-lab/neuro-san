@@ -23,7 +23,7 @@ from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.validation.output_validator import OutputValidator
 
 
-class TestCountResults(TestCase):
+class TestOutputValidator(TestCase):
     """
     Unit tests for OutputValidator.count_results().
 
