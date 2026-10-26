@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from typing import Dict
+from typing import List
 
 import unittest
 
@@ -74,34 +75,43 @@ class TestCorsPolicy(unittest.TestCase):
     def test_a_preflight_answer_names_the_methods_and_the_headers(self):
         """The browser learns what the real call is allowed to be."""
         policy = CorsPolicy([self.SITE])
-        headers: Dict[str, str] = policy.preflight_headers(self.SITE, "content-type, authorization")
-        self.assertEqual("content-type, authorization", headers.get("Access-Control-Allow-Headers"))
-        self.assertIn("POST", headers.get("Access-Control-Allow-Methods"))
-        self.assertIn("OPTIONS", headers.get("Access-Control-Allow-Methods"))
-        self.assertEqual(str(CorsPolicy.PREFLIGHT_MAX_AGE_SECONDS), headers.get("Access-Control-Max-Age"))
+        asked: str = "content-type, authorization"
+        headers: Dict[str, str] = policy.preflight_headers(self.SITE, asked)
+        allowed: str = headers.get("Access-Control-Allow-Headers")
+        methods: str = headers.get("Access-Control-Allow-Methods")
+        max_age: str = headers.get("Access-Control-Max-Age")
+        expected_age: str = str(CorsPolicy.PREFLIGHT_MAX_AGE_SECONDS)
+        self.assertEqual(asked, allowed)
+        self.assertIn("POST", methods)
+        self.assertIn("OPTIONS", methods)
+        self.assertEqual(expected_age, max_age)
 
     def test_a_preflight_that_asks_for_nothing_gets_the_usual_headers(self):
         """A browser that lists no header still learns the common ones."""
         policy = CorsPolicy([self.SITE])
         headers: Dict[str, str] = policy.preflight_headers(self.SITE)
-        self.assertEqual(", ".join(CorsPolicy.DEFAULT_ALLOWED_HEADERS),
-                         headers.get("Access-Control-Allow-Headers"))
+        allowed: str = headers.get("Access-Control-Allow-Headers")
+        expected: str = ", ".join(CorsPolicy.DEFAULT_ALLOWED_HEADERS)
+        self.assertEqual(expected, allowed)
 
     def test_flag_values_are_split_on_commas(self):
         """One --allow-origin can carry a list, and the flag can repeat."""
-        policy = CorsPolicy.from_values([f"{self.SITE}, http://beta.localhost:8080", "http://gamma.localhost"])
+        values: List[str] = [f"{self.SITE}, http://beta.localhost:8080", "http://gamma.localhost"]
+        policy = CorsPolicy.from_values(values)
         self.assertTrue(policy.allows(self.SITE))
         self.assertTrue(policy.allows("http://beta.localhost:8080"))
         self.assertTrue(policy.allows("http://gamma.localhost"))
 
     def test_an_empty_flag_value_admits_nothing(self):
         """A flag given with nothing in it must not open the proxy."""
-        policy = CorsPolicy.from_values(["", "  ", None])
+        values: List[str] = ["", "  ", None]
+        policy = CorsPolicy.from_values(values)
         self.assertFalse(policy.is_enabled())
 
     def test_the_wildcard_among_named_origins_wins(self):
         """A list that holds '*' admits every origin."""
-        policy = CorsPolicy.from_values([f"{self.SITE},*"])
+        values: List[str] = [f"{self.SITE},*"]
+        policy = CorsPolicy.from_values(values)
         self.assertTrue(policy.allow_any)
         self.assertTrue(policy.allows("http://anywhere.example.com"))
 

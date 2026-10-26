@@ -55,9 +55,10 @@ class CorsPolicy:
         """
         self.origins: List[str] = []
         self.allow_any: bool = False
+        given: List[str] = origins or []
         origin: str = ""
         # Hold the origins in the form the Origin header arrives in.
-        for origin in origins or []:
+        for origin in given:
             normal: str = CorsPolicy.normalize(origin)
             if not normal:
                 continue
@@ -76,7 +77,10 @@ class CorsPolicy:
         :return: The origin in lower case with no trailing slash, or "" when
                  there is nothing to compare.
         """
-        return str(origin or "").strip().rstrip("/").lower()
+        text: str = str(origin or "")
+        trimmed: str = text.strip()
+        without_slash: str = trimmed.rstrip("/")
+        return without_slash.lower()
 
     @staticmethod
     def from_values(values: Optional[List[str]]) -> "CorsPolicy":
@@ -88,15 +92,19 @@ class CorsPolicy:
         :return: The policy the values describe.
         """
         origins: List[str] = []
+        given: List[str] = values or []
         value: str = ""
         # Each flag can carry a comma separated list, so split every one.
-        for value in values or []:
+        for value in given:
             if not value:
                 continue
+            text: str = str(value)
+            parts: List[str] = text.split(",")
             part: str = ""
-            for part in str(value).split(","):
-                if part.strip():
-                    origins.append(part)
+            for part in parts:
+                stripped: str = part.strip()
+                if stripped:
+                    origins.append(stripped)
         return CorsPolicy(origins)
 
     def is_enabled(self) -> bool:
@@ -105,7 +113,8 @@ class CorsPolicy:
 
         :return: True when at least one origin is admitted.
         """
-        return self.allow_any or bool(self.origins)
+        has_named: bool = bool(self.origins)
+        return self.allow_any or has_named
 
     def allows(self, origin: str) -> bool:
         """
@@ -114,12 +123,14 @@ class CorsPolicy:
         :param origin: The value of the request's Origin header.
         :return: True when the origin is admitted.
         """
-        if not self.is_enabled():
+        enabled: bool = self.is_enabled()
+        if not enabled:
             return False
         normal: str = CorsPolicy.normalize(origin)
         if not normal:
             return False
-        return self.allow_any or normal in self.origins
+        is_named: bool = normal in self.origins
+        return self.allow_any or is_named
 
     def response_headers(self, origin: str) -> Dict[str, str]:
         """
@@ -128,15 +139,17 @@ class CorsPolicy:
         :param origin: The value of the request's Origin header.
         :return: The headers to set, empty when the origin is not admitted.
         """
-        if not self.allows(origin):
-            return {}
         headers: Dict[str, str] = {}
+        admitted: bool = self.allows(origin)
+        if not admitted:
+            return headers
         if self.allow_any:
             headers["Access-Control-Allow-Origin"] = CorsPolicy.WILDCARD
-        else:
-            # The answer differs by origin, so caches must key on the header.
-            headers["Access-Control-Allow-Origin"] = CorsPolicy.normalize(origin)
-            headers["Vary"] = "Origin"
+            return headers
+        normal: str = CorsPolicy.normalize(origin)
+        headers["Access-Control-Allow-Origin"] = normal
+        # The answer differs by origin, so caches must key on the header.
+        headers["Vary"] = "Origin"
         return headers
 
     def preflight_headers(self, origin: str, requested_headers: str = "") -> Dict[str, str]:
@@ -151,9 +164,12 @@ class CorsPolicy:
         headers: Dict[str, str] = self.response_headers(origin)
         if not headers:
             return headers
-        headers["Access-Control-Allow-Methods"] = ", ".join(CorsPolicy.ALLOWED_METHODS)
-        headers["Access-Control-Allow-Headers"] = self.allowed_headers(requested_headers)
-        headers["Access-Control-Max-Age"] = str(CorsPolicy.PREFLIGHT_MAX_AGE_SECONDS)
+        methods: str = ", ".join(CorsPolicy.ALLOWED_METHODS)
+        allowed: str = self.allowed_headers(requested_headers)
+        max_age: str = str(CorsPolicy.PREFLIGHT_MAX_AGE_SECONDS)
+        headers["Access-Control-Allow-Methods"] = methods
+        headers["Access-Control-Allow-Headers"] = allowed
+        headers["Access-Control-Max-Age"] = max_age
         return headers
 
     def allowed_headers(self, requested_headers: str) -> str:
@@ -163,7 +179,8 @@ class CorsPolicy:
         :param requested_headers: The value of Access-Control-Request-Headers.
         :return: The header names to admit, as one comma separated string.
         """
-        asked: str = str(requested_headers or "").strip()
+        text: str = str(requested_headers or "")
+        asked: str = text.strip()
         if asked:
             # The browser lists exactly what the call needs. A proxy that
             # records and replays has no reason to refuse a header.

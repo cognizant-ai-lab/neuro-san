@@ -43,45 +43,51 @@ class TestRecordPlaybackLlmServer(unittest.TestCase):
         """
         argv: List[str] = ["--mode", ProxyState.MODE_PLAYBACK]
         argv.extend(extra)
-        return RecordPlaybackLlmServer.parse_args(argv)
+        args: argparse.Namespace = RecordPlaybackLlmServer.parse_args(argv)
+        return args
 
     def test_no_flag_admits_no_browser_page(self):
         """The proxy stays as it was for a caller that is not a browser."""
-        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(self.parse([]))
+        args: argparse.Namespace = self.parse([])
+        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(args)
         self.assertFalse(policy.is_enabled())
 
     def test_allow_any_origin_admits_every_page(self):
         """One switch opens the proxy to every origin."""
-        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(self.parse(["--allow-any-origin"]))
+        args: argparse.Namespace = self.parse(["--allow-any-origin"])
+        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(args)
         self.assertTrue(policy.allow_any)
         self.assertTrue(policy.allows(self.SITE))
         self.assertTrue(policy.allows("http://anywhere.example.com"))
 
     def test_allow_origin_admits_only_what_it_names(self):
         """Naming an origin leaves every other origin out."""
-        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(self.parse(["--allow-origin", self.SITE]))
+        args: argparse.Namespace = self.parse(["--allow-origin", self.SITE])
+        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(args)
         self.assertFalse(policy.allow_any)
         self.assertTrue(policy.allows(self.SITE))
         self.assertFalse(policy.allows("http://anywhere.example.com"))
 
     def test_the_flag_can_repeat(self):
         """Several origins are named one flag at a time."""
-        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(
-            self.parse(["--allow-origin", self.SITE, "--allow-origin", "http://beta.localhost:8080"]))
+        args: argparse.Namespace = self.parse(
+            ["--allow-origin", self.SITE, "--allow-origin", "http://beta.localhost:8080"])
+        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(args)
         self.assertTrue(policy.allows(self.SITE))
         self.assertTrue(policy.allows("http://beta.localhost:8080"))
 
     def test_both_flags_together_admit_every_page(self):
         """The wider flag wins, so a named origin does not narrow it."""
-        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(
-            self.parse(["--allow-origin", self.SITE, "--allow-any-origin"]))
+        args: argparse.Namespace = self.parse(["--allow-origin", self.SITE, "--allow-any-origin"])
+        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(args)
         self.assertTrue(policy.allow_any)
         self.assertTrue(policy.allows("http://anywhere.example.com"))
 
     def test_one_command_line_does_not_reach_the_next(self):
         """A repeatable flag must not keep its values for a later parse."""
         self.parse(["--allow-origin", self.SITE])
-        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(self.parse([]))
+        args: argparse.Namespace = self.parse([])
+        policy: CorsPolicy = RecordPlaybackLlmServer.build_cors(args)
         self.assertFalse(policy.is_enabled())
 
 

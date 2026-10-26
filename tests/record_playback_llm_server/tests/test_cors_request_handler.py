@@ -72,10 +72,13 @@ class TestCorsRequestHandler(AsyncHTTPTestCase):
         :return: The application under test.
         """
         # The cassette file does not exist, so every request is a playback miss.
-        cassette_path: str = str(Path(self.temp_dir.name) / "cassette.json")
-        state = ProxyState(mode=ProxyState.MODE_PLAYBACK,
-                           cassette=Cassette(cassette_path, use_multi_mode=False))
-        return RecordPlaybackLlmServer.build_app(state, CorsPolicy([self.SITE]))
+        directory: Path = Path(self.temp_dir.name)
+        cassette_file: Path = directory / "cassette.json"
+        cassette_path: str = str(cassette_file)
+        cassette: Cassette = Cassette(cassette_path, use_multi_mode=False)
+        state: ProxyState = ProxyState(mode=ProxyState.MODE_PLAYBACK, cassette=cassette)
+        policy: CorsPolicy = CorsPolicy([self.SITE])
+        return RecordPlaybackLlmServer.build_app(state, policy)
 
     def preflight(self, origin: str) -> HTTPResponse:
         """
@@ -84,50 +87,63 @@ class TestCorsRequestHandler(AsyncHTTPTestCase):
         :param origin: The origin to ask as.
         :return: The response.
         """
+        headers: Dict[str, str] = {
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type, authorization",
+        }
         return self.fetch(self.CHAT_PATH, method="OPTIONS", body=None,
-                          headers={"Origin": origin,
-                                   "Access-Control-Request-Method": "POST",
-                                   "Access-Control-Request-Headers": "content-type, authorization"},
-                          allow_nonstandard_methods=True)
+                          headers=headers, allow_nonstandard_methods=True)
 
     def test_a_preflight_from_an_admitted_origin_is_answered(self):
         """The browser is told the POST may go ahead."""
         response: HTTPResponse = self.preflight(self.SITE)
+        allow_origin: str = response.headers.get("Access-Control-Allow-Origin")
+        methods: str = response.headers.get("Access-Control-Allow-Methods")
+        allowed: str = response.headers.get("Access-Control-Allow-Headers")
         self.assertEqual(204, response.code)
-        self.assertEqual(self.SITE, response.headers.get("Access-Control-Allow-Origin"))
-        self.assertIn("POST", response.headers.get("Access-Control-Allow-Methods"))
-        self.assertIn("authorization", response.headers.get("Access-Control-Allow-Headers"))
+        self.assertEqual(self.SITE, allow_origin)
+        self.assertIn("POST", methods)
+        self.assertIn("authorization", allowed)
 
     def test_a_preflight_from_another_origin_is_refused(self):
         """An origin nobody admitted gets the answer it got before CORS existed."""
         response: HTTPResponse = self.preflight(self.OTHER)
+        allow_origin: str = response.headers.get("Access-Control-Allow-Origin")
         self.assertEqual(405, response.code)
-        self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
+        self.assertIsNone(allow_origin)
 
     def test_an_admitted_page_may_read_an_ordinary_answer(self):
         """The permission header rides on the answer the page asked for."""
-        response: HTTPResponse = self.fetch("/healthz", headers={"Origin": self.SITE})
+        headers: Dict[str, str] = {"Origin": self.SITE}
+        response: HTTPResponse = self.fetch("/healthz", headers=headers)
+        allow_origin: str = response.headers.get("Access-Control-Allow-Origin")
+        vary: str = response.headers.get("Vary")
         self.assertEqual(200, response.code)
-        self.assertEqual(self.SITE, response.headers.get("Access-Control-Allow-Origin"))
-        self.assertEqual("Origin", response.headers.get("Vary"))
+        self.assertEqual(self.SITE, allow_origin)
+        self.assertEqual("Origin", vary)
 
     def test_another_page_may_not_read_an_ordinary_answer(self):
         """Without the header the browser hides the answer from the page."""
-        response: HTTPResponse = self.fetch("/healthz", headers={"Origin": self.OTHER})
+        headers: Dict[str, str] = {"Origin": self.OTHER}
+        response: HTTPResponse = self.fetch("/healthz", headers=headers)
+        allow_origin: str = response.headers.get("Access-Control-Allow-Origin")
         self.assertEqual(200, response.code)
-        self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
+        self.assertIsNone(allow_origin)
 
     def test_an_admitted_page_may_read_an_error_answer(self):
         """A playback miss is a 504, and the page must be able to see it."""
-        response: HTTPResponse = self.fetch(
-            self.CHAT_PATH, method="POST", body=json.dumps(self.PAYLOAD),
-            headers={"Origin": self.SITE, "Content-Type": "application/json"},
-            raise_error=False)
+        body: str = json.dumps(self.PAYLOAD)
+        headers: Dict[str, str] = {"Origin": self.SITE, "Content-Type": "application/json"}
+        response: HTTPResponse = self.fetch(self.CHAT_PATH, method="POST", body=body,
+                                            headers=headers, raise_error=False)
+        allow_origin: str = response.headers.get("Access-Control-Allow-Origin")
         self.assertEqual(504, response.code)
-        self.assertEqual(self.SITE, response.headers.get("Access-Control-Allow-Origin"))
+        self.assertEqual(self.SITE, allow_origin)
 
     def test_a_caller_with_no_origin_is_answered_as_before(self):
         """A neuro-san process sends no Origin and gets no extra headers."""
         response: HTTPResponse = self.fetch("/healthz")
+        allow_origin: str = response.headers.get("Access-Control-Allow-Origin")
         self.assertEqual(200, response.code)
-        self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
+        self.assertIsNone(allow_origin)

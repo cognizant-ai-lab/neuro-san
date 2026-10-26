@@ -22,6 +22,8 @@ import asyncio
 import logging
 import os
 
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 
@@ -99,16 +101,18 @@ class RecordPlaybackLlmServer:
                      None to admit no browser page.
         :return: The application.
         """
-        return tornado.web.Application(
-            [
-                (r"/v1/chat/completions", ChatCompletionsHandler,
-                 {"state": state, "upstream_path": "/chat/completions"}),
-                (r"/v1/models", ModelsHandler,
-                 {"state": state, "upstream_path": "/models"}),
-                (r"/healthz", HealthHandler),
-            ],
-            **{CorsRequestHandler.SETTING_NAME: cors or CorsPolicy()}
-        )
+        chat_options: Dict[str, Any] = {"state": state, "upstream_path": "/chat/completions"}
+        models_options: Dict[str, Any] = {"state": state, "upstream_path": "/models"}
+        routes: List[Any] = [
+            (r"/v1/chat/completions", ChatCompletionsHandler, chat_options),
+            (r"/v1/models", ModelsHandler, models_options),
+            (r"/healthz", HealthHandler),
+        ]
+        policy: CorsPolicy = cors
+        if policy is None:
+            policy = CorsPolicy()
+        settings: Dict[str, Any] = {CorsRequestHandler.SETTING_NAME: policy}
+        return tornado.web.Application(routes, **settings)
 
     @staticmethod
     def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -292,8 +296,11 @@ class RecordPlaybackLlmServer:
             "(mode=%s, multi_response=%s, delay_mode=%s, cassette=%s, entries=%d)",
             args.host, args.port, state.mode, state.multi_response,
             state.playback_delay.mode, args.cassette, len(state.cassette))
-        if cors.is_enabled():
-            admitted: str = CorsPolicy.WILDCARD if cors.allow_any else ", ".join(cors.origins)
+        enabled: bool = cors.is_enabled()
+        if enabled:
+            admitted: str = CorsPolicy.WILDCARD
+            if not cors.allow_any:
+                admitted = ", ".join(cors.origins)
             logging.info("browser pages admitted from %s", admitted)
         await asyncio.Event().wait()
 

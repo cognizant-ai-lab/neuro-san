@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from typing import Dict
 from typing import Optional
 
@@ -49,7 +50,8 @@ class CorsRequestHandler(tornado.web.RequestHandler):
 
         :return: The policy, or an empty one that admits nothing.
         """
-        policy: Optional[CorsPolicy] = self.settings.get(CorsRequestHandler.SETTING_NAME)
+        settings: Dict[str, Any] = self.settings
+        policy: Optional[CorsPolicy] = settings.get(CorsRequestHandler.SETTING_NAME)
         if policy is None:
             return CorsPolicy()
         return policy
@@ -61,7 +63,18 @@ class CorsRequestHandler(tornado.web.RequestHandler):
         :return: The Origin header, or "" when the caller sent none, which is
                  what a neuro-san process does.
         """
-        return self.request.headers.get("Origin", "")
+        headers: Dict[str, str] = self.request.headers
+        return headers.get("Origin", "")
+
+    def requested_headers(self) -> str:
+        """
+        Read the headers a browser says its real call needs.
+
+        :return: The Access-Control-Request-Headers value, or "" when the
+                 caller sent none.
+        """
+        headers: Dict[str, str] = self.request.headers
+        return headers.get("Access-Control-Request-Headers", "")
 
     @override
     def set_default_headers(self) -> None:
@@ -70,8 +83,11 @@ class CorsRequestHandler(tornado.web.RequestHandler):
 
         :return: Nothing.
         """
-        headers: Dict[str, str] = self.cors_policy().response_headers(self.request_origin())
+        policy: CorsPolicy = self.cors_policy()
+        origin: str = self.request_origin()
+        headers: Dict[str, str] = policy.response_headers(origin)
         name: str = ""
+        value: str = ""
         # Tornado has already cleared the headers, so set each one again.
         for name, value in headers.items():
             self.set_header(name, value)
@@ -90,12 +106,13 @@ class CorsRequestHandler(tornado.web.RequestHandler):
         """
         policy: CorsPolicy = self.cors_policy()
         origin: str = self.request_origin()
-        asked: str = self.request.headers.get("Access-Control-Request-Headers", "")
+        asked: str = self.requested_headers()
         headers: Dict[str, str] = policy.preflight_headers(origin, asked)
         if not headers:
             super().options(*args)
             return
         name: str = ""
+        value: str = ""
         # The preflight answer needs the methods and headers as well.
         for name, value in headers.items():
             self.set_header(name, value)
