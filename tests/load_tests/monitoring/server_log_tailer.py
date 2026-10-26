@@ -34,6 +34,7 @@ from psutil import Process
 from psutil import cpu_percent
 from psutil import virtual_memory
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -194,7 +195,7 @@ class ServerLogTailer:
         local_time: struct_time = localtime(now_seconds)
         timestamp: str = strftime("%H:%M:%S", local_time)
         elapsed_whole_seconds: int = int(elapsed_seconds)
-        elapsed_text: str = Heartbeat.format_elapsed(elapsed_whole_seconds)
+        elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_whole_seconds)
         progress_text: str = ServerLogTailer._progress_text(heartbeat_values)
         system_cpu_text: str = ServerLogTailer._system_cpu_text(heartbeat_values)
         self.logger.info(

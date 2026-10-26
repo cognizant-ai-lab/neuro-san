@@ -23,7 +23,7 @@ from tests.load_tests.duration import DurationParser
 
 class TestDurationParser(TestCase):
     """
-    Unit tests for DurationParser.parse() and DurationParser.format_seconds().
+    Unit tests for DurationParser.parse(), format_seconds() and format_minutes_seconds().
 
     Every timeout flag runs through parse(), so a wrong answer silently
     changes what a run measures rather than failing visibly.
@@ -125,3 +125,25 @@ class TestDurationParser(TestCase):
         for seconds in seconds_values:
             duration_text: str = DurationParser.format_seconds(seconds)
             self.assertEqual(DurationParser.parse(duration_text), seconds, duration_text)
+
+    def test_format_minutes_seconds_under_a_minute_is_seconds(self) -> None:
+        """
+        A time under a minute prints as seconds only, and zero is "0s".
+        """
+        self.assertEqual(DurationParser.format_minutes_seconds(45), "45s")
+        self.assertEqual(DurationParser.format_minutes_seconds(0), "0s")
+
+    def test_format_minutes_seconds_over_a_minute(self) -> None:
+        """
+        105 seconds prints as "1m 45s", 120 seconds as "2m 0s" and 1205 seconds as "20m 5s".
+        """
+        self.assertEqual(DurationParser.format_minutes_seconds(105), "1m 45s")
+        self.assertEqual(DurationParser.format_minutes_seconds(120), "2m 0s")
+        self.assertEqual(DurationParser.format_minutes_seconds(1205), "20m 5s")
+
+    def test_format_minutes_seconds_rounds_to_whole_seconds(self) -> None:
+        """
+        A fraction rounds to the nearest second: 59.6 is "1m 0s" and 59.4 is "59s".
+        """
+        self.assertEqual(DurationParser.format_minutes_seconds(59.6), "1m 0s")
+        self.assertEqual(DurationParser.format_minutes_seconds(59.4), "59s")

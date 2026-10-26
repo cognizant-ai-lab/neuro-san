@@ -74,3 +74,21 @@ class DurationParser:
             if whole_units > 0 and whole_units * unit_seconds == seconds:
                 duration_text = f"{whole_units}{suffix}"
         return duration_text
+
+    @staticmethod
+    def format_minutes_seconds(seconds: float) -> str:
+        """
+        Return a time waited or taken as minutes and seconds.
+
+        :param seconds: Duration in seconds, e.g. 105
+        :return: The duration text, e.g. "1m 45s" for 105, "2m 0s" for 120 and "45s" for 45
+        """
+        whole_seconds: int = round(seconds)
+        seconds_per_minute: int = DurationParser._UNITS.get("m")
+        duration_text: str = f"{whole_seconds}s"
+        if whole_seconds >= seconds_per_minute:
+            # Whole minutes: int() drops the fraction, so 105 seconds is 1 minute.
+            minutes: int = int(whole_seconds / seconds_per_minute)
+            remainder_seconds: int = whole_seconds - minutes * seconds_per_minute
+            duration_text = f"{minutes}m {remainder_seconds}s"
+        return duration_text

@@ -29,6 +29,7 @@ from typing import Optional
 
 from psutil import Process
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -96,8 +97,8 @@ class StageDataCollector:
             settle_end_seconds: float = time()
             settle_end_local: struct_time = localtime(settle_end_seconds)
             settle_end: str = strftime("%H:%M:%S", settle_end_local)
-            StageDataCollector.LOGGER.info("\n  Settle: waited %ss for server cleanup [%s]",
-                                           self.args.settle_time, settle_end)
+            settle_text: str = DurationParser.format_minutes_seconds(self.args.settle_time)
+            StageDataCollector.LOGGER.info("\n  Settle: waited %s for server cleanup [%s]", settle_text, settle_end)
 
             after_server = self.snapshot_server_process()
             if after_server:

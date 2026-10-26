@@ -33,6 +33,7 @@ from psutil import AccessDenied
 from psutil import NoSuchProcess
 from psutil import Process
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -196,11 +197,12 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         elapsed_seconds: float = perf_counter() - test_start_seconds
         if elapsed_seconds < limit_seconds:
             return False
+        elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
         StageExecutor.LOGGER.warning(
             """
-  ABORT: --total-timeout (%ss) reached after %.0fs.
+  ABORT: --total-timeout (%ss) reached after %s.
   Stopping test and reporting available results.""",
-            limit_seconds, elapsed_seconds,
+            limit_seconds, elapsed_text,
         )
         return True
 
