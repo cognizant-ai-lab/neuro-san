@@ -98,7 +98,6 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         self.server_checker: ServerChecker = ServerChecker(args)
         output_parts: Dict[str, Any] = {
             "server_checker": self.server_checker,
-            "profile": self.profile,
             "hocon_files": self.hocon_files,
             "resource_reporter": self.resource_reporter,
         }
@@ -141,12 +140,14 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         # Server-only runs return above, so only --client-only is left of the split modes here.
         monitor_resources: bool = level != LoadTestConstants.LEVEL_MIN or self.args.client_only
         self._log_run_config(level, stages, total_cap, monitor_resources)
+        primary_start_pattern: str = self.profile.get_primary_start_pattern()
         run_inputs: Dict[str, Any] = {
             "stages": stages,
             "total_cap": total_cap,
             "monitor_resources": monitor_resources,
             "has_server_log": self.server_log is not None,
             "probe_result": self.probe_result,
+            "primary_start_pattern": primary_start_pattern,
         }
         exit_code: int = self._run_stages(level, run_inputs)
         return exit_code
@@ -368,6 +369,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         pre_test_log_position: Optional[int] = None
         if self.server_log:
             pre_test_log_position = self.log_monitor.read_position()
+        estimated_tokens_per_request: Optional[int] = self.profile.get_estimated_tokens_per_request()
         executor_parts: Dict[str, Any] = {
             "profile": self.profile,
             "log_monitor": self.log_monitor,
@@ -404,13 +406,13 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                 exit_code = 2
             elif not self._aborted:
                 exit_code = self._check_results(stage_summaries)
-            self._output_writer.export_raw_json(stage_summaries, exit_code=exit_code)
+            self._output_writer.export_raw_json(stage_summaries, exit_code, estimated_tokens_per_request)
             self._output_writer.maybe_write_summary(stage_summaries, server_chat_timing)
             if self._interrupted:
                 self._output_writer.rename_interrupted()
         except KeyboardInterrupt:
             self.logger.info("\n  Interrupted — saving partial results...")
-            self._output_writer.export_raw_json(stage_summaries, exit_code=2)
+            self._output_writer.export_raw_json(stage_summaries, 2, estimated_tokens_per_request)
             self._output_writer.rename_interrupted()
             exit_code = 2
         finally:

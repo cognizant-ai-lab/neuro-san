@@ -31,7 +31,6 @@ from unittest.mock import patch
 from typing_extensions import override
 
 from tests.load_tests.load_test_constants import LoadTestConstants
-from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.run_output_writer import RunOutputWriter
 from tests.load_tests.validation.server_checker import ServerChecker
@@ -95,7 +94,6 @@ class TestRunOutputWriter(TestCase):
             server_checker.resolve_ns_version()
         output_parts: Dict[str, Any] = {
             "server_checker": server_checker,
-            "profile": AgentProfile("hello_world", {"estimated_tokens_per_request": 1000}),
             "hocon_files": [],
             "resource_reporter": ResourceReporter(),
         }
@@ -129,7 +127,7 @@ class TestRunOutputWriter(TestCase):
             "elapsed": max(elapsed_values_seconds),
         }]
 
-        self._export_writer().export_raw_json(stage_summaries, exit_code=0)
+        self._export_writer().export_raw_json(stage_summaries, 0, 1000)
 
         path: str = join(self._dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(path, "r", encoding="utf-8") as handle:

@@ -37,7 +37,6 @@ from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
-from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.stage_data_collector import StageDataCollector
 from tests.load_tests.reporting.stage_summary_builder import StageSummaryBuilder
@@ -69,12 +68,11 @@ class StageExecutor:
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
         self.runner: TrafficRunner = runner
-        self.profile: AgentProfile = executor_parts.get("profile")
         self.log_monitor: Optional[ServerLogMonitor] = executor_parts.get("log_monitor")
         self.server_process: Optional[Process] = executor_parts.get("server_process")
         self._output_dir: Optional[str] = executor_parts.get("output_dir")
         collector_parts: Dict[str, Any] = {
-            "profile": self.profile,
+            "profile": executor_parts.get("profile"),
             "log_monitor": self.log_monitor,
             "resource_reporter": executor_parts.get("resource_reporter"),
             "server_process": self.server_process,
@@ -88,8 +86,9 @@ class StageExecutor:
 
         :param run_inputs: A dict with "stages" (request count of each stage, in order), "total_cap" (most requests
             to send in the whole test), "monitor_resources" (True to take resource snapshots around each stage),
-            "has_server_log" (True when the server log can be read) and "probe_result" (result of the dry-run probe
-            to count in the first stage, or None)
+            "has_server_log" (True when the server log can be read), "probe_result" (result of the dry-run probe
+            to count in the first stage, or None) and "primary_start_pattern" (server log pattern of a primary
+            request start)
         :return: A dict with "stage_summaries" (one summary dict per stage that runs), "aborted" (True when a stage
             or --total-timeout stops the test) and "interrupted" (True when Ctrl-C stops a stage)
         """
@@ -102,6 +101,7 @@ class StageExecutor:
             "monitor_resources": run_inputs.get("monitor_resources"),
             "has_server_log": run_inputs.get("has_server_log"),
             "probe_result": run_inputs.get("probe_result"),
+            "primary_start_pattern": run_inputs.get("primary_start_pattern"),
             "only_stage": only_stage,
             "test_start_seconds": test_start_seconds,
             "total_sent": 0,
@@ -162,6 +162,7 @@ class StageExecutor:
                 "has_server_log": run_state.get("has_server_log"),
                 "probe_result": run_state.get("probe_result"),
                 "only_stage": run_state.get("only_stage"),
+                "primary_start_pattern": run_state.get("primary_start_pattern"),
             }
             stage_result: Dict[str, Any] = self._run_single_stage(stage_inputs)
 
@@ -238,8 +239,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             "num_concurrent" (requested concurrency before the --max-requests cap), "stage_num" and "round_num"
             (starting at 1), "global_offset" (number of requests sent by earlier stages), "monitor_resources" (True to
             take resource snapshots around the stage), "has_server_log" (True when the server log can be read),
-            "probe_result" (result of the dry-run probe to count in this stage, or None) and "only_stage" (True when
-            this is the only stage)
+            "probe_result" (result of the dry-run probe to count in this stage, or None), "only_stage" (True when
+            this is the only stage) and "primary_start_pattern" (server log pattern of a primary request start)
         :return: Dict with "summary" (the stage summary dict), "probe_used" (True when probe_result was counted),
             "should_abort" (True when the test must stop after this stage) and "interrupted" (True when Ctrl-C
             stops the stage)
@@ -388,7 +389,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         stop_event: Event = Event()
         monitor: Optional[Thread] = None
         if stage_inputs.get("has_server_log"):
-            monitor = self._start_log_monitor(stage_start, stop_event)
+            monitor = self._start_log_monitor(stage_inputs, stage_start, stop_event)
 
         system_before: Dict[str, Optional[float]] = SystemResources.snapshot()
 
@@ -433,16 +434,18 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         probe_time_seconds: float = probe_result.get("elapsed", 0.0)
         stage_run["total_time_seconds"] = stage_time_seconds + probe_time_seconds
 
-    def _start_log_monitor(self, stage_start: Dict[str, Any], stop_event: Event) -> Optional[Thread]:
+    def _start_log_monitor(self, stage_inputs: Dict[str, Any], stage_start: Dict[str, Any],
+                           stop_event: Event) -> Optional[Thread]:
         """
         Start the server log monitor thread of a stage.
 
+        :param stage_inputs: The stage_inputs dict of _run_single_stage()
         :param stage_start: The dict from _start_stage()
         :param stop_event: Event that stops the monitor when the stage ends
         :return: The monitor thread, or None when the server log can't be read
         """
         monitor_start_seconds: float = perf_counter()
-        primary_start_pattern: str = self.profile.get_primary_start_pattern()
+        primary_start_pattern: str = stage_inputs.get("primary_start_pattern")
         log_position: Optional[int] = stage_start.get("log_position")
         stage_requests: int = stage_start.get("stage_requests")
         client_process: Optional[Process] = stage_start.get("client_process")

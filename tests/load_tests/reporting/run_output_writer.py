@@ -38,7 +38,6 @@ from typing import Optional
 
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.load_test_constants import LoadTestConstants
-from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.history_recorder import HistoryRecorder
 from tests.load_tests.reporting.json_metadata import JsonMetadata
@@ -60,13 +59,12 @@ class RunOutputWriter:
         Keep the run's arguments and the parts the output files are built from.
 
         :param args: Parsed command-line arguments
-        :param output_parts: A dict with "server_checker" (the ServerChecker), "profile" (the AgentProfile),
-            "hocon_files" (fixture HOCON file paths) and "resource_reporter" (the ResourceReporter)
+        :param output_parts: A dict with "server_checker" (the ServerChecker), "hocon_files" (fixture HOCON file
+            paths) and "resource_reporter" (the ResourceReporter)
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
         self.server_checker: ServerChecker = output_parts.get("server_checker")
-        self.profile: AgentProfile = output_parts.get("profile")
         self.hocon_files: List[str] = output_parts.get("hocon_files")
         self.resource_reporter: ResourceReporter = output_parts.get("resource_reporter")
         self._run_log: RunLog = RunLog()
@@ -128,12 +126,14 @@ class RunOutputWriter:
         makedirs(self._output_dir, exist_ok=True)
         self._run_log.open(self._output_dir)
 
-    def export_raw_json(self, stage_summaries: List[Dict[str, Any]], exit_code: int) -> None:
+    def export_raw_json(self, stage_summaries: List[Dict[str, Any]], exit_code: int,
+                        estimated_tokens_per_request: Optional[int]) -> None:
         """
         Save all test data as a single raw_results.json file.
 
         :param stage_summaries: One summary dict per stage
         :param exit_code: Exit code of the test
+        :param estimated_tokens_per_request: The agent profile's token estimate per request, or None if unknown
         """
         aggregates: Dict[str, Any] = RunOutputWriter._build_aggregates(stage_summaries)
         verdict: str = "FAILED"
@@ -175,7 +175,7 @@ class RunOutputWriter:
                 "hocon_files": self.hocon_files,
                 "chat_filter": self.args.chat_filter,
                 "server_log": self.args.server_log,
-                "estimated_tokens_per_request": self.profile.get_estimated_tokens_per_request(),
+                "estimated_tokens_per_request": estimated_tokens_per_request,
             },
             "aggregates": aggregates,
             "stage_summaries": stage_summaries,
