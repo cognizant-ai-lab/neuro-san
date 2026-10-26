@@ -32,12 +32,9 @@ from typing_extensions import override
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
+from tests.load_tests.reporting.run_log import RunLog
 from tests.load_tests.reporting.run_output_writer import RunOutputWriter
 from tests.load_tests.validation.server_checker import ServerChecker
-
-# The export tests set the output directory that setup_test_log() otherwise creates;
-# suppress protected-access warnings file-wide.
-# pylint: disable=protected-access
 
 
 class TestRunOutputWriter(TestCase):
@@ -86,7 +83,7 @@ class TestRunOutputWriter(TestCase):
             total_timeout=600, settle_time=5, max_workers=10,
             num_rounds=1, num_requests=3, same_prompt=False,
             allow_caching=False, chat_filter=None,
-            fixtures_hocon_dir=None, server_log=None,
+            fixtures_hocon_dir=None, server_log=None, output_dir=self._dir,
         )
         server_checker: ServerChecker = ServerChecker(args)
         # The server version comes from /healthz; patch the fetch so the cached version is "0.6.92".
@@ -98,7 +95,9 @@ class TestRunOutputWriter(TestCase):
             "resource_reporter": ResourceReporter(),
         }
         writer: RunOutputWriter = RunOutputWriter(args, output_parts)
-        writer._output_dir = self._dir
+        # Create the run directory under the scratch directory, without adding the run log handler.
+        with patch.object(RunLog, "open"):
+            writer.setup_test_log()
         return writer
 
     def _export(self, elapsed_values_seconds: List[float]) -> Dict[str, Any]:
@@ -127,9 +126,10 @@ class TestRunOutputWriter(TestCase):
             "elapsed": max(elapsed_values_seconds),
         }]
 
-        self._export_writer().export_raw_json(stage_summaries, exit_code=0, estimated_tokens_per_request=1000)
+        writer: RunOutputWriter = self._export_writer()
+        writer.export_raw_json(stage_summaries, exit_code=0, estimated_tokens_per_request=1000)
 
-        path: str = join(self._dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
+        path: str = join(writer.get_output_dir(), LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(path, "r", encoding="utf-8") as handle:
             raw_data: Dict[str, Any] = load(handle)
         aggregates: Dict[str, Any] = raw_data.get("aggregates", {})

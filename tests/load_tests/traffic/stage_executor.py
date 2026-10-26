@@ -141,11 +141,15 @@ class StageExecutor:
         stages: List[int] = run_state.get("stages")
         total_cap: int = run_state.get("total_cap")
         stage_summaries: List[Dict[str, Any]] = run_state.get("stage_summaries")
+        test_start_seconds: float = run_state.get("test_start_seconds")
         stage_index: int
         num_concurrent: int
         # Run each stage, stopping at the request cap or the total timeout.
         for stage_index, num_concurrent in enumerate(stages):
-            if not self._can_start_stage(run_state):
+            if self._request_cap_reached(run_state):
+                return False
+            if self._total_timeout_reached(test_start_seconds):
+                run_state["aborted"] = True
                 return False
 
             total_sent: int = run_state.get("total_sent")
@@ -178,19 +182,18 @@ class StageExecutor:
                 return False
         return True
 
-    def _can_start_stage(self, run_state: Dict[str, Any]) -> bool:
+    def _request_cap_reached(self, run_state: Dict[str, Any]) -> bool:
         """
-        Check the request cap and the total timeout before a stage.
+        Check the request cap before a stage, and log how to run all planned requests when it is reached.
 
-        :param run_state: The run state dict of run_all_stages(). Its "aborted" value is set when the total timeout
-            is reached.
-        :return: True when the next stage can start, False when the request cap or the total timeout is reached
+        :param run_state: The run state dict of run_all_stages()
+        :return: True when the --max-requests cap is reached
         """
         stages: List[int] = run_state.get("stages")
         total_cap: int = run_state.get("total_cap")
         total_sent: int = run_state.get("total_sent")
-        can_start: bool = True
-        if total_sent >= total_cap:
+        cap_reached: bool = total_sent >= total_cap
+        if cap_reached:
             total_planned: int = sum(stages) * self.args.num_rounds
             self.logger.warning(
                 """
@@ -198,13 +201,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
          Use --max-requests %s to run all planned requests.""",
                 total_cap, total_sent, total_planned, total_planned,
             )
-            can_start = False
-        else:
-            test_start_seconds: float = run_state.get("test_start_seconds")
-            if self._total_timeout_reached(test_start_seconds):
-                run_state["aborted"] = True
-                can_start = False
-        return can_start
+        return cap_reached
 
     def _total_timeout_reached(self, test_start_seconds: float) -> bool:
         """

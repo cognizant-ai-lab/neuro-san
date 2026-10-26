@@ -46,6 +46,9 @@ class StageDataCollector:
     after the stage, the resource rows, and the server log analysis.
     """
 
+    # Request id of the dry-run probe, which is not one of the stage requests.
+    PROBE_REQUEST_ID: str = "request-0"
+
     def __init__(self, args: Namespace, collector_parts: Dict[str, Any]) -> None:
         """
         Keep the run's arguments and the parts the stage data is read from.
@@ -230,7 +233,7 @@ class StageDataCollector:
         request_result: Dict[str, Any]
         # Keep every result except request-0, the dry-run probe.
         for request_result in results:
-            if request_result.get("request_id") != "request-0":
+            if request_result.get("request_id") != StageDataCollector.PROBE_REQUEST_ID:
                 stage_results.append(request_result)
         if token_data:
             result: Dict[str, Any]
