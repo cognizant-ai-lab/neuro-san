@@ -13,15 +13,17 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-import json
-import os
-import tempfile
 from argparse import Namespace
+from json import loads
+from os import listdir
+from os.path import join
+from tempfile import TemporaryDirectory
 from typing import Any
 from typing import Dict
 from typing import List
 from unittest import TestCase
 
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.history_recorder import HistoryRecorder
 
 
@@ -29,23 +31,6 @@ class TestHistoryRecorder(TestCase):
     """
     Tests for HistoryRecorder: history file paths and the client and server-only trend records.
     """
-
-    @staticmethod
-    def _read_records(path: str) -> List[Dict[str, Any]]:
-        """
-        Read the JSONL records of a history file.
-
-        :param path: History file path
-        :return: The records in file order
-        """
-        records: List[Dict[str, Any]] = []
-        with open(path, "r", encoding="utf-8") as history_file:
-            line: str
-            # Parse each line of the file as one record.
-            for line in history_file:
-                record: Dict[str, Any] = json.loads(line)
-                records.append(record)
-        return records
 
     def test_history_paths_default_to_output_base(self) -> None:
         """
@@ -69,7 +54,8 @@ class TestHistoryRecorder(TestCase):
         """
         A client run with a known version writes counts, averages and threshold counts to history.jsonl.
         """
-        with tempfile.TemporaryDirectory() as base:
+        records: List[Dict[str, Any]] = []
+        with TemporaryDirectory() as base:
             args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
             recorder: HistoryRecorder = HistoryRecorder(args, base)
             stage_summaries: List[Dict[str, Any]] = [
@@ -87,59 +73,102 @@ class TestHistoryRecorder(TestCase):
                 },
             ]
             recorder.append_client_record(stage_summaries, "0.6.92")
-            records: List[Dict[str, Any]] = self._read_records(os.path.join(base, "history.jsonl"))
-        self.assertEqual(len(records), 1)
+            history_path: str = join(base, LoadTestConstants.HISTORY_FILE_NAME)
+            records = TestHistoryRecorder._read_records(history_path)
+        record_count: int = len(records)
+        self.assertEqual(record_count, 1)
         record: Dict[str, Any] = records[0]
-        self.assertEqual(record.get("total_requests"), 3)
-        self.assertEqual(record.get("completed"), 2)
-        self.assertEqual(record.get("avg_duration_s"), 3.0)
-        self.assertEqual(record.get("avg_first_response_s"), 1.5)
-        self.assertEqual(record.get("wall_time_s"), 7.5)
-        self.assertEqual(record.get("server_error_count"), 1)
-        self.assertEqual(record.get("neuro_san_version"), "0.6.92")
+        expected_values: Dict[str, Any] = {
+            "total_requests": 3,
+            "completed": 2,
+            "avg_duration_s": 3.0,
+            "avg_first_response_s": 1.5,
+            "wall_time_s": 7.5,
+            "server_error_count": 1,
+            "neuro_san_version": "0.6.92",
+        }
+        self._assert_record_values(record, expected_values)
 
     def test_append_client_record_without_results(self) -> None:
         """
         A client run with no results writes no file.
         """
-        with tempfile.TemporaryDirectory() as base:
+        with TemporaryDirectory() as base:
             args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
             recorder: HistoryRecorder = HistoryRecorder(args, base)
             recorder.append_client_record([{"results": []}], "0.6.92")
-            self.assertEqual(os.listdir(base), [])
+            entries: List[str] = listdir(base)
+            self.assertEqual(entries, [])
 
     def test_append_server_record_unknown_version(self) -> None:
         """
         A server-only round with no version goes to history_unknown.jsonl, with the server-side timings.
         """
-        with tempfile.TemporaryDirectory() as base:
+        records: List[Dict[str, Any]] = []
+        with TemporaryDirectory() as base:
             args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
             recorder: HistoryRecorder = HistoryRecorder(args, base)
             primary_pairs: List[Dict[str, Any]] = [
                 {"duration_seconds": 2.0, "start_ts": 10.0, "finish_ts": 12.0},
                 {"duration_seconds": 4.0, "start_ts": 11.0, "finish_ts": 15.0},
             ]
-            recorder.append_server_record(None, 2, 2, 6.0, {"rss": 2048.0}, None, primary_pairs, None, None)
-            records: List[Dict[str, Any]] = self._read_records(os.path.join(base, "history_unknown.jsonl"))
+            recorder.append_server_record(None, 2, 2, 6.0, {"rss_megabytes": 2048.0}, None, primary_pairs, None, None)
+            history_path: str = join(base, LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME)
+            records = TestHistoryRecorder._read_records(history_path)
         record: Dict[str, Any] = records[0]
-        self.assertEqual(record.get("mode"), "server-only")
-        self.assertEqual(record.get("neuro_san_version"), "unknown")
-        self.assertEqual(record.get("avg_duration_s"), 3.0)
-        self.assertEqual(record.get("time_to_first_completed_s"), 2.0)
-        self.assertEqual(record.get("peak_memory_gb"), 2.0)
-        self.assertEqual(record.get("peak_cpu_cores"), 0.0)
+        expected_values: Dict[str, Any] = {
+            "mode": "server-only",
+            "neuro_san_version": "unknown",
+            "avg_duration_s": 3.0,
+            "time_to_first_completed_s": 2.0,
+            "peak_memory_gb": 2.0,
+            "peak_cpu_cores": 0.0,
+        }
+        self._assert_record_values(record, expected_values)
 
     def test_log_existing_history_files(self) -> None:
         """
         Only the history files that exist are logged, each with its path.
         """
-        with tempfile.TemporaryDirectory() as base:
+        history_path: str = ""
+        with TemporaryDirectory() as base:
             args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
             recorder: HistoryRecorder = HistoryRecorder(args, base)
-            history_path: str = os.path.join(base, "history.jsonl")
+            history_path = join(base, LoadTestConstants.HISTORY_FILE_NAME)
             with open(history_path, "w", encoding="utf-8") as history_file:
                 history_file.write("{}\n")
             with self.assertLogs("tests.load_tests.reporting.history_recorder", level="INFO") as captured:
                 recorder.log_existing_history_files()
         expected_line: str = f"INFO:tests.load_tests.reporting.history_recorder:  History:     {history_path}"
         self.assertEqual(captured.output, [expected_line])
+
+    def _assert_record_values(self, record: Dict[str, Any], expected_values: Dict[str, Any]) -> None:
+        """
+        Check that each expected field of a history record has its expected value.
+
+        :param record: One record read from a history file
+        :param expected_values: Field name to the value the record must hold
+        """
+        key: str
+        # Compare each expected field with the value in the record.
+        for key in expected_values.keys():
+            actual_value: Any = record.get(key)
+            expected_value: Any = expected_values.get(key)
+            self.assertEqual(actual_value, expected_value, key)
+
+    @staticmethod
+    def _read_records(path: str) -> List[Dict[str, Any]]:
+        """
+        Read the JSONL records of a history file.
+
+        :param path: History file path
+        :return: The records in file order
+        """
+        records: List[Dict[str, Any]] = []
+        with open(path, "r", encoding="utf-8") as history_file:
+            line: str
+            # Parse each line of the file as one record.
+            for line in history_file:
+                record: Dict[str, Any] = loads(line)
+                records.append(record)
+        return records

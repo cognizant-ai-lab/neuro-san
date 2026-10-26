@@ -20,7 +20,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+import os
+
 from unittest import TestCase
+from unittest.mock import patch
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
@@ -511,8 +514,28 @@ class TestBaseMessageDictionaryConverter(TestCase):
         converter = BaseMessageDictionaryConverter()
         message = AIMessage(content=[{"type": "text"}], response_metadata={"model_provider": "anthropic"})
         result: Optional[Dict[str, Any]] = None
-        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
-            result = converter.to_dict(message)
+        # The warning goes through a SensitiveLogger, which reads
+        # LEAF_LOG_SENSITIVE when it is built, so pin it around the call.
+        with patch.dict(os.environ, {"LEAF_LOG_SENSITIVE": "true"}):
+            with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
+                result = converter.to_dict(message)
+        self.assertEqual(result, {
+            "type": ChatMessageType.AI,
+            "text": "",
+        })
+
+    def test_to_dict_malformed_block_content_warning_is_sensitive(self) -> None:
+        """
+        The warning for block content that cannot be standardized carries the
+        exception text, so LEAF_LOG_SENSITIVE="false" keeps it out of the logs.
+        The message still goes out text-only.
+        """
+        converter = BaseMessageDictionaryConverter()
+        message = AIMessage(content=[{"type": "text"}], response_metadata={"model_provider": "anthropic"})
+        result: Optional[Dict[str, Any]] = None
+        with patch.dict(os.environ, {"LEAF_LOG_SENSITIVE": "false"}):
+            with self.assertNoLogs("BaseMessageDictionaryConverter", level="WARNING"):
+                result = converter.to_dict(message)
         self.assertEqual(result, {
             "type": ChatMessageType.AI,
             "text": "",

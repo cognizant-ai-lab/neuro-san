@@ -235,8 +235,8 @@ You get everything from [What a run prints](#what-a-run-prints), plus parts like
 ============================================================
  Component  Concurrent  Before RSS  Peak RSS  Settled RSS  RSS Delta  CPU%  FDs   Threads  Thread Delta  Conns  Children
 ------------------------------------------------------------------------------------------------------------------------
-Server app          10      412.3M        na       431.8M     +19.5M  3.1%   45  38 -> 42            +4      2         0
-Client app          10      180.2M    205.6M       188.4M      +8.2M  0.4%   14         5            na     na        na
+Server app          10    412.3 MB        na     431.8 MB   +19.5 MB  3.1%   45  38 -> 42            +4      2         0
+Client app          10    180.2 MB  205.6 MB     188.4 MB    +8.2 MB  0.4%   14         5            na     na        na
 ```
 
 What to look at:

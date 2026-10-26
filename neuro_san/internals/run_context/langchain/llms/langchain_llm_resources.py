@@ -16,10 +16,12 @@
 # END COPYRIGHT
 from __future__ import annotations
 
+from typing import Any
 from typing import List
 
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.runnables.base import RunnableSerializable
+from langchain_core.runnables.fallbacks import RunnableWithFallbacks
 
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
@@ -38,7 +40,7 @@ class LangChainLlmResources(LlmResources):
         :param model: Language model used.
         :param llm_policy: optional LlmPolicy object to manage connections to LLM host.
         """
-        self.model: BaseLanguageModel = model
+        self.model: BaseLanguageModel | RunnableWithFallbacks[Any, Any] = model
         self.llm_policy: LlmPolicy = llm_policy
         self.child_resources: List[LingeringResource] = []
 

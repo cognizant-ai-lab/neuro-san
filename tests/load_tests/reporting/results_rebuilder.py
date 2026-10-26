@@ -24,14 +24,9 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from tests.load_tests.load_test_constants import LEGACY_RUN_LOG_FILE_NAME
-from tests.load_tests.load_test_constants import PROGRESS_LOG_FILE_NAME
-from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
-from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.traffic.output_parser import OutputParser
 
@@ -48,7 +43,7 @@ class ResultsRebuilder:
     """
 
     # Legacy name first, so a current stdout.log line wins for the same request.
-    RUN_LOG_FILES: List[str] = [LEGACY_RUN_LOG_FILE_NAME, STDOUT_LOG_FILE_NAME]
+    RUN_LOG_FILES: List[str] = [LoadTestConstants.LEGACY_RUN_LOG_FILE_NAME, LoadTestConstants.STDOUT_LOG_FILE_NAME]
 
     # A request result line, e.g. "Request 3: CREATED (1.25s)".
     # Groups: 1 request id, 2 status, 3 elapsed seconds.
@@ -80,8 +75,8 @@ class ResultsRebuilder:
         rebuild every subdirectory that has requests/ but is missing
         raw_results.json.
         """
-        requests_dir: str = os.path.join(self._output_dir, "requests")
-        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
+        requests_dir: str = os.path.join(self._output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
+        json_path: str = os.path.join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         if os.path.isdir(requests_dir):
             if os.path.isfile(json_path) and self._force:
                 self._reclassify(json_path, requests_dir)
@@ -103,8 +98,8 @@ class ResultsRebuilder:
             sub_dir: str = os.path.join(self._output_dir, entry)
             if not os.path.isdir(sub_dir):
                 continue
-            requests_dir: str = os.path.join(sub_dir, "requests")
-            json_path: str = os.path.join(sub_dir, RAW_RESULTS_FILE_NAME)
+            requests_dir: str = os.path.join(sub_dir, LoadTestConstants.REQUESTS_DIR_NAME)
+            json_path: str = os.path.join(sub_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
             if not os.path.isdir(requests_dir):
                 continue
             if os.path.isfile(json_path):
@@ -124,9 +119,9 @@ class ResultsRebuilder:
         """
         Rebuild raw_results.json for a single run directory.
         """
-        requests_dir: str = os.path.join(self._output_dir, "requests")
+        requests_dir: str = os.path.join(self._output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         if not os.path.isdir(requests_dir):
-            logger.error("No requests/ directory in %s", self._output_dir)
+            logger.error("No %s/ directory in %s", LoadTestConstants.REQUESTS_DIR_NAME, self._output_dir)
             return
 
         timing: Dict[int, Dict[str, Any]] = self._parse_timing()
@@ -142,14 +137,17 @@ class ResultsRebuilder:
         rebuilt_results: Dict[str, Any] = self._build_rebuilt_results(agent, request_count, results)
         rebuilt_results.update(JsonMetadata.build())
 
-        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
+        json_path: str = os.path.join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as file_handle:
             json.dump(rebuilt_results, file_handle, indent=2, default=str)
 
-        aggregates: Dict[str, Any] = rebuilt_results.get("aggregates", {})
+        results_extractor: DictionaryExtractor = DictionaryExtractor(rebuilt_results)
+        total_requests: Optional[int] = results_extractor.get("aggregates.total_requests")
+        passed_count: Optional[int] = results_extractor.get("aggregates.passed")
+        failed_count: Optional[int] = results_extractor.get("aggregates.failed")
         logger.info(
             "Rebuilt raw_results.json: %s requests (%s passed, %s failed)",
-            aggregates.get("total_requests"), aggregates.get("passed"), aggregates.get("failed"),
+            total_requests, passed_count, failed_count,
         )
         logger.info("  Saved to: %s", json_path)
 
@@ -171,7 +169,7 @@ class ResultsRebuilder:
         result: Dict[str, Any]
         # Count the passed requests, add up the tokens and collect the duration and cost of every request.
         for result in results:
-            if result.get("status") == STATUS_CREATED:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
                 passed += 1
             total_tokens += result.get("total_tokens", 0)
             duration_seconds: float = result.get("elapsed", 0)
@@ -222,7 +220,7 @@ class ResultsRebuilder:
         """
         timing: Dict[int, Dict[str, Any]] = {}
         log_files: List[str] = list(ResultsRebuilder.RUN_LOG_FILES)
-        log_files.append(PROGRESS_LOG_FILE_NAME)
+        log_files.append(LoadTestConstants.PROGRESS_LOG_FILE_NAME)
         filename: str
         # Failed requests are in the run log, successful ones in progress.log.
         for filename in log_files:
@@ -400,29 +398,42 @@ class ResultsRebuilder:
             result: Dict[str, Any]
             # Check each request that did not succeed against its stdout.
             for result in stage.get("results", []):
-                if result.get("status") == STATUS_CREATED:
-                    continue
-                request_id: str = result.get("request_id", "")
-                match: Optional[re.Match] = re.search(r"(\d+)$", request_id)
-                if not match:
-                    continue
-                stdout: str = stdout_cache.get(int(match.group(1)), "")
-                parsed: Dict[str, Optional[str]] = {
-                    "reservation_id": result.get(
-                        "reservation_id",
-                    ),
-                    "agent_network_name": result.get(
-                        "agent_network_name",
-                    ),
-                }
-                reason: Optional[str] = ResultsRebuilder._diagnose(result.get("status"), stdout, parsed)
-                if reason != result.get("failure_reason"):
-                    result["failure_reason"] = reason
+                reason_changed: bool = ResultsRebuilder._reclassify_result(result, stdout_cache)
+                if reason_changed:
                     updated += 1
 
         with open(json_path, "w", encoding="utf-8") as output_file:
             json.dump(raw_results, output_file, indent=2, default=str)
         logger.info("  Updated %s failure reason(s)", updated)
+
+    @staticmethod
+    def _reclassify_result(result: Dict[str, Any], stdout_cache: Dict[int, str]) -> bool:
+        """
+        Re-diagnose one request that did not succeed and update its failure_reason.
+
+        :param result: One per-request result from raw_results.json, updated in place
+        :param stdout_cache: Contents of each request_<id>_stdout.txt file, keyed by request number
+        :return: True when failure_reason changed, else False
+        """
+        status: Optional[str] = result.get("status")
+        if status == LoadTestConstants.STATUS_CREATED:
+            return False
+        request_id: str = result.get("request_id", "")
+        # Group 1 is the request number at the end of request_id, e.g. 7 in "request-7".
+        match: Optional[re.Match] = re.search(r"(\d+)$", request_id)
+        if not match:
+            return False
+        request_number: int = int(match.group(1))
+        stdout: str = stdout_cache.get(request_number, "")
+        parsed: Dict[str, Optional[str]] = {
+            "reservation_id": result.get("reservation_id"),
+            "agent_network_name": result.get("agent_network_name"),
+        }
+        reason: Optional[str] = ResultsRebuilder._diagnose(status, stdout, parsed)
+        if reason == result.get("failure_reason"):
+            return False
+        result["failure_reason"] = reason
+        return True
 
     def _fix_config(self, raw_results: Dict[str, Any]) -> None:
         """
@@ -450,16 +461,17 @@ class ResultsRebuilder:
         and KILLED: a rebuild that collapsed those into CREATED or
         FAILED would misstate what happened.  A request with no log
         line was never observed to finish -- failures past
-        FAILURE_LOG_LIMIT are never printed -- so it counts as failed
+        LoadTestConstants.FAILURE_LOG_LIMIT are never printed -- so it counts as failed
         rather than being guessed at from its partial output.
 
         :param timing_info: The request's entry from _parse_timing; empty when it has no log line
         :return: The status from the log line, or FAILED when there is none
         """
         log_status: str = timing_info.get("status", "")
-        if log_status in (STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
+        if log_status in [LoadTestConstants.STATUS_CREATED, LoadTestConstants.STATUS_FAILED,
+                          LoadTestConstants.STATUS_TIMEOUT, LoadTestConstants.STATUS_KILLED]:
             return log_status
-        return STATUS_FAILED
+        return LoadTestConstants.STATUS_FAILED
 
     @staticmethod
     def _diagnose(status: str, stdout: str, parsed_fields: Dict[str, Optional[str]]) -> Optional[str]:
@@ -471,7 +483,7 @@ class ResultsRebuilder:
         :param parsed_fields: reservation_id and agent_network_name parsed from stdout; None when missing
         :return: Reasons joined by "; ", or None for a CREATED request
         """
-        if status == STATUS_CREATED:
+        if status == LoadTestConstants.STATUS_CREATED:
             return None
         reasons: List[str] = []
         field_names: List[str] = ["reservation_id", "agent_network_name"]

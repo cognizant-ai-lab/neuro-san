@@ -20,18 +20,7 @@ from typing import Dict
 from typing import List
 from typing import Set
 
-from tests.load_tests.load_test_constants import ADV_NUM_REQUESTS
-from tests.load_tests.load_test_constants import ADV_NUM_ROUNDS
-from tests.load_tests.load_test_constants import DEFAULT_FIXTURES_HOCON_DIR
-from tests.load_tests.load_test_constants import DEFAULT_HTTPS_PORT
-from tests.load_tests.load_test_constants import DEFAULT_IDLE_TIMEOUT_SECONDS
-from tests.load_tests.load_test_constants import DEFAULT_SETTLE_TIME_SECONDS
-from tests.load_tests.load_test_constants import DEFAULT_STAGE_TIMEOUT_SECONDS
-from tests.load_tests.load_test_constants import DEFAULT_STAGES
-from tests.load_tests.load_test_constants import DEFAULT_TIMEOUT_SECONDS
-from tests.load_tests.load_test_constants import LEVEL_ADV
-from tests.load_tests.load_test_constants import LEVEL_MIN
-from tests.load_tests.load_test_constants import LEVEL_NORM
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.duration import DurationParser
 
 
@@ -62,7 +51,7 @@ class LoadTestArguments:
         # When targeting https and no explicit port was given,
         # default to the standard TLS port.
         if args.https and "port" not in explicit:
-            args.port = DEFAULT_HTTPS_PORT
+            args.port = LoadTestConstants.DEFAULT_HTTPS_PORT
         return args
 
     @staticmethod
@@ -76,14 +65,14 @@ class LoadTestArguments:
         stage_texts: List[str] = []
         stage: int
         # Turn each default stage into text for the --stages help, e.g. "10,30,50,100".
-        for stage in DEFAULT_STAGES:
+        for stage in LoadTestConstants.DEFAULT_STAGES:
             stage_texts.append(str(stage))
         default_stages_text: str = ",".join(stage_texts)
         # Durations shown after %(default)s in the timeout help texts, e.g. "20m" for 1200 seconds.
-        request_timeout_text: str = DurationParser.format_seconds(DEFAULT_TIMEOUT_SECONDS)
-        idle_timeout_text: str = DurationParser.format_seconds(DEFAULT_IDLE_TIMEOUT_SECONDS)
-        stage_timeout_text: str = DurationParser.format_seconds(DEFAULT_STAGE_TIMEOUT_SECONDS)
-        settle_time_text: str = DurationParser.format_seconds(DEFAULT_SETTLE_TIME_SECONDS)
+        request_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_TIMEOUT_SECONDS)
+        idle_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS)
+        stage_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_STAGE_TIMEOUT_SECONDS)
+        settle_time_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_SETTLE_TIME_SECONDS)
         parser: argparse.ArgumentParser = argparse.ArgumentParser(
             description="Load-test neuro-san agent networks with real LLM calls.",
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -113,13 +102,13 @@ class LoadTestArguments:
         parser.add_argument(
             "--fixtures-hocon-dir",
             nargs="?",
-            const=DEFAULT_FIXTURES_HOCON_DIR,
+            const=LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR,
             default=None,
             metavar="DIR",
             help=f"""
             Parent directory of test-case HOCON files to use as prompts.
             The agent subfolder is derived from --agent (e.g. basic/hello_world → DIR/hello_world/*.hocon).
-            Without a value, defaults to {DEFAULT_FIXTURES_HOCON_DIR} under the project root.
+            Without a value, defaults to {LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR} under the project root.
             """,
         )
         parser.add_argument(
@@ -192,7 +181,8 @@ class LoadTestArguments:
             type=int,
             default=8080,
             help=f"""
-            Neuro-san server port (default: %(default)s for http, {DEFAULT_HTTPS_PORT} for https unless overridden)
+            Neuro-san server port (default: %(default)s for http, {LoadTestConstants.DEFAULT_HTTPS_PORT} for https
+            unless overridden)
             """,
         )
         parser.add_argument(
@@ -202,14 +192,14 @@ class LoadTestArguments:
             help=f"""
             Use HTTPS/TLS to reach the server.
             Default is plain HTTP.
-            When set and --port is not given, the port defaults to {DEFAULT_HTTPS_PORT}.
+            When set and --port is not given, the port defaults to {LoadTestConstants.DEFAULT_HTTPS_PORT}.
             """,
         )
         parser.add_argument(
             "--request-timeout",
             type=DurationParser.parse,
             metavar="DURATION",
-            default=DEFAULT_TIMEOUT_SECONDS,
+            default=LoadTestConstants.DEFAULT_TIMEOUT_SECONDS,
             help=f"""
             Hard timeout per request.
             Bare number = seconds, or suffix s/m/h (e.g. 90s, 20m, 2h).
@@ -221,7 +211,7 @@ class LoadTestArguments:
             "--idle-timeout",
             type=DurationParser.parse,
             metavar="DURATION",
-            default=DEFAULT_IDLE_TIMEOUT_SECONDS,
+            default=LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS,
             help=f"""
             Kill a request if no output for this long.
             Bare number = seconds, or suffix s/m/h (e.g. 90s, 15m).
@@ -233,7 +223,7 @@ class LoadTestArguments:
             "--stage-timeout",
             type=DurationParser.parse,
             metavar="DURATION",
-            default=DEFAULT_STAGE_TIMEOUT_SECONDS,
+            default=LoadTestConstants.DEFAULT_STAGE_TIMEOUT_SECONDS,
             help=f"""
             Hard timeout for an entire stage/round.
             Bare number = seconds, or suffix s/m/h (e.g. 25m, 1h).
@@ -257,7 +247,7 @@ class LoadTestArguments:
             "--settle-time",
             type=DurationParser.parse,
             metavar="DURATION",
-            default=DEFAULT_SETTLE_TIME_SECONDS,
+            default=LoadTestConstants.DEFAULT_SETTLE_TIME_SECONDS,
             help=f"""
             Wait this long after each stage for cleanup.
             Bare number = seconds, or suffix s/m/h (e.g. 15s, 1m).
@@ -322,15 +312,6 @@ class LoadTestArguments:
             help="Disable server log analysis (overrides the default local auto-detect).",
         )
         parser.add_argument(
-            "--archive-server-log",
-            action="store_true",
-            default=False,
-            help="""
-            Gzip and copy the server log into the output directory after the test completes.
-            Requires --server-log.
-            """,
-        )
-        parser.add_argument(
             "--client-only",
             action="store_true",
             default=False,
@@ -355,14 +336,14 @@ class LoadTestArguments:
         parser.add_argument(
             "--level",
             type=str,
-            choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
-            default=LEVEL_NORM,
+            choices=[LoadTestConstants.LEVEL_MIN, LoadTestConstants.LEVEL_NORM, LoadTestConstants.LEVEL_ADV],
+            default=LoadTestConstants.LEVEL_NORM,
             help=f"""
             Test depth level (default: %(default)s).
             min: traffic + validation only (only with --client-only/--server-only; not valid for an all-in-one run).
             norm: adds resource monitoring and server log analysis (if --server-log given).
-            adv: adds pool analysis (defaults to {ADV_NUM_REQUESTS} requests, {ADV_NUM_ROUNDS} rounds
-            unless overridden).
+            adv: adds pool analysis (defaults to {LoadTestConstants.ADV_NUM_REQUESTS} requests,
+            {LoadTestConstants.ADV_NUM_ROUNDS} rounds unless overridden).
             """,
         )
         parser.add_argument(

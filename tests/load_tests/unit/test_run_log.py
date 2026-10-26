@@ -13,12 +13,15 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-import logging
-import os
-import tempfile
+from logging import INFO
+from logging import Logger
+from logging import getLogger
+from os.path import join
+from tempfile import TemporaryDirectory
 from typing import Optional
 from unittest import TestCase
 
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.run_log import RunLog
 
 
@@ -31,12 +34,12 @@ class TestRunLog(TestCase):
         """
         Root logger INFO lines go to stdout.log while the run log is open, and not after close().
         """
-        with tempfile.TemporaryDirectory() as output_dir:
+        with TemporaryDirectory() as output_dir:
             run_log: RunLog = RunLog()
             run_log.open(output_dir)
-            root_logger: logging.Logger = logging.getLogger()
+            root_logger: Logger = getLogger()
             previous_level: int = root_logger.level
-            root_logger.setLevel(logging.INFO)
+            root_logger.setLevel(INFO)
             try:
                 root_logger.info("line while open")
                 run_log.close()
@@ -44,7 +47,8 @@ class TestRunLog(TestCase):
             finally:
                 root_logger.setLevel(previous_level)
             log_path: Optional[str] = run_log.get_path()
-            self.assertEqual(log_path, os.path.join(output_dir, "stdout.log"))
+            expected_log_path: str = join(output_dir, LoadTestConstants.STDOUT_LOG_FILE_NAME)
+            self.assertEqual(log_path, expected_log_path)
             with open(log_path, "r", encoding="utf-8") as log_file:
                 log_text: str = log_file.read()
             self.assertEqual(log_text, "line while open\n")

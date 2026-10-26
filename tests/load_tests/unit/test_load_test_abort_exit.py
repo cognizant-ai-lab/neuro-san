@@ -20,7 +20,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from tests.load_tests.load_test_arguments import LoadTestArguments
-from tests.load_tests.load_test_cli import LoadTestOrchestrator
+from tests.load_tests.load_test_cli import LoadTestCli
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -30,7 +30,7 @@ FAILED_CHECK_EXIT_CODE: int = 1
 
 class TestLoadTestAbortExit(TestCase):
     """
-    Unit tests for LoadTestOrchestrator.main() and LoadTestAbortError.
+    Unit tests for LoadTestCli.main() and LoadTestAbortError.
 
     The validators raise LoadTestAbortError; main() is the one place that
     turns it into a process exit with the same exit code.
@@ -38,14 +38,14 @@ class TestLoadTestAbortExit(TestCase):
 
     def test_failed_check_exits_with_code_one(self) -> None:
         """
-        A validator check that fails while the orchestrator is built exits with code 1.
+        A validator check that fails while the LoadTestCli is built exits with code 1.
         """
         args: Namespace = Namespace(rebuild=None, trend=None, compare=None)
         abort_error = LoadTestAbortError(FAILED_CHECK_EXIT_CODE)
         with patch.object(LoadTestArguments, "parse_args", return_value=args), \
                 patch.object(InputValidator, "validate_fixtures_hocon_dir", side_effect=abort_error), \
                 self.assertRaises(SystemExit) as raised:
-            LoadTestOrchestrator.main()
+            LoadTestCli.main()
         self.assertEqual(raised.exception.code, FAILED_CHECK_EXIT_CODE)
 
     def test_declined_run_exits_with_code_zero(self) -> None:
@@ -57,5 +57,5 @@ class TestLoadTestAbortExit(TestCase):
         with patch.object(LoadTestArguments, "parse_args", return_value=args), \
                 patch.object(InputValidator, "validate_fixtures_hocon_dir", side_effect=abort_error), \
                 self.assertRaises(SystemExit) as raised:
-            LoadTestOrchestrator.main()
+            LoadTestCli.main()
         self.assertEqual(raised.exception.code, DECLINED_EXIT_CODE)

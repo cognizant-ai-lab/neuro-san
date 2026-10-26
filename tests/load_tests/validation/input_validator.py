@@ -15,7 +15,12 @@
 # END COPYRIGHT
 
 import logging
-import os
+from os import getcwd
+from os import listdir
+from os.path import isabs
+from os.path import isdir
+from os.path import isfile
+from os.path import join
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -23,14 +28,13 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-import psutil
+from psutil import virtual_memory
 
-from tests.load_tests.load_test_constants import DEFAULT_STAGES
-from tests.load_tests.load_test_constants import LEVEL_ADV
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.project_paths import ProjectPaths
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
@@ -66,7 +70,7 @@ class InputValidator:
         (e.g. 'basic/hello_world'), not by absolute path.
         """
         agent: str = self._args.agent
-        if os.path.isabs(agent):
+        if isabs(agent):
             logger.error(
                 """ERROR: --agent appears to be a filesystem path:
   %s
@@ -100,14 +104,14 @@ Then use:
         if not parent_dir:
             return []
 
-        if not os.path.isabs(parent_dir):
+        if not isabs(parent_dir):
             project_root: Optional[str] = ProjectPaths.resolve_project_root(self._args.project_root)
-            parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)
+            parent_dir = join(project_root or getcwd(), parent_dir)
 
         agent_base_name: str = ProjectPaths.agent_base_name(self._args.agent)
-        hocon_dir: str = os.path.join(parent_dir, agent_base_name)
+        hocon_dir: str = join(parent_dir, agent_base_name)
 
-        if not os.path.isdir(hocon_dir):
+        if not isdir(hocon_dir):
             logger.error(
                 """ERROR: no hocon fixtures directory for agent '%s':
   Expected: %s
@@ -119,9 +123,9 @@ Then use:
         hocon_files: List[str] = []
         file_name: str
         # Keep the *.hocon files of the directory.
-        for file_name in os.listdir(hocon_dir):
-            file_path: str = os.path.join(hocon_dir, file_name)
-            if file_name.endswith(".hocon") and os.path.isfile(file_path):
+        for file_name in listdir(hocon_dir):
+            file_path: str = join(hocon_dir, file_name)
+            if file_name.endswith(".hocon") and isfile(file_path):
                 hocon_files.append(file_path)
         hocon_files.sort()
         if not hocon_files:
@@ -135,7 +139,7 @@ Then use:
         Return the list of concurrency stages to run.
 
         If --ramp is set and --stages provided, parse the CSV.
-        If --ramp is set without --stages, use DEFAULT_STAGES.
+        If --ramp is set without --stages, use LoadTestConstants.DEFAULT_STAGES.
         Otherwise return a single-stage list from --num-requests.
 
         :return: Requests per stage
@@ -143,7 +147,7 @@ Then use:
         if self._args.ramp:
             if self._args.stages is not None:
                 stages: List[int] = []
-                stage_text: str
+                stage_text: str = ""
                 try:
                     # Parse each non-empty comma-separated value.
                     for stage_text in self._args.stages.split(","):
@@ -166,7 +170,7 @@ Then use:
                     logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     raise LoadTestAbortError(1)
                 return stages
-            return list(DEFAULT_STAGES)
+            return list(LoadTestConstants.DEFAULT_STAGES)
         if self._args.num_requests <= 0:
             logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
             raise LoadTestAbortError(1)
@@ -218,12 +222,12 @@ Then use:
         self._print_summary_header(stages, total_planned_requests, capped_requests)
 
         warnings: List[str] = []
-        if self._args.no_dry_run or self._args.level == LEVEL_ADV:
+        if self._args.no_dry_run or self._args.level == LoadTestConstants.LEVEL_ADV:
             warnings = self._collect_warnings(capped_requests=capped_requests,
                                               total_planned_requests=total_planned_requests,
                                               stale_log_age_minutes=stale_log_age_minutes)
             self._print_warnings(warnings)
-            logger.info("=" * SEPARATOR_WIDTH)
+            logger.info("%s", Formatters.SEPARATOR_LINE)
             return None
 
         probe_result: Dict[str, Any] = {}
@@ -258,7 +262,7 @@ Then use:
        --no-dry-run does not auto-adjust timeouts.""",
         )
 
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
             logger.info("Aborted by user.")
@@ -275,9 +279,9 @@ Then use:
         :param capped_requests: Requests after the --max-requests cap
         """
         args: Namespace = self._args
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  PRE-RUN SUMMARY")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         logger.info("  Agent:    %s", args.agent)
         logger.info("  Level:    %s", args.level)
         if args.ramp:
@@ -422,15 +426,16 @@ server log to fall back on:
         :param num_requests: Requests that may run at once
         :return: Warning text, or None when available memory looks sufficient
         """
-        virtual_memory_stats: Any = psutil.virtual_memory()
+        virtual_memory_stats: Any = virtual_memory()
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         per_request_megabytes: int = 2
-        needed_gigabytes: float = (num_requests * per_request_megabytes) / 1024
+        needed_megabytes: int = num_requests * per_request_megabytes
+        needed_gigabytes: float = needed_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
         if needed_gigabytes > available_gigabytes * 0.8:
             total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
             memory_warning: str = f"""Memory may be insufficient for {num_requests} concurrent requests:
-     Estimated need: ~{needed_gigabytes:.1f}G ({num_requests} x ~{per_request_megabytes}MB per request)
-     Available: {available_gigabytes:.1f}G / {total_gigabytes:.1f}G total
+     Estimated need: ~{needed_gigabytes:.1f} GB ({num_requests} x ~{per_request_megabytes} MB per request)
+     Available: {available_gigabytes:.1f} GB / {total_gigabytes:.1f} GB total
      Consider fewer concurrent workers or a larger instance"""
             return memory_warning
         return None

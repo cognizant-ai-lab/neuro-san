@@ -127,23 +127,25 @@ class StageSummaryBuilder:
             "has_server_log": has_server_log,
             "has_tokens": has_tokens,
         }
+        # The *_server_rss and *_client_rss values are in MB. The keys keep their names without a unit: saved
+        # runs hold them, and cross_run_comparison.py and summary_file_writer.py read them from old runs too.
         if monitor_resources:
             if before_server:
                 summary_entry["before_threads"] = before_server.get("threads")
-                summary_entry["before_server_rss"] = before_server.get("rss")
+                summary_entry["before_server_rss"] = before_server.get("rss_megabytes")
             if after_server:
                 summary_entry["after_threads"] = after_server.get("threads")
-                summary_entry["after_server_rss"] = after_server.get("rss")
+                summary_entry["after_server_rss"] = after_server.get("rss_megabytes")
         if peak_threads is not None:
             summary_entry["peak_threads"] = peak_threads
         if peak_server_rss is not None:
             summary_entry["peak_server_rss"] = peak_server_rss
         if before_client:
-            summary_entry["before_client_rss"] = before_client.get("rss")
+            summary_entry["before_client_rss"] = before_client.get("rss_megabytes")
         if settled_client:
-            summary_entry["after_client_rss"] = settled_client.get("rss")
+            summary_entry["after_client_rss"] = settled_client.get("rss_megabytes")
         if peak_client:
-            summary_entry["peak_client_rss"] = peak_client.get("rss")
+            summary_entry["peak_client_rss"] = peak_client.get("rss_megabytes")
         if before_system_memory_percent is not None:
             summary_entry["before_sys_mem_pct"] = before_system_memory_percent
         if after_system_memory_percent is not None:

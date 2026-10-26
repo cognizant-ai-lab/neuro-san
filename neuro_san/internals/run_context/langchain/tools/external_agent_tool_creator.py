@@ -180,7 +180,7 @@ class ExternalAgentToolCreator(ToolCreator):
             message: str = (
                 f"The front-man of external agent {name} declares no parameters "
                 f"in its function definition, so a single required "
-                f"'{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
+                f"'{ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
                 "is being synthesized for it to receive the calling agent's request. "
                 "To control what this agent network receives, declare at least one parameter "
                 "in the function definition of its front-man."
@@ -190,5 +190,5 @@ class ExternalAgentToolCreator(ToolCreator):
             self.logger.warning(message)
 
         use_function_json: Dict[str, Any] = dict(function_json)
-        use_function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
+        use_function_json["parameters"] = deepcopy(ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETERS)
         return use_function_json

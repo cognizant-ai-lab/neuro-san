@@ -14,10 +14,14 @@
 #
 # END COPYRIGHT
 
-import json
+from json import dumps
 import logging
-import os
-import time
+from os import makedirs
+from os.path import dirname
+from os.path import isfile
+from os.path import join
+from os.path import splitext
+from time import strftime
 from argparse import Namespace
 from logging import Logger
 from typing import Any
@@ -25,12 +29,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import psutil
+from psutil import cpu_count
 
-from tests.load_tests.load_test_constants import HISTORY_FILE_NAME
-from tests.load_tests.load_test_constants import HISTORY_THRESHOLDS_SECONDS
-from tests.load_tests.load_test_constants import HISTORY_UNKNOWN_FILE_NAME
-from tests.load_tests.load_test_constants import STATUS_CREATED
+from tests.load_tests.load_test_constants import LoadTestConstants
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -44,9 +46,6 @@ class HistoryRecorder:
     for debugging without polluting the trend data. Writing is best-effort: a write failure is logged and
     never fails the run.
     """
-
-    MEGABYTES_PER_GIGABYTE: int = 1024
-    PERCENT_PER_CORE: int = 100
 
     def __init__(self, args: Namespace, output_base: str) -> None:
         """
@@ -72,13 +71,13 @@ class HistoryRecorder:
         if self._args.history_file:
             if successful:
                 return self._args.history_file
-            root, ext = os.path.splitext(self._args.history_file)
+            root, ext = splitext(self._args.history_file)
             unknown_ext: str = ext or ".jsonl"
             return f"{root}_unknown{unknown_ext}"
-        name: str = HISTORY_UNKNOWN_FILE_NAME
+        name: str = LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME
         if successful:
-            name = HISTORY_FILE_NAME
-        history_path: str = os.path.join(self._output_base, name)
+            name = LoadTestConstants.HISTORY_FILE_NAME
+        history_path: str = join(self._output_base, name)
         return history_path
 
     def log_existing_history_files(self) -> None:
@@ -89,7 +88,7 @@ class HistoryRecorder:
         history_path: str
         # Log each history file that exists.
         for history_path in history_paths:
-            if os.path.isfile(history_path):
+            if isfile(history_path):
                 logger.info("  History:     %s", history_path)
 
     def append_client_record(self, stage_summaries: List[Dict[str, Any]], neuro_san_version: Optional[str]) -> None:
@@ -116,7 +115,7 @@ class HistoryRecorder:
         avg_duration_seconds: float = HistoryRecorder._average(durations_seconds)
         avg_first_response_seconds: float = HistoryRecorder._average(first_response_seconds)
         record: Dict[str, Any] = {
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": neuro_san_version or "unknown",
             "host": self._args.host,
             "agent": self._args.agent,
@@ -154,7 +153,7 @@ class HistoryRecorder:
         :param expected: Number of requests the round expects
         :param received: Number of requests the server received
         :param elapsed_seconds: Round wall time in seconds
-        :param peak_server: Peak server snapshot with "rss" in megabytes, or None
+        :param peak_server: Peak server snapshot with "rss_megabytes", or None
         :param peak_system_cpu_percent: Peak system CPU percent over all cores, or None
         :param primary_pairs: Primary agent Start/Finish pairs with "duration_seconds", "start_ts" and
             "finish_ts", or None
@@ -174,17 +173,21 @@ class HistoryRecorder:
                 durations_seconds.append(float(pair_duration_seconds))
         avg_duration_seconds: float = HistoryRecorder._average(durations_seconds)
         cpu_percent: float = peak_system_cpu_percent or 0.0
-        core_count: int = psutil.cpu_count() or 1
-        peak_cpu_cores: float = round(cpu_percent / HistoryRecorder.PERCENT_PER_CORE * core_count, 2)
+        core_count: int = cpu_count() or 1
+        cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percent, core_count)
+        peak_cpu_cores: float = round(cores_in_use, 2)
         peak_memory_gigabytes: Optional[float] = None
         if peak_server:
-            peak_rss_megabytes: float = peak_server.get("rss", 0.0)
-            peak_memory_gigabytes = round(peak_rss_megabytes / HistoryRecorder.MEGABYTES_PER_GIGABYTE, 2)
+            peak_rss_megabytes: float = peak_server.get("rss_megabytes", 0.0)
+            peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
+            peak_memory_gigabytes = round(peak_gigabytes, 2)
         first_completed_seconds: float = HistoryRecorder._time_to_first_completed(pairs)
         errors: List[Dict[str, str]] = server_errors or []
         warnings: List[Dict[str, str]] = tool_warnings or []
+        error_count: int = len(errors)
+        warning_count: int = len(warnings)
         record: Dict[str, Any] = {
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": neuro_san_version or "unknown",
             "host": self._args.host,
             "agent": self._args.agent,
@@ -196,8 +199,8 @@ class HistoryRecorder:
             "time_to_first_completed_s": first_completed_seconds,
             "avg_duration_s": avg_duration_seconds,
             "wall_time_s": round(elapsed_seconds, 2),
-            "server_error_count": len(errors),
-            "tool_warning_count": len(warnings),
+            "server_error_count": error_count,
+            "tool_warning_count": warning_count,
             "server_errors": errors,
             "tool_warnings": warnings,
         }
@@ -214,9 +217,9 @@ class HistoryRecorder:
         """
         path: str = self.get_history_path(successful=successful)
         try:
-            history_dir: str = os.path.dirname(path) or "."
-            os.makedirs(history_dir, exist_ok=True)
-            record_line: str = json.dumps(record) + "\n"
+            history_dir: str = dirname(path) or "."
+            makedirs(history_dir, exist_ok=True)
+            record_line: str = dumps(record) + "\n"
             with open(path, "a", encoding="utf-8") as handle:
                 handle.write(record_line)
             logger.info("  Trend history appended: %s", path)
@@ -271,7 +274,7 @@ class HistoryRecorder:
         result: Dict[str, Any]
         # Collect the duration and the time to first response of each successful request.
         for result in results:
-            if result.get("status") != STATUS_CREATED:
+            if result.get("status") != LoadTestConstants.STATUS_CREATED:
                 continue
             duration_seconds: float = result.get("elapsed", 0.0)
             durations_seconds.append(duration_seconds)
@@ -294,7 +297,7 @@ class HistoryRecorder:
         """
         threshold_seconds: int
         # Count the requests that completed within each threshold.
-        for threshold_seconds in HISTORY_THRESHOLDS_SECONDS:
+        for threshold_seconds in LoadTestConstants.HISTORY_THRESHOLDS_SECONDS:
             within_count: int = 0
             duration_seconds: float
             # Count the durations at or under this threshold.

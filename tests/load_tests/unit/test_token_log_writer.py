@@ -15,14 +15,15 @@
 # END COPYRIGHT
 
 
-import os
+from os.path import exists
+from os.path import join
 from tempfile import TemporaryDirectory
 from typing import Any
 from typing import Dict
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.load_test_constants import SERVER_TOKENS_LOG_FILE_NAME
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 
 LOGGER_NAME: str = "tests.load_tests.reporting.token_log_writer"
@@ -34,34 +35,6 @@ class TestTokenLogWriter(TestCase):
     server_tokens.log when given an output directory, and to the console otherwise.
     """
 
-    @staticmethod
-    def _results() -> List[Dict[str, Any]]:
-        """
-        :return: Two request results with token data and one without
-        """
-        return [
-            {
-                "request_id": "request-1", "server_request_id": "srv-1", "status": "CREATED",
-                "elapsed": 1.25, "total_tokens": 1500, "prompt_tokens": 1000, "completion_tokens": 500,
-                "llm_calls": 2, "model": "gpt-4o-mini",
-            },
-            {
-                "request_id": "request-2", "status": "CREATED", "elapsed": 2.0, "total_tokens": 500,
-                "prompt_tokens": 300, "completion_tokens": 200, "llm_calls": 1, "model": "gpt-4o-mini",
-                "reporting_agent": "hello_world",
-            },
-            {"request_id": "request-3", "status": "FAILED", "elapsed": 0.5},
-        ]
-
-    @staticmethod
-    def _read_token_file(output_dir: str) -> str:
-        """
-        :param output_dir: Directory that holds server_tokens.log
-        :return: Contents of server_tokens.log
-        """
-        with open(os.path.join(output_dir, SERVER_TOKENS_LOG_FILE_NAME), encoding="utf-8") as file_handle:
-            return file_handle.read()
-
     def test_no_tokens_writes_and_logs_nothing(self) -> None:
         """
         Without token data there is no server_tokens.log and no console output.
@@ -69,7 +42,9 @@ class TestTokenLogWriter(TestCase):
         with TemporaryDirectory() as output_dir:
             with self.assertNoLogs(LOGGER_NAME):
                 TokenLogWriter.log_token_summary([{"request_id": "request-1"}], output_dir=output_dir)
-            self.assertFalse(os.path.exists(os.path.join(output_dir, SERVER_TOKENS_LOG_FILE_NAME)))
+            token_log_path: str = join(output_dir, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
+            token_log_exists: bool = exists(token_log_path)
+            self.assertFalse(token_log_exists)
 
     def test_output_dir_gets_detail_and_console_gets_totals(self) -> None:
         """
@@ -82,12 +57,14 @@ class TestTokenLogWriter(TestCase):
         validation_events: List[Dict[str, Any]] = [
             {"request_id": "request-1", "attempts": 2, "fix_cycles": 1, "errors": ["missing key"]},
         ]
+        results: List[Dict[str, Any]] = TestTokenLogWriter._results()
         with TemporaryDirectory() as output_dir:
             with self.assertLogs(LOGGER_NAME, level="INFO") as logs:
                 TokenLogWriter.log_token_summary(
-                    self._results(), output_dir=output_dir,
+                    results, output_dir=output_dir,
                     network_tokens=network_tokens, validation_events=validation_events,
                 )
+            token_file_text: str = TestTokenLogWriter._read_token_file(output_dir)
             self.assertEqual(
                 """\
 request-1: 1,500 tokens (1,000 prompt + 500 completion), 2 LLM call(s), model=gpt-4o-mini  [1.2s CREATED]
@@ -99,7 +76,7 @@ request-2: 500 tokens (300 prompt + 200 completion), 1 LLM call(s), model=gpt-4o
   hello_world: 1 call(s)  500 tokens (300 prompt / 200 completion)
 
 """,
-                self._read_token_file(output_dir),
+                token_file_text,
             )
         output: str = "\n".join(logs.output)
         self.assertIn("Total: 2,000 tokens (1,300 prompt + 700 completion)", output)
@@ -109,19 +86,56 @@ request-2: 500 tokens (300 prompt + 200 completion), 1 LLM call(s), model=gpt-4o
         """
         A request with tokens but no agent data says so in server_tokens.log.
         """
+        results: List[Dict[str, Any]] = TestTokenLogWriter._results()
+        first_results: List[Dict[str, Any]] = results[:1]
         with TemporaryDirectory() as output_dir:
             with self.assertLogs(LOGGER_NAME, level="INFO"):
-                TokenLogWriter.log_token_summary(self._results()[:1], output_dir=output_dir)
-            self.assertIn("  (agent data not found in server log)\n", self._read_token_file(output_dir))
+                TokenLogWriter.log_token_summary(first_results, output_dir=output_dir)
+            token_file_text: str = TestTokenLogWriter._read_token_file(output_dir)
+            self.assertIn("  (agent data not found in server log)\n", token_file_text)
 
     def test_without_output_dir_logs_each_request(self) -> None:
         """
         Without an output directory each request with tokens is logged to the console.
         """
+        results: List[Dict[str, Any]] = TestTokenLogWriter._results()
         with self.assertLogs(LOGGER_NAME, level="INFO") as logs:
-            TokenLogWriter.log_token_summary(self._results())
-        self.assertEqual(2, len(logs.output))
+            TokenLogWriter.log_token_summary(results)
+        log_count: int = len(logs.output)
+        self.assertEqual(2, log_count)
         self.assertIn(
             "request-1: 1,500 tokens (1,000 prompt + 500 completion), 2 LLM call(s), model=gpt-4o-mini",
             logs.output[0],
         )
+
+    @staticmethod
+    def _results() -> List[Dict[str, Any]]:
+        """
+        :return: Two request results with token data and one without
+        """
+        results: List[Dict[str, Any]] = [
+            {
+                "request_id": "request-1", "server_request_id": "srv-1", "status": "CREATED",
+                "elapsed": 1.25, "total_tokens": 1500, "prompt_tokens": 1000, "completion_tokens": 500,
+                "llm_calls": 2, "model": "gpt-4o-mini",
+            },
+            {
+                "request_id": "request-2", "status": "CREATED", "elapsed": 2.0, "total_tokens": 500,
+                "prompt_tokens": 300, "completion_tokens": 200, "llm_calls": 1, "model": "gpt-4o-mini",
+                "reporting_agent": "hello_world",
+            },
+            {"request_id": "request-3", "status": "FAILED", "elapsed": 0.5},
+        ]
+        return results
+
+    @staticmethod
+    def _read_token_file(output_dir: str) -> str:
+        """
+        :param output_dir: Directory that holds server_tokens.log
+        :return: Contents of server_tokens.log
+        """
+        tokens_log_path: str = join(output_dir, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
+        token_file_text: str = ""
+        with open(tokens_log_path, encoding="utf-8") as file_handle:
+            token_file_text = file_handle.read()
+        return token_file_text

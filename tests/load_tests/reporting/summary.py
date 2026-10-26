@@ -25,13 +25,9 @@ from typing import Tuple
 
 from collections import Counter
 
-from tests.load_tests.load_test_constants import SEPARATOR_WIDTH
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
-from tests.load_tests.reporting.system_resources import SysSnapshot
+from tests.load_tests.reporting.system_resources import SystemSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -65,12 +61,12 @@ class SummaryReporter:
 
         :param is_ramp: True to label each row by stage, False by round
         """
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         title: str = "ROUND SUMMARY"
         if is_ramp:
             title = "RAMP-UP SUMMARY"
         logger.info("  %s", title)
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         has_server_counts: bool = False
         summary: Dict[str, Any]
@@ -119,18 +115,18 @@ class SummaryReporter:
         # Add up the status counts, time and retries of every stage.
         for summary in self._summaries:
             counts: Dict[str, int] = summary.get("counts", {})
-            total_created += counts.get(STATUS_CREATED, 0)
-            total_failed += counts.get(STATUS_FAILED, 0)
-            total_timeout += counts.get(STATUS_TIMEOUT, 0)
-            total_killed += counts.get(STATUS_KILLED, 0)
+            total_created += counts.get(LoadTestConstants.STATUS_CREATED, 0)
+            total_failed += counts.get(LoadTestConstants.STATUS_FAILED, 0)
+            total_timeout += counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+            total_killed += counts.get(LoadTestConstants.STATUS_KILLED, 0)
             total_time_seconds += summary.get("elapsed", 0)
             total_retries += summary.get("total_retries", 0)
 
         total_sent: int = total_created + total_failed + total_timeout + total_killed
 
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  OVERALL RESULTS")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         if self._neuro_san_version:
             logger.info("  neuro-san version: %s", self._neuro_san_version)
         logger.info("  Total requests: %s", total_sent)
@@ -175,9 +171,9 @@ class SummaryReporter:
         """
         if client is None and server is None:
             return False
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  LLM & TOKEN USAGE")
-        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         SummaryReporter._log_token_source(f"Client ({client_source})", client)
         SummaryReporter._log_token_source("Server log", server)
         if client is not None and server is not None:
@@ -371,7 +367,7 @@ class SummaryReporter:
             self._sys_edge_snapshot("after"),
         )
 
-    def _sys_edge_snapshot(self, edge: str) -> Optional[SysSnapshot]:
+    def _sys_edge_snapshot(self, edge: str) -> Optional[SystemSnapshot]:
         """
         Build the before/after whole-system snapshot across stages.
 
@@ -383,14 +379,14 @@ class SummaryReporter:
         :return: The snapshot, or None when no stage has system data
         """
         prefix: str = f"{edge}_sys_"
-        chosen_snapshot: Optional[SysSnapshot] = None
+        chosen_snapshot: Optional[SystemSnapshot] = None
         summary: Dict[str, Any]
         # Find the first ("before") or last ("after") stage with system data.
         for summary in self._summaries:
             memory_percentage: Optional[float] = summary.get(prefix + "mem_pct")
             if memory_percentage is None:
                 continue
-            snapshot: SysSnapshot = {
+            snapshot: SystemSnapshot = {
                 "mem_pct": memory_percentage,
                 "mem_avail_gb": summary.get(prefix + "mem_avail_gb"),
                 "cpu_pct": summary.get(prefix + "cpu"),
@@ -401,7 +397,7 @@ class SummaryReporter:
             chosen_snapshot = snapshot
         return chosen_snapshot
 
-    def _sys_peak_snapshot(self) -> Optional[SysSnapshot]:
+    def _sys_peak_snapshot(self) -> Optional[SystemSnapshot]:
         """
         Build the whole-system peak snapshot (per-metric max).
 
@@ -631,10 +627,10 @@ class SummaryReporter:
         """
         counts: Dict[str, int] = summary.get("counts", {})
         concurrent: Optional[int] = summary.get("concurrent")
-        created_count: int = counts.get(STATUS_CREATED, 0)
-        failed_count: int = counts.get(STATUS_FAILED, 0)
-        timeout_count: int = counts.get(STATUS_TIMEOUT, 0)
-        killed_count: int = counts.get(STATUS_KILLED, 0)
+        created_count: int = counts.get(LoadTestConstants.STATUS_CREATED, 0)
+        failed_count: int = counts.get(LoadTestConstants.STATUS_FAILED, 0)
+        timeout_count: int = counts.get(LoadTestConstants.STATUS_TIMEOUT, 0)
+        killed_count: int = counts.get(LoadTestConstants.STATUS_KILLED, 0)
         total_retries: int = summary.get("total_retries", 0)
         amplification: float = summary.get("amplification", 1.0)
         elapsed_seconds: float = summary.get("elapsed", 0)

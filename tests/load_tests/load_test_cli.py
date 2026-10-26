@@ -18,22 +18,17 @@
 
 import argparse
 import getpass
-import gzip
-import importlib.metadata as _pkg_meta
 import json
 import logging
 import os
 import platform
 import re
-import shutil
 import signal
 import socket
 import sys
 import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
 from typing import Any
 from typing import Dict
 from typing import List
@@ -42,28 +37,12 @@ from typing import Set
 
 import psutil
 
-from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-
-from tests.load_tests.load_test_constants import ADV_NUM_REQUESTS
-from tests.load_tests.load_test_constants import ADV_NUM_ROUNDS
-from tests.load_tests.load_test_constants import LEVEL_ADV
-from tests.load_tests.load_test_constants import LEVEL_MIN
-from tests.load_tests.load_test_constants import LOCAL_HOSTS
-from tests.load_tests.load_test_constants import RAW_RESULTS_FILE_NAME
-from tests.load_tests.load_test_constants import SOCKET_CHECK_TIMEOUT_SECONDS
-from tests.load_tests.load_test_constants import STALE_LOG_THRESHOLD_SECONDS
-from tests.load_tests.load_test_constants import STATUS_CREATED
-from tests.load_tests.load_test_constants import STATUS_FAILED
-from tests.load_tests.load_test_constants import STATUS_KILLED
-from tests.load_tests.load_test_constants import STATUS_TIMEOUT
-from tests.load_tests.load_test_constants import STDOUT_LOG_FILE_NAME
-from tests.load_tests.load_test_constants import HEARTBEAT_INTERVAL_SECONDS
-from tests.load_tests.load_test_constants import THREAD_JOIN_TIMEOUT_SECONDS
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.load_test_arguments import LoadTestArguments
-from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.monitoring.server_only_monitor import ServerOnlyMonitor
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.formatters import Formatters
@@ -72,7 +51,6 @@ from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
-from tests.load_tests.reporting.latency_analyzer import COMPLETION_MILESTONES
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.run_log import RunLog
@@ -89,21 +67,29 @@ from tests.load_tests.validation.environment_validator import EnvironmentValidat
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 from tests.load_tests.validation.output_validator import OutputValidator
+from tests.load_tests.validation.server_checker import ServerChecker
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
+class LoadTestCli:  # pylint: disable=too-many-instance-attributes
     """
-    Orchestrates the full load test workflow for neuro-san agent networks.
+    Runs the full load test workflow for neuro-san agent networks.
 
     See tests/load_tests/load_tests.md for prerequisites, test levels, and
     usage examples.
     """
 
+    # 60 "#" characters: the line around the round header.
+    ROUND_HEADER_LINE: str = "############################################################"
+
     def __init__(self, args) -> None:
-        """Initialize the orchestrator with parsed arguments."""
+        """
+        Initialize the load test CLI with parsed arguments.
+
+        :param args: Parsed command-line arguments
+        """
         self.args = args
         self.input_validator = InputValidator(args)
         self.hocon_files: List[str] = self.input_validator.validate_fixtures_hocon_dir()
@@ -124,71 +110,82 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._run_log: RunLog = RunLog()
         self._aborted = False
         self._interrupted = False
-        self._server_ns_version = None
-        self._history_recorder: HistoryRecorder = HistoryRecorder(args, self._output_base())
+        self.server_checker: ServerChecker = ServerChecker(args)
+        output_base: str = self._output_base()
+        self._history_recorder: HistoryRecorder = HistoryRecorder(args, output_base)
 
     def _profile_source(self) -> str:
-        """Describe where the profile came from, for logs and raw_results.json."""
+        """
+        Describe where the profile came from, for logs and raw_results.json.
+
+        :return: "hocon (<N> files)" or "json profile"
+        """
         if self.hocon_files:
             return f"hocon ({len(self.hocon_files)} files)"
         return "json profile"
 
     # pylint: disable=too-many-locals
-    def _run_all_stages(self, stages, total_cap) -> List[Dict[str, Any]]:
-        """Execute all stages of the load test, collecting data per stage."""
-        monitor_resources = (self.args.level != LEVEL_MIN
-                             or self.args.client_only
-                             or self.args.server_only)
-        has_server_log = self.server_log is not None
-        probe_result = self.probe_result
-        only_stage = len(stages) == 1 and self.args.num_rounds == 1
+    def _run_all_stages(self, stages: List[int], total_cap: int) -> List[Dict[str, Any]]:
+        """
+        Execute all stages of the load test, collecting data per stage.
+
+        :param stages: Request count of each stage, in order
+        :param total_cap: Most requests to send in the whole test
+        :return: One summary dict per stage that runs
+        """
+        monitor_resources: bool = (self.args.level != LoadTestConstants.LEVEL_MIN
+                                   or self.args.client_only
+                                   or self.args.server_only)
+        has_server_log: bool = self.server_log is not None
+        probe_result: Optional[Dict[str, Any]] = self.probe_result
+        only_stage: bool = len(stages) == 1 and self.args.num_rounds == 1
 
         stage_summaries: List[Dict[str, Any]] = []
-        global_offset = 0
-        total_sent = 0
-        test_start = time.time()
+        global_offset: int = 0
+        total_sent: int = 0
+        test_start_seconds: float = time.perf_counter()
 
         round_num: int
         # Run every stage once per round.
         for round_num in range(1, self.args.num_rounds + 1):
             if self.args.num_rounds > 1:
-                logger.info("\n%s", "#" * 60)
+                logger.info("\n%s", LoadTestCli.ROUND_HEADER_LINE)
                 logger.info("  ROUND %s of %s", round_num, self.args.num_rounds)
-                logger.info("#" * 60)
+                logger.info("%s", LoadTestCli.ROUND_HEADER_LINE)
 
             stage_idx: int
             num_concurrent: int
             # Run each stage, stopping at the request cap or the total timeout.
             for stage_idx, num_concurrent in enumerate(stages):
                 if total_sent >= total_cap:
-                    total_planned = sum(stages) * self.args.num_rounds
+                    total_planned: int = sum(stages) * self.args.num_rounds
                     logger.warning(
                         """
 WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests completed.
          Use --max-requests %s to run all planned requests.""",
-                        total_cap, total_sent, total_planned,
-                        total_planned,
+                        total_cap, total_sent, total_planned, total_planned,
                     )
                     return stage_summaries
 
-                if self._total_timeout_reached(test_start):
+                if self._total_timeout_reached(test_start_seconds):
                     self._aborted = True
                     return stage_summaries
 
-                remaining = total_cap - total_sent
-                actual_requests = min(num_concurrent, remaining)
+                remaining: int = total_cap - total_sent
+                actual_requests: int = min(num_concurrent, remaining)
 
-                stage_result: Dict[str, Any] = self._run_single_stage(
-                    actual_requests=actual_requests,
-                    num_concurrent=num_concurrent,
-                    stage_num=stage_idx + 1,
-                    round_num=round_num,
-                    global_offset=global_offset,
-                    monitor_resources=monitor_resources,
-                    has_server_log=has_server_log,
-                    probe_result=probe_result,
-                    only_stage=only_stage,
-                )
+                stage_inputs: Dict[str, Any] = {
+                    "actual_requests": actual_requests,
+                    "num_concurrent": num_concurrent,
+                    "stage_num": stage_idx + 1,
+                    "round_num": round_num,
+                    "global_offset": global_offset,
+                    "monitor_resources": monitor_resources,
+                    "has_server_log": has_server_log,
+                    "probe_result": probe_result,
+                    "only_stage": only_stage,
+                }
+                stage_result: Dict[str, Any] = self._run_single_stage(stage_inputs)
                 summary: Dict[str, Any] = stage_result.get("summary")
                 probe_used: bool = stage_result.get("probe_used")
                 should_abort: bool = stage_result.get("should_abort")
@@ -204,52 +201,60 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         return stage_summaries
 
-    def _total_timeout_reached(self, test_start) -> bool:
-        """Check if total-timeout has been exceeded.
-
-        Returns True and logs a warning when the elapsed time since
-        test_start exceeds --total-timeout (0 means disabled).
+    def _total_timeout_reached(self, test_start: float) -> bool:
         """
-        limit = self.args.total_timeout
-        if limit <= 0:
+        Check if total-timeout has been exceeded.
+
+        Logs a warning when the elapsed time since
+        test_start reaches --total-timeout (0 means disabled).
+
+        :param test_start: time.perf_counter() at the start of the test
+        :return: True when the total timeout is reached
+        """
+        limit_seconds: float = self.args.total_timeout
+        if limit_seconds <= 0:
             return False
-        elapsed = time.time() - test_start
-        if elapsed < limit:
+        elapsed_seconds: float = time.perf_counter() - test_start
+        if elapsed_seconds < limit_seconds:
             return False
         logger.warning(
             """
   ABORT: --total-timeout (%ss) reached after %.0fs.
   Stopping test and reporting available results.""",
-            limit, elapsed,
+            limit_seconds, elapsed_seconds,
         )
         return True
 
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-    # pylint: disable=too-many-arguments
-    def _run_single_stage(
-            self, *, actual_requests, num_concurrent,
-            stage_num, round_num, global_offset,
-            monitor_resources, has_server_log,
-            probe_result, only_stage=False,
-    ) -> Dict[str, Any]:
+    def _run_single_stage(self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute one stage of the load test.
 
-        :param actual_requests: Number of requests to send in this stage
-        :param num_concurrent: Requested concurrency before the --max-requests cap
-        :param stage_num: Stage number, starting at 1
-        :param round_num: Round number, starting at 1
-        :param global_offset: Number of requests sent by earlier stages
-        :param monitor_resources: True to take resource snapshots around the stage
-        :param has_server_log: True when the server log can be read
-        :param probe_result: Result of the dry-run probe to count in this stage, or None
-        :param only_stage: True when this is the only stage
+        :param stage_inputs: A dictionary with "actual_requests" (number of requests to send in this stage),
+            "num_concurrent" (requested concurrency before the --max-requests cap), "stage_num" and "round_num"
+            (starting at 1), "global_offset" (number of requests sent by earlier stages), "monitor_resources" (True to
+            take resource snapshots around the stage), "has_server_log" (True when the server log can be read),
+            "probe_result" (result of the dry-run probe to count in this stage, or None) and "only_stage" (True when
+            this is the only stage)
         :return: Dict with "summary" (the stage summary dict), "probe_used" (True when probe_result was counted)
             and "should_abort" (True when the test must stop after this stage)
         """
-        stage_workers = self.args.max_workers if not self.args.ramp else actual_requests
+        actual_requests: int = stage_inputs.get("actual_requests")
+        num_concurrent: int = stage_inputs.get("num_concurrent")
+        stage_num: int = stage_inputs.get("stage_num")
+        round_num: int = stage_inputs.get("round_num")
+        global_offset: int = stage_inputs.get("global_offset")
+        monitor_resources: bool = stage_inputs.get("monitor_resources")
+        has_server_log: bool = stage_inputs.get("has_server_log")
+        probe_result: Optional[Dict[str, Any]] = stage_inputs.get("probe_result")
+        only_stage: bool = stage_inputs.get("only_stage", False)
 
-        logger.info("\n%s", "=" * 60)
+        stage_workers: int = self.args.max_workers
+        if self.args.ramp:
+            stage_workers = actual_requests
+
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        stage_label: str = ""
         if self.args.ramp:
             stage_label = f"[STAGE {stage_num}] {actual_requests} requests (max {stage_workers} workers)"
             if self.args.num_rounds > 1:
@@ -259,12 +264,14 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             if self.args.num_rounds > 1:
                 stage_label += f" (round {round_num})"
         logger.info("  %s", stage_label)
-        logger.info("=" * 60)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if actual_requests < num_concurrent:
             logger.info("  (Capped from %s to %s by --max-requests)", num_concurrent, actual_requests)
 
-        log_position = self.log_monitor.read_position() if has_server_log else None
+        log_position: Optional[int] = None
+        if has_server_log:
+            log_position = self.log_monitor.read_position()
 
         client_process: Optional[psutil.Process] = None
         before_server: Optional[Dict[str, Any]] = None
@@ -280,30 +287,35 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         # If a dry-run probe ran, inject it into stage 1.  The probe
         # fired before log_position was captured, so only stage_requests of
         # them appear in the server log from here on.
-        stage_requests = actual_requests
-        probe_used = probe_result is not None
+        stage_requests: int = actual_requests
+        probe_used: bool = probe_result is not None
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
         stop_event: threading.Event = threading.Event()
         monitor: Optional[threading.Thread] = None
         if has_server_log:
+            monitor_start_seconds: float = time.perf_counter()
+            primary_start_pattern: str = self.profile.get_primary_start_pattern()
             monitor = self.log_monitor.start_log_monitor(
-                log_position, stage_requests, time.perf_counter(), stop_event, client_process=client_process,
-                primary_start_pattern=self.profile.get_primary_start_pattern(), output_dir=self._output_dir)
+                log_position, stage_requests, monitor_start_seconds, stop_event, client_process=client_process,
+                primary_start_pattern=primary_start_pattern, output_dir=self._output_dir)
 
-        sys_before = SystemResources.snapshot()
-        before_system_memory_percent = sys_before["mem_pct"]
+        system_before: Dict[str, Optional[float]] = SystemResources.snapshot()
+        before_system_memory_percent: Optional[float] = system_before.get("mem_pct")
 
-        first_request_number: int = global_offset + (1 if probe_used else 0)
+        first_request_number: int = global_offset
+        # The dry-run probe is the first request of the stage.
+        if probe_used:
+            first_request_number += 1
         plan: StagePlan = StagePlan(stage_requests, stage_workers, first_request_number, self._output_dir)
         stage_run: Dict[str, Any] = self.runner.run_stage(plan, server_process=self.server_process,
                                                           client_process=client_process, log_monitor=self.log_monitor)
-        elapsed: float = stage_run.get("total_time_seconds")
+        elapsed_seconds: float = stage_run.get("total_time_seconds")
         results: List[Dict[str, Any]] = stage_run.get("results")
         peak_threads: Optional[int] = stage_run.get("peak_server_threads")
-        peak_client_rss: Optional[float] = stage_run.get("peak_client_rss_megabytes")
-        peak_server_rss: Optional[float] = stage_run.get("peak_server_rss_megabytes")
+        peak_client_rss_megabytes: Optional[float] = stage_run.get("peak_client_rss_megabytes")
+        peak_server_rss_megabytes: Optional[float] = stage_run.get("peak_server_rss_megabytes")
         peak_system_memory: Optional[Dict[str, float]] = stage_run.get("peak_system_memory")
         peak_system_cpu_percent: Optional[float] = stage_run.get("peak_system_cpu_percent")
         peak_system_threads: Optional[int] = stage_run.get("peak_system_threads")
@@ -314,49 +326,53 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         if probe_used:
             results.insert(0, probe_result)
-            elapsed += probe_result.get("elapsed", 0.0)
+            elapsed_seconds += probe_result.get("elapsed", 0.0)
 
         stop_event.set()
         if monitor:
-            monitor.join(timeout=THREAD_JOIN_TIMEOUT_SECONDS)
+            monitor.join(timeout=LoadTestConstants.THREAD_JOIN_TIMEOUT_SECONDS)
 
-        peak_client = None
-        settled_client = None
+        peak_client: Optional[Dict[str, Any]] = None
+        settled_client: Optional[Dict[str, Any]] = None
         if monitor_resources:
-            if peak_client_rss is not None:
-                peak_client = {"rss": peak_client_rss}
+            if peak_client_rss_megabytes is not None:
+                peak_client = {"rss_megabytes": peak_client_rss_megabytes}
             settled_client = ResourceMonitor.snapshot(client_process)
 
-        counts = OutputValidator.count_results(results)
+        counts: Dict[str, Any] = OutputValidator.count_results(results)
 
         retries: Dict[str, int] = {}
-        total_retries = 0
-        amplification = 1.0
+        total_retries: int = 0
+        amplification: float = 1.0
         if has_server_log:
             retries = self.log_monitor.count_retries_since(log_position)
-            total_retries = sum(retries.values())
+            retry_count: int
+            # Add up the retries of every error type.
+            for retry_count in retries.values():
+                total_retries += retry_count
             amplification = Formatters.compute_amplification(stage_requests, total_retries)
 
-        OutputValidator.log_stage_results(
-            actual_requests, counts, elapsed,
-            timeout_seconds=self.args.request_timeout,
-            idle_timeout_seconds=self.args.idle_timeout,
-            show_counts=not only_stage,
-        )
-        should_abort = server_died or interrupted
+        OutputValidator.log_stage_results(actual_requests, counts, elapsed_seconds,
+                                          timeout_seconds=self.args.request_timeout,
+                                          idle_timeout_seconds=self.args.idle_timeout, show_counts=not only_stage)
+        should_abort: bool = server_died or interrupted
         if not should_abort:
             should_abort = OutputValidator.check_permission_failures(results, self.args.agent)
         if not should_abort:
             should_abort = OutputValidator.check_timeout_abort(counts)
+        system_after: Dict[str, Optional[float]] = {}
+        after_system_memory_percent: Optional[float] = None
+        summary_entry: Dict[str, Any] = {}
+        stage_result: Dict[str, Any] = {}
         if should_abort:
-            sys_after = SystemResources.snapshot()
-            after_system_memory_percent = sys_after["mem_pct"]
+            system_after = SystemResources.snapshot()
+            after_system_memory_percent = system_after.get("mem_pct")
             summary_entry = StageSummaryBuilder.build_stage_summary(
                 stage_num=stage_num,
                 round_num=round_num,
                 actual_requests=actual_requests,
                 counts=counts,
-                elapsed=elapsed,
+                elapsed=elapsed_seconds,
                 retries=retries,
                 total_retries=total_retries,
                 amplification=amplification,
@@ -373,7 +389,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 before_server=before_server,
                 after_server=None,
                 peak_threads=peak_threads,
-                peak_server_rss=peak_server_rss,
+                peak_server_rss=peak_server_rss_megabytes,
                 before_client=before_client,
                 peak_client=peak_client,
                 settled_client=settled_client,
@@ -381,11 +397,11 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
                 after_system_memory_percent=after_system_memory_percent,
                 peak_system_memory=peak_system_memory,
                 peak_system_cpu_percent=peak_system_cpu_percent,
-                before_sys=sys_before,
-                after_sys=sys_after,
+                before_sys=system_before,
+                after_sys=system_after,
                 peak_system_threads=peak_system_threads,
             )
-            stage_result: Dict[str, Any] = {
+            stage_result = {
                 "summary": summary_entry,
                 "probe_used": probe_used,
                 "should_abort": True,
@@ -406,32 +422,39 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             server_log_requests=stage_requests,
         )
 
-        sys_after = SystemResources.snapshot()
-        after_system_memory_percent = sys_after["mem_pct"]
+        system_after = SystemResources.snapshot()
+        after_system_memory_percent = system_after.get("mem_pct")
 
+        server_counts: Dict[str, Any] = post_stage_data.get("server_counts")
+        disconnections: List[Dict[str, str]] = post_stage_data.get("disconnections")
+        server_errors: List[Dict[str, str]] = post_stage_data.get("server_errors")
+        tool_warnings: List[Dict[str, str]] = post_stage_data.get("tool_warnings")
+        network_tokens: List[Dict[str, Any]] = post_stage_data.get("network_tokens")
+        validation_events: List[Dict[str, Any]] = post_stage_data.get("validation_events")
+        after_server: Optional[Dict[str, Any]] = post_stage_data.get("after_server")
         summary_entry = StageSummaryBuilder.build_stage_summary(
             stage_num=stage_num,
             round_num=round_num,
             actual_requests=actual_requests,
             counts=counts,
-            elapsed=elapsed,
+            elapsed=elapsed_seconds,
             retries=retries,
             total_retries=total_retries,
             amplification=amplification,
             results=results,
-            server_counts=post_stage_data.get("server_counts"),
-            disconnections=post_stage_data.get("disconnections"),
-            server_errors=post_stage_data.get("server_errors"),
-            tool_warnings=post_stage_data.get("tool_warnings"),
-            network_tokens=post_stage_data.get("network_tokens"),
-            validation_events=post_stage_data.get("validation_events"),
+            server_counts=server_counts,
+            disconnections=disconnections,
+            server_errors=server_errors,
+            tool_warnings=tool_warnings,
+            network_tokens=network_tokens,
+            validation_events=validation_events,
             has_server_log=has_server_log,
             has_tokens=self.args.include_tokens,
             monitor_resources=monitor_resources,
             before_server=before_server,
-            after_server=post_stage_data.get("after_server"),
+            after_server=after_server,
             peak_threads=peak_threads,
-            peak_server_rss=peak_server_rss,
+            peak_server_rss=peak_server_rss_megabytes,
             before_client=before_client,
             peak_client=peak_client,
             settled_client=settled_client,
@@ -439,11 +462,11 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             after_system_memory_percent=after_system_memory_percent,
             peak_system_memory=peak_system_memory,
             peak_system_cpu_percent=peak_system_cpu_percent,
-            before_sys=sys_before,
-            after_sys=sys_after,
+            before_sys=system_before,
+            after_sys=system_after,
             peak_system_threads=peak_system_threads,
         )
-        stage_result: Dict[str, Any] = {
+        stage_result = {
             "summary": summary_entry,
             "probe_used": probe_used,
             "should_abort": False,
@@ -477,22 +500,11 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
 
         before_client: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_process)
         if before_client:
-            logger.info(
-                "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
-                before_client.get("rss"),
-                before_client.get("cpu"),
-            )
+            client_rss_megabytes: float = before_client.get("rss_megabytes")
+            client_cpu_percent: float = before_client.get("cpu_percent")
+            logger.info("  Client BEFORE: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
 
-        virtual_memory_stats: Any = psutil.virtual_memory()
-        used_bytes: int = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes: float = used_bytes / ResourceMonitor.ONE_MEGABYTE
-        available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        total_gigabytes: float = virtual_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        logger.info(
-            "  System BEFORE: %.0f%% used"
-            " (%.0fM used / %.1fG free / %.1fG total)",
-            virtual_memory_stats.percent, used_megabytes, available_gigabytes, total_gigabytes,
-        )
+        ResourceMonitor.log_system_memory("BEFORE")
         before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {
             "server": before_server,
             "client": before_client,
@@ -500,8 +512,17 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return before_snapshots
 
     def _log_fire_info(self, actual_requests, monitor_resources, *, probe_result):
-        """Log the 'Firing N requests' line with thread count."""
-        fire_ts = time.strftime("%H:%M:%S", time.localtime(time.time()))
+        """
+        Log the 'Firing N requests' line with thread count.
+
+        :param actual_requests: Number of requests this stage fires
+        :param monitor_resources: When True and a local server process is known, the line also shows the
+                                  server thread count
+        :param probe_result: Result of the dry-run probe to count in this stage, or None
+        """
+        fire_seconds: float = time.time()
+        fire_local_time: time.struct_time = time.localtime(fire_seconds)
+        fire_ts: str = time.strftime("%H:%M:%S", fire_local_time)
         fire_threads = ""
         if monitor_resources and self.server_process:
             try:
@@ -565,7 +586,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         post_stage_data["after_server"] = after_server
         return post_stage_data
 
-    def _analyze_server_log(self, has_server_log, log_position, results, actual_requests) -> Dict[str, Any]:
+    def _analyze_server_log(self, has_server_log: bool, log_position: Optional[int], results: List[Dict[str, Any]],
+                            actual_requests: int) -> Dict[str, Any]:
         """
         Analyze the server log of a stage, or report that it is not available.
 
@@ -583,23 +605,19 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         network_tokens: List[Dict[str, Any]] = []
         validation_events: List[Dict[str, Any]] = []
         if has_server_log:
-            server_counts = (
-                self.log_monitor.count_requests_since(
-                    log_position,
-                    self.profile.get_primary_start_pattern(),
-                    self.profile.get_primary_finish_pattern(),
-                )
-            )
-            disconnections = (
-                self.log_monitor.scan_disconnections_since(
-                    log_position,
-                    primary_start_pattern=(
-                        self.profile.get_primary_start_pattern()
-                    ),
-                )
-            )
-            token_data = self.log_monitor.parse_token_accounting_since(log_position)
-            stage_results = [r for r in results if r.get("request_id") != "request-0"]
+            primary_start_pattern: str = self.profile.get_primary_start_pattern()
+            primary_finish_pattern: str = self.profile.get_primary_finish_pattern()
+            server_counts = self.log_monitor.count_requests_since(log_position, primary_start_pattern,
+                                                                  primary_finish_pattern)
+            disconnections = self.log_monitor.scan_disconnections_since(log_position,
+                                                                        primary_start_pattern=primary_start_pattern)
+            token_data: Dict[str, Dict[str, Any]] = self.log_monitor.parse_token_accounting_since(log_position)
+            stage_results: List[Dict[str, Any]] = []
+            request_result: Dict[str, Any]
+            # Keep every result except request-0, the dry-run probe.
+            for request_result in results:
+                if request_result.get("request_id") != "request-0":
+                    stage_results.append(request_result)
             if token_data:
                 result: Dict[str, Any]
                 # Keep the client token counts of each request under client_* keys.
@@ -626,12 +644,18 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             OutputValidator.log_tool_warnings(tool_warnings)
             OutputValidator.log_server_validation(server_counts, actual_requests, self.args.agent)
         else:
-            has_token_data = any(r.get("total_tokens") for r in results)
+            has_token_data: bool = False
+            request_result: Dict[str, Any]
+            # Look for any result that has client token counts.
+            for request_result in results:
+                if request_result.get("total_tokens"):
+                    has_token_data = True
+                    break
             if has_token_data:
-                token_source = "HTTP token_accounting"
+                token_source: str = "HTTP token_accounting"
                 logger.info("\n  Token usage (from %s):", token_source)
                 TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)
-            if self.args.level != LEVEL_MIN:
+            if self.args.level != LoadTestConstants.LEVEL_MIN:
                 logger.info("\n  Server-side validation: not available (no --server-log)")
         server_log_analysis: Dict[str, Any] = {
             "server_counts": server_counts,
@@ -644,11 +668,14 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         return server_log_analysis
 
     def _output_base(self) -> str:
-        """Return the base output directory.
+        """
+        Return the base output directory.
 
         The default is per-user because the temp directory is shared:
         whoever ran first would otherwise own ``load_test`` and lock
         everyone else out of it.
+
+        :return: Path of the base output directory
         """
         if self.args.output_dir:
             return self.args.output_dir
@@ -656,99 +683,57 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             user = getpass.getuser()
         except (KeyError, OSError):
             # No passwd entry for this uid (some containers).
-            user = str(os.getuid())
+            user_id: int = os.getuid()
+            user = str(user_id)
         user = re.sub(r"[^A-Za-z0-9._-]", "_", user)
-        return os.path.join(tempfile.gettempdir(), f"load_test_{user}")
+        temp_dir: str = tempfile.gettempdir()
+        return os.path.join(temp_dir, f"load_test_{user}")
 
     def _setup_test_log(self) -> None:
-        """Create output directory and add a file handler for logging."""
+        """
+        Create output directory and add a file handler for logging.
+        """
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         base = self._output_base()
-        neuro_san_version: Optional[str] = self._resolve_ns_version()
+        neuro_san_version: Optional[str] = self.server_checker.resolve_ns_version()
         request_count: int = self.args.num_requests
         folder_name: str = RunNamer.run_folder_name(timestamp, self.args.host, neuro_san_version, request_count)
         self._output_dir = os.path.join(base, self.args.level, folder_name)
         os.makedirs(self._output_dir, exist_ok=True)
         self._run_log.open(self._output_dir)
 
-    def _preflight_server_check(self) -> None:
-        """Abort before firing if the target server is unreachable.
-
-        A quick TCP connect to --host:--port catches "server not
-        found" (connection refused / DNS failure / host down) so a
-        whole run's worth of requests is not fired at nothing.
+    def _finalize_test_log(self, stage_summaries: List[Dict[str, Any]]) -> None:
         """
-        host = self.args.host
-        port = self.args.port
-        if EnvironmentValidator.is_port_open(host, port):
-            logger.info("  Preflight: server %s:%s reachable.", host, port)
-            self._server_ns_version = self._fetch_server_version()
-            if self._server_ns_version:
-                logger.info("  Preflight: server neuro-san version %s.", self._server_ns_version)
-            else:
-                logger.info("  Preflight: server version unavailable (no /healthz response).")
-            return
-        scheme = "https" if getattr(self.args, "https", False) else "http"
-        logger.error(
-            """ABORT: server %s:%s (%s) is unreachable — not firing any requests.
-  Check --host/--port/--https, or start the server.""",
-            host, port, scheme,
-        )
-        raise SystemExit(1)
+        Report the output directory and close the log handler.
 
-    def _fetch_server_version(self) -> Optional[str]:
-        """Return the server's neuro-san version via its /healthz API.
-
-        Queries ``<scheme>://<host>:<port>/healthz`` (the same HTTP
-        endpoint the client already reaches, so it works remotely
-        without any access to the server machine) and reads
-        ``versions['neuro-san']``.  Returns None if the endpoint is
-        unreachable or unparseable (e.g. an older/gRPC-only server).
+        :param stage_summaries: One summary dict per stage
         """
-        scheme = "https" if getattr(self.args, "https", False) else "http"
-        url = f"{scheme}://{self.args.host}:{self.args.port}/healthz"
-        try:
-            with urllib.request.urlopen(url, timeout=SOCKET_CHECK_TIMEOUT_SECONDS) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            extractor: DictionaryExtractor = DictionaryExtractor(payload)
-            return extractor.get("versions.neuro-san")
-        except (urllib.error.URLError, OSError, ValueError) as exc:
-            logger.debug("Could not fetch server version from %s: %s", url, exc)
-            return None
-
-    def _finalize_test_log(self, stage_summaries) -> None:
-        """Report the output directory and close the log handler."""
         if self._output_dir is None:
             self._run_log.close()
             return
-        self._archive_server_log()
         has_failures: bool = False
         summary: Dict[str, Any]
         # Look for a stage with failed, timed-out or killed requests
         for summary in stage_summaries:
             counts: Dict[str, int] = summary.get("counts", {})
-            if (counts.get(STATUS_FAILED, 0) > 0
-                    or counts.get(STATUS_TIMEOUT, 0) > 0
-                    or counts.get(STATUS_KILLED, 0) > 0):
+            if (counts.get(LoadTestConstants.STATUS_FAILED, 0) > 0
+                    or counts.get(LoadTestConstants.STATUS_TIMEOUT, 0) > 0
+                    or counts.get(LoadTestConstants.STATUS_KILLED, 0) > 0):
                 has_failures = True
                 break
         label: str = "OUTPUT FILES"
         if has_failures:
             label = "OUTPUT FILES (with failures)"
-        logger.info("\n%s", "=" * 60)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  %s", label)
-        logger.info("=" * 60)
+        logger.info("%s", Formatters.SEPARATOR_LINE)
         logger.info("  Directory:   %s", self._output_dir)
-        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
+        json_path: str = os.path.join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
-        requests_dir = os.path.join(self._output_dir, "requests")
+        requests_dir: str = os.path.join(self._output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         if os.path.isdir(requests_dir):
             logger.info("  Requests:    %s", requests_dir)
-        gz_path = os.path.join(self._output_dir, "server.log.gz")
-        if os.path.isfile(gz_path):
-            size_megabytes: float = os.path.getsize(gz_path) / ResourceMonitor.ONE_MEGABYTE
-            logger.info("  Server log:  %s (%.1fM)", gz_path, size_megabytes)
         stdout_log_path: Optional[str] = self._run_log.get_path()
         if stdout_log_path is not None:
             logger.info("  Stdout log:  %s", stdout_log_path)
@@ -756,87 +741,13 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         # Close the run log last so OUTPUT FILES is captured
         self._run_log.close()
 
-    def _archive_server_log(self) -> None:
-        """Gzip the server log into the output directory."""
-        if not self.args.archive_server_log:
-            return
-        if not self.server_log or not os.path.isfile(self.server_log):
-            logger.warning("  --archive-server-log: no server log to archive (missing --server-log or file not found)")
-            return
-        gz_path = os.path.join(self._output_dir, "server.log.gz")
-        with open(self.server_log, "rb") as f_in, gzip.open(gz_path, "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
-
-    def _validate_server_log(self) -> Optional[int]:
-        """Validate --server-log path when provided.
-
-        Skips validation when --server-log is used without a path
-        (auto-detect mode, value is ``"auto"``).  At norm/adv levels
-        without --server-log, logs a warning listing which features
-        will be unavailable.
-
-        Returns the stale log age in minutes, or None if not stale.
-        """
-        level = self.args.level
-        server_log = self.args.server_log
-
-        if server_log == "auto":
-            return None
-
-        if level == LEVEL_MIN and not server_log:
-            return None
-
-        if not server_log:
-            logger.warning(
-                """No --server-log provided at %s level.
-  The following will be unavailable:
-    - Retry counts and amplification factor
-    - Server-side request validation
-    - Client disconnection detection
-    - Per-agent-network token breakdown (server log only)
-  Resource monitoring (psutil) and aggregated token accounting (--tokens) still work.
-  To enable full analysis, add:
-    --server-log  (auto-detect)
-    --server-log logs/server.log""",
-                level,
-            )
-            return None
-
-        if not os.path.isfile(server_log):
-            logger.error("Server log not found: %s", server_log)
-            sys.exit(1)
-
-        modification_time: float = os.path.getmtime(server_log)
-        age_seconds: float = time.time() - modification_time
-        if age_seconds > STALE_LOG_THRESHOLD_SECONDS:
-            # Whole minutes, e.g. 150.7 seconds -> 2 minutes
-            return int(age_seconds / 60)
-        return None
-
-    def _confirm_no_server_log(self, level) -> None:
-        """Prompt to continue when a local server.log isn't found.
-
-        norm/adv expect a server log; if auto-detect fails, offer to
-        run without it or abort. --no-server-log skips this prompt;
-        --no-dry-run does not (it only bypasses the cost confirmation).
-        """
-        logger.warning(
-            """Server log not found for --level %s. Without it: no retry, disconnection, or pool analysis.
-  Set it with --server-log <path>, or use --no-server-log to skip this prompt.""",
-            level,
-        )
-        if not Confirm.ask("Continue without server-log analysis?"):
-            logger.info("Aborted by user.")
-            sys.exit(0)
-        logger.info("  Continuing without server-log analysis.")
-
     @staticmethod
     def _apply_level_defaults(args: argparse.Namespace, explicit_args: Set[str]) -> None:
         """
         Override argparse defaults with level-specific values.
 
         Only applies when the user did not explicitly set the flag.
-        adv: ADV_NUM_REQUESTS requests, ADV_NUM_ROUNDS rounds (stress test).
+        adv: LoadTestConstants.ADV_NUM_REQUESTS requests, LoadTestConstants.ADV_NUM_ROUNDS rounds (stress test).
 
         --full-concurrency matches workers to num-requests so every
         request fires at once.  Otherwise workers stay at the
@@ -846,21 +757,24 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         :param args: Parsed arguments, updated in place
         :param explicit_args: Dest names the user passed on the command line
         """
-        if args.level == LEVEL_ADV:
+        if args.level == LoadTestConstants.LEVEL_ADV:
             if "num_requests" not in explicit_args:
-                args.num_requests = ADV_NUM_REQUESTS
+                args.num_requests = LoadTestConstants.ADV_NUM_REQUESTS
             if "num_rounds" not in explicit_args:
-                args.num_rounds = ADV_NUM_ROUNDS
+                args.num_rounds = LoadTestConstants.ADV_NUM_ROUNDS
 
         if "max_workers" not in explicit_args and args.full_concurrency:
             args.max_workers = args.num_requests
 
     @staticmethod
     def _apply_scale(args) -> None:
-        """Multiply load parameters by --scale factor.
+        """
+        Multiply load parameters by --scale factor.
 
         Applied after level defaults so that both explicit
         values and level defaults are scaled uniformly.
+
+        :param args: Parsed command-line arguments, scaled in place
         """
         factor = args.scale
         if factor <= 1:
@@ -873,727 +787,22 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if args.total_timeout > 0:
             args.total_timeout *= factor
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _server_only_primary_pairs(self, log_position, primary_start_regex) -> List[Dict]:
-        """Primary-agent streaming_chat Start/Finish pairs since log_position.
-
-        Returns the subset of parsed pairs whose agent matches the
-        primary (front-man) agent, each with ``start_ts``,
-        ``finish_ts``, and ``duration_seconds``.  Empty on read error or when
-        no primary request has completed yet.
-        """
-        if self.log_monitor is None:
-            return []
-        try:
-            pairs = self.log_monitor.parse_streaming_chat_timing_since(log_position)
-        except (OSError, ValueError):
-            return []
-        primary = []
-        pair: Dict[str, object]
-        # Keep the pairs of the primary agent.
-        for pair in pairs:
-            agent = pair.get("agent", "")
-            start_line = f"Start {agent}/streaming_chat"
-            if primary_start_regex.search(start_line):
-                primary.append(pair)
-        return primary
-
-    def _server_only_duration_stats(self, log_position, primary_start_regex) -> str:
-        """Cumulative server-side min/avg/max for the primary agent.
-
-        Parses primary streaming_chat Start/Finish pairs seen since
-        the round's log position and formats them.  Returns "n/a"
-        until at least one request has completed.
-        """
-        durations = [
-            float(pair.get("duration_seconds"))
-            for pair in self._server_only_primary_pairs(
-                log_position, primary_start_regex,
-            )
-            if isinstance(pair.get("duration_seconds"), (int, float))
-            and pair.get("duration_seconds") > 0
-        ]
-        return Heartbeat.format_duration_stats(durations)
-
-    def _log_server_only_token_usage(self, log_position) -> None:
-        """Log the LLM & TOKEN USAGE section for a server-only round.
-
-        There is no client side in server-only, so the client line
-        reads "not available" and the numbers come solely from
-        server.log token accounting.
-        """
-        token_data = self.log_monitor.parse_token_accounting_since(log_position)
-        server_stats = SummaryReporter.aggregate_token_entries(token_data.values())
-        printed = SummaryReporter.render_token_usage(None, server_stats, client_source="HTTP token_accounting")
-        if not printed:
-            return
-        model_counts: Dict[str, int] = {}
-        entry: Dict[str, Any]
-        # Count the requests of each known model.
-        for entry in token_data.values():
-            model = entry.get("model")
-            if model and model != "unknown":
-                model_counts[model] = model_counts.get(model, 0) + 1
-        if model_counts:
-            logger.info(
-                "  LLM models: %s",
-                ", ".join(
-                    f"{m} ({c})" for m, c in sorted(
-                        model_counts.items(),
-                        key=lambda kv: kv[1], reverse=True,
-                    )
-                ),
-            )
-
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _server_only_heartbeat(
-            self,
-            received: int,
-            expected: int,
-            completed: int,
-            elapsed_seconds: float,
-            now: float,
-            server_snapshot: Optional[Dict[str, Any]],
-            virtual_memory_stats: Any,
-            duration_stats: str = "n/a",
-            current_system_cpu_percent: Optional[float] = None,
-            peak_system_cpu_percent: Optional[float] = None,
-    ) -> None:
-        """Log a periodic heartbeat during server-only monitoring."""
-        used_bytes = virtual_memory_stats.total - virtual_memory_stats.available
-        used_megabytes = used_bytes / ResourceMonitor.ONE_MEGABYTE
-        available_gigabytes = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        rss_text = ""
-        threads_text = ""
-        if server_snapshot:
-            rss_text = f"  RSS: {server_snapshot.get("rss", 0):.0f}M"
-            threads_text = f"  threads: {server_snapshot.get("threads", 0)}"
-        timestamp = time.strftime("%H:%M:%S", time.localtime(now))
-        elapsed_text: str = Heartbeat.format_elapsed(int(elapsed_seconds))
-        in_flight = max(0, received - completed)
-        if received >= expected:
-            progress_text = f" {expected} recv  {completed}/{expected} done  {in_flight} in-flight"
-        else:
-            progress_text = f" {received}/{expected} recv  {completed} done  {in_flight} in-flight"
-        system_cpu_text = ""
-        if current_system_cpu_percent is not None:
-            shown_peak_cpu_percent: float = current_system_cpu_percent
-            if peak_system_cpu_percent is not None:
-                shown_peak_cpu_percent = peak_system_cpu_percent
-            system_cpu_text = f"  syscpu: {current_system_cpu_percent:.0f}% (peak {shown_peak_cpu_percent:.0f}%)"
-        logger.info(
-            "  [heartbeat] %s [%s]%s  dur/server: %s%s%s"
-            "  sysmem: %.0f%% (%.0fM used"
-            " / %.1fG free)%s",
-            elapsed_text, timestamp,
-            progress_text,
-            duration_stats,
-            threads_text, rss_text,
-            virtual_memory_stats.percent, used_megabytes,
-            available_gigabytes,
-            system_cpu_text,
-        )
-
-    def _run_server_only_monitor(self) -> int:
-        """Interactive server-only monitoring loop.
-
-        Prompts the user for the expected request count, then
-        monitors the server log until all requests arrive (or
-        timeout / Ctrl-C).  After each round, reports results,
-        writes raw_results.json, archives the server log, and
-        loops back for another round.  Only exits on Ctrl-C
-        at the prompt.
-        """
-        primary_start_pattern = self.profile.get_primary_start_pattern()
-        primary_start_regex = re.compile(primary_start_pattern)
-        primary_finish_pattern = self.profile.get_primary_finish_pattern()
-        primary_finish_regex = re.compile(primary_finish_pattern)
-        round_num = 0
-
-        while True:
-            try:
-                answer = input("\nHow many requests will the client send? ")
-            except (KeyboardInterrupt, EOFError):
-                logger.info("\n  Exiting server-only monitor.")
-                return 0
-
-            answer = answer.strip()
-            if not answer:
-                continue
-            try:
-                expected = int(answer)
-            except ValueError:
-                logger.error("  Invalid number: %s", answer)
-                continue
-            if expected <= 0:
-                logger.error("  Number must be positive.")
-                continue
-
-            round_num += 1
-            self._run_server_only_round(expected, round_num, primary_start_regex, primary_finish_regex)
-
-    def _setup_round_output_dir(self, expected) -> str:
-        """Create an output directory for a server-only round."""
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        base = self._output_base()
-        neuro_san_version: Optional[str] = self._resolve_ns_version()
-        folder_name: str = RunNamer.run_folder_name(timestamp, self.args.host, neuro_san_version, expected)
-        round_dir = os.path.join(base, "server_only", folder_name)
-        os.makedirs(round_dir, exist_ok=True)
-        return round_dir
-
-    def _run_server_only_round(self, expected, round_num, primary_start_regex, primary_finish_regex) -> None:
-        """Execute one round of server-only monitoring.
-
-        Wraps the round body with a per-round ``stdout.log`` file
-        handler so each server-only round captures its own console
-        output (heartbeats + summary) in its output directory.
-        """
-        round_dir = self._setup_round_output_dir(expected)
-        log_position = self.log_monitor.read_position()
-        round_log_path: str = os.path.join(round_dir, STDOUT_LOG_FILE_NAME)
-        round_handler = logging.FileHandler(round_log_path, encoding="utf-8")
-        round_handler.setLevel(logging.INFO)
-        round_handler.setFormatter(logging.Formatter("%(message)s"))
-        root_logger = logging.getLogger()
-        root_logger.addHandler(round_handler)
-        try:
-            self._server_only_round_body(
-                expected, round_num,
-                primary_start_regex, primary_finish_regex,
-                round_dir, log_position, round_log_path,
-            )
-        finally:
-            root_logger.removeHandler(round_handler)
-            round_handler.close()
-
-    # pylint: disable=too-many-locals,too-many-arguments
-    # pylint: disable=too-many-positional-arguments
-    def _server_only_round_body(
-            self, expected, round_num,
-            primary_start_regex, primary_finish_regex,
-            round_dir, log_position, round_log_path,
-    ) -> None:
-        """Execute one round of server-only monitoring."""
-        logger.info("\n%s", "=" * 60)
-        logger.info("  Round %d: expecting %d request(s)", round_num, expected)
-        logger.info("=" * 60)
-        logger.info("  neuro-san version: %s", self._resolve_ns_version() or "unknown")
-
-        before_server = self._snapshot_server_process()
-        if before_server:
-            ResourceMonitor.log_snapshot("Server BEFORE", before_server)
-        before_memory_stats = psutil.virtual_memory()
-        before_used_bytes = before_memory_stats.total - before_memory_stats.available
-        before_used_megabytes = before_used_bytes / ResourceMonitor.ONE_MEGABYTE
-        before_available_gigabytes = before_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        total_gigabytes = before_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        logger.info(
-            "  System BEFORE: %.0f%% used"
-            " (%.0fM used / %.1fG free / %.1fG total)",
-            before_memory_stats.percent, before_used_megabytes,
-            before_available_gigabytes, total_gigabytes,
-        )
-        core_count = psutil.cpu_count() or 1
-        before_system_cpu_percent = psutil.cpu_percent(interval=0.1)
-        logger.info("  System CPU: %d cores (%.0f%% in use)", core_count, before_system_cpu_percent)
-        before_sys_threads = SystemResources.total_threads()
-        user_limit, sys_max = SystemResources.thread_limits()
-        logger.info(
-            "  System threads: %s in use / limit %s"
-            " per-user (%s max)",
-            f"{before_sys_threads:,}", user_limit, sys_max,
-        )
-        before_system_memory_percent = before_memory_stats.percent
-        sys_before = {
-            "mem_pct": before_memory_stats.percent,
-            "mem_avail_gb": before_available_gigabytes,
-            "cpu_pct": before_system_cpu_percent,
-            "threads": before_sys_threads,
-        }
-
-        logger.info(
-            """
-Waiting for %d request(s) in server log...
-  Start the client on the remote machine now.""",
-            expected,
-        )
-
-        tail_result: Dict[str, Any] = self._tail_server_log(expected, log_position, primary_start_regex,
-                                                            primary_finish_regex, before_server,
-                                                            before_system_memory_percent)
-        count: int = tail_result.get("count")
-        completed: int = tail_result.get("completed")
-        peak_server: Optional[Dict[str, Any]] = tail_result.get("peak_server")
-        peak_threads: int = tail_result.get("peak_threads")
-        peak_system_memory_percent: float = tail_result.get("peak_sys_mem_pct")
-        elapsed_seconds: float = tail_result.get("elapsed_seconds")
-        interrupted: bool = tail_result.get("interrupted")
-        peak_system_cpu_percent: float = tail_result.get("peak_sys_cpu")
-        avg_system_cpu_percent: float = tail_result.get("avg_sys_cpu")
-        peak_system_threads: int = tail_result.get("peak_sys_threads")
-
-        logger.info(
-            "\n  Monitoring complete: %d/%d received,"
-            " %d/%d processed in %.1fs",
-            count, expected, completed,
-            count, elapsed_seconds,
-        )
-
-        after_server = self._snapshot_server_process()
-        after_kernel = self._read_kernel_memory()
-        after_memory_stats = psutil.virtual_memory()
-        total_gigabytes = after_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
-        after_available_gigabytes = after_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        after_system_cpu_percent = psutil.cpu_percent(interval=0.1)
-        after_sys_threads = SystemResources.total_threads()
-        peak_available_gigabytes = total_gigabytes - peak_system_memory_percent / 100.0 * total_gigabytes
-        SystemResources.log_section(
-            sys_before,
-            {
-                "mem_pct": peak_system_memory_percent,
-                "mem_avail_gb": peak_available_gigabytes,
-                "cpu_pct": peak_system_cpu_percent,
-                "threads": peak_system_threads,
-            },
-            {
-                "mem_pct": after_memory_stats.percent,
-                "mem_avail_gb": after_available_gigabytes,
-                "cpu_pct": after_system_cpu_percent,
-                "threads": after_sys_threads,
-            },
-        )
-
-        primary_pairs = self._server_only_primary_pairs(log_position, primary_start_regex)
-        self._log_server_completion_percentiles(primary_pairs)
-
-        server_errors = self.log_monitor.scan_server_errors_since(log_position)
-        OutputValidator.log_server_errors(server_errors)
-        tool_warnings = self.log_monitor.scan_tool_warnings_since(log_position)
-        OutputValidator.log_tool_warnings(tool_warnings)
-
-        self._log_server_only_token_usage(log_position)
-
-        peak_rss_for_breakdown = 0.0
-        if peak_server:
-            peak_rss_for_breakdown = peak_server.get("rss", 0)
-        elif after_server:
-            peak_rss_for_breakdown = after_server.get("rss", 0)
-        kernel_breakdown = self._log_kernel_breakdown(after_kernel, peak_rss_for_breakdown, log=False)
-
-        self._export_server_only_json(
-            round_dir, expected, count, elapsed_seconds,
-            before_server, after_server, peak_server,
-            peak_threads,
-            before_system_memory_percent, peak_system_memory_percent,
-            after_memory_stats.percent, interrupted,
-            kernel_breakdown,
-            avg_system_cpu_percent=avg_system_cpu_percent,
-            peak_system_cpu_percent=peak_system_cpu_percent,
-            server_errors=server_errors,
-            tool_warnings=tool_warnings,
-        )
-
-        self._history_recorder.append_server_record(
-            self._server_ns_version, expected, count, elapsed_seconds, peak_server, peak_system_cpu_percent,
-            primary_pairs, server_errors, tool_warnings,
-        )
-
-        self._archive_server_log_to(round_dir)
-
-        logger.info("\n%s", "=" * 60)
-        logger.info("  OUTPUT FILES")
-        logger.info("=" * 60)
-        logger.info("  Directory:   %s", round_dir)
-        json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
-        if os.path.isfile(json_path):
-            logger.info("  Raw results: %s", json_path)
-        gz_path = os.path.join(round_dir, "server.log.gz")
-        if os.path.isfile(gz_path):
-            size_megabytes: float = os.path.getsize(gz_path) / ResourceMonitor.ONE_MEGABYTE
-            logger.info("  Server log:  %s (%.1fM)", gz_path, size_megabytes)
-        logger.info("  Stdout log:  %s", round_log_path)
-        self._history_recorder.log_existing_history_files()
-
-        logger.info("\n%s", "\u2500" * 45)
-        logger.info("  Round %d complete. Ready for next round.", round_num)
-        logger.info("%s", "\u2500" * 45)
-
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _tail_server_log(self, expected: int, log_position: Optional[int], primary_start_regex: re.Pattern,
-                         primary_finish_regex: re.Pattern, before_server: Optional[Dict[str, Any]],
-                         before_system_memory_percent: float) -> Dict[str, Any]:
-        """
-        Tail the server log in two phases.
-
-        Phase 1 counts Start patterns until all requests are received. Phase 2 counts Finish patterns until all
-        requests are processed.
-
-        :param expected: Number of requests to wait for
-        :param log_position: Server log offset to start reading from
-        :param primary_start_regex: Regex for the log line of a primary agent request starting
-        :param primary_finish_regex: Regex for the log line of a primary agent request finishing
-        :param before_server: Server snapshot before the round, or None
-        :param before_system_memory_percent: System memory use in percent before the round
-        :return: Dict with "count" (requests received), "completed" (requests processed), "peak_server" (peak server
-            snapshot), "peak_threads", "peak_sys_mem_pct", "elapsed_seconds", "interrupted" (True on Ctrl-C),
-            "peak_sys_cpu", "avg_sys_cpu" and "peak_sys_threads"
-        """
-        start_time = time.time()
-        count = 0
-        completed = 0
-        last_heartbeat = start_time
-        heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
-        peak_server = before_server
-        peak_threads = 0
-        peak_system_memory_percent: float = before_system_memory_percent
-        peak_system_cpu_percent: float = 0.0
-        peak_system_threads: int = 0
-        system_cpu_sum = 0.0
-        system_cpu_samples = 0
-        interrupted = False
-        warned_missing_starts = False
-        phase = 1
-        log_limit = 5
-        # Prime the non-blocking system CPU counter.
-        psutil.cpu_percent(interval=None)
-
-        try:
-            with open(self.server_log, "r", encoding="utf-8") as server_log_file:
-                server_log_file.seek(log_position)
-                last_monitor = start_time
-                monitor_interval = 1.0
-                while True:
-                    if phase == 1 and count >= expected:
-                        now = time.time()
-                        elapsed_seconds = now - start_time
-                        logger.info(
-                            "\n  All %d request(s)"
-                            " received (%.1fs)."
-                            " Monitoring until"
-                            " processing completes"
-                            "...",
-                            expected, elapsed_seconds,
-                        )
-                        phase = 2
-                    if phase == 2 and completed >= count:
-                        break
-                    # Guard: completions arriving without
-                    # matching starts means the monitor was
-                    # started after the client fired, so the
-                    # Start lines predate our read position and
-                    # were skipped. Warn and finish gracefully
-                    # instead of hanging with negative in-flight.
-                    if completed > count:
-                        if not warned_missing_starts:
-                            logger.warning(
-                                "\n  %d completion(s) seen with"
-                                " only %d start(s). The"
-                                " server-only monitor was"
-                                " likely started after the"
-                                " client; Start lines predate"
-                                " its read position and were"
-                                " missed. Received counts are"
-                                " unreliable -- start the"
-                                " monitor before the client.",
-                                completed, count,
-                            )
-                            warned_missing_starts = True
-                        if completed >= expected:
-                            break
-
-                    line = server_log_file.readline()
-                    if line:
-                        if phase == 1 and primary_start_regex.search(line):
-                            count += 1
-                            now = time.time()
-                            timestamp = time.strftime("%H:%M:%S", time.localtime(now))
-                            elapsed_seconds = now - start_time
-                            if count <= log_limit or count == expected:
-                                logger.info(
-                                    "  [server] request"
-                                    " %d/%d received"
-                                    " [%s] (+%.1fs)",
-                                    count, expected,
-                                    timestamp, elapsed_seconds,
-                                )
-                        if primary_finish_regex.search(line):
-                            completed += 1
-                            now = time.time()
-                            timestamp = time.strftime("%H:%M:%S", time.localtime(now))
-                            elapsed_seconds = now - start_time
-                            total = count if phase == 2 else expected
-                            if completed <= log_limit or completed == total:
-                                logger.info(
-                                    "  [server] request"
-                                    " %d/%d completed"
-                                    " [%s] (+%.1fs)",
-                                    completed, total,
-                                    timestamp, elapsed_seconds,
-                                )
-                        continue
-                    position = server_log_file.tell()
-                    server_log_file.seek(position)
-                    time.sleep(0.5)
-
-                    now = time.time()
-                    elapsed_seconds = now - start_time
-
-                    if now - last_monitor >= monitor_interval:
-                        server_snapshot = ResourceMonitor.snapshot(self.server_process)
-                        if server_snapshot:
-                            if peak_server is None or server_snapshot.get("rss", 0) > peak_server.get("rss", 0):
-                                peak_server = server_snapshot
-                            current_threads = server_snapshot.get("threads", 0)
-                            peak_threads = max(peak_threads, current_threads)
-                        virtual_memory_stats = psutil.virtual_memory()
-                        peak_system_memory_percent = max(peak_system_memory_percent, virtual_memory_stats.percent)
-                        current_system_cpu_percent = psutil.cpu_percent(interval=None)
-                        system_cpu_sum += current_system_cpu_percent
-                        system_cpu_samples += 1
-                        peak_system_cpu_percent = max(peak_system_cpu_percent, current_system_cpu_percent)
-                        peak_system_threads = max(peak_system_threads, SystemResources.total_threads())
-                        last_monitor = now
-
-                        if now - last_heartbeat >= heartbeat_interval:
-                            duration_stats = self._server_only_duration_stats(log_position, primary_start_regex)
-                            self._server_only_heartbeat(
-                                count, expected,
-                                completed,
-                                elapsed_seconds, now,
-                                server_snapshot, virtual_memory_stats,
-                                duration_stats,
-                                current_system_cpu_percent, peak_system_cpu_percent,
-                            )
-                            last_heartbeat = now
-
-                    if elapsed_seconds > self.args.stage_timeout:
-                        if phase == 1:
-                            logger.warning(
-                                "  Stage timeout"
-                                " (%.0fs) reached"
-                                " with %d/%d"
-                                " requests"
-                                " received.",
-                                self.args.stage_timeout,
-                                count, expected,
-                            )
-                        else:
-                            logger.warning(
-                                "  Stage timeout"
-                                " (%.0fs) reached"
-                                " with %d/%d"
-                                " requests"
-                                " processed.",
-                                self.args.stage_timeout,
-                                completed, count,
-                            )
-                        break
-        except KeyboardInterrupt:
-            interrupted = True
-            logger.info("\n  Interrupted \u2014 reporting partial results...")
-
-        elapsed_seconds = time.time() - start_time
-        avg_system_cpu_percent: float = 0.0
-        if system_cpu_samples:
-            avg_system_cpu_percent = system_cpu_sum / system_cpu_samples
-        tail_result: Dict[str, Any] = {
-            "count": count,
-            "completed": completed,
-            "peak_server": peak_server,
-            "peak_threads": peak_threads,
-            "peak_sys_mem_pct": peak_system_memory_percent,
-            "elapsed_seconds": elapsed_seconds,
-            "interrupted": interrupted,
-            "peak_sys_cpu": peak_system_cpu_percent,
-            "avg_sys_cpu": avg_system_cpu_percent,
-            "peak_sys_threads": peak_system_threads,
-        }
-        return tail_result
-
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _export_server_only_json(
-            self,
-            round_dir: str,
-            expected: int,
-            count: int,
-            elapsed: float,
-            before_server: Optional[Dict[str, Any]],
-            after_server: Optional[Dict[str, Any]],
-            peak_server: Optional[Dict[str, Any]],
-            peak_threads: int,
-            before_system_memory_percent: float,
-            peak_system_memory_percent: float,
-            after_system_memory_percent: float,
-            interrupted: bool,
-            kernel_breakdown: Optional[Dict[str, float]] = None,
-            avg_system_cpu_percent: Optional[float] = None,
-            peak_system_cpu_percent: Optional[float] = None,
-            server_errors: Optional[List[Dict[str, str]]] = None,
-            tool_warnings: Optional[List[Dict[str, str]]] = None,
-    ) -> None:
-        """Write raw_results.json for a server-only round."""
-        server_cpu_seconds = None
-        if before_server and after_server:
-            cpu_before = before_server.get("cpu_seconds")
-            cpu_after = after_server.get("cpu_seconds")
-            if cpu_before is not None and cpu_after is not None:
-                server_cpu_seconds = cpu_after - cpu_before
-        raw_data = {
-            "test_metadata": {
-                "timestamp": time.strftime(
-                    "%Y-%m-%dT%H:%M:%S%z",
-                ),
-                "hostname": socket.gethostname(),
-                "python_version": (
-                    platform.python_version()
-                ),
-                "platform": platform.platform(),
-                "mode": "server-only",
-                "agent": self.args.agent,
-            },
-            "round": {
-                "expected_requests": expected,
-                "received_requests": count,
-                "elapsed_seconds": round(elapsed, 2),
-                "interrupted": interrupted,
-            },
-            "server_resources": {
-                "before": before_server,
-                "after": after_server,
-                "peak": peak_server,
-                "peak_threads": peak_threads,
-            },
-            "system_memory": {
-                "before_pct": before_system_memory_percent,
-                "peak_pct": peak_system_memory_percent,
-                "after_pct": after_system_memory_percent,
-            },
-            "system_cpu": {
-                "avg_pct": avg_system_cpu_percent,
-                "peak_pct": peak_system_cpu_percent,
-                "server_cpu_seconds_total": server_cpu_seconds,
-                "server_cpu_seconds_per_request": (
-                    server_cpu_seconds / count
-                    if (server_cpu_seconds is not None
-                        and count > 0)
-                    else None
-                ),
-            },
-        }
-        raw_data["server_errors"] = server_errors or []
-        raw_data["tool_warnings"] = tool_warnings or []
-        if kernel_breakdown:
-            raw_data["kernel_memory_breakdown"] = kernel_breakdown
-        json_path: str = os.path.join(round_dir, RAW_RESULTS_FILE_NAME)
-        with open(json_path, "w", encoding="utf-8") as json_file:
-            json.dump(raw_data, json_file, indent=2)
-
-    @staticmethod
-    def _read_kernel_memory() -> Optional[Dict[str, float]]:
-        """Read kernel memory breakdown from /proc/meminfo.
-
-        Returns a dict with values in MB, or None if not on
-        Linux.
-        """
-        if not os.path.isfile("/proc/meminfo"):
-            return None
-        result = {}
-        try:
-            with open("/proc/meminfo", "r", encoding="utf-8") as meminfo_file:
-                line: str
-                # Read each meminfo value in megabytes.
-                for line in meminfo_file:
-                    parts = line.split()
-                    if len(parts) < 2:
-                        continue
-                    key = parts[0].rstrip(":")
-                    val_kb = int(parts[1])
-                    result[key] = val_kb / 1024.0
-        except (OSError, ValueError):
-            return None
-
-        tcp_mem_mb = 0.0
-        try:
-            with open("/proc/net/sockstat", "r", encoding="utf-8") as sockstat_file:
-                # Read the TCP memory pages from the TCP: line.
-                for line in sockstat_file:
-                    if line.startswith("TCP:"):
-                        parts = line.split()
-                        mem_index = parts.index("mem")
-                        pages = int(parts[mem_index + 1])
-                        tcp_mem_mb = (pages * 4) / 1024.0
-                        break
-        except (OSError, ValueError, IndexError):
-            pass
-        result["TcpMem"] = tcp_mem_mb
-        return result
-
-    @staticmethod
-    def _log_kernel_breakdown(after_kernel, server_rss_peak, *, log=True) -> Dict[str, float]:
-        """Compute the kernel memory breakdown.
-
-        When ``log`` is False the values are still returned for JSON
-        export but nothing is printed to the console.
-        """
-        if not after_kernel:
-            return {}
-
-        rss_mb = server_rss_peak or 0.0
-        kern_stacks = after_kernel.get("KernelStack", 0)
-        page_tables = after_kernel.get("PageTables", 0)
-        slab = after_kernel.get("Slab", 0)
-        cached = after_kernel.get("Cached", 0) + after_kernel.get("Buffers", 0)
-        tcp_mem = after_kernel.get("TcpMem", 0)
-        mem_total = after_kernel.get("MemTotal", 0)
-        mem_free = after_kernel.get("MemFree", 0)
-        sys_used = mem_total - mem_free
-
-        accounted = rss_mb + kern_stacks + page_tables + slab + cached + tcp_mem
-        unaccounted = max(0, sys_used - accounted)
-
-        if log:
-            logger.info("\n  Kernel memory breakdown:")
-            logger.info("    Server RSS:       %.0fM", rss_mb)
-            logger.info("    Kernel stacks:    %.0fM", kern_stacks)
-            logger.info("    Page tables:      %.0fM", page_tables)
-            logger.info("    Slab cache:       %.0fM", slab)
-            logger.info("    Page cache:       %.0fM", cached)
-            logger.info("    TCP buffers:      %.0fM", tcp_mem)
-            logger.info("    %s", "\u2500" * 30)
-            logger.info("    Accounted:        %.0fM", accounted)
-            logger.info("    Unaccounted:      %.0fM", unaccounted)
-            logger.info("    System total:     %.0fM (used + cache)", sys_used)
-
-        return {
-            "server_rss_mb": rss_mb,
-            "kernel_stacks_mb": kern_stacks,
-            "page_tables_mb": page_tables,
-            "slab_mb": slab,
-            "page_cache_mb": cached,
-            "tcp_buffers_mb": tcp_mem,
-            "accounted_mb": accounted,
-            "unaccounted_mb": unaccounted,
-            "system_total_mb": sys_used,
-        }
-
-    def _archive_server_log_to(self, target_dir) -> None:
-        """Gzip the server log into the given directory."""
-        if not self.server_log or not os.path.isfile(self.server_log):
-            return
-        gz_path = os.path.join(target_dir, "server.log.gz")
-        with open(self.server_log, "rb") as f_in, gzip.open(gz_path, "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
-
     def run(self) -> int:
-        """Execute the full load test workflow."""
-        level = self.args.level
+        """
+        Execute the full load test workflow.
+
+        :return: The exit code: 0 when every request passes or the server-only monitor exits at its prompt,
+                 1 on failures or an abort, 2 on Ctrl-C
+        :raises SystemExit: When the arguments don't fit together
+        :raises LoadTestAbortError: When the server can't be reached or the --server-log file is not found
+        """
+        level: str = self.args.level
         self.args.include_tokens = not self.args.no_tokens
-        split_mode = self.args.client_only or self.args.server_only
+        split_mode: bool = self.args.client_only or self.args.server_only
         if split_mode:
-            level = LEVEL_MIN
-            self.args.level = LEVEL_MIN
-        elif level == LEVEL_MIN:
+            level = LoadTestConstants.LEVEL_MIN
+            self.args.level = LoadTestConstants.LEVEL_MIN
+        elif level == LoadTestConstants.LEVEL_MIN:
             logger.error(
                 "--level min requires --client-only or "
                 "--server-only. For an all-in-one run use "
@@ -1613,15 +822,15 @@ Waiting for %d request(s) in server log...
         elif (self.args.server_log is None
                 and not self.args.client_only
                 and not self.args.server_only
-                and self.args.host in LOCAL_HOSTS
-                and level != LEVEL_MIN):
+                and self.args.host in LoadTestConstants.LOCAL_HOSTS
+                and level != LoadTestConstants.LEVEL_MIN):
             self.args.server_log = EnvironmentValidator.try_auto_detect_server_log(self.args)
-        if (level != LEVEL_MIN
+        if (level != LoadTestConstants.LEVEL_MIN
                 and not self.args.client_only
                 and not self.args.server_only
                 and not self.args.no_server_log
                 and self.args.server_log is None):
-            if self.args.host not in LOCAL_HOSTS:
+            if self.args.host not in LoadTestConstants.LOCAL_HOSTS:
                 logger.error(
                     "--level %s needs a local server to read "
                     "server.log. Use --client-only for a remote "
@@ -1629,19 +838,19 @@ Waiting for %d request(s) in server log...
                     level,
                 )
                 raise SystemExit(1)
-            self._confirm_no_server_log(level)
+            self.server_checker.confirm_no_server_log(level)
         self._apply_level_defaults(self.args, self.args.explicit_args)
         self._apply_scale(self.args)
         self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
-        stale_log_age_minutes: Optional[int] = self._validate_server_log()
+        stale_log_age_minutes: Optional[int] = self.server_checker.validate_server_log()
 
         stages = self.input_validator.resolve_stages()
         total_cap = self.input_validator.resolve_max_requests(stages)
 
         self._setup_test_log()
         if not self.args.server_only:
-            self._preflight_server_check()
+            self.server_checker.preflight_server_check()
             self.probe_result = (
                 self.input_validator.confirm_cost(
                     stages, total_cap,
@@ -1651,8 +860,8 @@ Waiting for %d request(s) in server log...
                 )
             )
 
-        is_local = self.args.host in LOCAL_HOSTS
-        monitor_resources = level != LEVEL_MIN or split_mode
+        is_local: bool = self.args.host in LoadTestConstants.LOCAL_HOSTS
+        monitor_resources: bool = level != LoadTestConstants.LEVEL_MIN or split_mode
 
         if self.args.client_only:
             logger.info("Client-only mode: skipping server process detection.")
@@ -1679,7 +888,15 @@ Waiting for %d request(s) in server log...
             )
             if self.server_log:
                 logger.info("  server_log=%s", self.server_log)
-            return self._run_server_only_monitor()
+            output_base: str = self._output_base()
+            monitor_parts: Dict[str, Any] = {
+                "server_process": self.server_process,
+                "log_monitor": self.log_monitor,
+                "history_recorder": self._history_recorder,
+                "server_checker": self.server_checker,
+            }
+            server_only_monitor: ServerOnlyMonitor = ServerOnlyMonitor(self.args, self.profile, monitor_parts)
+            return server_only_monitor.run(output_base)
 
         if not is_local:
             logger.info("Remote mode: targeting %s:%s", self.args.host, self.args.port)
@@ -1693,6 +910,7 @@ Waiting for %d request(s) in server log...
         mode: str = "flat"
         if self.args.ramp:
             mode = "ramp"
+        profile_source: str = self._profile_source()
         logger.info(
             "\nConfig: agent=%s, mode=%s, level=%s, "
             "stages=%s, rounds=%s, max_requests=%s, host=%s, port=%s, "
@@ -1702,7 +920,7 @@ Waiting for %d request(s) in server log...
             self.args.num_rounds, total_cap,
             self.args.host, self.args.port, self.args.request_timeout,
             self.args.idle_timeout, self.args.stage_timeout,
-            prompt_mode, self._profile_source(),
+            prompt_mode, profile_source,
         )
         if monitor_resources:
             logger.info("  settle_time=%ss", self.args.settle_time)
@@ -1711,9 +929,11 @@ Waiting for %d request(s) in server log...
         else:
             logger.info("  server_log=none")
         if self.probe_result and self.probe_result.get("total_tokens"):
-            logger.info("  tokens_per_request=%s (measured by probe)", f"{self.probe_result.get('total_tokens'):,}")
+            probe_tokens: int = self.probe_result.get("total_tokens")
+            logger.info("  tokens_per_request=%s (measured by probe)", f"{probe_tokens:,}")
         elif self.profile.get_estimated_tokens_per_request():
-            logger.info("  estimated_tokens_per_request=%s", f"{self.profile.get_estimated_tokens_per_request():,}")
+            estimated_tokens: int = self.profile.get_estimated_tokens_per_request()
+            logger.info("  estimated_tokens_per_request=%s", f"{estimated_tokens:,}")
 
         stage_summaries: List[Dict[str, Any]] = []
         exit_code = 1
@@ -1733,9 +953,10 @@ Waiting for %d request(s) in server log...
                     "before the interrupt.",
                 )
 
+            neuro_san_version: Optional[str] = self.server_checker.resolve_ns_version()
             summary_reporter = SummaryReporter(
                 stage_summaries,
-                neuro_san_version=self._resolve_ns_version(),
+                neuro_san_version=neuro_san_version,
                 client_token_source="HTTP token_accounting",
             )
             if len(stage_summaries) > 1:
@@ -1764,7 +985,7 @@ Waiting for %d request(s) in server log...
                 disc_reporter = DisconnectionReporter(stage_summaries)
                 disc_reporter.log_disconnection_summary()
 
-            if level == LEVEL_ADV:
+            if level == LoadTestConstants.LEVEL_ADV:
                 has_server_log = self.server_log is not None
                 if has_server_log:
                     pool_analyzer = PoolAnalyzer(stage_summaries)
@@ -1788,25 +1009,38 @@ Waiting for %d request(s) in server log...
         finally:
             if prev_sigint_handler is not None:
                 signal.signal(signal.SIGINT, prev_sigint_handler)
-            self._history_recorder.append_client_record(stage_summaries, self._server_ns_version)
+            self._history_recorder.append_client_record(stage_summaries, self.server_checker.get_server_ns_version())
             self._finalize_test_log(stage_summaries)
 
         return exit_code
 
     def was_interrupted(self) -> bool:
-        """Return True if the run was stopped early by Ctrl-C."""
+        """
+        Return True if the run was stopped early by Ctrl-C.
+
+        :return: True when Ctrl-C stops the run
+        """
         return self._interrupted
 
     def _install_interrupt_handler(self):
-        """Install a SIGINT handler that requests a graceful stop.
+        """
+        Install a SIGINT handler that requests a graceful stop.
 
         The first Ctrl-C sets a cancel event so in-flight requests are
         killed and the completed ones are still summarized.  A second
         Ctrl-C restores the previous handler so the interpreter exits
-        immediately.  Returns the previous handler (or None if it could
-        not be installed, e.g. not on the main thread).
+        immediately.
+
+        :return: The previous handler, or None if it could not be installed
+                 (e.g. not on the main thread)
         """
         def _handle_sigint(_signum, _frame):
+            """
+            Stop gracefully on the first Ctrl-C, and restore the previous handler on the second.
+
+            :param _signum: Signal number (not used)
+            :param _frame: Current stack frame (not used)
+            """
             # Nested to close over self and prev_handler, which the
             # signal callback needs to toggle graceful vs. forced stop;
             # signal.signal() takes a bare callable, not a bound method.
@@ -1828,47 +1062,38 @@ Waiting for %d request(s) in server log...
         except (ValueError, OSError):
             return None
 
-    @staticmethod
-    def _log_server_completion_percentiles(primary_pairs) -> None:
-        """Log server-side completion-duration percentiles on one line.
-
-        Durations are server-side processing times (Start->Finish from
-        the primary agent's log pairs), so they run slightly shorter
-        than the client's end-to-end per-request duration.  Reuses
-        ``LatencyAnalyzer._percentile`` and ``COMPLETION_MILESTONES`` so
-        the math and labels match the client's percentile line.
+    def _export_raw_json(self, stage_summaries: List[Dict[str, Any]], exit_code: int) -> None:
         """
-        durations = sorted(
-            float(pair.get("duration_seconds")) for pair in primary_pairs
-            if isinstance(pair.get("duration_seconds"), (int, float))
-            and pair.get("duration_seconds") > 0
-        )
-        if not durations:
-            return
-        milestones = [
-            (
-                pct,
-                Formatters.fmt_duration(
-                    # pylint: disable=protected-access
-                    LatencyAnalyzer._percentile(durations, pct),
-                    precision=1,
-                ),
-            )
-            for pct in COMPLETION_MILESTONES
-        ]
-        parts = " / ".join(f"p{pct} {value}" for pct, value in milestones)
-        logger.info("\n  Server-side completion percentiles (%d requests): %s", len(durations), parts)
+        Save all test data as a single raw_results.json file.
 
-    def _export_raw_json(self, stage_summaries, *, exit_code) -> None:
-        """Save all test data as a single raw_results.json file."""
+        :param stage_summaries: One summary dict per stage
+        :param exit_code: Exit code of the test
+        """
         all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
 
-        total_tokens = sum(r.get("total_tokens", 0) for r in all_results)
-        total_cost = sum(r.get("cost_usd", 0.0) for r in all_results)
-        total_elapsed = sum(s.get("elapsed", 0) for s in stage_summaries)
-        total_requests = len(all_results)
-        passed = sum(1 for r in all_results if r.get("status") == STATUS_CREATED)
-        avg_latency = sum(r.get("elapsed", 0) for r in all_results) / total_requests if total_requests else 0
+        total_tokens: int = 0
+        costs: List[float] = []
+        latencies: List[float] = []
+        passed: int = 0
+        result: Dict[str, Any]
+        # Collect the tokens, cost, latency and pass count of every request.
+        for result in all_results:
+            total_tokens += result.get("total_tokens", 0)
+            costs.append(result.get("cost_usd", 0.0))
+            latencies.append(result.get("elapsed", 0))
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
+                passed += 1
+        total_cost: float = sum(costs)
+        stage_elapsed: List[float] = []
+        summary: Dict[str, Any]
+        # Collect the elapsed time of every stage.
+        for summary in stage_summaries:
+            stage_elapsed.append(summary.get("elapsed", 0))
+        total_elapsed: float = sum(stage_elapsed)
+        total_requests: int = len(all_results)
+        avg_latency: float = 0
+        if total_requests:
+            avg_latency = sum(latencies) / total_requests
 
         raw_data = {
             "test_metadata": {
@@ -1876,8 +1101,8 @@ Waiting for %d request(s) in server log...
                 "hostname": socket.gethostname(),
                 "python_version": platform.python_version(),
                 "platform": platform.platform(),
-                "neuro_san_version": self._resolve_ns_version(),
-                "neuro_san_studio_version": self._get_package_version(
+                "neuro_san_version": self.server_checker.resolve_ns_version(),
+                "neuro_san_studio_version": ServerChecker.get_package_version(
                     "neuro_san_studio",
                 ),
                 "verdict": "PASSED" if exit_code == 0 else "FAILED",
@@ -1919,26 +1144,19 @@ Waiting for %d request(s) in server log...
                 "total_cost_usd": round(total_cost, 6),
             },
             "stage_summaries": stage_summaries,
-            "resource_rows": [
-                {"before": row[1], "after": row[2]}
-                for row in self.resource_reporter.get_resource_rows()
-            ],
-            "client_resource_rows": [
-                {
-                    "before": row[1],
-                    "peak": row[2],
-                    "settled": row[3],
-                }
-                for row in self.resource_reporter.get_client_rows()
-            ],
+            "resource_rows": self.resource_reporter.get_resource_snapshots(),
+            "client_resource_rows": self.resource_reporter.get_client_snapshots(),
         }
-        raw_data.update(JsonMetadata.build())
-        json_path: str = os.path.join(self._output_dir, RAW_RESULTS_FILE_NAME)
+        json_metadata: Dict[str, Any] = JsonMetadata.build()
+        raw_data.update(json_metadata)
+        json_path: str = os.path.join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as json_file:
             json.dump(raw_data, json_file, indent=2, default=str)
 
     def _rename_interrupted(self) -> None:
-        """Append _interrupted to the output directory name."""
+        """
+        Append _interrupted to the output directory name.
+        """
         if self._output_dir is None:
             return
         new_path = self._output_dir + "_interrupted"
@@ -1950,11 +1168,15 @@ Waiting for %d request(s) in server log...
             logger.warning("  Could not rename output dir: %s", exc)
 
     def _maybe_write_summary(self, stage_summaries, server_chat_timing) -> None:
-        """Write summary.txt for adv level only.
+        """
+        Write summary.txt for adv level only.
 
         With --no-dry-run: auto-write.  Otherwise prompt the user.
+
+        :param stage_summaries: One summary dict per stage
+        :param server_chat_timing: Server streaming_chat Start/Finish pairs for the test
         """
-        if self.args.level != LEVEL_ADV:
+        if self.args.level != LoadTestConstants.LEVEL_ADV:
             return
         if not self.args.no_dry_run:
             if not Confirm.ask("\nSave summary.txt?"):
@@ -1963,10 +1185,20 @@ Waiting for %d request(s) in server log...
         writer.write(self._output_dir)
 
     def _check_results(self, stage_summaries) -> int:
-        """Log pass/fail verdict and return appropriate exit code."""
+        """
+        Log pass/fail verdict and return appropriate exit code.
+
+        :param stage_summaries: One summary dict per stage
+        :return: 0 when the test passes, 1 when it fails
+        """
         all_results: List[Dict[str, Any]] = self._collect_stage_results(stage_summaries)
-        total = len(all_results)
-        passed = sum(1 for r in all_results if r.get("status") == STATUS_CREATED)
+        total: int = len(all_results)
+        passed: int = 0
+        result: Dict[str, Any]
+        # Count the requests that passed.
+        for result in all_results:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
+                passed += 1
         failed = total - passed
 
         if failed > 0:
@@ -1993,49 +1225,44 @@ Waiting for %d request(s) in server log...
         return all_results
 
     @staticmethod
-    def _get_package_version(package_name) -> Optional[str]:
-        """Return the installed version of a package, or None."""
-        try:
-            return _pkg_meta.version(package_name)
-        except _pkg_meta.PackageNotFoundError:
-            return None
-
-    def _resolve_ns_version(self) -> Optional[str]:
-        """Return the neuro-san version to tag this run with.
-
-        Prefers the *server's* version (via ``/healthz``) so the tag
-        reflects what is actually being exercised, even when the client
-        runs from a different checkout/venv or a remote machine.  The
-        result is cached in ``_server_ns_version``.  Falls back to the
-        locally installed package version when the server is
-        unreachable or does not report one.
-        """
-        if not self._server_ns_version:
-            self._server_ns_version = self._fetch_server_version()
-        return self._server_ns_version or self._get_package_version("neuro-san")
-
-    @staticmethod
     def _agent_filter(args) -> Optional[List[str]]:
-        """Split --compare-agent into a list of agent names."""
+        """
+        Split --compare-agent into a list of agent names.
+
+        :param args: Parsed command-line arguments
+        :return: The agent names, or None when --compare-agent is not set
+        """
         if not args.compare_agent:
             return None
-        return [name.strip() for name in args.compare_agent.split(",")]
+        agent_names: List[str] = []
+        name: str
+        # Keep each comma-separated agent name, without its spaces.
+        for name in args.compare_agent.split(","):
+            agent_names.append(name.strip())
+        return agent_names
 
     @staticmethod
     def main() -> None:
-        """Entry point for the load test script."""
+        """
+        Entry point for the load test script.
+        """
         args = LoadTestArguments.parse_args(__doc__)
         if args.rebuild:
             ResultsRebuilder(args.rebuild, force=args.rebuild_all).run()
             return
         if args.trend:
-            TrendHistory(args.trend, agent_filter=LoadTestOrchestrator._agent_filter(args)).run()
+            trend_agent_filter: Optional[List[str]] = LoadTestCli._agent_filter(args)
+            TrendHistory(args.trend, agent_filter=trend_agent_filter).run()
             return
         if args.compare:
-            agent_filter = LoadTestOrchestrator._agent_filter(args)
-            run_filter = None
+            agent_filter: Optional[List[str]] = LoadTestCli._agent_filter(args)
+            run_filter: Optional[List[str]] = None
             if args.compare_runs:
-                run_filter = [r.strip() for r in args.compare_runs.split(",")]
+                run_filter = []
+                run_name: str
+                # Keep each comma-separated run name, without its spaces.
+                for run_name in args.compare_runs.split(","):
+                    run_filter.append(run_name.strip())
             CrossRunComparison(
                 args.compare,
                 agent_filter=agent_filter,
@@ -2044,20 +1271,21 @@ Waiting for %d request(s) in server log...
             ).run()
             return
         try:
-            orchestrator = LoadTestOrchestrator(args)
-            exit_code = orchestrator.run()
+            load_test_cli = LoadTestCli(args)
+            exit_code = load_test_cli.run()
         except LoadTestAbortError as abort_error:
-            sys.exit(abort_error.get_exit_code())
-        if orchestrator.was_interrupted():
+            abort_exit_code: int = abort_error.get_exit_code()
+            sys.exit(abort_exit_code)
+        if load_test_cli.was_interrupted():
             # After Ctrl-C some worker threads (e.g. un-killable
             # in-thread HTTP requests) may still be blocked.  Results
             # are already printed and saved, so exit hard rather than
             # hang joining those threads at interpreter shutdown.
             sys.stdout.flush()
             sys.stderr.flush()
-            os._exit(exit_code)  # pylint: disable=protected-access
+            os._exit(exit_code)
         sys.exit(exit_code)
 
 
 if __name__ == "__main__":
-    LoadTestOrchestrator.main()
+    LoadTestCli.main()
