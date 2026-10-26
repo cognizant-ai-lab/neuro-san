@@ -449,9 +449,16 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         log_position: Optional[int] = stage_start.get("log_position")
         stage_requests: int = stage_start.get("stage_requests")
         client_process: Optional[Process] = stage_start.get("client_process")
-        monitor: Optional[Thread] = self.log_monitor.start_log_monitor(
-            log_position, stage_requests, monitor_start_seconds, stop_event, client_process=client_process,
-            primary_start_pattern=primary_start_pattern, output_dir=self._output_dir)
+        monitor_settings: Dict[str, Any] = {
+            "position": log_position,
+            "expected_count": stage_requests,
+            "fire_time_seconds": monitor_start_seconds,
+            "stop_event": stop_event,
+            "client_process": client_process,
+            "primary_start_pattern": primary_start_pattern,
+            "output_dir": self._output_dir,
+        }
+        monitor: Optional[Thread] = self.log_monitor.start_log_monitor(monitor_settings)
         return monitor
 
     def _check_stage(self, stage_inputs: Dict[str, Any], stage_start: Dict[str, Any],
