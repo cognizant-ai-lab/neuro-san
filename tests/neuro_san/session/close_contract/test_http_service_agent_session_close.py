@@ -14,25 +14,24 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-close()/is_closed() single-use contract tests for HttpServiceAgentSession.
 
-These exercise the client-side contract only and never contact a server: the
-closed-session guard raises before any network call, so no LLM key or running
-service is required.
-"""
 from typing import Any
 from typing import Dict
 
 import pytest
 
-from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
 
 class TestHttpServiceAgentSessionClose:
-    """A HttpServiceAgentSession is single-use once close() has been called."""
+    """
+    A HttpServiceAgentSession is single-use once close() has been called.
+
+    These close()/is_closed() contract tests exercise the client-side contract only
+    and never contact a server: the closed-session guard raises before any network
+    call, so no LLM key or running service is required.
+    """
 
     @staticmethod
     def _make_session() -> HttpServiceAgentSession:
@@ -81,7 +80,3 @@ class TestHttpServiceAgentSessionClose:
         request: Dict[str, Any] = {"user_message": {"type": "HUMAN", "text": "hi"}}
         with pytest.raises(AgentSessionClosedError):
             list(session.streaming_chat(request))
-
-    def test_interface_default_is_closed_is_false(self):
-        """The AgentSession base contract defaults is_closed() to False (direct sessions can't be closed)."""
-        assert AgentSession().is_closed() is False

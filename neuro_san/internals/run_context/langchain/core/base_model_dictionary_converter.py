@@ -26,6 +26,7 @@ from typing import Union
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import create_model
+from pydantic.fields import FieldInfo
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
@@ -160,6 +161,8 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             raise ToolSpecError(f"'required' must contain only field-name strings, got {required!r}")
 
         fields: Dict[str, Any] = {}
+        field_name: str = None
+        one_property: Dict[str, Any] = None
         for field_name, one_property in properties.items():
 
             # Reject parameter names pydantic cannot make fields for
@@ -209,7 +212,9 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 # never enables strict mode itself; this only matters for
                 # schema-strict gateways or user code that opts into it.
                 field_type = Optional[field_type]
-            field = Field(**field_kwargs)
+            # Pydantic types Field() as returning Any so its result can be assigned
+            # to a field of any declared type, so Any is all that can be said here.
+            field: FieldInfo = Field(**field_kwargs)
 
             # Add the field to our dictionary with its name as key
             fields[field_name] = (field_type, field)
@@ -267,7 +272,8 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             message = f"Parameter name '{field_name}' must not start with an underscore."
         elif field_name == "model_config":
             message = "Parameter name 'model_config' is reserved by pydantic for model configuration."
-        elif field_name.startswith(("model_dump", "model_validate")) and hasattr(BaseModel, field_name):
+        elif (field_name.startswith("model_dump") or field_name.startswith("model_validate")) \
+                and hasattr(BaseModel, field_name):
             message = f"Parameter name '{field_name}' shadows a pydantic BaseModel method."
 
         if message is not None:
@@ -297,7 +303,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             raise ToolSpecError(f"Field '{field_name}' has a non-string 'type' ({type_from_dict!r}). "
                                 "Union type lists are not supported; use a single type name.")
 
-        field_type: Type = self.TYPE_LOOKUP.get(type_from_dict)
+        field_type: Type = BaseModelDictionaryConverter.TYPE_LOOKUP.get(type_from_dict)
 
         # Pydantic v1 rejected the None annotation that resulted from an
         # unrecognized type string, but pydantic v2 accepts None as NoneType,

@@ -74,3 +74,13 @@ class RecordingReservationsStorage(ReservationsStorage):
         """
         Nothing to expire in this test double.
         """
+
+    def start(self) -> None:
+        """
+        Nothing to start in this test double.
+        """
+
+    def stop(self) -> None:
+        """
+        Nothing to stop in this test double.
+        """

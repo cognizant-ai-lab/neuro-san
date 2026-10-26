@@ -13,9 +13,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Tests for RequestCanonicalizer key stability.
-"""
+
 import json
 
 from typing import Any

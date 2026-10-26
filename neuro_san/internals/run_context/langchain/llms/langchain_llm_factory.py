@@ -18,16 +18,20 @@
 from typing import Any
 from typing import Dict
 
+from abc import abstractmethod
+
 from langchain_core.language_models.base import BaseLanguageModel
 
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
+from leaf_common.utils.interface import interface
+
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
 
-class LangChainLlmFactory(EnvironmentConfiguration):
+@interface
+class LangChainLlmFactory:
     """
     Interface for Factory classes creating LLM BaseLanguageModels.
-    This derives from EnvironmentConfiguration in order to support easy access to
+    Implementations typically also derive from EnvironmentConfiguration in order to support easy access to
     the get_value_or_env() method.
 
     Most methods take a config dictionary which consists of the following keys:
@@ -45,6 +49,7 @@ class LangChainLlmFactory(EnvironmentConfiguration):
                                     the model description in this class.
     """
 
+    @abstractmethod
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a LangChainLlmResources instance from the fully-specified llm config.
@@ -62,6 +67,7 @@ class LangChainLlmFactory(EnvironmentConfiguration):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def create_llm_resources(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
         Create a LangChainLlmResources instance from the fully-specified llm config.

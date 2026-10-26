@@ -22,6 +22,8 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 
+from tests.load_tests.load_test_constants import LoadTestConstants
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -48,6 +50,8 @@ class TokenLogWriter:
         :param validation_events: Validation retry events parsed from the server log
         """
         has_tokens: bool = False
+        result: Dict[str, Any]
+        # Stop at the first result that has tokens.
         for result in results:
             if result.get("total_tokens"):
                 has_tokens = True
@@ -71,6 +75,8 @@ class TokenLogWriter:
 
         :param results: Results of every request in the run
         """
+        result: Dict[str, Any]
+        # One log line per request that used tokens.
         for result in results:
             total_tokens: int = result.get("total_tokens", 0)
             if not total_tokens:
@@ -102,8 +108,10 @@ class TokenLogWriter:
         """
         by_request: Dict[str, List[Dict[str, Any]]] = TokenLogWriter._group_network_tokens(network_tokens)
         by_validation: Dict[str, Dict[str, Any]] = TokenLogWriter._group_validation_events(validation_events)
-        path: str = os.path.join(output_dir, "server_tokens.log")
+        path: str = os.path.join(output_dir, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
         with open(path, "w", encoding="utf-8") as file_handle:
+            result: Dict[str, Any]
+            # One file section per request that used tokens.
             for result in results:
                 total_tokens: int = result.get("total_tokens", 0)
                 if not total_tokens:
@@ -120,6 +128,8 @@ class TokenLogWriter:
         :return: request_id -> its token entries
         """
         by_request: Dict[str, List[Dict[str, Any]]] = {}
+        entry: Dict[str, Any]
+        # Group the token entries by request id.
         for entry in (network_tokens or []):
             request_id: str = entry.get("request_id", "")
             by_request.setdefault(request_id, []).append(entry)
@@ -134,6 +144,8 @@ class TokenLogWriter:
         :return: request_id -> its validation event
         """
         by_request: Dict[str, Dict[str, Any]] = {}
+        event: Dict[str, Any]
+        # Index the validation events by request id.
         for event in (validation_events or []):
             request_id: str = event.get("request_id", "")
             by_request[request_id] = event
@@ -152,6 +164,39 @@ class TokenLogWriter:
         """
         request_id: str = result.get("request_id", "?")
         total_tokens: int = result.get("total_tokens", 0)
+        prompt_tokens: int = result.get("prompt_tokens", 0)
+        completion_tokens: int = result.get("completion_tokens", 0)
+        llm_calls: int = result.get("llm_calls", 0)
+        agent: str = result.get("reporting_agent", "")
+        request_line: str = TokenLogWriter._format_request_line(result)
+        file_handle.write(request_line)
+        TokenLogWriter._write_validation_detail(file_handle, request_id, by_validation)
+        server_request_id: str = result.get("server_request_id", request_id)
+        agents: List[Dict[str, Any]] = by_request.get(server_request_id) or by_request.get(request_id) or []
+        if not agents and agent:
+            split_text: str = f"({prompt_tokens:,} prompt / {completion_tokens:,} completion)"
+            file_handle.write(f"  {agent}: {llm_calls} call(s)  {total_tokens:,} tokens {split_text}\n")
+        elif not agents and not agent:
+            file_handle.write("  (agent data not found in server log)\n")
+        TokenLogWriter._write_agent_breakdown(file_handle, agents)
+        if (agents
+                or agent
+                or request_id in by_validation.keys()):
+            file_handle.write("\n")
+
+    @staticmethod
+    def _format_request_line(result: Dict[str, Any]) -> str:
+        """
+        Build one request's first server_tokens.log line, read by CrossRunComparison.SERVER_TOKEN_RE.
+
+        :param result: The request's result
+        :return: The line, e.g. "request-1: 1,500 tokens (1,000 prompt + 500 completion), 12 LLM call(s),
+            model=gpt-4o-mini, agent=hello_world  [1.2s CREATED]" plus a newline
+        """
+        request_id: str = result.get("request_id", "?")
+        total_tokens: int = result.get("total_tokens", 0)
+        prompt_tokens: int = result.get("prompt_tokens", 0)
+        completion_tokens: int = result.get("completion_tokens", 0)
         llm_calls: int = result.get("llm_calls", 0)
         model: str = result.get("model", "unknown")
         agent: str = result.get("reporting_agent", "")
@@ -160,23 +205,10 @@ class TokenLogWriter:
         agent_suffix: str = ""
         if agent:
             agent_suffix = f", agent={agent}"
-        file_handle.write(
-            f"{request_id}: {total_tokens:,} tokens, {llm_calls} LLM call(s), model={model}{agent_suffix}"
-            f"  [{elapsed_seconds:.1f}s {status}]\n"
-        )
-        TokenLogWriter._write_validation_detail(file_handle, request_id, by_validation)
-        server_request_id: str = result.get("server_request_id", request_id)
-        agents: List[Dict[str, Any]] = by_request.get(server_request_id) or by_request.get(request_id) or []
-        if not agents and agent:
-            file_handle.write(
-                f"  {agent}: {llm_calls} call(s)  {total_tokens:,} tokens ({result.get('prompt_tokens', 0):,} prompt"
-                f" / {result.get('completion_tokens', 0):,} completion)\n"
-            )
-        elif not agents and not agent:
-            file_handle.write("  (agent data not found in server log)\n")
-        TokenLogWriter._write_agent_breakdown(file_handle, agents)
-        if agents or agent or request_id in by_validation.keys():
-            file_handle.write("\n")
+        token_text: str = f"{total_tokens:,} tokens ({prompt_tokens:,} prompt + {completion_tokens:,} completion)"
+        call_text: str = f"{llm_calls} LLM call(s), model={model}{agent_suffix}"
+        timing_text: str = f"[{elapsed_seconds:.1f}s {status}]"
+        return f"{request_id}: {token_text}, {call_text}  {timing_text}\n"
 
     @staticmethod
     def _write_agent_breakdown(file_handle: TextIO, agents: List[Dict[str, Any]]) -> None:
@@ -186,16 +218,16 @@ class TokenLogWriter:
         :param file_handle: Open server_tokens.log
         :param agents: Per-agent token entries of the request
         """
+        agent_entry: Dict[str, Any]
+        # One line per agent of the request.
         for agent_entry in agents:
             network_name: str = agent_entry.get("network", "?")
             agent_calls: int = agent_entry.get("llm_calls", 0)
             agent_total_tokens: int = agent_entry.get("total_tokens", 0)
             agent_prompt_tokens: int = agent_entry.get("prompt_tokens", 0)
             agent_completion_tokens: int = agent_entry.get("completion_tokens", 0)
-            file_handle.write(
-                f"  {network_name}: {agent_calls} call(s)  {agent_total_tokens:,} tokens"
-                f" ({agent_prompt_tokens:,} prompt / {agent_completion_tokens:,} completion)\n"
-            )
+            split_text: str = f"({agent_prompt_tokens:,} prompt / {agent_completion_tokens:,} completion)"
+            file_handle.write(f"  {network_name}: {agent_calls} call(s)  {agent_total_tokens:,} tokens {split_text}\n")
 
     @staticmethod
     def _write_validation_detail(file_handle: TextIO, request_id: str,
@@ -214,6 +246,8 @@ class TokenLogWriter:
         fix_cycles: int = event.get("fix_cycles", 0)
         file_handle.write(f"  Validation: {attempts} attempt(s), {fix_cycles} fix cycle(s)\n")
         errors: List[str] = event.get("errors", [])
+        error: str
+        # One line per validation error.
         for error in errors:
             file_handle.write(f"    - {error}\n")
 
@@ -228,6 +262,8 @@ class TokenLogWriter:
         total_prompt_tokens: int = 0
         total_completion_tokens: int = 0
         count: int = 0
+        result: Dict[str, Any]
+        # Add up the tokens of each request that reported any.
         for result in results:
             token_count: int = result.get("total_tokens", 0)
             if not token_count:
@@ -238,7 +274,8 @@ class TokenLogWriter:
             count += 1
         if count == 0:
             return
-        average_tokens: int = total_tokens // count
+        # Whole tokens per request, rounded down, e.g. 1001 / 2 -> 500.
+        average_tokens: int = int(total_tokens / count)
         logger.info(
             "  Total: %s tokens (%s prompt + %s completion)",
             f"{total_tokens:,}", f"{total_prompt_tokens:,}",

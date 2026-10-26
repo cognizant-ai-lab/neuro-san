@@ -48,14 +48,17 @@ class ServedManifestConfigFilter(ConfigFilter):
         """
         Filters the given basis config.
 
-        :param basis_config: The config dictionary to act as the basis
-                for filtering
+        :param basis_config: The config dictionary to act as the basis for filtering
         :return: A config dictionary, potentially modified as per the
                 policy encapsulated by the implementation
         """
 
         filtered: Dict[str, Dict[str, Any]] = {}
 
+        key: str = None
+        # DEF - Nor says that value is not always a dict, but the typing says so.
+        #       Perhaps some tech debt on typing is at play.
+        value: Dict[str, Any] = None
         for key, value in basis_config.items():
 
             skip: bool = False

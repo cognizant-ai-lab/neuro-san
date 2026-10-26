@@ -69,7 +69,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                     Subclasses can pass in their own lookup table if desired,
                     making the extension of the library easier.
         """
-        self.class_to_llm_policy_type: Dict[str, LlmPolicy] = class_to_llm_policy_type
+        self.class_to_llm_policy_type: Dict[str, Type[LlmPolicy]] = class_to_llm_policy_type
         if self.class_to_llm_policy_type is None:
             self.class_to_llm_policy_type = {
                 "anthropic": AnthropicLlmPolicy,
@@ -129,7 +129,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if policy_class is not None:
 
             # Use the LlmPolicy type we found in the lookup table to create an call a new instance.
-            llm_policy_instance = policy_class()
+            llm_policy_instance: LlmPolicy = policy_class()
             llm, llm_policy = llm_policy_instance.create_llm_resources_components(config)
 
         elif chat_class is None:

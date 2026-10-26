@@ -22,7 +22,7 @@ from typing import Optional
 
 import psutil
 
-from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -59,10 +59,11 @@ class EnvironmentValidator:
 
         :param host: Server host name or address
         :param port: TCP port to check
-        :return: True if a connection succeeds within SOCKET_CHECK_TIMEOUT, False otherwise
+        :return: True if a connection succeeds within LoadTestConstants.SOCKET_CHECK_TIMEOUT_SECONDS,
+            False otherwise
         """
         try:
-            with socket.create_connection((host, port), timeout=SOCKET_CHECK_TIMEOUT):
+            with socket.create_connection((host, port), timeout=LoadTestConstants.SOCKET_CHECK_TIMEOUT_SECONDS):
                 return True
         except (ConnectionRefusedError, OSError):
             return False
@@ -158,14 +159,14 @@ class EnvironmentValidator:
                 logger.info("  Auto-detected server log: %s", server_log_path)
                 return server_log_path
             logger.error(
-                "Server log not found at %s\n"
-                "  Provide the path explicitly: --server-log /path/to/server.log",
+                """Server log not found at %s
+  Provide the path explicitly: --server-log /path/to/server.log""",
                 server_log_path,
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             logger.error(
-                "Could not determine server working directory.\n"
-                "  Provide the path explicitly: --server-log /path/to/server.log",
+                """Could not determine server working directory.
+  Provide the path explicitly: --server-log /path/to/server.log""",
             )
         raise LoadTestAbortError(1)
 

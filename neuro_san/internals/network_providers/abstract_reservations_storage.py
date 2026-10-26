@@ -16,7 +16,6 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import Dict
 from typing import Optional
 from typing import Tuple
 
@@ -27,13 +26,13 @@ from threading import Event
 from threading import Thread
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-from leaf_common.utils.startable import Startable
+from leaf_common.utils.map import Map
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 
 
-class AbstractReservationsStorage(ReservationsStorage, Startable):
+class AbstractReservationsStorage(ReservationsStorage):
     """
     An abstract implementation of ExpiringReservationsStorage interface
     providing a background thread that periodically checks for expired reservations and removes them.
@@ -50,7 +49,7 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         super().__init__()
         self._thread: Thread = None
         self._check_interval_seconds: float = check_expirations_interval_seconds
-        self._stop_event = Event()
+        self._stop_event: Event = Event()
         self._logger: Logger = getLogger(self.__class__.__name__)
         self._name: str = storage_name
 
@@ -75,25 +74,24 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
     def _run_loop(self):
         while not self._stop_event.is_set():
             # Using "monotonic" time allows us to avoid potential issues with system clock changes
-            start = monotonic()
+            start: float = monotonic()
             try:
                 self.expire_reservations()
             except Exception as exception:  # pylint: disable=broad-except
-                sensitive_logger = SensitiveLogger(self._logger)
+                sensitive_logger: SensitiveLogger = SensitiveLogger(self._logger)
                 sensitive_logger.info("%s: Expiration cleanup failed: %s", self._name, exception)
-            elapsed = monotonic() - start
+            elapsed: float = monotonic() - start
             self._logger.debug("%s: Expiration cleanup took %f seconds.", self._name, elapsed)
 
             # Compute remaining sleep time
-            sleep_time = self._check_interval_seconds - elapsed
+            sleep_time: float = self._check_interval_seconds - elapsed
             if sleep_time > 0:
                 # Sleep but wake early if stop is requested,
                 # this makes worker thread more responsive to the shutdown requests.
                 self._stop_event.wait(timeout=sleep_time)
             # We're behind schedule; skip sleeping (prevents drift accumulation)
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                               source: str = None):
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 

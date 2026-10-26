@@ -38,6 +38,7 @@ from langchain_core.runnables.utils import Output
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
@@ -196,13 +197,12 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
 
         # Add values for listed env vars if they have values.
         # Defaults are standard env vars for kubernetes deployments
-        env_vars_str: str = os.getenv("AGENT_TRACING_METADATA_ENV_VARS",
-                                      "POD_NAME POD_NAMESPACE POD_IP NODE_NAME")
+        env_vars_str: str = Env.getenv("AGENT_TRACING_METADATA_ENV_VARS", "POD_NAME POD_NAMESPACE POD_IP NODE_NAME")
         to_add: Dict[str, Any] = MetadataUtil.minimize_metadata(os.environ, env_vars_str)
         runnable_metadata.update(to_add)
 
-        request_keys: str = os.getenv("AGENT_TRACING_METADATA_REQUEST_KEYS",
-                                      os.getenv("AGENT_FORWARDED_REQUEST_METADATA", "request_id user_id"))
+        request_keys: str = Env.getenv("AGENT_TRACING_METADATA_REQUEST_KEYS",
+                                       Env.getenv("AGENT_FORWARDED_REQUEST_METADATA", "request_id user_id"))
         request_metadata: Dict[str, Any] = self.invocation_context.get_metadata()
         use_to_add: Dict[str, Any] = MetadataUtil.minimize_metadata(request_metadata, request_keys)
         runnable_metadata.update(use_to_add)

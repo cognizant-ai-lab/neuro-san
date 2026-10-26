@@ -23,7 +23,6 @@ from io import BytesIO
 from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
-from os import environ
 
 from aiofiles import open as async_open
 from pyhocon import ConfigException
@@ -36,6 +35,7 @@ from leaf_common.serialization.format.hocon_serialization_format import HoconSer
 from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
 from leaf_common.serialization.interface.serialization_format import SerializationFormat
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.persistence.hocon_parse_lock import HoconParseLock
 
 
@@ -76,11 +76,11 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         if (file_path is None or len(file_path) == 0) and self.env_var:
 
             # Get the value from the env var
-            file_path = environ.get(self.env_var)
+            file_path = Env.getenv(self.env_var)
             if (file_path is None or len(file_path) == 0) and self.deprecated_env_var:
 
                 # Get the value from the deprecated env var if there is one.
-                file_path = environ.get(self.deprecated_env_var)
+                file_path = Env.getenv(self.deprecated_env_var)
                 if file_path is not None:
                     # Provide warning if the deprecated env var is set.
                     self.logger.warning("Using deprecated env var %s for %s. Please use %s instead.",

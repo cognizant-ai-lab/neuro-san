@@ -69,13 +69,15 @@ class ManifestDictConfigFilter(ConfigFilter):
 
         filtered: Dict[str, Dict[str, Any]] = {}
 
+        key: str = None
+        value: Any = None
         for key, value in basis_config.items():
 
             # Default template
             expanded_value: Dict[str, Any] = {
                 "serve": True,
                 StorageClass.PUBLIC: True,
-                "mcp": self.MCP_DEFAULT_MODE,
+                "mcp": ManifestDictConfigFilter.MCP_DEFAULT_MODE,
                 "periodic": False
             }
 
@@ -96,7 +98,7 @@ class ManifestDictConfigFilter(ConfigFilter):
                 continue
 
             # Apply the filter chain to the basis dictionary
-            entry_filter_chain = ManifestDictFilterChain(self.manifest_file, key)
+            entry_filter_chain: ManifestDictFilterChain = ManifestDictFilterChain(self.manifest_file, key)
             filtered[key] = entry_filter_chain.filter_config(expanded_value)
 
         return filtered

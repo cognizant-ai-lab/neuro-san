@@ -33,6 +33,9 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
 - **One module, one class.** Each `.py` file defines exactly one class (a handful of pre-existing exceptions are
   not precedent). Split helper logic into a separate module rather than adding a second class to an existing file.
   This should also mean that there should be no module comments - they should be really be the class's docstring.
+- **No module over 1000 lines.** That is pylint's `too-many-lines` limit, and CI checks it for source and tests
+  alike. When a module would go over it, refactor instead of disabling the check: move whole concerns of the class,
+  such as validation or formatting, into classes of their own, each in its own module. Tests split by topic (§3).
 - **No module-level functions, no nested functions, no lambdas.** Every function is a method (or `@staticmethod`)
   on the module's class. If a method needs a helper, make it another method on the same class; bind arguments with
   `functools.partial` on a method or `@staticmethod` where a lambda would otherwise have been used.
@@ -82,6 +85,12 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
   `test_some_module.py` as the single class `TestSomeClass`, mirroring the source path under `tests/`. Every
   `tests/` directory that holds test modules needs an `__init__.py`, or the CI pylint gate silently skips it — see
   [tests.md](docs/tests.md).
+- **Split by topic only past the size limit.** When all the tests of `SomeClass` together would go over the
+  1000-line limit in §2, move any number of whole topics (one method or behavior each) to
+  `test_some_module_<topic>.py`, each with the single class `TestSomeClass<Topic>` (for example
+  `test_some_module_timeout.py` with `TestSomeClassTimeout`), and keep the rest in `test_some_module.py`. Share
+  helpers through a helper class of their own, since importing or subclassing `TestSomeClass` makes pytest run its
+  tests again. When all the tests fit under the limit, use one module.
 - Test classes derive from `unittest.TestCase`, or `unittest.IsolatedAsyncioTestCase` when the class has
   `async def` tests. `IsolatedAsyncioTestCase` runs its own async tests, so do not add `@pytest.mark.asyncio`.
 - Use `TestCase` assert methods (`assertEqual`, `assertIs`, `assertIsNone`, `assertIn`, `assertRaises`, and so

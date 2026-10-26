@@ -71,7 +71,7 @@ class LangChainTracingContext(TracingContext):
 
         :return: A clone of the tracing context.
         """
-        clone = LangChainTracingContext(run_target=self.run_target, config=self.config)
+        clone: TracingContext = LangChainTracingContext(run_target=self.run_target, config=self.config)
         return clone
 
     def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:

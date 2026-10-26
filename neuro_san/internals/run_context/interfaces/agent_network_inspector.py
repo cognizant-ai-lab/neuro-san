@@ -17,7 +17,12 @@
 from typing import Any
 from typing import Dict
 
+from abc import abstractmethod
 
+from leaf_common.utils.interface import interface
+
+
+@interface
 class AgentNetworkInspector:
     """
     Interface describing an entity that can examine the configuration of the
@@ -25,12 +30,14 @@ class AgentNetworkInspector:
     Having this interface breaks some circular dependencies.
     """
 
+    @abstractmethod
     def get_config(self) -> Dict[str, Any]:
         """
         :return: The entire config dictionary given to the instance.
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_agent_tool_spec(self, name: str) -> Dict[str, Any]:
         """
         :param name: The name of the agent tool to get out of the registry
@@ -38,6 +45,7 @@ class AgentNetworkInspector:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_name_from_spec(self, agent_spec: Dict[str, Any]) -> str:
         """
         :param agent_spec: A single agent to register
@@ -45,6 +53,7 @@ class AgentNetworkInspector:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_network_name(self) -> str:
         """
         :return: The name of the agent network these specs belong to, as it is
@@ -54,6 +63,7 @@ class AgentNetworkInspector:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def find_front_man(self) -> str:
         """
         :return: A single tool name to use as the root of the chat agent.
@@ -62,6 +72,7 @@ class AgentNetworkInspector:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_size_in_bytes(self) -> int:
         """
         :return: The size in bytes of this AgentNetwork

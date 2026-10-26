@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -58,12 +59,12 @@ class AnthropicBedrockLlmPolicy(AnthropicLlmPolicy):
         # Use lazy loading to prevent installing the world. The `[anthropic]` extra
         # pulls in the `anthropic` SDK which ChatAnthropicBedrock needs at runtime.
         # pylint: disable=invalid-name
-        ChatAnthropicBedrock = self.resolver.resolve_class_in_module(
+        ChatAnthropicBedrock: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
             "ChatAnthropicBedrock",
             module_name="langchain_aws.chat_models.anthropic",
             install_if_missing="langchain-aws[anthropic]")
 
-        llm = ChatAnthropicBedrock(
+        llm: BaseLanguageModel = ChatAnthropicBedrock(
             model_name=model_name,
             max_tokens=config.get("max_tokens"),  # This is always for output
             temperature=config.get("temperature"),

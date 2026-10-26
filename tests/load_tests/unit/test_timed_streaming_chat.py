@@ -15,8 +15,9 @@
 # END COPYRIGHT
 
 
-import time
 from functools import partial
+from time import perf_counter
+from time import sleep
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -29,7 +30,40 @@ from tests.load_tests.traffic.timed_streaming_chat import TimedStreamingChat
 
 
 class TestTimedStreamingChat(TestCase):
-    """Tests for TimedStreamingChat."""
+    """
+    Tests for TimedStreamingChat.
+    """
+
+    def test_passes_messages_through_and_times_the_first(self) -> None:
+        """
+        Within the cap every message is yielded unchanged and the first one is timed.
+        """
+        timed: TimedStreamingChat = self._wrap(timeout_seconds=5.0, message_count=3, message_interval_seconds=0.01)
+        received: List[Dict[str, Any]] = list(timed.streaming_chat({}))
+        self.assertEqual(received, [{"index": 0}, {"index": 1}, {"index": 2}])
+        self.assertGreater(timed.get_time_to_first_response_seconds(), 0.0)
+        self.assertLess(timed.get_time_to_first_response_seconds(), 1.0)
+
+    def test_raises_once_past_the_cap(self) -> None:
+        """
+        A message arriving after the cap raises RequestTimeoutError and stops the stream.
+        """
+        timed: TimedStreamingChat = self._wrap(timeout_seconds=0.05, message_count=20, message_interval_seconds=0.02)
+        received: List[Dict[str, Any]] = []
+        message: Dict[str, Any]
+        with self.assertRaises(RequestTimeoutError):
+            # Read messages until the cap raises.
+            for message in timed.streaming_chat({}):
+                received.append(message)
+        self.assertLess(len(received), 20)
+
+    def test_no_messages_means_zero_first_response(self) -> None:
+        """
+        An empty stream reports 0.0 for time to first response.
+        """
+        timed: TimedStreamingChat = self._wrap(timeout_seconds=5.0, message_count=0, message_interval_seconds=0.0)
+        self.assertEqual(list(timed.streaming_chat({})), [])
+        self.assertEqual(timed.get_time_to_first_response_seconds(), 0.0)
 
     @staticmethod
     def _stream(message_count: int, message_interval_seconds: float,
@@ -43,8 +77,10 @@ class TestTimedStreamingChat(TestCase):
         :param _request_dict: The streaming_chat request, ignored
         :return: The messages
         """
+        index: int
+        # Sleep, then yield the next message.
         for index in range(message_count):
-            time.sleep(message_interval_seconds)
+            sleep(message_interval_seconds)
             yield {"index": index}
 
     def _wrap(self, timeout_seconds: float, message_count: int, message_interval_seconds: float) -> TimedStreamingChat:
@@ -57,27 +93,6 @@ class TestTimedStreamingChat(TestCase):
         streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]] = partial(
             TestTimedStreamingChat._stream, message_count, message_interval_seconds,
         )
-        return TimedStreamingChat(streaming_chat, time.perf_counter(), timeout_seconds)
-
-    def test_passes_messages_through_and_times_the_first(self) -> None:
-        """Within the cap every message is yielded unchanged and the first one is timed."""
-        timed: TimedStreamingChat = self._wrap(timeout_seconds=5.0, message_count=3, message_interval_seconds=0.01)
-        received: List[Dict[str, Any]] = list(timed.streaming_chat({}))
-        self.assertEqual(received, [{"index": 0}, {"index": 1}, {"index": 2}])
-        self.assertGreater(timed.get_time_to_first_response_seconds(), 0.0)
-        self.assertLess(timed.get_time_to_first_response_seconds(), 1.0)
-
-    def test_raises_once_past_the_cap(self) -> None:
-        """A message arriving after the cap raises RequestTimeoutError and stops the stream."""
-        timed: TimedStreamingChat = self._wrap(timeout_seconds=0.05, message_count=20, message_interval_seconds=0.02)
-        received: List[Dict[str, Any]] = []
-        with self.assertRaises(RequestTimeoutError):
-            for message in timed.streaming_chat({}):
-                received.append(message)
-        self.assertLess(len(received), 20)
-
-    def test_no_messages_means_zero_first_response(self) -> None:
-        """An empty stream reports 0.0 for time to first response."""
-        timed: TimedStreamingChat = self._wrap(timeout_seconds=5.0, message_count=0, message_interval_seconds=0.0)
-        self.assertEqual(list(timed.streaming_chat({})), [])
-        self.assertEqual(timed.get_time_to_first_response_seconds(), 0.0)
+        start_seconds: float = perf_counter()
+        timed_chat: TimedStreamingChat = TimedStreamingChat(streaming_chat, start_seconds, timeout_seconds)
+        return timed_chat

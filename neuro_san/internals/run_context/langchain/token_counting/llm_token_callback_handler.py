@@ -132,7 +132,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         self.start_time: float = None
         # run_id -> llm_info entry to price that run's usage as, when the policy said so through the
         # chat model's metadata (see PRICE_MODEL_METADATA_KEY). Filled at start, dropped at end or on error.
-        self.price_model_names: Dict[UUID, str] = {}
+        self.price_model_names: Dict[str, str] = {}
 
         # Dictionary for accumulating token stats of models. For example
         # {"openai": {"gpt-4o": {"total_tokens": 100, "prompt_tokens": 80, ...}, "gpt_4.1": {...}}, }
@@ -186,7 +186,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         price_model_name: Optional[str] = metadata.get(PRICE_MODEL_METADATA_KEY)
         run_id: Optional[UUID] = kwargs.get("run_id")
         if price_model_name and run_id is not None:
-            self.price_model_names[run_id] = price_model_name
+            run_id_str: str = str(run_id)
+            self.price_model_names[run_id_str] = price_model_name
 
         if not self._is_own_call():
             # A downstream agent's chat model is starting.  Only that agent's own
@@ -230,7 +231,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         is_empty_response: bool = False
         if isinstance(generation, ChatGeneration):
             try:
-                message = generation.message
+                message: BaseMessage = generation.message
                 if isinstance(message, AIMessage):
                     # Token info is in an attribute of AIMessage called "usage_metadata".
                     usage_metadata = message.usage_metadata
@@ -271,7 +272,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         # A policy may have said which llm_info entry prices this run (see PRICE_MODEL_METADATA_KEY);
         # otherwise the model the response names is priced.
         run_id: Optional[UUID] = kwargs.get("run_id")
-        model_name: str = self.price_model_names.pop(run_id, None) or response_model_name
+        run_id_str: str = str(run_id)
+        model_name: str = self.price_model_names.pop(run_id_str, None) or response_model_name
 
         if usage_metadata:
             total_tokens: int = usage_metadata.get("total_tokens", 0)
@@ -316,7 +318,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         :param kwargs: The run's callback arguments; "run_id" is read here
         """
         _ = error
-        self.price_model_names.pop(kwargs.get("run_id"), None)
+        run_id: Optional[UUID] = kwargs.get("run_id")
+        run_id_str: str = str(run_id)
+        self.price_model_names.pop(run_id_str, None)
 
     def calculate_token_costs(self, model_name: str, completion_tokens: int, prompt_tokens: int) -> float:
         """
@@ -333,7 +337,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
 
         if completion_token_cost is None and prompt_token_cost is None:
             logger: Logger = getLogger(__name__)
-            logger.warning("No price info found for model %s in llm info. Token cost defaults to 0.", model_name)
+            logger.warning("No price info found for model %s in llm info. Token cost defaults to 0. To fix, add "
+                           "price_per_1k_input_tokens and price_per_1k_output_tokens to that model's entry in "
+                           "default_llm_info.hocon or in the AGENT_LLM_INFO_FILE file.", model_name)
 
         # Return total cost
         return (completion_token_cost or 0.0) + (prompt_token_cost or 0.0)
@@ -410,3 +416,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         else:
             has_content = bool(content)
         return not has_content and not getattr(message, "tool_calls", None)
+
+    def close(self):
+        """
+        Allow the instance to be closed within a python context manager.
+        Doesn't do anything.
+        """

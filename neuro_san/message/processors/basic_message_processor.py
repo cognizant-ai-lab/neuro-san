@@ -42,9 +42,9 @@ class BasicMessageProcessor(CompositeMessageProcessor):
         """
         super().__init__(message_processors, False)
 
-        self.answer = AnswerMessageProcessor(None)
-        self.chat_context = ChatContextMessageProcessor()
-        self.token_accounting = TokenAccountingMessageProcessor()
+        self.answer: AnswerMessageProcessor = AnswerMessageProcessor(None)
+        self.chat_context: ChatContextMessageProcessor = ChatContextMessageProcessor()
+        self.token_accounting: TokenAccountingMessageProcessor = TokenAccountingMessageProcessor()
 
         # These always go first because they should never be blocked
         self.message_processors.insert(0, self.chat_context)

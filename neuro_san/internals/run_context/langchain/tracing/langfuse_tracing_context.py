@@ -128,18 +128,18 @@ class LangfuseTracingContext(LangChainTracingContext):
             environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
 
             # Create the callback handler instance
-            callback_handler: BaseCallbackHandler = callback_handler_type()
+            my_callback_handler: BaseCallbackHandler = callback_handler_type()
             # Langfuse's handler is synchronous, so LangChain routes every trace event through
             # a thread pool. Each of those ThreadPoolExecutor.submit calls grabs a process-global lock,
             # and with thousands of events, threads just queue on it.
             # This run_inline = True tells LangChain to call the handler directly,
             # skipping the thread pool entirely.
-            callback_handler.run_inline = True
+            my_callback_handler.run_inline = True
 
             # Carry the handler as the ContextVar default rather than via set():
             # a set() is only visible in contexts descended from the setting
             # thread, while a default is visible in every thread.
-            context_var = ContextVar(LANGFUSE_HANDLER_VAR_NAME, default=callback_handler)
+            context_var = ContextVar(LANGFUSE_HANDLER_VAR_NAME, default=my_callback_handler)
             register_configure_hook(context_var, inheritable=True)
             cls.HANDLER_CONTEXT_VAR = context_var
             return context_var
@@ -198,6 +198,7 @@ class LangfuseTracingContext(LangChainTracingContext):
         except ImportError:
             return None
 
+        hook: Any = None
         for hook in _configure_hooks:
             hook_var: ContextVar = hook[0]
             if getattr(hook_var, "name", None) == LANGFUSE_HANDLER_VAR_NAME:
@@ -257,7 +258,8 @@ class LangfuseTracingContext(LangChainTracingContext):
 
         :return: A clone of the tracing context.
         """
-        clone = LangfuseTracingContext(run_target=self.run_target, config=self.config, parent_context=self)
+        clone: TracingContext = LangfuseTracingContext(run_target=self.run_target, config=self.config,
+                                                       parent_context=self)
         return clone
 
     async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
@@ -313,7 +315,7 @@ class LangfuseTracingContext(LangChainTracingContext):
         empty: Dict[str, Any] = {}
         request_metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
         user_id: str = request_metadata.get("user_id", "<Unknown>")
-        run_name = runnable_config.get("run_name")
+        run_name: str = runnable_config.get("run_name")
 
         # Find the right session_id to use for the session components
         self.session_id: str = self.get_parent_session_id()
@@ -326,7 +328,7 @@ class LangfuseTracingContext(LangChainTracingContext):
             hostname: str = gethostname()
 
             # We use the time to distiguish sessions on a restarted server on the same host.
-            now_time = datetime.now()
+            now_time: datetime = datetime.now()
             now_str: str = now_time.strftime('%Y-%m-%d-%H:%M:%S.%f')
 
             # Create a session_id for the trace.
@@ -343,7 +345,7 @@ class LangfuseTracingContext(LangChainTracingContext):
 
         return runnable_config
 
-    def get_parent_session_id(self):
+    def get_parent_session_id(self) -> str:
         """
         Get the parent session id.
         We want the to be consistent for any depth of trace in the request.

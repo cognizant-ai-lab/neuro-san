@@ -56,7 +56,7 @@ class ReservationDictionaryConverter(DictionaryConverter):
                 If obj_dict is not the correct type, it is also reasonable
                 to return None.
         """
-        reservation = AgentReservation(obj_dict.get("lifetime_in_seconds"))
+        reservation: AgentReservation = AgentReservation(obj_dict.get("lifetime_in_seconds"))
         reservation.id = obj_dict.get("id")
         if reservation.id is None:
             reservation.id = obj_dict.get("reservation_id")

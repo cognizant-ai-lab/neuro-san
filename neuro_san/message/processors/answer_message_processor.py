@@ -114,7 +114,8 @@ class AnswerMessageProcessor(MessageProcessor):
 
         if structure is None and text is not None:
             # Parse structure from the first available format in the answer content
-            structure_parser = FirstAvailableStructureParser(self.structure_formats)
+            structure_parser: FirstAvailableStructureParser = \
+                FirstAvailableStructureParser(self.structure_formats)
             self.structure = structure_parser.parse_structure(text)
             if self.structure is not None:
                 self.answer = structure_parser.get_remainder()

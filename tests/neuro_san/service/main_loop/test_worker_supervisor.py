@@ -13,9 +13,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Unit tests for the WorkerSupervisor.
-"""
 
 import os
 import signal

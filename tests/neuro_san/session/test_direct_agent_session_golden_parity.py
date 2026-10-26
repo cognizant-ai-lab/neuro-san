@@ -38,7 +38,9 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
+from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from neuro_san.message.types.chat_message_type import ChatMessageType
 from neuro_san.message.utils.content_utils import ContentUtils
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
@@ -49,22 +51,24 @@ class TestDirectAgentSessionGoldenParity(TestCase):
     """
     Golden-parity test for the client-visible wire stream of a whole request.
 
-    Issue #1222 made the message pipeline safe for LangChain content blocks
-    while promising that the dicts a client receives for text traffic do not
-    change, and the content_blocks wrapper is added only to messages whose
-    content says more than its text. This test locks both end to end: it drives the
-    chat_mock_llm_echo network through DirectAgentSession.streaming_chat with
-    the MAXIMAL filter, so nothing is filtered out, and compares the complete
-    stream of response dicts with a golden file under golden/.
+    The message pipeline carries LangChain content blocks while the dicts a
+    client receives for text traffic keep their shape, and the content_blocks
+    wrapper is added only to messages whose content says more than its text.
+    This test locks both end to end: it drives the chat_mock_llm_echo network
+    through DirectAgentSession.streaming_chat with the MAXIMAL filter, so
+    nothing is filtered out, and compares the complete stream of response
+    dicts with a golden file under golden/.
 
     The network is a single front man with no tools, so the streams hold the
     SYSTEM (first turn only), HUMAN, AI, AGENT token accounting and
     AGENT_FRAMEWORK messages. Tool results, sub-agent origins, error frames and
     sly_data would need a tool-calling mock network.
 
-    Four conversations are locked: a two-turn echo, which carries chat_context
-    into the second turn and also passes on main as it was before the first
-    #1222 PR (7fbebb1b), and one turn for each provider marker of the mock
+    Five conversations are locked: a two-turn echo, which carries chat_context
+    into the second turn; the same two turns with the client sending the
+    turn-1 AI entry back inside chat_context as content blocks, which locks
+    what the server restores from them and returns in the turn-2
+    chat_context; and one turn for each provider marker of the mock
     (Anthropic thinking, OpenAI reasoning, Gemini thinking), whose block
     content reaches the wire as the text plus the content_blocks wrapper while
     every other message in the stream stays as it was.
@@ -136,12 +140,17 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         invocation_context.start()
         return DirectAgentSession(agent_network=agent_network, invocation_context=invocation_context)
 
-    def run_conversation(self, turns: List[str]) -> List[Dict[str, Any]]:
+    def run_conversation(self, turns: List[str],
+                         client_blocks: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
         """
         Sends the turns through one session as a single conversation and
         collects every response dict the client would receive.
 
         :param turns: The user inputs, in order.
+        :param client_blocks: Content blocks the client sends back on the
+                turn-1 AI entry of the chat_context it carries into turn 2,
+                as a block-aware client would. None sends the chat_context
+                back as received.
         :return: The normalized stream of response dicts across all turns.
         """
         threads_before: int = active_count()
@@ -149,7 +158,10 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         stream: List[Dict[str, Any]] = []
         chat_context: Optional[Dict[str, Any]] = None
         try:
-            for turn in turns:
+            # Send each turn with the chat_context the previous turn returned.
+            index: int = None
+            turn: str = None
+            for index, turn in enumerate(turns):
                 # Same protocol as the smoke test driver: reset the direct
                 # session before each turn and carry the chat_context forward.
                 session.reset()
@@ -160,6 +172,8 @@ class TestDirectAgentSessionGoldenParity(TestCase):
                 if chat_context is not None:
                     request["chat_context"] = chat_context
                 processor = BasicMessageProcessor()
+                # Record every frame of the turn and feed it to the processor.
+                response: Dict[str, Any] = None
                 for response in session.streaming_chat(request):
                     if not response:
                         # Keep-alive frame from the sync generator; timing dependent, no content.
@@ -168,12 +182,42 @@ class TestDirectAgentSessionGoldenParity(TestCase):
                     message: Dict[str, Any] = response.get("response")
                     processor.process_message(message, message.get("type"))
                 chat_context = processor.get_chat_context()
+                if index == 0 and client_blocks is not None:
+                    chat_context = self.send_blocks_back(chat_context, client_blocks)
         finally:
             session.close()
         # A thread still alive here belongs to a turn whose executor was never returned.
         self.assertLessEqual(self.wait_for_thread_count(threads_before), threads_before,
                              "a turn's executor thread outlived the session")
         return self.normalize(stream)
+
+    def send_blocks_back(self, chat_context: Dict[str, Any],
+                         client_blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Rewrites the one AI entry of a chat_context the way a block-aware
+        client sends it back: the blocks become its content_blocks wrapper
+        and their flattened text becomes its text.
+
+        :param chat_context: The chat_context a turn returned.
+        :param client_blocks: The content blocks the client sends back for the AI entry.
+        :return: A deep copy of chat_context with its AI entry rewritten.
+        """
+        # The processor hands back the very dict that sits in the recorded
+        # stream, so the copy keeps the recorded frame as the server sent it.
+        rewritten: Dict[str, Any] = deepcopy(chat_context)
+        histories: List[Dict[str, Any]] = rewritten.get("chat_histories", [])
+        self.assertEqual(len(histories), 1)
+        ai_entries: List[Dict[str, Any]] = []
+        # Collect the AI entries of the front man's history.
+        entry: Dict[str, Any] = None
+        for entry in histories[0].get("messages", []):
+            if entry.get("type") == ChatMessageType.AI:
+                ai_entries.append(entry)
+        self.assertEqual(len(ai_entries), 1, "expected exactly one AI entry to send blocks back on")
+        ai_entry: Dict[str, Any] = ai_entries[0]
+        ai_entry["content_blocks"] = ContentUtils.wrap_content_blocks(client_blocks)
+        ai_entry["text"] = ContentUtils.flatten_to_text(client_blocks)
+        return rewritten
 
     @staticmethod
     def wait_for_thread_count(limit: int, timeout_seconds: float = 2.0) -> int:
@@ -248,13 +292,15 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         where present, is the langchain_v1 wrapper whose blocks flatten to that
         text. Text presence is not required here on purpose: the converter
         omits text for empty-list content, and the golden comparison locks
-        exactly which messages carry which keys. Today the history copies
-        inside chat_context are text-only (OriginatingJournal appends a text
-        projection of block-content AI messages), so they carry no
-        content_blocks; restoring blocks from chat_context will revisit this.
+        exactly which messages carry which keys. The history entries inside
+        chat_context follow the same content_blocks rule: the server's own
+        history is text-only, and an entry carries content_blocks only when
+        the client sent blocks back and the server restored them.
 
         :param stream: The normalized response dicts.
         """
+        # Check every frame of the stream, history entries included.
+        response: Dict[str, Any] = None
         for response in stream:
             message: Dict[str, Any] = response.get("response")
             self.assertIsInstance(message, dict)
@@ -262,14 +308,28 @@ class TestDirectAgentSessionGoldenParity(TestCase):
             if "text" in message:
                 self.assertIsInstance(message.get("text"), str)
             if "content_blocks" in message:
-                wrapper: Dict[str, Any] = message.get("content_blocks")
-                self.assertEqual(wrapper.get("format"), ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1)
-                self.assertIsInstance(wrapper.get("blocks"), list)
-                self.assertGreater(len(wrapper.get("blocks")), 0)
-                self.assertEqual(ContentUtils.flatten_to_text(wrapper.get("blocks")), message.get("text"))
+                self.assert_blocks_match_text(message)
+            # Check each history the frame carries in its chat_context.
+            history: Dict[str, Any] = None
             for history in message.get("chat_context", {}).get("chat_histories", []):
+                # Check each entry of that history.
+                history_message: Dict[str, Any] = None
                 for history_message in history.get("messages", []):
-                    self.assertNotIn("content_blocks", history_message)
+                    if "content_blocks" in history_message:
+                        self.assert_blocks_match_text(history_message)
+
+    def assert_blocks_match_text(self, message: Dict[str, Any]) -> None:
+        """
+        Asserts that a message's content_blocks is the langchain_v1 wrapper
+        around a non-empty block list that flattens to the message's text.
+
+        :param message: A ChatMessage dict that carries content_blocks.
+        """
+        wrapper: Dict[str, Any] = message.get("content_blocks")
+        self.assertEqual(wrapper.get("format"), LangchainV1ContentBlocksFormat.NAME)
+        self.assertIsInstance(wrapper.get("blocks"), list)
+        self.assertGreater(len(wrapper.get("blocks")), 0)
+        self.assertEqual(ContentUtils.flatten_to_text(wrapper.get("blocks")), message.get("text"))
 
     def test_echo_two_turns_match_golden(self) -> None:
         """
@@ -280,6 +340,34 @@ class TestDirectAgentSessionGoldenParity(TestCase):
 
         self.assert_wire_contract(actual)
         self.check_against_golden("echo_two_turns_maximal.json", actual)
+
+    def test_echo_two_turns_with_client_blocks_match_golden(self) -> None:
+        """
+        The two-turn echo with the client sending the turn-1 AI entry back as
+        a reasoning block plus a phased text block produces exactly the golden
+        stream. This locks what the server restores from client-supplied
+        blocks: the AI entry comes back in the turn-2 chat_context with the
+        phased text block kept and the reasoning block gone, because a
+        message bound for a model's chat history loses its reasoning until
+        the wire names the provider that produced it. Its text stays equal
+        to the flattened blocks the client sent.
+        """
+        client_blocks: List[Dict[str, Any]] = [
+            {
+                "type": "reasoning",
+                "reasoning": "The user greets me, so I greet back.",
+            },
+            {
+                "type": "text",
+                "text": "hello there",
+                "phase": "final_answer",
+            },
+        ]
+        actual: List[Dict[str, Any]] = self.run_conversation(
+            ["hello there", "second turn"], client_blocks=client_blocks)
+
+        self.assert_wire_contract(actual)
+        self.check_against_golden("echo_two_turns_client_blocks_maximal.json", actual)
 
     def test_anthropic_thinking_marker_answer_matches_golden(self) -> None:
         """

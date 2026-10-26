@@ -78,7 +78,7 @@ class StructureMessageProcessor(MessageProcessor):
             return
 
         # Parse structure from the first available format in the answer content
-        structure_parser = FirstAvailableStructureParser(self.structure_formats)
+        structure_parser: FirstAvailableStructureParser = FirstAvailableStructureParser(self.structure_formats)
         use_structure: Dict[str, Any] = structure_parser.parse_structure(text)
         if use_structure is None:
             return

@@ -164,20 +164,22 @@ class RunContextRunnable(NeuroSanRunnable):
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
         verbose: Union[bool, str] = agent_spec.get("verbose", False)
-        if isinstance(verbose, str) and verbose.lower() in ("true", "extra", "logging"):
-            # This particular class adds a *lot* of very detailed messages
-            # to the logs.  Add this because some people are interested in it.
-            # If you find yourself curious about this setting, what you probably
-            # are really looking for is an Observability setup like:
-            #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
-            # See the docs for Observability plugins in neuro-san-studio.
-            # This was our only tie to langchain-classic, so make it optional in this case.
-            # pylint: disable=invalid-name
-            LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
-                "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
-                install_if_missing="langchain-classic"
-            )
-            callbacks.append(LoggingCallbackHandler(self.logger))
+        if isinstance(verbose, str):
+            verbose_string: str = verbose
+            if verbose_string.lower() in ("true", "extra", "logging"):
+                # This particular class adds a *lot* of very detailed messages
+                # to the logs.  Add this because some people are interested in it.
+                # If you find yourself curious about this setting, what you probably
+                # are really looking for is an Observability setup like:
+                #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
+                # See the docs for Observability plugins in neuro-san-studio.
+                # This was our only tie to langchain-classic, so make it optional in this case.
+                # pylint: disable=invalid-name
+                LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
+                    "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
+                    install_if_missing="langchain-classic"
+                )
+                callbacks.append(LoggingCallbackHandler(self.logger))
 
         # Get the number of attempts from the spec.
         max_attempts: int = agent_spec.get("max_attempts", 3)
@@ -268,10 +270,10 @@ class RunContextRunnable(NeuroSanRunnable):
                 backtrace = traceback.format_exc()
             except ValueError as value_error:
                 response = str(value_error)
-                find_string = "An output parsing error occurred. " + \
-                              "In order to pass this error back to the agent and have it try again, " + \
-                              "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
-                              "This is the error: Could not parse LLM output: `"
+                find_string: str = "An output parsing error occurred. " + \
+                                   "In order to pass this error back to the agent and have it try again, " + \
+                                   "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
+                                   "This is the error: Could not parse LLM output: `"
                 if response.startswith(find_string):
                     # Agent is returning good stuff, but langchain is erroring out over it.
                     # From: https://github.com/langchain-ai/langchain/issues/1358#issuecomment-1486132587
@@ -345,7 +347,8 @@ class RunContextRunnable(NeuroSanRunnable):
             # graph used today returns a state dict and never an AgentFinish, so
             # this unwrap is kept for backwards compatibility only. Its
             # return_values carry the output in dict form.
-            use_result = use_result.return_values
+            use_result_agent_finish: AgentFinish = use_result
+            use_result = use_result_agent_finish.return_values
 
         if isinstance(use_result, AIMessage):
             # Sometimes we get an AIMessage from a tool call.
@@ -356,6 +359,7 @@ class RunContextRunnable(NeuroSanRunnable):
             # The dict in question usually has chat history in a messages field.
             # We want the last AIMessage from that chat history.
             messages: List[BaseMessage] = use_result.get("messages", [])
+            message: BaseMessage = None
             for message in reversed(messages):
                 if isinstance(message, AIMessage):
                     return message
@@ -413,11 +417,12 @@ class RunContextRunnable(NeuroSanRunnable):
         # scans everything, exactly as it always has for plain-string output.
         # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
-            output = ContentUtils.flatten_to_text(output)
+            output_list: List[Any] = output
+            output = ContentUtils.flatten_to_text(output_list)
 
         # See if we had some kind of error and format accordingly, if asked for.
-        output = self.error_detector.handle_error(output)
-        return output
+        handled_output: str = self.error_detector.handle_error(output)
+        return handled_output
 
     def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
                              output: str) -> BaseMessage:
@@ -480,14 +485,14 @@ class RunContextRunnable(NeuroSanRunnable):
         # answer with extended thinking on (thinking blocks, then text;
         # normalized to reasoning + text with the signature kept in extras,
         # while a redacted_thinking block stays a non_standard wrapper around
-        # its opaque data, see ContentUtils.standard_blocks), an OpenAI
+        # its opaque data, see LangchainV1ContentBlocksFormat.blocks_of), an OpenAI
         # Responses answer with reasoning summaries on (reasoning items, then
         # text, with their ids kept on the blocks), or any answer whose text
         # arrives as two or more text blocks or as a text block carrying a
         # key with a value beyond type/text/id/index (annotations, extras, an
-        # OpenAI Responses "phase"), since is_trivial collapses only a single
+        # OpenAI Responses "phase"), since the format's is_trivial collapses only a single
         # plain text block. Not expected here: tool-call blocks
-        # (standard_blocks leaves them out), data blocks (providers do not
+        # (blocks_of leaves them out), data blocks (providers do not
         # emit them in assistant answers), chunks (converted above) and mixed
         # string-and-block lists (caught by the text check above).
         return preserved

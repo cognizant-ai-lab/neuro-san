@@ -14,14 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Trend history — read the append-only history file and log a table.
-
-Complements the cross-run comparison, which answers a different
-question: that one groups runs by request count to show how the system
-scales, while this one keeps runs in the order they happened so a
-regression between neuro-san versions is visible.
-"""
-
 import json
 import logging
 import os
@@ -32,15 +24,23 @@ from typing import List
 from typing import Optional
 from typing import Set
 
-from tests.load_tests.config import HISTORY_FILE_NAME
-from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TrendHistory:
-    """Reads history JSONL records and logs them in run order."""
+    """
+    Reads history JSONL records and logs them in run order.
+
+    Complements the cross-run comparison, which answers a different
+    question: that one groups runs by request count to show how the system
+    scales, while this one keeps runs in the order they happened so a
+    regression between neuro-san versions is visible.
+    """
 
     def __init__(self, path: str, agent_filter: Optional[List[str]] = None) -> None:
         """
@@ -50,7 +50,9 @@ class TrendHistory:
         :param agent_filter: Agent names to include; None or empty includes every agent
         """
         self._path: str = path
-        self._agent_filter: Set[str] = set(agent_filter) if agent_filter else set()
+        self._agent_filter: Set[str] = set()
+        if agent_filter:
+            self._agent_filter = set(agent_filter)
 
     def run(self) -> None:
         """
@@ -67,9 +69,11 @@ class TrendHistory:
         if not records:
             logger.info("No usable records in %s", history_path)
             return
+        record: Dict[str, Any] = {}
         if self._agent_filter:
             # Keep only the records for the agents in the filter.
             matching_records: List[Dict[str, Any]] = []
+            # Keep the records of the agents in the filter.
             for record in records:
                 if record.get("agent") in self._agent_filter:
                     matching_records.append(record)
@@ -78,15 +82,26 @@ class TrendHistory:
                 agent_names: str = ", ".join(sorted(self._agent_filter))
                 logger.info("No records for agent(s) %s in %s", agent_names, history_path)
                 return
-        records.sort(key=lambda record: record.get("timestamp", ""))
+        records.sort(key=self._timestamp_of)
         logger.info("")
         logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
         # One table row per record, in file order.
         rows: List[List[str]] = []
+        # One table row per record.
         for record in records:
             rows.append(self._row(record))
         TableFormatter.log_table(self._header(), rows)
         logger.info("")
+
+    @staticmethod
+    def _timestamp_of(record: Dict[str, Any]) -> str:
+        """
+        Sort key: the timestamp of a history record.
+
+        :param record: One history record
+        :return: The record's "timestamp", "" if missing
+        """
+        return record.get("timestamp", "")
 
     def _resolve_path(self) -> Optional[str]:
         """
@@ -100,7 +115,7 @@ class TrendHistory:
         """
         if os.path.isfile(self._path):
             return self._path
-        candidate: str = os.path.join(self._path, HISTORY_FILE_NAME)
+        candidate: str = os.path.join(self._path, LoadTestConstants.HISTORY_FILE_NAME)
         if os.path.isfile(candidate):
             return candidate
         return None
@@ -121,22 +136,31 @@ class TrendHistory:
         skipped: int = 0
         try:
             with open(history_path, "r", encoding="utf-8") as file_handle:
+                line: str
+                # Parse each non-empty line as one JSON record.
                 for line in file_handle:
-                    line = line.strip()
-                    if not line:
+                    stripped_line: str = line.strip()
+                    if not stripped_line:
                         continue
                     record: Any = None
                     try:
-                        record = json.loads(line)
+                        record = json.loads(stripped_line)
                     except json.JSONDecodeError:
                         skipped += 1
                         continue
                     if isinstance(record, dict):
-                        records.append(record)
+                        record_dict: Dict[str, Any] = record
+                        records.append(record_dict)
                     else:
                         skipped += 1
         except OSError as exc:
-            logger.warning("Could not read history file %s: %s", history_path, exc)
+            # Caught-exception text goes through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE setting;
+            # when that is off, the plain logger still names the file.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.warning("Could not read history file %s: %s", history_path, exc)
+            else:
+                logger.warning("Could not read history file %s", history_path)
             return []
         if skipped:
             logger.warning("  Skipped %s unreadable line(s) in %s", skipped, history_path)
@@ -150,9 +174,10 @@ class TrendHistory:
         :return: Column names
         """
         header: List[str] = ["timestamp", "neuro-san", "agent", "mode", "via", "reqs", "done"]
+        threshold_seconds: int
         # One column per threshold, e.g. "<30s".
-        for threshold in HISTORY_THRESHOLDS_SECONDS:
-            header.append(f"<{int(threshold)}s")
+        for threshold_seconds in LoadTestConstants.HISTORY_THRESHOLDS_SECONDS:
+            header.append(f"<{int(threshold_seconds)}s")
         header.extend(["first_resp", "avg", "wall", "err", "warn"])
         return header
 
@@ -183,9 +208,10 @@ class TrendHistory:
             str(requests),
             str(completed),
         ]
+        threshold_seconds: int
         # One cell per threshold: requests completed within it, or "-".
-        for threshold in HISTORY_THRESHOLDS_SECONDS:
-            threshold_key: str = f"completed_within_{int(threshold)}s"
+        for threshold_seconds in LoadTestConstants.HISTORY_THRESHOLDS_SECONDS:
+            threshold_key: str = f"completed_within_{int(threshold_seconds)}s"
             completed_count: Any = record.get(threshold_key, "-")
             row.append(str(completed_count))
         row.append(TrendHistory._fmt_seconds(record.get("avg_first_response_s")))

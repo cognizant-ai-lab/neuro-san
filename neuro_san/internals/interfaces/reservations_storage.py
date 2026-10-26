@@ -16,22 +16,28 @@
 # END COPYRIGHT
 from __future__ import annotations
 
+from abc import abstractmethod
+
 from typing import Any
-from typing import Dict
 from typing import Tuple
+
+from leaf_common.utils.interface import interface
+from leaf_common.utils.map import Map
+from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
 
 
-class ReservationsStorage:
+@interface
+class ReservationsStorage(Startable):
     """
     An interface for implementations of basic Reservations storage,
     supporting addition Reservations in bulk and retrieval of individual Reservations,
     as well as expiration of Reservations based on their lifetime.
     """
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                               source: str = None):
+    @abstractmethod
+    async def add_reservations(self, reservations_dict: Map[Reservation, Any], source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 
@@ -40,6 +46,7 @@ class ReservationsStorage:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
         Extract a single reservation.
@@ -51,6 +58,7 @@ class ReservationsStorage:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def expire_reservations(self):
         """
         Remove Reservations that are expired

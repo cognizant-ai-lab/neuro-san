@@ -14,34 +14,30 @@
 #
 # END COPYRIGHT
 
-"""Command-line interface for the load test.
-
-Holds the argparse definition for every load-test flag, plus the
-detection of which flags the user actually passed, which the
-orchestrator needs in order to leave explicit values alone when it
-applies level-based defaults.
-"""
-
-import argparse
-import os
+from argparse import ArgumentParser
+from argparse import Namespace
+from argparse import RawDescriptionHelpFormatter
+from os import environ
 from typing import Dict
+from typing import List
+from typing import Optional
 from typing import Set
 
-from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
-from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
-from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
-from tests.load_tests.config import LEVEL_ADV
-from tests.load_tests.config import LEVEL_MIN
-from tests.load_tests.config import LEVEL_NORM
+from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.duration import DurationParser
 
 
 class LoadTestArguments:
-    """Defines and parses the load test's command-line arguments."""
+    """
+    Defines and parses the load test's command-line arguments.
+    Holds the argparse definition for every load-test flag, plus the detection of which flags the user actually passed,
+    so apply_level_defaults() leaves explicit values alone. apply_scale() applies the --scale factor.
+    """
 
     @staticmethod
-    def parse_args(epilog: str) -> argparse.Namespace:
-        """Parse command-line arguments for the load test.
+    def parse_args(epilog: str) -> Namespace:
+        """
+        Parse command-line arguments for the load test.
 
         The epilog is supplied by the caller so that ``--help``
         still ends with the entrypoint module's usage notes.
@@ -49,334 +45,8 @@ class LoadTestArguments:
         :param epilog: Text shown at the end of --help
         :return: Parsed arguments, with explicit_args set to the dest names the user passed
         """
-        parser: argparse.ArgumentParser = argparse.ArgumentParser(
-            description=(
-                "Load-test neuro-san agent networks with real LLM calls."
-            ),
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog=epilog,
-        )
-
-        parser.add_argument(
-            "--agent",
-            type=str,
-            default="hello_world",
-            help="Agent network name to test (default: hello_world). "
-                 "Must be registered in the server's AGENT_REGISTRY_PATH.",
-        )
-        parser.add_argument(
-            "--profile-path",
-            type=str,
-            default=os.environ.get("LOAD_TEST_PROFILE_PATH"),
-            help="Directory containing agent profile JSON files. "
-                 "The filename is derived from --agent (e.g. basic/smart_home → smart_home.json). "
-                 "Without this, searches built-in profiles/. Can also be set via LOAD_TEST_PROFILE_PATH env var.",
-        )
-        parser.add_argument(
-            "--fixtures-hocon-dir",
-            nargs="?",
-            const=DEFAULT_FIXTURES_HOCON_DIR,
-            default=None,
-            metavar="DIR",
-            help="Parent directory of test-case HOCON files to use as "
-                 "prompts. The agent subfolder is derived from --agent "
-                 "(e.g. basic/hello_world → DIR/hello_world/*.hocon). "
-                 f"Without a value, defaults to {DEFAULT_FIXTURES_HOCON_DIR} "
-                 "under the project root.",
-        )
-        parser.add_argument(
-            "--project-root",
-            type=str,
-            default=None,
-            help="Path to the project root where the server is "
-                 "running from (e.g., /path/to/neuro-san-studio). Used to find agent profiles at "
-                 "{project-root}/tests/load_tests/prompts/profiles/. Falls back to PYTHONPATH if not set.",
-        )
-        parser.add_argument(
-            "--num-requests",
-            type=int,
-            default=3,
-            help="Number of requests per round in flat mode "
-                 "(default: 3). Ignored when --ramp is used.",
-        )
-        parser.add_argument(
-            "--max-workers",
-            type=int,
-            default=3,
-            help="Max concurrent workers in flat mode "
-                 "(default: 3). Use --full-concurrency to match --num-requests instead. Ignored when --ramp is used.",
-        )
-        parser.add_argument(
-            "--num-rounds",
-            type=int,
-            default=1,
-            help="Number of rounds in flat mode, or number of "
-                 "times to repeat the full ramp sequence (default: 1).",
-        )
-        parser.add_argument(
-            "--ramp",
-            action="store_true",
-            default=False,
-            help="Enable staged ramp-up mode. Runs escalating "
-                 "concurrency stages instead of flat requests.",
-        )
-        parser.add_argument(
-            "--stages",
-            type=str,
-            default=None,
-            help="Comma-separated concurrency levels for ramp-up "
-                 "mode (default: 10,30,50,100). Only used with --ramp.",
-        )
-        parser.add_argument(
-            "--max-requests",
-            type=int,
-            default=None,
-            help="Hard cap on total requests across all "
-                 "stages/rounds. Cost safeguard for real LLM calls. Default: sum(stages) * num_rounds.",
-        )
-        parser.add_argument("--host", type=str, default="localhost", help="Neuro-san server host (default: localhost)")
-        parser.add_argument(
-            "--port",
-            type=int,
-            default=8080,
-            help="Neuro-san server port (default: 8080 for "
-                 "http, 443 for https unless overridden)",
-        )
-        parser.add_argument(
-            "--https",
-            action="store_true",
-            default=False,
-            help="Use HTTPS/TLS to reach the server. "
-                 "Default is plain HTTP. When set and --port is not given, the port defaults to 443.",
-        )
-        parser.add_argument(
-            "--request-timeout",
-            type=DurationParser.parse,
-            metavar="DURATION",
-            default=DEFAULT_TIMEOUT_SECONDS,
-            help="Hard timeout per request. Bare number = seconds, "
-                 "or suffix s/m/h (e.g. 90s, 20m, 2h). Default: 1200 (20m). Safety net to prevent "
-                 "requests from running forever.",
-        )
-        parser.add_argument(
-            "--idle-timeout",
-            type=DurationParser.parse,
-            metavar="DURATION",
-            default=DEFAULT_IDLE_TIMEOUT_SECONDS,
-            help="Kill a request if no output for this long. Bare "
-                 "number = seconds, or suffix s/m/h (e.g. 90s, 15m). Default: 900 (15m). Detects hanging requests.",
-        )
-        parser.add_argument(
-            "--stage-timeout",
-            type=DurationParser.parse,
-            metavar="DURATION",
-            default=1500,
-            help="Hard timeout for an entire stage/round. Bare "
-                 "number = seconds, or suffix s/m/h (e.g. 25m, 1h). Default: 1500 (25m). Kills remaining in-flight "
-                 "requests when hit.",
-        )
-        parser.add_argument(
-            "--total-timeout",
-            type=DurationParser.parse,
-            metavar="DURATION",
-            default=0,
-            help="Hard timeout for the entire load test. Bare "
-                 "number = seconds, or suffix s/m/h (e.g. 30m, 2h). Default: 0 (disabled). Kills the test run when "
-                 "exceeded.",
-        )
-        parser.add_argument(
-            "--settle-time",
-            type=DurationParser.parse,
-            metavar="DURATION",
-            default=15,
-            help="Wait this long after each stage for cleanup. Bare "
-                 "number = seconds, or suffix s/m/h (e.g. 15s, 1m). Default: 15 (15s).",
-        )
-        parser.add_argument(
-            "--same-prompt",
-            action="store_true",
-            default=False,
-            help="Use the same prompt for all requests "
-                 "(collision stress test). Default is varied prompts from the agent's prompt pool.",
-        )
-        parser.add_argument(
-            "--allow-caching",
-            action="store_true",
-            default=False,
-            help="Send prompts verbatim from the agent's prompt "
-                 "pool so caches along the path can serve them. By default a unique '(request N)' suffix is "
-                 "appended to defeat caching; pass this flag to measure cached behavior instead. No effect with "
-                 "--same-prompt, which is already cacheable.",
-        )
-        parser.add_argument(
-            "--no-dry-run",
-            action="store_true",
-            default=False,
-            help="Skip the dry-run probe, which otherwise fires one "
-                 "real request first and asks you to confirm the estimated cost (it runs by default at min/norm; adv "
-                 "skips it already).",
-        )
-        parser.add_argument(
-            "--full-concurrency",
-            action="store_true",
-            default=False,
-            help="Fire every request at once by matching "
-                 "--max-workers to --num-requests, instead of the conservative default of 3 workers. An explicit "
-                 "--max-workers wins, and --ramp ignores this since its stages set their own concurrency.",
-        )
-        parser.add_argument(
-            "--server-log",
-            nargs="?",
-            const="auto",
-            default=None,
-            help="Server log analysis.  Auto-detected by default "
-                 "for a local server at norm/adv levels.  Pass a path to use a specific file, or --server-log "
-                 "with no path to force auto-detect.  Disable with --no-server-log.",
-        )
-        parser.add_argument(
-            "--no-server-log",
-            action="store_true",
-            default=False,
-            help="Disable server log analysis (overrides the "
-                 "default local auto-detect).",
-        )
-        parser.add_argument(
-            "--archive-server-log",
-            action="store_true",
-            default=False,
-            help="Gzip and copy the server log into the "
-                 "output directory after the test completes. Requires --server-log.",
-        )
-        parser.add_argument(
-            "--client-only",
-            action="store_true",
-            default=False,
-            help="Client-only mode for split-machine testing. "
-                 "Fires requests and monitors client RSS and system memory. Skips server process "
-                 "detection and server log analysis. Mutually exclusive with --server-only.",
-        )
-        parser.add_argument(
-            "--server-only",
-            action="store_true",
-            default=False,
-            help="Server-only mode for split-machine testing. "
-                 "Monitors the server process and reads the server log while a remote client fires "
-                 "requests. Does not fire requests itself. Mutually exclusive with --client-only.",
-        )
-        parser.add_argument(
-            "--level",
-            type=str,
-            choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
-            default=LEVEL_NORM,
-            help="Test depth level (default: norm). "
-                 "min: traffic + validation only (only with --client-only/--server-only; "
-                 "not valid for an all-in-one run). norm: adds resource monitoring and "
-                 "server log analysis (if --server-log given). adv: adds pool analysis "
-                 "(defaults to 50 requests, 50 workers, 3 rounds unless overridden).",
-        )
-        parser.add_argument(
-            "--no-tokens",
-            action="store_true",
-            default=False,
-            help="Disable per-request token accounting. By default "
-                 "the load test requests token accounting at all levels.",
-        )
-        parser.add_argument(
-            "--minimal",
-            dest="chat_filter",
-            action="store_const",
-            const="minimal",
-            default="maximal",
-            help="Ask the server for the bare minimum of messages. "
-                 "Streams only the final answer instead of all messages including AGENT_PROGRESS, "
-                 "which reduces server-to-client traffic and the server-side work of producing progress events, but "
-                 "also drops the token-accounting message and so disables client-side LLM/token reporting (tokens "
-                 "then come only from the server log).",
-        )
-        parser.add_argument(
-            "--scale",
-            type=int,
-            default=1,
-            help="Multiplier for load parameters. Scales "
-                 "--num-requests, --max-workers, --request-timeout, --idle-timeout, "
-                 "--stage-timeout, and --total-timeout by this factor. --max-requests auto-adjusts. "
-                 "Integer only (default: 1).",
-        )
-        parser.add_argument(
-            "--output-dir",
-            type=str,
-            default=None,
-            help="Base directory for test output. Defaults to "
-                 "/tmp/load_test_{user}/{level}/{timestamp}, which is "
-                 "per-user so a shared temp directory cannot be owned by whoever ran first.",
-        )
-        parser.add_argument(
-            "--history-file",
-            type=str,
-            default=None,
-            help="Append-only JSONL file recording one trend record "
-                 "per client run (completion counts under fixed time thresholds + neuro-san version) for plotting over "
-                 "time. Defaults to <output-base>/history.jsonl.",
-        )
-        parser.add_argument(
-            "--compare",
-            type=str,
-            default=None,
-            metavar="DIR",
-            help="Skip load test; scan DIR for previous "
-                 "raw_results.json files and print a cross-run comparison table.",
-        )
-        parser.add_argument(
-            "--trend",
-            type=str,
-            default=None,
-            metavar="PATH",
-            help="Skip load test; print one row per recorded run "
-                 "from the --history-file JSONL, oldest first, so throughput can be compared across neuro-san "
-                 "versions. PATH is the history file or a directory containing history.jsonl. Filtered by "
-                 "--compare-agent.",
-        )
-        parser.add_argument(
-            "--compare-agent",
-            type=str,
-            default=None,
-            metavar="NAME",
-            help="When used with --compare, show only runs "
-                 "for this agent (e.g. hello_world). Comma-separated for multiple agents. "
-                 "Without this, tables are grouped by agent.",
-        )
-        parser.add_argument(
-            "--compare-baseline",
-            type=int,
-            default=0,
-            metavar="N",
-            help="When used with --compare, only show runs "
-                 "with at least N requests. The smallest remaining run becomes the baseline for percentage deltas.",
-        )
-        parser.add_argument(
-            "--compare-runs",
-            type=str,
-            default=None,
-            metavar="FOLDERS",
-            help="When used with --compare, show only "
-                 "these specific run folders. Comma-separated folder names.",
-        )
-        parser.add_argument(
-            "--rebuild",
-            type=str,
-            default=None,
-            metavar="DIR",
-            help="Reconstruct raw_results.json from the "
-                 "request output files in DIR. Useful for runs interrupted by Ctrl+C.",
-        )
-        parser.add_argument(
-            "--rebuild-all",
-            action="store_true",
-            default=False,
-            help="When used with --rebuild on a parent "
-                 "directory, rebuild ALL runs including those that already have raw_results.json.",
-        )
-        args: argparse.Namespace = parser.parse_args()
+        parser: ArgumentParser = LoadTestArguments._create_parser(epilog)
+        args: Namespace = parser.parse_args()
         # Track which args the user explicitly provided so
         # level-based defaults do not override them.
         explicit: Set[str] = LoadTestArguments._explicit_args(parser, args)
@@ -384,12 +54,486 @@ class LoadTestArguments:
         # When targeting https and no explicit port was given,
         # default to the standard TLS port.
         if args.https and "port" not in explicit:
-            args.port = 443
+            args.port = LoadTestConstants.DEFAULT_HTTPS_PORT
         return args
 
     @staticmethod
-    def _explicit_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Set[str]:
-        """Return the dest names the user actually passed.
+    def apply_level_defaults(args: Namespace, explicit_args: Set[str]) -> None:
+        """
+        Override argparse defaults with level-specific values.
+
+        Only applies when the user did not explicitly set the flag.
+        adv: LoadTestConstants.ADV_NUM_REQUESTS requests, LoadTestConstants.ADV_NUM_ROUNDS rounds (stress test).
+
+        --full-concurrency matches workers to num-requests so every
+        request fires at once.  Otherwise workers stay at the
+        conservative --max-workers default and a warning is shown if
+        max-workers < num-requests.
+
+        :param args: Parsed arguments, updated in place
+        :param explicit_args: Dest names the user passed on the command line
+        """
+        if args.level == LoadTestConstants.LEVEL_ADV:
+            if "num_requests" not in explicit_args:
+                args.num_requests = LoadTestConstants.ADV_NUM_REQUESTS
+            if "num_rounds" not in explicit_args:
+                args.num_rounds = LoadTestConstants.ADV_NUM_ROUNDS
+
+        if "max_workers" not in explicit_args and args.full_concurrency:
+            args.max_workers = args.num_requests
+
+    @staticmethod
+    def apply_scale(args: Namespace) -> None:
+        """
+        Multiply load parameters by --scale factor.
+
+        Applied after level defaults so that both explicit
+        values and level defaults are scaled uniformly.
+
+        :param args: Parsed command-line arguments, scaled in place
+        """
+        factor: int = args.scale
+        if factor <= 1:
+            return
+        args.num_requests *= factor
+        args.max_workers *= factor
+        args.request_timeout *= factor
+        args.idle_timeout *= factor
+        args.stage_timeout *= factor
+        if args.total_timeout > 0:
+            args.total_timeout *= factor
+
+    @staticmethod
+    def _create_parser(epilog: str) -> ArgumentParser:
+        """
+        Build the parser that holds every load-test flag.
+
+        :param epilog: Text shown at the end of --help
+        :return: The parser, ready to read the command line
+        """
+        default_stages_text: str = LoadTestArguments._default_stages_text()
+        # Durations shown after %(default)s in the timeout help texts, e.g. "20m" for 1200 seconds.
+        request_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_TIMEOUT_SECONDS)
+        idle_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS)
+        stage_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_STAGE_TIMEOUT_SECONDS)
+        settle_time_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_SETTLE_TIME_SECONDS)
+        parser: ArgumentParser = ArgumentParser(
+            description="Load-test neuro-san agent networks with real LLM calls.",
+            formatter_class=RawDescriptionHelpFormatter,
+            epilog=epilog,
+        )
+
+        parser.add_argument(
+            "--agent",
+            type=str,
+            default="hello_world",
+            help="""
+            Agent network name to test (default: %(default)s).
+            Must be registered in the server's AGENT_REGISTRY_PATH.
+            """,
+        )
+        profile_path_default: Optional[str] = environ.get("LOAD_TEST_PROFILE_PATH")
+        parser.add_argument(
+            "--profile-path",
+            type=str,
+            default=profile_path_default,
+            help="""
+            Directory containing agent profile JSON files.
+            The filename is derived from --agent (e.g. basic/smart_home → smart_home.json).
+            Without this, searches built-in profiles/.
+            Can also be set via LOAD_TEST_PROFILE_PATH env var.
+            """,
+        )
+        parser.add_argument(
+            "--fixtures-hocon-dir",
+            nargs="?",
+            const=LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR,
+            default=None,
+            metavar="DIR",
+            help=f"""
+            Parent directory of test-case HOCON files to use as prompts.
+            The agent subfolder is derived from --agent (e.g. basic/hello_world → DIR/hello_world/*.hocon).
+            Without a value, defaults to {LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR} under the project root.
+            """,
+        )
+        parser.add_argument(
+            "--project-root",
+            type=str,
+            default=None,
+            help="""
+            Path to the project root where the server is running from (e.g., /path/to/neuro-san-studio).
+            Used to find agent profiles at {project-root}/tests/load_tests/prompts/profiles/.
+            Falls back to PYTHONPATH if not set.
+            """,
+        )
+        parser.add_argument(
+            "--num-requests",
+            type=int,
+            default=3,
+            help="Number of requests per round in flat mode (default: %(default)s). Ignored when --ramp is used.",
+        )
+        parser.add_argument(
+            "--max-workers",
+            type=int,
+            default=3,
+            help="""
+            Max concurrent workers in flat mode (default: %(default)s).
+            Use --full-concurrency to match --num-requests instead.
+            Ignored when --ramp is used.
+            """,
+        )
+        parser.add_argument(
+            "--num-rounds",
+            type=int,
+            default=1,
+            help="""
+            Number of rounds in flat mode, or number of times to repeat the full ramp sequence (default: %(default)s).
+            """,
+        )
+        parser.add_argument(
+            "--ramp",
+            action="store_true",
+            default=False,
+            help="Enable staged ramp-up mode. Runs escalating concurrency stages instead of flat requests.",
+        )
+        parser.add_argument(
+            "--stages",
+            type=str,
+            default=None,
+            help=f"""
+            Comma-separated concurrency levels for ramp-up mode (default: {default_stages_text}).
+            Only used with --ramp.
+            """,
+        )
+        parser.add_argument(
+            "--max-requests",
+            type=int,
+            default=None,
+            help="""
+            Hard cap on total requests across all stages/rounds.
+            Cost safeguard for real LLM calls.
+            Default: sum(stages) * num_rounds.
+            """,
+        )
+        parser.add_argument(
+            "--host",
+            type=str,
+            default="localhost",
+            help="Neuro-san server host (default: %(default)s)",
+        )
+        parser.add_argument(
+            "--port",
+            type=int,
+            default=8080,
+            help=f"""
+            Neuro-san server port (default: %(default)s for http, {LoadTestConstants.DEFAULT_HTTPS_PORT} for https
+            unless overridden)
+            """,
+        )
+        parser.add_argument(
+            "--https",
+            action="store_true",
+            default=False,
+            help=f"""
+            Use HTTPS/TLS to reach the server.
+            Default is plain HTTP.
+            When set and --port is not given, the port defaults to {LoadTestConstants.DEFAULT_HTTPS_PORT}.
+            """,
+        )
+        parser.add_argument(
+            "--request-timeout",
+            type=DurationParser.parse,
+            metavar="DURATION",
+            default=LoadTestConstants.DEFAULT_TIMEOUT_SECONDS,
+            help=f"""
+            Hard timeout per request.
+            Bare number = seconds, or suffix s/m/h (e.g. 90s, 20m, 2h).
+            Default: %(default)s ({request_timeout_text}).
+            Safety net to prevent requests from running forever.
+            """,
+        )
+        parser.add_argument(
+            "--idle-timeout",
+            type=DurationParser.parse,
+            metavar="DURATION",
+            default=LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS,
+            help=f"""
+            Kill a request if no output for this long.
+            Bare number = seconds, or suffix s/m/h (e.g. 90s, 15m).
+            Default: %(default)s ({idle_timeout_text}).
+            Detects hanging requests.
+            """,
+        )
+        parser.add_argument(
+            "--stage-timeout",
+            type=DurationParser.parse,
+            metavar="DURATION",
+            default=LoadTestConstants.DEFAULT_STAGE_TIMEOUT_SECONDS,
+            help=f"""
+            Hard timeout for an entire stage/round.
+            Bare number = seconds, or suffix s/m/h (e.g. 25m, 1h).
+            Default: %(default)s ({stage_timeout_text}).
+            Kills remaining in-flight requests when hit.
+            """,
+        )
+        parser.add_argument(
+            "--total-timeout",
+            type=DurationParser.parse,
+            metavar="DURATION",
+            default=0,
+            help="""
+            Hard timeout for the entire load test.
+            Bare number = seconds, or suffix s/m/h (e.g. 30m, 2h).
+            Default: %(default)s (disabled).
+            Kills the test run when exceeded.
+            """,
+        )
+        parser.add_argument(
+            "--settle-time",
+            type=DurationParser.parse,
+            metavar="DURATION",
+            default=LoadTestConstants.DEFAULT_SETTLE_TIME_SECONDS,
+            help=f"""
+            Wait this long after each stage for cleanup.
+            Bare number = seconds, or suffix s/m/h (e.g. 15s, 1m).
+            Default: %(default)s ({settle_time_text}).
+            """,
+        )
+        parser.add_argument(
+            "--same-prompt",
+            action="store_true",
+            default=False,
+            help="""
+            Use the same prompt for all requests (collision stress test).
+            Default is varied prompts from the agent's prompt pool.
+            """,
+        )
+        parser.add_argument(
+            "--allow-caching",
+            action="store_true",
+            default=False,
+            help="""
+            Send prompts verbatim from the agent's prompt pool so caches along the path can serve them.
+            By default a unique '(request N)' suffix is appended to defeat caching; pass this flag to measure cached
+            behavior instead.
+            No effect with --same-prompt, which is already cacheable.
+            """,
+        )
+        parser.add_argument(
+            "--no-dry-run",
+            action="store_true",
+            default=False,
+            help="""
+            Skip the dry-run probe, which otherwise fires one real request first and asks you to confirm the estimated
+            cost (it runs by default at min/norm; adv skips it already).
+            """,
+        )
+        parser.add_argument(
+            "--full-concurrency",
+            action="store_true",
+            default=False,
+            help="""
+            Fire every request at once by matching --max-workers to --num-requests, instead of the conservative default
+            of 3 workers.
+            An explicit --max-workers wins, and --ramp ignores this since its stages set their own concurrency.
+            """,
+        )
+        parser.add_argument(
+            "--server-log",
+            nargs="?",
+            const="auto",
+            default=None,
+            help="""
+            Server log analysis.
+            Auto-detected by default for a local server at norm/adv levels.
+            Pass a path to use a specific file, or --server-log with no path to force auto-detect.
+            Disable with --no-server-log.
+            """,
+        )
+        parser.add_argument(
+            "--no-server-log",
+            action="store_true",
+            default=False,
+            help="Disable server log analysis (overrides the default local auto-detect).",
+        )
+        parser.add_argument(
+            "--client-only",
+            action="store_true",
+            default=False,
+            help="""
+            Client-only mode for split-machine testing.
+            Fires requests and monitors client RSS and system memory.
+            Skips server process detection and server log analysis.
+            Mutually exclusive with --server-only.
+            """,
+        )
+        parser.add_argument(
+            "--server-only",
+            action="store_true",
+            default=False,
+            help="""
+            Server-only mode for split-machine testing.
+            Monitors the server process and reads the server log while a remote client fires requests.
+            Does not fire requests itself.
+            Mutually exclusive with --client-only.
+            """,
+        )
+        parser.add_argument(
+            "--level",
+            type=str,
+            choices=[LoadTestConstants.LEVEL_MIN, LoadTestConstants.LEVEL_NORM, LoadTestConstants.LEVEL_ADV],
+            default=LoadTestConstants.LEVEL_NORM,
+            help=f"""
+            Test depth level (default: %(default)s).
+            min: traffic + validation only (only with --client-only/--server-only; not valid for an all-in-one run).
+            norm: adds resource monitoring and server log analysis (if --server-log given).
+            adv: adds pool analysis (defaults to {LoadTestConstants.ADV_NUM_REQUESTS} requests,
+            {LoadTestConstants.ADV_NUM_ROUNDS} rounds unless overridden).
+            """,
+        )
+        parser.add_argument(
+            "--no-tokens",
+            action="store_true",
+            default=False,
+            help="""
+            Disable per-request token accounting.
+            By default the load test requests token accounting at all levels.
+            """,
+        )
+        parser.add_argument(
+            "--minimal",
+            dest="chat_filter",
+            action="store_const",
+            const="minimal",
+            default="maximal",
+            help="""
+            Ask the server for the bare minimum of messages.
+            Streams only the final answer instead of all messages including AGENT_PROGRESS, which reduces
+            server-to-client traffic and the server-side work of producing progress events, but also drops the
+            token-accounting message and so disables client-side LLM/token reporting (tokens then come only from the
+            server log).
+            """,
+        )
+        parser.add_argument(
+            "--scale",
+            type=int,
+            default=1,
+            help="""
+            Multiplier for load parameters.
+            Scales --num-requests, --max-workers, --request-timeout, --idle-timeout, --stage-timeout, and
+            --total-timeout by this factor.
+            --max-requests auto-adjusts.
+            Integer only (default: %(default)s).
+            """,
+        )
+        parser.add_argument(
+            "--output-dir",
+            type=str,
+            default=None,
+            help="""
+            Base directory for test output.
+            Defaults to /tmp/load_test_{user}/{level}/{timestamp}, which is per-user so a shared temp directory cannot
+            be owned by whoever ran first.
+            """,
+        )
+        parser.add_argument(
+            "--history-file",
+            type=str,
+            default=None,
+            help="""
+            Append-only JSONL file recording one trend record per client run (completion counts under fixed time
+            thresholds + neuro-san version) for plotting over time.
+            Defaults to <output-base>/history.jsonl.
+            """,
+        )
+        parser.add_argument(
+            "--compare",
+            type=str,
+            default=None,
+            metavar="DIR",
+            help="Skip load test; scan DIR for previous raw_results.json files and print a cross-run comparison table.",
+        )
+        parser.add_argument(
+            "--trend",
+            type=str,
+            default=None,
+            metavar="PATH",
+            help="""
+            Skip load test; print one row per recorded run from the --history-file JSONL, oldest first, so throughput
+            can be compared across neuro-san versions.
+            PATH is the history file or a directory containing history.jsonl.
+            Filtered by --compare-agent.
+            """,
+        )
+        parser.add_argument(
+            "--compare-agent",
+            type=str,
+            default=None,
+            metavar="NAME",
+            help="""
+            When used with --compare, show only runs for this agent (e.g. hello_world).
+            Comma-separated for multiple agents.
+            Without this, tables are grouped by agent.
+            """,
+        )
+        parser.add_argument(
+            "--compare-baseline",
+            type=int,
+            default=0,
+            metavar="N",
+            help="""
+            When used with --compare, only show runs with at least N requests.
+            The smallest remaining run becomes the baseline for percentage deltas.
+            """,
+        )
+        parser.add_argument(
+            "--compare-runs",
+            type=str,
+            default=None,
+            metavar="FOLDERS",
+            help="When used with --compare, show only these specific run folders. Comma-separated folder names.",
+        )
+        parser.add_argument(
+            "--rebuild",
+            type=str,
+            default=None,
+            metavar="DIR",
+            help="""
+            Reconstruct raw_results.json from the request output files in DIR.
+            Useful for runs interrupted by Ctrl+C.
+            """,
+        )
+        parser.add_argument(
+            "--rebuild-all",
+            action="store_true",
+            default=False,
+            help="""
+            When used with --rebuild on a parent directory, rebuild ALL runs including those that already have
+            raw_results.json.
+            """,
+        )
+        return parser
+
+    @staticmethod
+    def _default_stages_text() -> str:
+        """
+        Return the default stages as text for the --stages help.
+
+        :return: The stages joined by commas, e.g. "10,30,50,100"
+        """
+        stage_texts: List[str] = []
+        stage: int
+        # Turn each default stage into text.
+        for stage in LoadTestConstants.DEFAULT_STAGES:
+            stage_text: str = str(stage)
+            stage_texts.append(stage_text)
+        default_stages_text: str = ",".join(stage_texts)
+        return default_stages_text
+
+    @staticmethod
+    def _explicit_args(parser: ArgumentParser, args: Namespace) -> Set[str]:
+        """
+        Return the dest names the user actually passed.
 
         Re-parses the command line with every default replaced by a
         sentinel, so anything still holding the sentinel was not
@@ -403,11 +547,17 @@ class LoadTestArguments:
         """
         sentinel: object = object()
         sentinel_defaults: Dict[str, object] = {}
+        name: str
+        # Replace each default with the sentinel.
         for name in vars(args):
             sentinel_defaults[name] = sentinel
         parser.set_defaults(**sentinel_defaults)
         explicit: Set[str] = set()
-        for name, value in vars(parser.parse_args()).items():
+        value: object
+        parsed_args: Namespace = parser.parse_args()
+        parsed_values: Dict[str, object] = vars(parsed_args)
+        # Keep each dest whose value is not the sentinel.
+        for name, value in parsed_values.items():
             if value is not sentinel:
                 explicit.add(name)
         return explicit

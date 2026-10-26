@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -47,10 +48,11 @@ class BedrockLlmPolicy(LlmPolicy):
         """
         # Use lazy loading to prevent installing the world
         # pylint: disable=invalid-name
-        ChatBedrock = self.resolver.resolve_class_in_module("ChatBedrock",
-                                                            module_name="langchain_aws",
-                                                            install_if_missing="langchain-aws")
-        llm = ChatBedrock(
+        ChatBedrock: Type[BaseLanguageModel] = self.resolver.resolve_class_in_module(
+            "ChatBedrock",
+            module_name="langchain_aws",
+            install_if_missing="langchain-aws")
+        llm: BaseLanguageModel = ChatBedrock(
             model=model_name,
             aws_access_key_id=self.get_value_or_env(config, "aws_access_key_id", "AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=self.get_value_or_env(config, "aws_secret_access_key", "AWS_SECRET_ACCESS_KEY"),
@@ -65,6 +67,7 @@ class BedrockLlmPolicy(LlmPolicy):
             guardrails=config.get("guardrails"),
             max_tokens=config.get("max_tokens"),
             metadata=config.get("metadata"),
+            model_kwargs=config.get("model_kwargs"),
             provider=config.get("provider"),
             rate_limiter=config.get("rate_limiter"),
             region_name=config.get("region_name"),

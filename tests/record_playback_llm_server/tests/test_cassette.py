@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Tests for the Cassette on-disk store.
-"""
+
 import os
 
 from tests.record_playback_llm_server.cassette import Cassette

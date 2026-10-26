@@ -18,11 +18,10 @@
 from typing import Any
 from typing import Dict
 
-from os import getenv
-
 from leaf_common.time.timeout import Timeout
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class AbstractHttpServiceAgentSession(AgentSessionConstants):
@@ -70,7 +69,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         if host is not None:
             self.use_host = host
 
-        self.use_port: str = str(self.DEFAULT_HTTP_PORT)
+        self.use_port: str = str(AbstractHttpServiceAgentSession.DEFAULT_HTTP_PORT)
         if port is not None:
             self.use_port = port
 
@@ -97,7 +96,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
 
         # By default, be permissive so developers can get work done.
         # Servers can turn this on to be more strict within their systems.
-        require_https: bool = getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
+        require_https: bool = Env.getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
         if require_https and scheme != "https":
             raise ValueError(
                 f"AGENT_SESSION_REQUIRE_HTTPS=true requires https. Configure the {self.__class__.__name__} accordingly"

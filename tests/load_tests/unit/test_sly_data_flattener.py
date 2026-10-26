@@ -23,10 +23,14 @@ from tests.load_tests.reporting.sly_data_flattener import SlyDataFlattener
 
 
 class TestSlyDataFlattener(TestCase):
-    """Tests for SlyDataFlattener."""
+    """
+    Tests for SlyDataFlattener.
+    """
 
     def test_nested_string_fields_are_found(self) -> None:
-        """Strings at the top level, inside dicts and inside lists are all collected."""
+        """
+        Strings at the top level, inside dicts and inside lists are all collected.
+        """
         sly_data: Dict[str, Any] = {
             "top": "a",
             "nested": {"inner": "b", "count": 3},
@@ -38,10 +42,14 @@ class TestSlyDataFlattener(TestCase):
         )
 
     def test_first_occurrence_wins(self) -> None:
-        """A name seen twice keeps its first value."""
+        """
+        A name seen twice keeps its first value.
+        """
         sly_data: Dict[str, Any] = {"id": "first", "child": {"id": "second"}}
         self.assertEqual(SlyDataFlattener.flatten_string_fields(sly_data), {"id": "first"})
 
     def test_empty(self) -> None:
-        """No sly_data gives no fields."""
+        """
+        No sly_data gives no fields.
+        """
         self.assertEqual(SlyDataFlattener.flatten_string_fields({}), {})

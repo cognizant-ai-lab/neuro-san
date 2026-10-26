@@ -35,6 +35,7 @@ from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSess
 from neuro_san.internals.chat.queue_filter import QueueFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
+from neuro_san.internals.journals.message_journal import MessageJournal
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -101,7 +102,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         Logs the usage of the agent network if enabled.
         :param operation: The operation being performed (e.g., "function", "connectivity", "streaming_chat").
         """
-        if self.LOG_AGENT_NETWORK_USAGE:
+        if AsyncDirectAgentSession.LOG_AGENT_NETWORK_USAGE:
             self.logger.info("Agent network '%s' (ID: %d) used for operation: %s",
                              self.agent_network.get_network_name(),
                              id(self.agent_network),
@@ -197,7 +198,8 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         # Task for late-stage conversions for any and all messages
         queue_filter = QueueFilter(chat_filter, self.agent_network)
-        queue_filter.apply_to_journal(self.invocation_context.get_journal())
+        message_journal: MessageJournal = self.invocation_context.get_journal()
+        queue_filter.apply_to_journal(message_journal)
 
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some
@@ -244,3 +246,12 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         self.invocation_context.finish_request()
         self.invocation_context = None
+
+    def is_closed(self) -> bool:
+        """
+        :return: True if close() has been called on this session, in which case
+                 further streaming_chat()/function()/connectivity() calls raise
+                 AgentSessionClosedError. The default is False for sessions that
+                 hold no external connection and therefore cannot be closed.
+        """
+        return False

@@ -19,7 +19,6 @@ from typing import Dict
 from typing import List
 
 from copy import copy as shallow_copy
-from os import environ
 from os import pathsep as os_path_separator
 from os import sep as os_separator
 from pathlib import Path
@@ -37,6 +36,7 @@ from neuro_san.internals.graph.preppers.front_man_activation_prepper import Fron
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -66,70 +66,113 @@ class ActivationFactory(AgentToolFactory):
         :param agent_network: The AgentNetwork this factory will be basing its information on
         """
         self.agent_network: AgentNetwork = agent_network
-        self.agent_tool_path: str = self._determine_agent_tool_path()
+        self.agent_tool_paths: List[str] = self._determine_agent_tool_paths()
         self.preppers: List[ActivationPrepper] = self._create_preppers()
 
-    def _determine_agent_tool_path(self) -> str:
+    def _determine_agent_tool_paths(self) -> List[str]:
         """
         Policy for determining where tool source should be looked for
         when resolving references to coded tools.
 
-        :return: the agent tool path to use for source resolution.
+        Like PYTHONPATH, AGENT_TOOL_PATH can list several tool roots. A root is
+        either a directory under the PYTHONPATH or a Python module path. Each root
+        becomes a dotted module path ending with the agent network name.
+
+        :return: The agent tool paths to use for source resolution,
+                 one per root, in the order the roots are listed.
+        :raises ValueError: If AGENT_TOOL_PATH has no usable root, or a directory
+                            root is not under the PYTHONPATH.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = environ.get("AGENT_TOOL_PATH")
+        agent_tool_path: str = Env.getenv("AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
             agent_tool_path = TOP_LEVEL_DIR.get_file_in_basis("coded_tools")
 
-        # If we are dealing with file paths, convert that to something resolvable
-        if agent_tool_path.find(os_separator) >= 0:
-
-            # Find the best of many resolution paths in the PYTHONPATH
-            resolved_tool_path: str = str(Path(agent_tool_path).resolve())
-            best_path = ""
-            pythonpath: str = environ.get("PYTHONPATH")
-            if pythonpath is None:
-                # Trust what we have already
-                best_path = agent_tool_path
-            else:
-                pythonpath_split = pythonpath.split(os_path_separator)
-                for one_path in pythonpath_split:
-                    resolved_path: str = str(Path(one_path).resolve())
-                    if resolved_tool_path.startswith(resolved_path) and \
-                            len(resolved_path) > len(best_path):
-                        best_path = resolved_path
-
-            if len(best_path) == 0:
-                raise ValueError(f"No reasonable agent tool path found in PYTHONPATH for {agent_tool_path}")
-
-            # Find the path beneath the python path
-            path_split = resolved_tool_path.split(best_path)
-            if len(path_split) < 2:
-                raise ValueError("""
-Cannot find tool path for {agent_tool_path} in PYTHONPATH.
-Check to be sure your value for PYTHONPATH includes where you expect where your coded tools live.
-""")
-            resolve_path = path_split[1]
-
-            # Replace separators with python delimiters for later resolution
-            agent_tool_path = resolve_path.replace(os_separator, ".")
-
-            # Remove any leading .s
-            while agent_tool_path.startswith("."):
-                agent_tool_path = agent_tool_path[1:]
-
         # Now, agent network name itself can contain "/" symbols (regardless of underlying OS)
         # in case of hierarchical agents structure. Replace those with "." as well.
-        agent_network_path = self.agent_network.get_network_name().replace("/", ".")
+        agent_network_path: str = self.agent_network.get_network_name().replace("/", ".")
 
-        # Be sure the name of the agent (stem of the hocon file) is the
-        # last piece to narrow down the path resolution further.
-        if not agent_tool_path.endswith(agent_network_path):
-            agent_tool_path = f"{agent_tool_path}.{agent_network_path}"
+        agent_tool_paths: List[str] = []
 
-        return agent_tool_path
+        # Convert each root on its own, so one list can mix directories and module paths.
+        one_root: str = None
+        for one_root in agent_tool_path.split(os_path_separator):
+            root: str = one_root.strip()
+            if len(root) == 0:
+                # A blank entry, such as one left by a trailing separator, is not a root.
+                # Kept, it would become an unusable ".<network>" module path that resolves nothing.
+                continue
+
+            module_path: str = self._module_path_from_root(root)
+
+            # Be sure the name of the agent (stem of the hocon file) is the
+            # last piece to narrow down the path resolution further.
+            if not module_path.endswith(agent_network_path):
+                module_path = f"{module_path}.{agent_network_path}"
+
+            agent_tool_paths.append(module_path)
+
+        if len(agent_tool_paths) == 0:
+            raise ValueError(f"No agent tool path found in AGENT_TOOL_PATH '{agent_tool_path}'")
+
+        return agent_tool_paths
+
+    @staticmethod
+    def _module_path_from_root(root: str) -> str:
+        """
+        Converts one AGENT_TOOL_PATH root into a Python module path.
+
+        A root without an OS path separator is already a module path and is used as is.
+        A directory root is matched against the PYTHONPATH entries. The longest matching
+        entry wins, and the part beneath it becomes the module path.
+
+        :param root: One root from AGENT_TOOL_PATH, with surrounding whitespace removed
+        :return: The module path for the root
+        :raises ValueError: If a directory root is not under any PYTHONPATH entry
+        """
+        # A module path needs no conversion
+        if root.find(os_separator) < 0:
+            return root
+
+        # Find the best of many resolution paths in the PYTHONPATH
+        resolved_tool_path: str = str(Path(root).resolve())
+        best_path: str = ""
+        pythonpath: str = Env.getenv("PYTHONPATH")
+        if pythonpath is None:
+            # Trust what we have already
+            best_path = root
+        else:
+            pythonpath_split: List[str] = pythonpath.split(os_path_separator)
+            # The longest matching entry wins, so a nested PYTHONPATH entry converts correctly
+            one_path: str = None
+            for one_path in pythonpath_split:
+                resolved_path: str = str(Path(one_path).resolve())
+                if resolved_tool_path.startswith(resolved_path) and \
+                        len(resolved_path) > len(best_path):
+                    best_path = resolved_path
+
+        if len(best_path) == 0:
+            raise ValueError(f"No reasonable agent tool path found in PYTHONPATH for {root}")
+
+        # Find the path beneath the python path
+        path_split: List[str] = resolved_tool_path.split(best_path)
+        if len(path_split) < 2:
+            raise ValueError(f"""
+Cannot find tool path for {root} in PYTHONPATH.
+Check to be sure your value for PYTHONPATH includes where you expect where your coded tools live.
+""")
+        resolve_path: str = path_split[1]
+
+        # Replace separators with python delimiters for later resolution
+        module_path: str = resolve_path.replace(os_separator, ".")
+
+        # Remove any leading .s
+        while module_path.startswith("."):
+            module_path = module_path[1:]
+
+        return module_path
 
     def _create_preppers(self) -> List[ActivationPrepper]:
         """
@@ -138,13 +181,13 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
         :return: A list of ActivationPrepper instances
         """
-        preppers: List[ActivationPrepper] = shallow_copy(self.BASE_PREPPERS)
+        preppers: List[ActivationPrepper] = shallow_copy(ActivationFactory.BASE_PREPPERS)
 
         # Then read the agent network's prepper list
         external_preppers: List[ActivationPrepper] = []
 
         prepper_class_name: str = None
-        agent_prepper_classes: str = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        agent_prepper_classes: str = Env.getenv("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
         for prepper_class_name in agent_prepper_classes.split():
             use_prepper_class_name = prepper_class_name.strip()
             prepper: ActivationPrepper = ResolverUtil.create_instance(use_prepper_class_name,
@@ -159,11 +202,13 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
         return preppers
 
-    def get_agent_tool_path(self) -> str:
+    def get_agent_tool_paths(self) -> List[str]:
         """
-        :return: The path under which tools for this registry should be looked for.
+        :return: The paths under which tools for this registry should be looked for,
+                 one per AGENT_TOOL_PATH root, in the order the roots are listed.
+                 Each path is a dotted module path ending with the agent network name.
         """
-        return self.agent_tool_path
+        return self.agent_tool_paths
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def create_agent_activation(self, parent_run_context: RunContext,
@@ -257,3 +302,33 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :return: The agent network inspector associated with the instance
         """
         return self.agent_network
+
+    def get_agent_tool_spec(self, name: str) -> Dict[str, Any]:
+        """
+        :param name: The name of the agent tool to get out of the registry
+        :return: The dictionary representing the spec registered agent
+        """
+        return self.agent_network.get_agent_tool_spec(name)
+
+    def get_network_name(self) -> str:
+        """
+        :return: The name of the agent network these specs belong to, as it is
+                 registered in the manifest (for example "deep/math_guy"), which
+                 is also how its hocon file is found. Messages use it to tell the
+                 reader where a problem has to be fixed.
+        """
+        return self.agent_network.get_network_name()
+
+    def find_front_man(self) -> str:
+        """
+        :return: A single tool name to use as the root of the chat agent.
+                 This guy will be user facing.  If there are none or > 1,
+                 an exception will be raised.
+        """
+        return self.agent_network.find_front_man()
+
+    def get_size_in_bytes(self) -> int:
+        """
+        :return: The size in bytes of this AgentNetwork
+        """
+        return self.agent_network.get_size_in_bytes()

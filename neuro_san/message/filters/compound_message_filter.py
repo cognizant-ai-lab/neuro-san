@@ -45,6 +45,7 @@ class CompoundMessageFilter(MessageFilter):
         :return: True if the message should be allowed through to the client. False otherwise.
         """
         # If any one filter says to let a message through, then let it through.
+        one_filter: MessageFilter = None
         for one_filter in self.filters:
             if one_filter.allow_message(chat_message_dict, message_type):
                 return True

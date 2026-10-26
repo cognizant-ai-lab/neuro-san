@@ -37,6 +37,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
@@ -54,7 +55,7 @@ API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
                                         ])
 
 
-class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
+class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangChainLlmFactory):
     """
     Factory class for LLM operations
 
@@ -142,6 +143,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if not isinstance(llm_factory_classes, List):
             raise ValueError(f"The classes.factories key in {self.llm_info_file} must be a list of strings")
 
+        llm_factory_class_name: str = None
         for llm_factory_class_name in llm_factory_classes:
             llm_factory: LangChainLlmFactory = self.resolve_one_llm_factory(llm_factory_class_name, self.llm_info_file)
             # Success. Tack it on to the list
@@ -161,7 +163,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                              "must be a list of strings")
 
         # Resolve and instantiate the factory class
-        llm_factory = ResolverUtil.create_instance(
+        llm_factory: LangChainLlmFactory = ResolverUtil.create_instance(
             class_name=llm_factory_class_name,
             class_name_source=llm_info_file,
             type_of_class=LangChainLlmFactory
@@ -320,7 +322,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # The two-key limit is what lets a sparse user overlay such as
         # {"claude-fable": {"model_info_url": ...}} keep behaving as an alias.
         is_alias: bool = len(llm_entry.keys()) <= 2 and use_model_name is not None
-        resolved_entry: Dict[str, Any] = self.llm_infos.get(use_model_name) if is_alias else llm_entry
+        resolved_entry: Dict[str, Any] = llm_entry
+        if is_alias:
+            resolved_entry = self.llm_infos.get(use_model_name)
         return resolved_entry, use_model_name
 
     def _resolve_llm_entry(self, model_name: str) -> Tuple[Dict[str, Any], str]:
@@ -367,7 +371,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         # Full entries can carry a "use_model_name" of their own (e.g. azure-gpt-4o -> gpt-4o-2024-08-06).
         # This mirrors how create_full_llm_config() fills in model_name when no class is given.
-        return llm_entry.get("use_model_name", use_model_name)
+        resolved: str = llm_entry.get("use_model_name", use_model_name)
+        return resolved
 
     def get_chat_class_args(self, chat_class_name: str, use_model_name: str = None) -> Dict[str, Any]:
         """
@@ -395,8 +400,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         extends: str = chat_class.get("extends")
         if extends is not None:
             # If this class extends another, get its args too.
+            # The overlay wins, so this class's own args override the inherited ones.
             extends_args: Dict[str, Any] = self.get_chat_class_args(extends, use_model_name)
-            args = self.overlayer.overlay(args, extends_args)
+            args = self.overlayer.overlay(extends_args, args)
 
         return args
 
@@ -422,6 +428,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Loop through each of the config values and replace any "sly_data" values
         # with their corresponding values from the llm_config dictionary.
         required_set: Set[str] = set()
+        key: str = None
+        value: Any = None
         for key, value in config.items():
             # If any value is "sly_data", replace it with the same value from the llm_config dictionary
             small_value: str = str(value).lower()
@@ -473,6 +481,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Loop through the loaded factories in order until we can find one
         # that can create the llm.
         found_exception: Exception = None
+        llm_factory: LangChainLlmFactory = None
         for llm_factory in self.llm_factories:
             try:
                 llm_resources = llm_factory.create_llm_resources(config)
@@ -568,7 +577,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # This fallback only applies when the user provides a non-default class path
         # and factory resolution failed.
         class_path: str = config.get("class")
-        default_llm_classes: Set[str] = set(self.llm_infos.get("classes"))
+        classes_value: List[str] = self.llm_infos.get("classes")
+        default_llm_classes: Set[str] = set(classes_value)
         if (
             llm_resources is None
             and found_exception is not None
@@ -611,6 +621,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Note: "verbose" is valid for both Neuro SAN and LangChain chat models, but when specified by the user,
         # it should only apply to Neuro SAN (e.g. AgentExecutor) — not passed into the LLM constructor.
         user_config: Dict[str, Any] = {}
+        llm_config_key: str = None
+        llm_config_value: Any = None
         for llm_config_key, llm_config_value in config.items():
             if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
                 user_config[llm_config_key] = llm_config_value
@@ -702,6 +714,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 fallbacks = fallbacks[:num_fallbacks]
 
         # Go through the list of fallbacks in the config.
+        # An entry is normally a config dictionary, but a nested list is a peer group.
+        fallback: Any = None
         for fallback in fallbacks:
 
             # Create a model we might use.
@@ -775,6 +789,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             if provider_tools:
                 main_policy_type = type(main_llm_resources.get_llm_policy())
                 fallback_policy_types: Set[type] = set()
+                resources: LangChainLlmResources = None
                 for resources in fallback_llm_resources:
                     fallback_policy_types.add(type(resources.get_llm_policy()))
 
@@ -784,6 +799,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                     policy_types: Set[type] = {main_policy_type}
                     policy_types.update(fallback_policy_types)
                     policy_names: List[str] = []
+                    policy_type: type = None
                     for policy_type in policy_types:
                         policy_names.append(policy_type.__name__)
                     policy_names.sort()
@@ -811,3 +827,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             main_llm_resources.add_fallback_resources(fallback_llm_resources)
 
         return main_llm_resources
+
+    def get_llm_infos(self) -> Dict[str, Any]:
+        """
+        :return: A dictionary mapping llm names to their descriptions.
+        """
+        return self.llm_infos

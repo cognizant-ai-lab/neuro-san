@@ -20,7 +20,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
+from typing import Type
 
 from logging import Logger
 from logging import getLogger
@@ -32,7 +32,6 @@ from langchain_core.language_models.base import BaseLanguageModel
 from leaf_common.config.config_util import ConfigUtil
 
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
-from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
 
@@ -71,14 +70,14 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     and warned about once.
 
     This class is a child of OpenAILlmPolicy, and inherits its implementation of
-    create_http_client() and delete_resources().
+    create_http_client(), resolve_chat_model_class() and delete_resources().
     """
 
     # Path Azure's v1 API lives under, relative to the resource endpoint.
     V1_PATH: str = "/openai/v1"
 
     # llm_config keys of the dated Azure API that the v1 API has no use for.
-    LEGACY_KEYS: Tuple[str, ...] = ("openai_api_version", "openai_api_type", "model_version")
+    LEGACY_KEYS: List[str] = ["openai_api_version", "openai_api_type", "model_version"]
 
     # Process-wide so the legacy-key warning appears once, not once per agent instantiation.
     legacy_keys_warned: bool = False
@@ -115,9 +114,10 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         # OpenAI SDK client is all it needs. Same lazy-loading resolver rigamarole as the other policies.
 
         # pylint: disable=invalid-name
-        AsyncOpenAI = self.resolver.resolve_class_in_module("AsyncOpenAI",
-                                                            module_name="openai",
-                                                            install_if_missing="langchain-openai")
+        AsyncOpenAI: Type[Any] = self.resolver.resolve_class_in_module(
+            "AsyncOpenAI",
+            module_name="openai",
+            install_if_missing="langchain-openai")
 
         # Resolve the configuration before opening anything: the factory drops a policy whose
         # create_client() raised without calling delete_resources(), so an httpx client opened
@@ -127,7 +127,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         default_headers: Dict[str, str] = self.build_default_headers(config)
         # The deployment is checked here for the same reason: create_llm() would only find it
         # missing once this client exists.
-        self.resolve_deployment_name(config, self.get_model_name(config))
+        self.resolve_deployment_name(config, AzureLlmPolicy.get_model_name(config))
 
         self.create_http_client(config)
 
@@ -171,8 +171,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         deployment_name: str = self.resolve_deployment_name(config, model_name)
 
         # The chat model of the "openai" class is all Azure's v1 API needs once the client points at it and
-        # the model is the deployment.
-        llm: BaseLanguageModel = ToolStrictChatOpenAI(
+        # the model is the deployment. Same lazy-loading resolver as OpenAILlmPolicy.
+        chat_model_class: Type[BaseLanguageModel] = self.resolve_chat_model_class()
+        llm: BaseLanguageModel = chat_model_class(
             async_client=client,
             root_async_client=self.async_openai_client,
             # Azure routes by deployment: this is what goes in the "model" field on both
@@ -316,9 +317,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         """
         trimmed: str = azure_endpoint.strip().rstrip("/")
         # Tolerate an endpoint that already carries the v1 path, as Azure's own quickstarts show it.
-        if trimmed.endswith(self.V1_PATH):
+        if trimmed.endswith(AzureLlmPolicy.V1_PATH):
             return trimmed + "/"
-        return trimmed + self.V1_PATH + "/"
+        return trimmed + AzureLlmPolicy.V1_PATH + "/"
 
     def resolve_credential(self, config: Dict[str, Any]) -> str:
         """
@@ -390,9 +391,10 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :return: The exception to raise
         """
         # pylint: disable=invalid-name
-        OpenAIError = self.resolver.resolve_class_in_module("OpenAIError",
-                                                            module_name="openai",
-                                                            install_if_missing="langchain-openai")
+        OpenAIError: Type[Exception] = self.resolver.resolve_class_in_module(
+            "OpenAIError",
+            module_name="openai",
+            install_if_missing="langchain-openai")
         return OpenAIError(message)
 
     def build_default_headers(self, config: Dict[str, Any]) -> Dict[str, str]:
@@ -422,7 +424,8 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :param config: The fully specified llm config
         """
         legacy_present: List[str] = []
-        for key in self.LEGACY_KEYS:
+        key: str = None
+        for key in AzureLlmPolicy.LEGACY_KEYS:
             # null and "" are the neutral values the class defaults carry; only a real value counts.
             if config.get(key):
                 legacy_present.append(key)

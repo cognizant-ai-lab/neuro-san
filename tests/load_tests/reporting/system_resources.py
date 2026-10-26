@@ -14,18 +14,11 @@
 #
 # END COPYRIGHT
 
-"""Shared whole-system resource snapshots and reporting.
-
-Centralizes the whole-machine (not per-process) memory, CPU, and
-thread readings so the PRE-RUN SUMMARY and the OVERALL SYSTEM
-RESOURCES section render from a single source instead of duplicated
-copies across the input validator, load test, and summary reporter.
-"""
-
 import logging
+from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
-from typing import Tuple
 
 try:
     import resource
@@ -33,18 +26,33 @@ except ImportError:
     # Unix-only module.  Thread limits report "n/a" without it.
     resource = None
 
-import psutil
+from psutil import AccessDenied
+from psutil import NoSuchProcess
+from psutil import Process
+from psutil import cpu_count
+from psutil import cpu_percent
+from psutil import process_iter
+from psutil import virtual_memory
 
-from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# A whole-system snapshot: mem_pct, mem_avail_gb, cpu_pct, threads.
-SysSnapshot = Dict[str, float]
+# A whole-system snapshot: mem_pct, mem_avail_gb, cpu_pct, threads (a count).
+# SummaryReporter builds snapshots from stage summaries, so a value is None when a summary lacks it.
+SystemSnapshot = Dict[str, Optional[float]]
 
 
 class SystemResources:
-    """Whole-system (not per-process) resource readings and reporting."""
+    """
+    Whole-system (not per-process) resource readings and reporting.
+
+    Centralizes the whole-machine memory, CPU, and thread readings so the
+    PRE-RUN SUMMARY and the OVERALL SYSTEM RESOURCES section render from a
+    single source instead of duplicated copies across the input validator,
+    load test, and summary reporter.
+    """
 
     @staticmethod
     def total_threads() -> int:
@@ -54,83 +62,109 @@ class SystemResources:
         :return: Total thread count, leaving out processes that exit or deny access
         """
         total: int = 0
-        for process in psutil.process_iter(["num_threads"]):
+        process: Process
+        # Add up the thread count of each process that still exists and allows access.
+        for process in process_iter(["num_threads"]):
             try:
                 total += process.info.get("num_threads") or 0
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except (NoSuchProcess, AccessDenied):
                 continue
         return total
 
     @staticmethod
-    def thread_limits() -> Tuple[str, str]:
+    def thread_limits() -> List[str]:
         """
-        Return (per-user limit, system max) as display strings.
+        Return [per-user limit, system max] as display strings.
 
-        :return: (per-user limit, system max); "n/a" when a value cannot be read
+        :return: [per-user limit, system max]; "n/a" when a value cannot be read
         """
         user_limit: str = "n/a"
         if resource is not None:
             try:
                 soft_limit: int = 0
                 soft_limit, _ = resource.getrlimit(resource.RLIMIT_NPROC)
-                user_limit = (
-                    "unlimited"
-                    if soft_limit == resource.RLIM_INFINITY
-                    else f"{soft_limit:,}"
-                )
+                if soft_limit == resource.RLIM_INFINITY:
+                    user_limit = "unlimited"
+                else:
+                    user_limit = f"{soft_limit:,}"
             except (ValueError, OSError, AttributeError):
                 user_limit = "n/a"
         system_maximum: str = "n/a"
         try:
             with open("/proc/sys/kernel/threads-max", encoding="utf-8") as file_handle:
-                system_maximum = f"{int(file_handle.read().strip()):,}"
+                threads_max_text: str = file_handle.read().strip()
+                threads_max: int = int(threads_max_text)
+                system_maximum = f"{threads_max:,}"
         except (OSError, ValueError):
             pass
-        return user_limit, system_maximum
+        limits: List[str] = [user_limit, system_maximum]
+        return limits
 
     @classmethod
-    def snapshot(cls, cpu_interval_seconds: float = 0.1) -> SysSnapshot:
+    def snapshot(cls, cpu_interval_seconds: float = 0.1) -> SystemSnapshot:
         """
         Capture a point-in-time whole-system snapshot.
 
         :param cpu_interval_seconds: Seconds to sample CPU usage over
-        :return: mem_pct, mem_avail_gb, cpu_pct and threads
+        :return: A dictionary with "mem_pct", "mem_avail_gb", "cpu_pct" and "threads"
         """
-        memory_stats = psutil.virtual_memory()
-        return {
+        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = virtual_memory()
+        available_gigabytes: float = memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        cpu_percentage: float = cpu_percent(interval=cpu_interval_seconds)
+        thread_count: int = cls.total_threads()
+        system_snapshot: SystemSnapshot = {
             "mem_pct": memory_stats.percent,
-            "mem_avail_gb": memory_stats.available / (1024 ** 3),
-            "cpu_pct": psutil.cpu_percent(interval=cpu_interval_seconds),
-            "threads": cls.total_threads(),
+            "mem_avail_gb": available_gigabytes,
+            "cpu_pct": cpu_percentage,
+            "threads": thread_count,
         }
+        return system_snapshot
+
+    @staticmethod
+    def total_gigabytes() -> float:
+        """
+        Read the total system memory.
+
+        :return: Total system memory in gigabytes
+        """
+        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = virtual_memory()
+        total_gigabytes: float = memory_stats.total / ResourceMonitor.ONE_GIGABYTE
+        return total_gigabytes
 
     @classmethod
     def log_prerun(cls) -> None:
-        """Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads)."""
-        memory_stats = psutil.virtual_memory()
-        total_gigabytes: float = memory_stats.total / (1024 ** 3)
-        available_gigabytes: float = memory_stats.available / (1024 ** 3)
-        core_count: int = psutil.cpu_count() or 1
-        cpu_percentage: float = psutil.cpu_percent(interval=0.1)
+        """
+        Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads).
+        """
+        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = virtual_memory()
+        total_gigabytes: float = memory_stats.total / ResourceMonitor.ONE_GIGABYTE
+        available_gigabytes: float = memory_stats.available / ResourceMonitor.ONE_GIGABYTE
+        core_count: int = cpu_count() or 1
+        cpu_percentage: float = cpu_percent(interval=0.1)
         user_limit: str = ""
         system_maximum: str = ""
         user_limit, system_maximum = cls.thread_limits()
         logger.info(
-            "  System RAM: %.1fG (%.1fG available, %.0f%% used)",
+            "  System RAM: %.1f GB (%.1f GB available, %.0f%% used)",
             total_gigabytes, available_gigabytes, memory_stats.percent,
         )
         logger.info("  System CPU: %d cores (%.0f%% in use)", core_count, cpu_percentage)
+        thread_count: int = cls.total_threads()
+        thread_count_text: str = f"{thread_count:,}"
         logger.info(
             "  System threads: %s in use / limit %s per-user (%s max)",
-            f"{cls.total_threads():,}", user_limit, system_maximum,
+            thread_count_text, user_limit, system_maximum,
         )
 
     @classmethod
     def log_section(
             cls,
-            before_snapshot: Optional[SysSnapshot],
-            peak_snapshot: Optional[SysSnapshot],
-            after_snapshot: Optional[SysSnapshot],
+            before_snapshot: Optional[SystemSnapshot],
+            peak_snapshot: Optional[SystemSnapshot],
+            after_snapshot: Optional[SystemSnapshot],
     ) -> None:
         """
         Log the aligned SYSTEM RESOURCES before/peak/after section.
@@ -139,28 +173,45 @@ class SystemResources:
         :param peak_snapshot: Peak values during the run, or None
         :param after_snapshot: Snapshot taken after the run, or None
         """
-        rows: Tuple[Tuple[str, Optional[SysSnapshot]], ...] = (
-            ("before", before_snapshot), ("peak", peak_snapshot), ("after", after_snapshot),
-        )
-        if all(snapshot is None for _, snapshot in rows):
+        snapshots_by_tag: Dict[str, Optional[SystemSnapshot]] = {
+            "before": before_snapshot,
+            "peak": peak_snapshot,
+            "after": after_snapshot,
+        }
+        has_snapshot: bool = False
+        tag: str
+        snapshot: Optional[SystemSnapshot]
+        # Look for at least one snapshot that is set.
+        for tag, snapshot in snapshots_by_tag.items():
+            if snapshot is not None:
+                has_snapshot = True
+                break
+        if not has_snapshot:
             return
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("\n%s", Formatters.SEPARATOR_LINE)
         logger.info("  SYSTEM RESOURCES")
-        logger.info("=" * SEPARATOR_WIDTH)
-        total_gigabytes: float = psutil.virtual_memory().total / (1024 ** 3)
-        core_count: int = psutil.cpu_count() or 1
+        logger.info("%s", Formatters.SEPARATOR_LINE)
+        total_gigabytes: float = cls.total_gigabytes()
+        core_count: int = cpu_count() or 1
         user_limit: str = ""
         system_maximum: str = ""
         user_limit, system_maximum = cls.thread_limits()
-        for tag, snapshot in rows:
+        row_text: str = ""
+        # One memory row per snapshot that has it.
+        for tag, snapshot in snapshots_by_tag.items():
             if snapshot is not None and snapshot.get("mem_pct") is not None:
-                cls._log_row("System memory", tag, cls._fmt_mem(snapshot, total_gigabytes))
-        for tag, snapshot in rows:
+                row_text = cls._format_memory_row(snapshot, total_gigabytes)
+                cls._log_row("System memory", tag, row_text)
+        # One CPU row per snapshot that has it.
+        for tag, snapshot in snapshots_by_tag.items():
             if snapshot is not None and snapshot.get("cpu_pct") is not None:
-                cls._log_row("System CPU", tag, cls._fmt_cpu(snapshot, core_count))
-        for tag, snapshot in rows:
+                row_text = cls._format_cpu_row(snapshot, core_count)
+                cls._log_row("System CPU", tag, row_text)
+        # One threads row per snapshot that has it.
+        for tag, snapshot in snapshots_by_tag.items():
             if snapshot is not None and snapshot.get("threads") is not None:
-                cls._log_row("System threads", tag, cls._fmt_threads(snapshot, tag, user_limit, system_maximum))
+                row_text = cls._format_threads_row(snapshot, tag, user_limit, system_maximum)
+                cls._log_row("System threads", tag, row_text)
 
     @staticmethod
     def _log_row(metric: str, tag: str, value: str) -> None:
@@ -174,43 +225,51 @@ class SystemResources:
         logger.info("  %-14s %-9s %s", metric, f"({tag}):", value)
 
     @staticmethod
-    def _fmt_mem(snapshot: SysSnapshot, total_gigabytes: float) -> str:
+    def _format_memory_row(snapshot: SystemSnapshot, total_gigabytes: float) -> str:
         """
         Format a memory row: used / free / percent.
 
-        :param snapshot: System snapshot
+        :param snapshot: System snapshot; log_section passes only one whose "mem_pct" is not None
         :param total_gigabytes: Total system memory in GB
-        :return: e.g. '8192M used / 7.5G free (50% used)'
+        :return: e.g. '8192 MB used / 7.5 GB free (50% used)', with 'n/a free' when "mem_avail_gb" is None
         """
-        memory_percentage: float = snapshot.get("mem_pct", 0.0)
-        available_gigabytes: float = snapshot.get("mem_avail_gb", 0.0)
-        used_megabytes: float = memory_percentage / 100.0 * total_gigabytes * 1024.0
-        return f"{used_megabytes:.0f}M used / {available_gigabytes:.1f}G free ({memory_percentage:.0f}% used)"
+        memory_percentage: Optional[float] = snapshot.get("mem_pct", 0.0)
+        available_gigabytes: Optional[float] = snapshot.get("mem_avail_gb", 0.0)
+        used_fraction: float = memory_percentage / ResourceMonitor.ONE_HUNDRED_PERCENT
+        used_gigabytes: float = used_fraction * total_gigabytes
+        used_megabytes: float = used_gigabytes * ResourceMonitor.MEGABYTES_PER_GIGABYTE
+        # A stage summary can have the memory percentage without the free memory.
+        free_text: str = "n/a"
+        if available_gigabytes is not None:
+            free_text = f"{available_gigabytes:.1f} GB"
+        return f"{used_megabytes:.0f} MB used / {free_text} free ({memory_percentage:.0f}% used)"
 
     @staticmethod
-    def _fmt_cpu(snapshot: SysSnapshot, core_count: int) -> str:
+    def _format_cpu_row(snapshot: SystemSnapshot, core_count: int) -> str:
         """
         Format a CPU row: percent and core-equivalents.
 
-        :param snapshot: System snapshot
+        :param snapshot: System snapshot; log_section passes only one whose "cpu_pct" is not None
         :param core_count: Number of CPU cores
         :return: e.g. '50% (2.00 of 4 cores)'
         """
-        cpu_percentage: float = snapshot.get("cpu_pct", 0.0)
-        return f"{cpu_percentage:.0f}% ({cpu_percentage / 100.0 * core_count:.2f} of {core_count} cores)"
+        cpu_percentage: Optional[float] = snapshot.get("cpu_pct", 0.0)
+        cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percentage, core_count)
+        return f"{cpu_percentage:.0f}% ({cores_in_use:.2f} of {core_count} cores)"
 
     @staticmethod
-    def _fmt_threads(snapshot: SysSnapshot, tag: str, user_limit: str, system_maximum: str) -> str:
+    def _format_threads_row(snapshot: SystemSnapshot, tag: str, user_limit: str, system_maximum: str) -> str:
         """
         Format a threads row; limits only on the before row.
 
-        :param snapshot: System snapshot
+        :param snapshot: System snapshot; log_section passes only one whose "threads" is not None
         :param tag: "before", "peak" or "after"
         :param user_limit: Per-user thread limit from thread_limits
         :param system_maximum: System thread max from thread_limits
         :return: e.g. '1,234 in use', with the limits added on the before row
         """
-        threads: int = int(snapshot.get("threads", 0))
+        thread_count: Optional[float] = snapshot.get("threads", 0)
+        threads: int = int(thread_count)
         if tag == "before":
             return f"{threads:,} in use / limit {user_limit} per-user ({system_maximum} max)"
         return f"{threads:,} in use"

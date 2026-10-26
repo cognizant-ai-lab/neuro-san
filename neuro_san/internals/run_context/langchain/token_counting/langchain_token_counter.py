@@ -19,18 +19,16 @@ from typing import Any
 from typing import Awaitable
 from typing import Dict
 from typing import List
-from typing import Union
 
-from asyncio import Task
 from asyncio import TimeoutError as AsyncTimeout
 from asyncio import wait_for
+from asyncio import Future
 from contextvars import Context
 from contextvars import ContextVar
 from contextvars import copy_context
+from copy import copy
 from time import time
 
-from langchain_core.callbacks import AsyncCallbackHandler
-from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 
@@ -41,6 +39,8 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.langchain.token_counting.get_llm_token_callback import get_llm_token_callback
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import llm_token_callback_var
+from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler \
+    import LlmTokenCallbackHandler
 from neuro_san.message.types.agent_message import AgentMessage
 
 # Keep a ContextVar for the origin info.  We do this because the
@@ -126,7 +126,7 @@ class LangChainTokenCounter:
 
         retval: Any = None
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
-        llm_infos: Dict[str, Any] = llm_factory.llm_infos
+        llm_infos: Dict[str, Any] = llm_factory.get_llm_infos()
         # Take a time stamp so we measure another thing people care about - latency.
         start_time: float = time()
 
@@ -166,14 +166,14 @@ class LangChainTokenCounter:
         timed_out: bool = False
         with get_llm_token_callback(llm_infos) as callback:
             # Create a new context for different ContextVar values
-            # and use the create_task() to run within that context.
+            # and use the create_future() to run within that context.
             new_context: Context = copy_context()
-            task: Task = new_context.run(self.create_task, awaitable)
+            future: Future = new_context.run(self.create_future, awaitable)
             try:
-                retval = await wait_for(task, max_execution_seconds)
+                retval = await wait_for(future, max_execution_seconds)
             except AsyncTimeout:
-                # Per docs for wait_for(), the task is already cancelled, so the
-                # task's own final journal.write_message(AIMessage(...)) never ran.
+                # Per docs for wait_for(), the future is already cancelled, so the
+                # wrapped Awaitable's own final journal.write_message(AIMessage(...)) never ran.
                 # Synthesize that final AIMessage here — before report() below — so
                 # the journal order matches the normal-completion path:
                 #   streamed events -> final AIMessage -> token accounting.
@@ -199,23 +199,26 @@ class LangChainTokenCounter:
 
         return retval
 
-    def create_task(self, awaitable: Awaitable) -> Task:
+    def create_future(self, awaitable: Awaitable) -> Future:
         """
         Riffed from:
         https://stackoverflow.com/questions/78659844/async-version-of-context-run-for-context-vars-in-python-asyncio
+
+        :param awaitable: The awaitable to run
+        :return: A Future
         """
         executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
         origin_str: str = ORIGIN_INFO.get()
-        task: Task = executor.create_task(awaitable, origin_str)
+        future: Future = executor.create_task(awaitable, origin_str)
 
         if self.debug:
             # Print to be sure we have a different callback object.
-            oai_call = llm_token_callback_var.get()
+            oai_call: LlmTokenCallbackHandler = llm_token_callback_var.get()
             print(f"origin is {origin_str} callback var is {id(oai_call)}")
 
-        return task
+        return future
 
-    async def report(self, callback: AsyncCallbackHandler, time_taken_in_seconds: float):
+    async def report(self, callback: LlmTokenCallbackHandler, time_taken_in_seconds: float):
         """
         Report on the token accounting results of the callback
 
@@ -287,8 +290,9 @@ class LangChainTokenCounter:
         # Assignment preserves key insertion order (main first, total last, as the
         # first reporter established) so the server log always prints them that way.
         request_reporting["token_accounting"] = main_accounting
-        request_reporting["total_token_accounting"] = \
-            {**network_token_dict, "models": models_token_dict}
+        total_token_accounting: Dict[str, Any] = copy(network_token_dict)
+        total_token_accounting["models"] = models_token_dict
+        request_reporting["total_token_accounting"] = total_token_accounting
 
         # Figure out whether we are the front man of the main network:
         # * Only front men sit at the root of the origin path (single-element origin).
@@ -331,7 +335,7 @@ class LangChainTokenCounter:
 
     def _generate_agent_token_dict(
             self,
-            callback: Union[AsyncCallbackHandler, BaseCallbackHandler],
+            callback: LlmTokenCallbackHandler,
             time_taken_in_seconds: float,
     ) -> Dict[str, Any]:
         """
@@ -345,7 +349,12 @@ class LangChainTokenCounter:
         """
 
         # Organize the token dict for each agent to be the same format
-        agent_token_dict = {
+        caveats: List[str] = [
+            "Token usage is tracked at the agent level. "
+            "Counts include usage from any downstream agents called on this agent's behalf."
+        ]
+        caveats.extend(COMMON_CAVEATS)
+        agent_token_dict: Dict[str, Any] = {
             "total_tokens": callback.total_tokens,
             "prompt_tokens": callback.prompt_tokens,
             "completion_tokens": callback.completion_tokens,
@@ -353,10 +362,7 @@ class LangChainTokenCounter:
             "empty_responses": getattr(callback, "empty_responses", 0),
             "total_cost": callback.total_cost,
             "time_taken_in_seconds": time_taken_in_seconds,
-            "caveats": [
-                "Token usage is tracked at the agent level. "
-                "Counts include usage from any downstream agents called on this agent's behalf."
-            ] + COMMON_CAVEATS
+            "caveats": caveats,
         }
 
         return agent_token_dict
@@ -372,8 +378,12 @@ class LangChainTokenCounter:
                 nothing to aggregate) so downstream consumers can rely on them.
         """
         aggregated: Dict[str, Any] = dict(ZERO_TOKEN_STATS)
+        models: Dict[str, Any] = None
         for models in token_dict.values():
+            model_stats: Dict[str, Any] = None
             for model_stats in models.values():
+                metric: str = None
+                value: Any = None
                 for metric, value in model_stats.items():
                     if metric != "time_taken_in_seconds":
                         aggregated[metric] = aggregated.get(metric, 0) + value
@@ -382,7 +392,7 @@ class LangChainTokenCounter:
 
         return aggregated
 
-    def merge_dicts(self, dict_1, dict_2):
+    def merge_dicts(self, dict_1: Dict[str, Any], dict_2: Dict[str, Any]) -> Dict[str, Any]:
         """
         Recursively merge two dictionaries.
 
@@ -397,6 +407,8 @@ class LangChainTokenCounter:
         :return: A new dictionary containing the merged result.
         """
         result: Dict[str, Any] = dict(dict_1)  # start with dict_1
+        key: str = None
+        value: Any = None
         for key, value in dict_2.items():
             if key in result:
                 if isinstance(result[key], dict) and isinstance(value, dict):

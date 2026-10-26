@@ -79,7 +79,7 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
             "interactions": [
                 {
                     "enable": True,
-                    "cron_schedule": self.DEFAULT_CRON_SCHEDULE,
+                    "cron_schedule": PeriodicManifestDictConfigFilter.DEFAULT_CRON_SCHEDULE,
                     "second_at_beginning": False,
                     "text": "Do your thing",
                     "sly_data": {},
@@ -118,11 +118,13 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
         interactions: List[Dict[str, Any]] = template.get("interactions", empty)
 
         # Now do late validation of cron_schedule string in each interaction
+        index: int = 0
+        interaction: Dict[str, Any] = None
         for index, interaction in enumerate(interactions):
 
             cron_schedule: str = interaction.get("cron_schedule")
             if cron_schedule is None:
-                interaction["cron_schedule"] = self.DEFAULT_CRON_SCHEDULE
+                interaction["cron_schedule"] = PeriodicManifestDictConfigFilter.DEFAULT_CRON_SCHEDULE
 
             elif not CronIter.is_valid(cron_schedule):
 

@@ -36,6 +36,7 @@ from langchain_core.messages.tool import ToolMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.outputs.llm_result import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
+from langchain_core.outputs.generation import Generation
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
@@ -159,8 +160,8 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         # have a generations field which is a list of lists. Inside that inner list,
         # the first object is a ChatGeneration, whose text field tends to have agent
         # thinking in it.
-        generations = response.generations[0]
-        first_generation = generations[0]
+        generations: List[Generation] = response.generations[0]
+        first_generation: Generation = generations[0]
         if isinstance(first_generation, ChatGeneration):
             # Project the message content to its full text through the single
             # projection policy ContentUtils defines: the dupe comparison
@@ -236,10 +237,14 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
 
         if "langchain_tool" in tags:
 
+            # Get a string version of the run_id
+            run_id_str: str = str(run_id)
+
             # Build the origin path
             origin: List[Dict[str, Any]] = self.origination.add_spec_name_to_origin(self.parent_origin, agent_name)
+
             # Store the origin for this run_id
-            self._tool_origins[run_id] = origin
+            self._tool_origins[run_id_str] = origin
 
             # Re-build the tool start dictionary we will report with tool origin information
             # for the langchain tool's journal.
@@ -248,7 +253,7 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             # Create a journal entry for this invocation and log the combined inputs
             langchain_tool_journal = OriginatingJournal(self.base_journal, origin)
             # Store the journal for this run_id
-            self._tool_journals[run_id] = langchain_tool_journal
+            self._tool_journals[run_id_str] = langchain_tool_journal
             message = AgentMessage(content="Received arguments:", structure=tool_start_dict)
             await langchain_tool_journal.write_message(message)
 
@@ -276,9 +281,12 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             if isinstance(output, ToolMessage):
                 output = output.content
 
+            # Get a string version of the run_id
+            run_id_str: str = str(run_id)
+
             # Retrieve the correct journal and origin for this run_id
-            origin = self._tool_origins.get(run_id)
-            langchain_tool_journal = self._tool_journals.get(run_id)
+            origin: List[Dict[str, Any]] = self._tool_origins.get(run_id_str)
+            langchain_tool_journal: OriginatingJournal = self._tool_journals.get(run_id_str)
 
             # A tool can return a list of standard content blocks (text plus
             # image/file data): toolbox tools that return blocks do, and so
