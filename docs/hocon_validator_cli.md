@@ -56,11 +56,13 @@ This is useful when:
 
 ### How It Works
 
+The validator is read-only: it never writes to the filesystem.
+
 When a registry directory is specified (either by default or via `--registry-dir`):
 
-1. The validator temporarily copies your HOCON file to the registry directory
-2. It parses the file from that location, allowing includes to be resolved correctly
-3. After validation completes, the temporary file is automatically removed
+1. The validator chdirs into that directory for the duration of the HOCON parse,
+   so `include "registries/..."` statements inside your file resolve correctly.
+2. The previous working directory is restored before anything else runs.
 
 ## Examples
 

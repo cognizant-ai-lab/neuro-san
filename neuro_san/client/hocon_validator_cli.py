@@ -18,13 +18,11 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Tuple
 
 import argparse
 import copy
 import json
 import os
-import shutil
 import sys
 
 from pyparsing.exceptions import ParseException
@@ -45,9 +43,12 @@ class HoconValidatorCli:
     This script validates HOCON files against neuro-san's agent network validation rules,
     checking for issues such as:
     - Missing or unreachable agents
+    - Duplicate agent names
     - Invalid tool names
     - Empty instructions
     - Invalid URL references
+
+    The tool is read-only: it never writes to the filesystem.
 
     Usage:
         python -m neuro_san.client.hocon_validator_cli path/to/agent.hocon
@@ -68,8 +69,11 @@ class HoconValidatorCli:
         """
         self.parse_args()
 
+        abs_file_path: str = os.path.abspath(self.args.hocon_file)
+        restorer = AgentNetworkRestorer(registry_dir=self.args.registry_dir)
+
         try:
-            resolved_config, raw_config = self.load_hocon_file(self.args.hocon_file)
+            raw_config: Dict[str, Any] = self.parse_file(abs_file_path, restorer)
         except FileNotFoundError as exception:
             print(f"Error: File not found - {exception}", file=sys.stderr)
             return 2
@@ -80,26 +84,62 @@ class HoconValidatorCli:
             print(f"Error: {exception}", file=sys.stderr)
             return 2
 
-        # Run hard validation (missing nodes, cycles, etc.)
-        validator: DictionaryValidator = self.create_validator()
-        errors: List[str] = validator.validate(resolved_config)
-
-        # Run lint checks: unused commondefs can be promoted to errors
-        # by --strict; unresolved placeholders are always advisory.
+        resolved_config: Dict[str, Any] = self.resolve_config(raw_config)
+        errors: List[str] = self.collect_errors(restorer, resolved_config, abs_file_path)
         lint = LintNetworkValidator(raw_config=raw_config)
         unused_warnings: List[str] = lint.find_unused_commondefs()
         placeholder_warnings: List[str] = lint.find_unresolved_placeholders(resolved_config)
+        return self.report_results(resolved_config, errors, unused_warnings, placeholder_warnings)
 
-        # Build the list of things that cause exit 1
+    def collect_errors(
+        self,
+        restorer: AgentNetworkRestorer,
+        resolved_config: Dict[str, Any],
+        file_path: str,
+    ) -> List[str]:
+        """
+        Run every hard check (schema, references, duplicate names) and
+        return the combined list of error messages.
+
+        :param restorer: The AgentNetworkRestorer used for the duplicate check
+        :param resolved_config: The resolved config to validate
+        :param file_path: The HOCON file path (used in duplicate-name messages)
+        :return: Combined list of error messages, empty if nothing failed
+        """
+        validator: DictionaryValidator = self.create_validator()
+        errors: List[str] = validator.validate(resolved_config)
+        duplicate_error: str = self.check_duplicate_agents(restorer, resolved_config, file_path)
+        if duplicate_error:
+            errors.append(duplicate_error)
+        return errors
+
+    def report_results(
+        self,
+        resolved_config: Dict[str, Any],
+        errors: List[str],
+        unused_warnings: List[str],
+        placeholder_warnings: List[str],
+    ) -> int:
+        """
+        Print validation results to stdout and return the exit code.
+
+        Unused-commondefs warnings are promoted to errors when --strict
+        is set; placeholder warnings are always advisory.
+
+        :param resolved_config: The resolved config (used for the verbose summary)
+        :param errors: Hard-validation errors
+        :param unused_warnings: Unused-commondefs lint warnings
+        :param placeholder_warnings: Unresolved-placeholder lint warnings
+        :return: Exit code (0 for pass, 1 for errors)
+        """
         exit_errors: List[str] = list(errors)
         if self.args.strict:
             exit_errors.extend(unused_warnings)
 
         if exit_errors:
             print(f"Validation failed with {len(exit_errors)} error(s):\n")
-            for i, error in enumerate(exit_errors, 1):
-                print(f"  {i}. {error}")
-            # Show remaining warnings that weren't promoted to errors
+            for index, error in enumerate(exit_errors, 1):
+                print(f"  {index}. {error}")
             remaining: List[str] = list(placeholder_warnings)
             if not self.args.strict:
                 remaining = unused_warnings + remaining
@@ -107,7 +147,6 @@ class HoconValidatorCli:
                 self._print_lint_warnings(remaining)
             return 1
 
-        # Validation passed
         print("Validation passed: No errors found.")
         all_warnings: List[str] = unused_warnings + placeholder_warnings
         if all_warnings:
@@ -117,11 +156,74 @@ class HoconValidatorCli:
         return 0
 
     @staticmethod
+    def parse_file(file_path: str, restorer: AgentNetworkRestorer) -> Dict[str, Any]:
+        """
+        Parse a HOCON file into its raw (pre-filter) config dictionary.
+
+        To make HOCON 'include' statements inside the file resolve against
+        the registry layout, this chdirs into the restorer's registry_dir
+        for the duration of the parse and restores the previous cwd after.
+
+        :param file_path: Absolute path to the HOCON file
+        :param restorer: An AgentNetworkRestorer (used only for its HOCON parser)
+        :return: The raw parsed config dictionary
+        """
+        with open(file_path, "rb") as file_obj:
+            file_contents: bytes = file_obj.read()
+
+        registry_dir: str = restorer.registry_dir
+        original_cwd: str = os.getcwd()
+        # chdir only when a registry_dir is set, so includes resolve relative to it
+        if registry_dir and os.path.isdir(registry_dir):
+            os.chdir(registry_dir)
+        try:
+            parsed: Dict[str, Any] = restorer.deserialize_file_contents(file_path, file_contents)
+        finally:
+            os.chdir(original_cwd)
+
+        if parsed is None:
+            raise FileNotFoundError(f"Could not parse file: {file_path}")
+        return parsed
+
+    @staticmethod
+    def resolve_config(raw_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply the standard neuro-san filter chain to produce a resolved
+        config suitable for hard validation. Operates on a deep copy so
+        the caller's raw config stays intact for the lint checks.
+
+        :param raw_config: The raw, pre-filter config
+        :return: The resolved config dictionary
+        """
+        config_for_filter: Dict[str, Any] = copy.deepcopy(raw_config)
+        return NetworkConfigFilterChain().filter_config(config_for_filter)
+
+    @staticmethod
+    def check_duplicate_agents(
+        restorer: AgentNetworkRestorer, resolved_config: Dict[str, Any], file_path: str
+    ) -> str:
+        """
+        Trigger AgentNetwork's duplicate-name detection by building a
+        network from the resolved config. Returns the duplicate-name
+        message if the build raises, or an empty string if it passes.
+
+        :param restorer: The AgentNetworkRestorer that owns the agent mapper
+        :param resolved_config: The filter-chain-applied config
+        :param file_path: The HOCON file path (used in the error message)
+        :return: The error message string, or an empty string if no duplicates
+        """
+        try:
+            restorer.create_network(resolved_config, file_path)
+        except ValueError as exception:
+            return str(exception)
+        return ""
+
+    @staticmethod
     def _print_lint_warnings(lint_warnings: List[str]):
         """Print lint warnings to stdout."""
         print(f"\n{len(lint_warnings)} lint warning(s) (use --strict to treat these as errors):\n")
-        for i, warning in enumerate(lint_warnings, 1):
-            print(f"  {i}. {warning}")
+        for index, warning in enumerate(lint_warnings, 1):
+            print(f"  {index}. {warning}")
 
     def parse_args(self):
         """
@@ -202,85 +304,6 @@ Examples:
 
         self.args = arg_parser.parse_args()
 
-    def load_hocon_file(self, file_path: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        Load and parse a HOCON file, returning both the resolved and raw configs.
-
-        The file is parsed once. A deep copy is kept as the raw config (needed
-        by the unused-commondefs check, which must see definitions before they
-        are substituted away), and the standard filter chain is applied to the
-        original to produce the resolved config.
-
-        :param file_path: Path to the HOCON file
-        :return: (resolved_config, raw_config)
-        """
-        abs_file_path: str = os.path.abspath(file_path)
-
-        if self.args.registry_dir:
-            return self._load_with_registry_dir(abs_file_path, self.args.registry_dir)
-
-        restorer = AgentNetworkRestorer(registry_dir=None)
-        return self._parse_and_resolve(abs_file_path, restorer)
-
-    @staticmethod
-    def _parse_and_resolve(
-        file_path: str, restorer: AgentNetworkRestorer
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        Parse a HOCON file once, then produce both raw and resolved configs.
-
-        Uses the restorer's deserialize_file_contents() directly (rather than
-        its full restore() path) because restore() applies the filter chain
-        *and* wraps the result in an AgentNetwork. We need the parsed dict
-        before filtering so we can deep-copy it as the raw config.
-
-        :param file_path: Absolute path to the HOCON file
-        :param restorer: An AgentNetworkRestorer (used only for its HOCON parser)
-        :return: (resolved_config, raw_config)
-        """
-        with open(file_path, "rb") as file_obj:
-            file_contents: bytes = file_obj.read()
-
-        parsed: Dict[str, Any] = restorer.deserialize_file_contents(
-            file_path, file_contents
-        )
-
-        if parsed is None:
-            raise FileNotFoundError(f"Could not parse file: {file_path}")
-
-        # Keep a deep copy as the raw config before filtering mutates it
-        raw_config: Dict[str, Any] = copy.deepcopy(parsed)
-        resolved_config: Dict[str, Any] = NetworkConfigFilterChain().filter_config(parsed)
-        return resolved_config, raw_config
-
-    def _load_with_registry_dir(
-        self, file_path: str, registry_dir: str
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        Load a HOCON file by temporarily copying it to the registry directory
-        so that HOCON 'include' statements resolve correctly.
-
-        :param file_path: Absolute path to the HOCON file
-        :param registry_dir: Directory containing the registries folder
-        :return: (resolved_config, raw_config)
-        """
-        abs_registry_dir: str = os.path.abspath(registry_dir)
-
-        if not os.path.isdir(abs_registry_dir):
-            raise ValueError(f"Registry directory does not exist: {abs_registry_dir}")
-
-        temp_file: str = None
-        try:
-            base_name: str = os.path.basename(file_path)
-            temp_file = os.path.join(abs_registry_dir, f"_temp_validate_{base_name}")
-            shutil.copy(file_path, temp_file)
-
-            restorer = AgentNetworkRestorer(registry_dir=None)
-            return self._parse_and_resolve(temp_file, restorer)
-        finally:
-            if temp_file and os.path.exists(temp_file):
-                os.remove(temp_file)
-
     def create_validator(self) -> DictionaryValidator:
         """
         Create the validator using ManifestNetworkValidator.
@@ -296,8 +319,7 @@ Examples:
             mcp_servers = [server.strip() for server in self.args.mcp_servers.split(",")]
 
         network_name: str = os.path.basename(self.args.hocon_file)
-        return ManifestNetworkValidator(external_agents, mcp_servers,
-                                        network_name=network_name)
+        return ManifestNetworkValidator(external_agents, mcp_servers, network_name=network_name)
 
     @staticmethod
     def _print_network_summary(config: Dict[str, Any]):

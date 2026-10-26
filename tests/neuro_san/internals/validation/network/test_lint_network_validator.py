@@ -149,28 +149,28 @@ class TestFindUnresolvedReplacementStrings(unittest.TestCase):
         }
         self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
 
-    def test_only_instructions_and_description_scanned(self):
-        """A {word} token in a field other than instructions/description is not flagged."""
+    def test_only_scanned_fields_are_flagged(self):
+        """A {word} token outside the scanned paths is not flagged."""
         resolved_config = {
             "tools": [{"name": "agent", "instructions": "OK", "args": {"url": "/{path}/api"}}]
         }
         self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
 
-    def test_nested_function_description_is_not_scanned(self):
-        """A {word} token inside function.description is not scanned (only top-level fields)."""
+    def test_nested_function_description_is_scanned(self):
+        """A {word} token inside function.description is flagged (agents keep description here)."""
         resolved_config = {
             "tools": [{"name": "agent", "function": {"description": "Perform {action}"}}]
-        }
-        self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
-
-    def test_top_level_description_is_scanned(self):
-        """A {word} token in a tool's top-level 'description' field is flagged."""
-        resolved_config = {
-            "tools": [{"name": "agent", "description": "Does the {action} thing"}]
         }
         warnings = LintNetworkValidator().validate(resolved_config)
         self.assertEqual(len(warnings), 1)
         self.assertIn("{action}", warnings[0])
+
+    def test_top_level_description_is_not_scanned(self):
+        """A {word} token in a tool's top-level 'description' field is not flagged (agents use function.description)."""
+        resolved_config = {
+            "tools": [{"name": "agent", "description": "Does the {action} thing"}]
+        }
+        self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
 
 
 class TestIndividualCheckMethods(unittest.TestCase):

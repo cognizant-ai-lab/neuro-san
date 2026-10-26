@@ -21,6 +21,8 @@ import os
 import tempfile
 import unittest
 
+from typing import List
+from typing import Tuple
 from unittest.mock import patch
 
 from neuro_san.client.hocon_validator_cli import HoconValidatorCli
@@ -31,22 +33,42 @@ class TestHoconValidatorCli(unittest.TestCase):
     Unit tests for the HoconValidatorCli class.
     """
 
-    def setUp(self):
-        """Set up test fixtures.
+    # Reused by the two strict/non-strict lint tests
+    UNUSED_COMMONDEF_HOCON: str = """
+    {
+        commondefs: {
+            replacement_strings: {
+                unused_key: "never referenced"
+            }
+        }
+        tools: [
+            {
+                name: "test_agent"
+                instructions: "Test instructions"
+                tools: []
+            }
+        ]
+    }
+    """
 
-        Paths navigate from this file (tests/neuro_san/client/) up to the
-        project root and back into the neuro_san package.
+    def setUp(self):
+        """
+        Resolve paths relative to this test file so the registry directory
+        can be passed to the CLI without depending on the caller's cwd.
         """
         self.test_dir = os.path.dirname(os.path.abspath(__file__))
         # tests/neuro_san/client -> tests/neuro_san -> tests -> project_root
-        self.project_root = os.path.dirname(
-            os.path.dirname(os.path.dirname(self.test_dir))
-        )
+        self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(self.test_dir)))
         self.neuro_san_dir = os.path.join(self.project_root, "neuro_san")
         self.registries_dir = os.path.join(self.neuro_san_dir, "registries")
 
-    def _run_cli(self, args):
-        """Run the CLI with the given args and capture stdout."""
+    def _run_cli(self, args: List[str]) -> Tuple[int, str]:
+        """
+        Run the CLI with the given args and capture stdout.
+
+        :param args: Argv tail (everything after the program name)
+        :return: (exit_code, captured_stdout)
+        """
         stdout = io.StringIO()
         with patch("sys.argv", ["hocon_validator_cli"] + args):
             with contextlib.redirect_stdout(stdout):
@@ -54,20 +76,41 @@ class TestHoconValidatorCli(unittest.TestCase):
                 exit_code = cli.main()
         return exit_code, stdout.getvalue()
 
+    def _run_cli_on_hocon(self, hocon_content: str, extra_args: List[str] = None) -> Tuple[int, str]:
+        """
+        Write hocon_content to a temp file, run the CLI against it with
+        --registry-dir set to the project root plus any extra args, and
+        clean up the temp file afterwards.
+
+        :param hocon_content: Raw HOCON source to validate
+        :param extra_args: Additional CLI args appended after --registry-dir
+        :return: (exit_code, captured_stdout)
+        """
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as hocon_handle:
+            hocon_handle.write(hocon_content)
+            temp_path: str = hocon_handle.name
+        try:
+            args: List[str] = [temp_path, "--registry-dir", self.project_root]
+            if extra_args:
+                args.extend(extra_args)
+            return self._run_cli(args)
+        finally:
+            os.unlink(temp_path)
+
     def test_valid_hocon_returns_zero(self):
-        """Test that a valid HOCON file returns exit code 0."""
-        hocon_file = os.path.join(self.registries_dir, "hello_world.hocon")
+        """A valid HOCON file returns exit code 0."""
+        hocon_file: str = os.path.join(self.registries_dir, "hello_world.hocon")
         exit_code, _ = self._run_cli([hocon_file])
         self.assertEqual(exit_code, 0)
 
     def test_file_not_found_returns_two(self):
-        """Test that a non-existent file returns exit code 2."""
+        """A non-existent file returns exit code 2."""
         exit_code, _ = self._run_cli(["/nonexistent/file.hocon"])
         self.assertEqual(exit_code, 2)
 
     def test_missing_agent_returns_one(self):
-        """Test that a HOCON with missing agent reference returns exit code 1."""
-        hocon_content = '''
+        """A HOCON with a missing agent reference returns exit code 1."""
+        hocon_content: str = """
         {
             tools: [
                 {
@@ -77,21 +120,13 @@ class TestHoconValidatorCli(unittest.TestCase):
                 }
             ]
         }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, _ = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root]
-            )
-            self.assertEqual(exit_code, 1)
-        finally:
-            os.unlink(temp_file)
+        """
+        exit_code, _ = self._run_cli_on_hocon(hocon_content)
+        self.assertEqual(exit_code, 1)
 
     def test_unreachable_agent_returns_one(self):
-        """Test that a HOCON with unreachable agent returns exit code 1."""
-        hocon_content = '''
+        """A HOCON with an unreachable agent returns exit code 1."""
+        hocon_content: str = """
         {
             tools: [
                 {
@@ -106,21 +141,35 @@ class TestHoconValidatorCli(unittest.TestCase):
                 }
             ]
         }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, _ = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root]
-            )
-            self.assertEqual(exit_code, 1)
-        finally:
-            os.unlink(temp_file)
+        """
+        exit_code, _ = self._run_cli_on_hocon(hocon_content)
+        self.assertEqual(exit_code, 1)
+
+    def test_duplicate_agent_name_returns_one(self):
+        """A HOCON with two agents sharing a name returns exit code 1."""
+        hocon_content: str = """
+        {
+            tools: [
+                {
+                    name: "helper"
+                    instructions: "First helper"
+                    tools: []
+                },
+                {
+                    name: "helper"
+                    instructions: "Second helper"
+                    tools: []
+                }
+            ]
+        }
+        """
+        exit_code, output = self._run_cli_on_hocon(hocon_content)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("duplicate entry", output)
 
     def test_external_agents_flag(self):
-        """Test that --external-agents flag allows external agent references."""
-        hocon_content = '''
+        """--external-agents allows references to external agents."""
+        hocon_content: str = """
         {
             tools: [
                 {
@@ -130,90 +179,33 @@ class TestHoconValidatorCli(unittest.TestCase):
                 }
             ]
         }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, _ = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root,
-                 "--external-agents", "/external_agent"]
-            )
-            self.assertEqual(exit_code, 0)
-        finally:
-            os.unlink(temp_file)
+        """
+        exit_code, _ = self._run_cli_on_hocon(hocon_content, ["--external-agents", "/external_agent"])
+        self.assertEqual(exit_code, 0)
 
     def test_verbose_flag(self):
-        """Test that --verbose flag works without errors."""
-        hocon_file = os.path.join(self.registries_dir, "hello_world.hocon")
+        """--verbose prints a network summary without errors."""
+        hocon_file: str = os.path.join(self.registries_dir, "hello_world.hocon")
         exit_code, output = self._run_cli([hocon_file, "--verbose"])
         self.assertEqual(exit_code, 0)
         self.assertIn("Agent Network Summary", output)
 
     def test_lint_warning_does_not_fail_by_default(self):
         """An unused commondef is reported but does not fail without --strict."""
-        hocon_content = '''
-        {
-            commondefs: {
-                replacement_strings: {
-                    unused_key: "never referenced"
-                }
-            }
-            tools: [
-                {
-                    name: "test_agent"
-                    instructions: "Test instructions"
-                    tools: []
-                }
-            ]
-        }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, output = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root]
-            )
-            self.assertEqual(exit_code, 0)
-            self.assertIn("lint warning", output)
-            self.assertIn("unused_key", output)
-        finally:
-            os.unlink(temp_file)
+        exit_code, output = self._run_cli_on_hocon(self.UNUSED_COMMONDEF_HOCON)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("lint warning", output)
+        self.assertIn("unused_key", output)
 
     def test_lint_warning_fails_with_strict_flag(self):
         """An unused commondef fails validation with --strict."""
-        hocon_content = '''
-        {
-            commondefs: {
-                replacement_strings: {
-                    unused_key: "never referenced"
-                }
-            }
-            tools: [
-                {
-                    name: "test_agent"
-                    instructions: "Test instructions"
-                    tools: []
-                }
-            ]
-        }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, output = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root, "--strict"]
-            )
-            self.assertEqual(exit_code, 1)
-            self.assertIn("unused_key", output)
-        finally:
-            os.unlink(temp_file)
+        exit_code, output = self._run_cli_on_hocon(self.UNUSED_COMMONDEF_HOCON, ["--strict"])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("unused_key", output)
 
     def test_unresolved_placeholder_is_advisory_only(self):
         """A {word} placeholder is reported but never fails, even with --strict."""
-        hocon_content = '''
+        hocon_content: str = """
         {
             tools: [
                 {
@@ -223,28 +215,18 @@ class TestHoconValidatorCli(unittest.TestCase):
                 }
             ]
         }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, output = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root]
-            )
-            self.assertEqual(exit_code, 0)
-            self.assertIn("{operation}", output)
+        """
+        exit_code, output = self._run_cli_on_hocon(hocon_content)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("{operation}", output)
 
-            exit_code_strict, output_strict = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root, "--strict"]
-            )
-            self.assertEqual(exit_code_strict, 0)
-            self.assertIn("{operation}", output_strict)
-        finally:
-            os.unlink(temp_file)
+        exit_code_strict, output_strict = self._run_cli_on_hocon(hocon_content, ["--strict"])
+        self.assertEqual(exit_code_strict, 0)
+        self.assertIn("{operation}", output_strict)
 
     def test_clean_hocon_has_no_lint_warnings(self):
         """A self-contained network with commondefs fully used produces zero warnings."""
-        hocon_content = '''
+        hocon_content: str = """
         {
             commondefs: {
                 replacement_strings: {
@@ -263,22 +245,14 @@ class TestHoconValidatorCli(unittest.TestCase):
                 }
             ]
         }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, output = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root]
-            )
-            self.assertEqual(exit_code, 0)
-            self.assertNotIn("lint warning", output)
-        finally:
-            os.unlink(temp_file)
+        """
+        exit_code, output = self._run_cli_on_hocon(hocon_content)
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("lint warning", output)
 
-    def test_string_tool_refs_do_not_crash(self):
-        """A network with string tool references in replacement_values loads without error."""
-        hocon_content = '''
+    def test_string_tool_refs_pass_validation(self):
+        """A network with string tool references in replacement_values validates cleanly."""
+        hocon_content: str = """
         {
             commondefs: {
                 replacement_values: {
@@ -291,17 +265,9 @@ class TestHoconValidatorCli(unittest.TestCase):
             }
             tools: [ "front_def" ]
         }
-        '''
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as f:
-            f.write(hocon_content)
-            temp_file = f.name
-        try:
-            exit_code, _ = self._run_cli(
-                [temp_file, "--registry-dir", self.project_root]
-            )
-            self.assertIn(exit_code, (0, 1))
-        finally:
-            os.unlink(temp_file)
+        """
+        exit_code, _ = self._run_cli_on_hocon(hocon_content)
+        self.assertEqual(exit_code, 0)
 
 
 if __name__ == "__main__":
