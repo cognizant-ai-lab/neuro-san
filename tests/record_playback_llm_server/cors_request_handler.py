@@ -86,6 +86,8 @@ class CorsRequestHandler(tornado.web.RequestHandler):
         policy: CorsPolicy = self.cors_policy()
         origin: str = self.request_origin()
         headers: Dict[str, str] = policy.response_headers(origin)
+        if policy.is_enabled():
+            headers["Vary"] = "Origin"
         name: str = ""
         value: str = ""
         # Tornado has already cleared the headers, so set each one again.
