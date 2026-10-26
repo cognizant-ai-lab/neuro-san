@@ -171,9 +171,12 @@ network failure. An origin nobody named is answered exactly as before: 405 to
 the preflight, and no permission header.
 
 Named origins are matched whole, so `http://alpha.localhost:8080` does not
-admit `https://alpha.localhost:8080` or any other port. Credentials are never
-allowed; a key in an `Authorization` header is an ordinary header to CORS and
-travels normally.
+admit `https://alpha.localhost:8080` or any other port. The one port that makes
+no difference is the default port of the scheme, which a browser leaves out of
+the `Origin` header: `https://alpha.example:443` and `https://alpha.example`
+are one origin, as are `http://beta.example:80` and `http://beta.example`.
+Credentials are never allowed; a key in an `Authorization` header is an
+ordinary header to CORS and travels normally.
 
 To admit every page instead of naming them, use `--allow-any-origin`:
 

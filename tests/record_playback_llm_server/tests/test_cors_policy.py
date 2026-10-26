@@ -66,6 +66,42 @@ class TestCorsPolicy(unittest.TestCase):
         policy = CorsPolicy(["HTTP://Alpha.Localhost:8080/"])
         self.assertTrue(policy.allows(self.SITE))
 
+    def test_the_default_https_port_names_the_same_origin(self):
+        """An operator who writes :443 still admits the page a browser loads."""
+        policy: CorsPolicy = CorsPolicy(["https://alpha.example:443"])
+        self.assertTrue(policy.allows("https://alpha.example"))
+        self.assertTrue(policy.allows("https://alpha.example:443"))
+
+    def test_the_default_http_port_names_the_same_origin(self):
+        """Port 80 is the default of http, so it is left out as well."""
+        policy: CorsPolicy = CorsPolicy(["http://beta.example:80"])
+        self.assertTrue(policy.allows("http://beta.example"))
+        self.assertTrue(policy.allows("http://beta.example:80"))
+
+    def test_an_origin_written_without_the_default_port_admits_one_with_it(self):
+        """The two forms meet whichever of them the operator wrote."""
+        policy: CorsPolicy = CorsPolicy(["https://alpha.example"])
+        self.assertTrue(policy.allows("https://alpha.example:443"))
+
+    def test_the_echoed_origin_leaves_out_a_default_port(self):
+        """A browser compares the echoed origin with its own, which has no :443."""
+        policy: CorsPolicy = CorsPolicy(["https://alpha.example:443"])
+        headers: Dict[str, str] = policy.response_headers("https://alpha.example:443")
+        self.assertEqual("https://alpha.example", headers.get("Access-Control-Allow-Origin"))
+
+    def test_a_port_that_is_not_the_default_of_its_scheme_is_kept(self):
+        """Only the default port of the scheme goes, so other ports still differ."""
+        policy: CorsPolicy = CorsPolicy(["https://alpha.example:443", "http://beta.example:80"])
+        self.assertFalse(policy.allows("https://alpha.example:8443"))
+        self.assertFalse(policy.allows("http://beta.example:8080"))
+        self.assertFalse(policy.allows("https://beta.example:443"))
+
+    def test_the_default_port_of_another_scheme_is_kept(self):
+        """Port 80 is not the default of https, so the two origins differ."""
+        policy: CorsPolicy = CorsPolicy(["https://alpha.example:80"])
+        self.assertTrue(policy.allows("https://alpha.example:80"))
+        self.assertFalse(policy.allows("https://alpha.example"))
+
     def test_a_caller_with_no_origin_header_is_not_admitted(self):
         """A neuro-san process sends no Origin and needs no permission."""
         policy = CorsPolicy([CorsPolicy.WILDCARD])

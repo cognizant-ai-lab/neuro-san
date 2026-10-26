@@ -33,12 +33,19 @@ class CorsPolicy:
     is why the policy is off until an operator names the origins to admit.
 
     An origin is either an exact match, such as "http://alpha.localhost:8080",
-    or the wildcard "*", which admits every page. Credentials are never allowed:
-    the proxy holds no cookie or session, and the visitor's key travels in an
-    Authorization header, which CORS treats as an ordinary header.
+    or the wildcard "*", which admits every page. A browser leaves the default
+    port of the scheme out of the Origin header, so "https://alpha.example:443"
+    and "https://alpha.example" are one origin here, and so are
+    "http://beta.example:80" and "http://beta.example".
+
+    Credentials are never allowed: the proxy holds no cookie or session, and the
+    visitor's key travels in an Authorization header, which CORS treats as an
+    ordinary header.
     """
 
     WILDCARD: str = "*"
+
+    DEFAULT_PORTS: Tuple[Tuple[str, str], ...] = (("http://", ":80"), ("https://", ":443"))
 
     DEFAULT_ALLOWED_HEADERS: Tuple[str, ...] = ("authorization", "content-type")
 
@@ -74,13 +81,36 @@ class CorsPolicy:
         Put an origin in the form an Origin header carries it.
 
         :param origin: The origin as an operator or a browser wrote it.
-        :return: The origin in lower case with no trailing slash, or "" when
-                 there is nothing to compare.
+        :return: The origin in lower case, with no trailing slash and no
+                 default port, or "" when there is nothing to compare.
         """
         text: str = str(origin or "")
         trimmed: str = text.strip()
         without_slash: str = trimmed.rstrip("/")
-        return without_slash.lower()
+        lowered: str = without_slash.lower()
+        return CorsPolicy.drop_default_port(lowered)
+
+    @staticmethod
+    def drop_default_port(origin: str) -> str:
+        """
+        Remove the port of an origin when the scheme makes it the default one.
+
+        A browser writes "https://alpha.example" for a page on port 443, so an
+        operator who names the port must still get a match.
+
+        :param origin: The origin in lower case, with no trailing slash.
+        :return: The origin as a browser serializes it.
+        """
+        scheme: str = ""
+        port: str = ""
+        # Each scheme has one default port, which a browser never sends.
+        for scheme, port in CorsPolicy.DEFAULT_PORTS:
+            on_scheme: bool = origin.startswith(scheme)
+            on_port: bool = origin.endswith(port)
+            if on_scheme and on_port:
+                keep: int = len(origin) - len(port)
+                return origin[:keep]
+        return origin
 
     @staticmethod
     def from_values(values: Optional[List[str]]) -> "CorsPolicy":
