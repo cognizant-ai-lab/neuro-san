@@ -404,7 +404,7 @@ Check these things:
         # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
         # operator setting this security flag the way other flags are set gets the
         # behavior they expect rather than a silent fail-open.
-        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", default=False)
+        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", default_value=False)
 
     def _log_unrestricted_resolution_notice_once(self):
         """
