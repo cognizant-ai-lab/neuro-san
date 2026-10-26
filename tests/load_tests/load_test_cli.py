@@ -16,6 +16,7 @@
 
 from argparse import Namespace
 from functools import partial
+from inspect import cleandoc
 from logging import INFO
 from logging import Logger
 from logging import basicConfig
@@ -364,7 +365,8 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         Entry point for the load test script.
         """
         basicConfig(level=INFO, format="%(message)s")
-        args: Namespace = LoadTestArguments.parse_args(__doc__)
+        epilog: str = cleandoc(LoadTestCli.__doc__)
+        args: Namespace = LoadTestArguments.parse_args(epilog)
         if args.rebuild:
             ResultsRebuilder(args.rebuild, force=args.rebuild_all).run()
             return
