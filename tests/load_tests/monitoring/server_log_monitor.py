@@ -47,14 +47,14 @@ class ServerLogMonitor:
     monitoring and telemetry when those features become available.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     def __init__(self, server_log: Optional[str]) -> None:
         """
         Store the server log path.
 
         :param server_log: Path of the server log, or None when there is none
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
+        self._parser: ServerLogParser = ServerLogParser()
         self._server_log: Optional[str] = server_log
 
     def read_position(self) -> Optional[int]:
@@ -240,14 +240,14 @@ class ServerLogMonitor:
         results: Dict[str, Dict[str, Any]] = {}
         block: Dict[str, object]
         # Keep the token entry of each reporting block, with the network named after it.
-        for block in ServerLogParser.collect_reporting_blocks(lines):
+        for block in self._parser.collect_reporting_blocks(lines):
             block_text: str = block.get("text", "")
-            entry: Optional[Dict[str, Any]] = ServerLogParser.extract_token_entry(block_text)
+            entry: Optional[Dict[str, Any]] = self._parser.extract_token_entry(block_text)
             if entry:
                 request_id: Optional[str] = entry.get("request_id")
                 if request_id is not None:
                     end_index: int = block.get("end_index", 0)
-                    agent: Optional[str] = ServerLogParser.find_network_after(lines, end_index)
+                    agent: Optional[str] = self._parser.find_network_after(lines, end_index)
                     if agent:
                         entry["reporting_agent"] = agent
                     results[request_id] = entry
@@ -265,15 +265,15 @@ class ServerLogMonitor:
 
         :param position: Server log position to read from, from read_position(), or None
         :return: One dict per sub-network block that has a network name, with the keys listed in
-                 ServerLogParser.resolve_network_names()
+                 self._parser.resolve_network_names()
         """
         if self._server_log is None or position is None:
             return []
         lines: List[str] = self._read_lines_since(position, "network tokens")
         if not lines:
             return []
-        blocks: List[Dict[str, object]] = ServerLogParser.collect_reporting_blocks(lines)
-        return ServerLogParser.resolve_network_names(blocks, lines)
+        blocks: List[Dict[str, object]] = self._parser.collect_reporting_blocks(lines)
+        return self._parser.resolve_network_names(blocks, lines)
 
     def parse_validation_events_since(self, position: Optional[int]) -> List[Dict[str, Any]]:
         """
@@ -293,7 +293,7 @@ class ServerLogMonitor:
         lines: List[str] = self._read_lines_since(position, "validation events")
         if not lines:
             return []
-        return ServerLogParser.collect_validation_events(lines)
+        return self._parser.collect_validation_events(lines)
 
     def parse_streaming_chat_timing_since(self, position: Optional[int]) -> List[Dict[str, object]]:
         """
@@ -308,7 +308,7 @@ class ServerLogMonitor:
         lines: List[str] = self._read_lines_since(position, "streaming_chat timing")
         if not lines:
             return []
-        return ServerLogParser.match_streaming_chat_pairs(lines)
+        return self._parser.match_streaming_chat_pairs(lines)
 
     def scan_disconnections_since(self, position: Optional[int],
                                   primary_start_pattern: Optional[str] = None) -> List[Dict[str, str]]:
@@ -360,10 +360,10 @@ class ServerLogMonitor:
                     }
             cancel_match: Optional[re.Match] = LoadTestConstants.TASK_CANCELLED_PATTERN.search(line)
             if cancel_match:
-                ServerLogParser.set_cancelled_agent(cancel_match, disconnections, agent_by_request_id)
+                self._parser.set_cancelled_agent(cancel_match, disconnections, agent_by_request_id)
 
-        ServerLogParser.map_to_client_requests(disconnections, primary_request_ids)
-        return ServerLogParser.disconnection_list(disconnections)
+        self._parser.map_to_client_requests(disconnections, primary_request_ids)
+        return self._parser.disconnection_list(disconnections)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time_seconds: float,
@@ -406,6 +406,6 @@ class ServerLogMonitor:
                 server_log_file.seek(position)
                 return server_log_file.readlines()
         except OSError as exc:
-            sensitive_logger: SensitiveLogger = SensitiveLogger(ServerLogMonitor.LOGGER)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.info("Could not read server log for %s: %s", label, exc)
             return []

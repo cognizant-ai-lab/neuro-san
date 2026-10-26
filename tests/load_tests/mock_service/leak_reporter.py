@@ -34,8 +34,6 @@ class LeakReporter:
     between round 1 before and the last round settled.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     HEADER: List[str] = ["Round", "Before RSS", "Settled RSS", "RSS Delta",
                          "FDs", "Threads", "Thread Delta",
                          "Conns", "CPU%", "Children"]
@@ -46,6 +44,7 @@ class LeakReporter:
 
         :param args: Parsed command-line arguments from MockLoadTestArguments.parse_args()
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._args: Namespace = args
 
     def log_results(self, rounds_result: Dict[str, Any]) -> None:
@@ -63,26 +62,26 @@ class LeakReporter:
         failed: int = totals.get("failed")
         time_seconds: float = totals.get("time_seconds")
 
-        LeakReporter.LOGGER.info("\n%s", Formatters.SEPARATOR_LINE)
-        LeakReporter.LOGGER.info("  OVERALL RESULTS")
-        LeakReporter.LOGGER.info("%s", Formatters.SEPARATOR_LINE)
-        LeakReporter.LOGGER.info("  Total requests: %s (%s passed, %s failed)", total_requests, passed, failed)
-        LeakReporter.LOGGER.info("  Total time:     %.2fs", time_seconds)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  OVERALL RESULTS")
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  Total requests: %s (%s passed, %s failed)", total_requests, passed, failed)
+        self.logger.info("  Total time:     %.2fs", time_seconds)
         if total_requests > 0:
             average_request_seconds: float = time_seconds / total_requests
-            LeakReporter.LOGGER.info("  Avg per request: %.2fs", average_request_seconds)
+            self.logger.info("  Avg per request: %.2fs", average_request_seconds)
 
-        LeakReporter.LOGGER.info("\n%s", Formatters.SEPARATOR_LINE)
-        LeakReporter.LOGGER.info("  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)",
-                                 self._args.num_rounds, total_requests)
-        LeakReporter.LOGGER.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)",
+                         self._args.num_rounds, total_requests)
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if server_rows:
-            LeakReporter.LOGGER.info("\nNEURO-SAN SERVER:")
+            self.logger.info("\nNEURO-SAN SERVER:")
             LeakReporter._log_snapshot_table(server_rows)
 
         if mock_rows:
-            LeakReporter.LOGGER.info("\nMOCK LLM SERVER:")
+            self.logger.info("\nMOCK LLM SERVER:")
             LeakReporter._log_snapshot_table(mock_rows)
 
         if len(server_rows) >= 2:
@@ -153,10 +152,10 @@ class LeakReporter:
         thread_delta: int = last_row.get("settled_threads") - first_row.get("before_threads")
         connections_delta: int = last_row.get("connections") - first_row.get("connections")
         children_delta: int = last_row.get("children") - first_row.get("children")
-        LeakReporter.LOGGER.info("\n%s overall deltas (round 1 before vs round %s settled):", label,
-                                 self._args.num_rounds)
-        LeakReporter.LOGGER.info("  RSS:         +%.1f MB", rss_delta_megabytes)
-        LeakReporter.LOGGER.info("  FDs:         +%s", fds_delta)
-        LeakReporter.LOGGER.info("  Threads:     +%s", thread_delta)
-        LeakReporter.LOGGER.info("  Connections: +%s", connections_delta)
-        LeakReporter.LOGGER.info("  Children:    +%s", children_delta)
+        self.logger.info("\n%s overall deltas (round 1 before vs round %s settled):", label,
+                         self._args.num_rounds)
+        self.logger.info("  RSS:         +%.1f MB", rss_delta_megabytes)
+        self.logger.info("  FDs:         +%s", fds_delta)
+        self.logger.info("  Threads:     +%s", thread_delta)
+        self.logger.info("  Connections: +%s", connections_delta)
+        self.logger.info("  Children:    +%s", children_delta)

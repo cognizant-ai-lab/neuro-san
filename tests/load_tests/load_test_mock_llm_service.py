@@ -86,8 +86,6 @@ class MockLlmLoadTest:
         python tests/load_tests/load_test_mock_llm_service.py --auto-start --mock-port 9999
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     PROMPT_FILE_PATH: str = "/tmp/load_test_prompt.txt"
 
     def __init__(self, args: Namespace) -> None:
@@ -96,10 +94,11 @@ class MockLlmLoadTest:
 
         :param args: Parsed command-line arguments from MockLoadTestArguments.parse_args()
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
-        self.prompt_file: str = MockLlmLoadTest.PROMPT_FILE_PATH
         self._server_manager: MockServerManager = MockServerManager(args)
-        self._round_runner: MockRoundRunner = MockRoundRunner(args, self.prompt_file, self._server_manager)
+        prompt_file: str = MockLlmLoadTest.PROMPT_FILE_PATH
+        self._round_runner: MockRoundRunner = MockRoundRunner(args, prompt_file, self._server_manager)
         self._leak_reporter: LeakReporter = LeakReporter(args)
         self._test_log_path: Optional[str] = None
         self._test_log_handler: Optional[FileHandler] = None
@@ -131,31 +130,31 @@ class MockLlmLoadTest:
         """
         self._setup_test_log()
 
-        with open(self.prompt_file, "w", encoding="utf-8") as prompt_file_handle:
+        with open(MockLlmLoadTest.PROMPT_FILE_PATH, "w", encoding="utf-8") as prompt_file_handle:
             prompt_file_handle.write(self.args.prompt)
 
         is_local: bool = self.args.host in LoadTestConstants.LOCAL_HOSTS
 
         if self.args.auto_start:
             if not is_local:
-                MockLlmLoadTest.LOGGER.error("--auto-start can only be used with local mode (localhost).")
+                self.logger.error("--auto-start can only be used with local mode (localhost).")
                 raise LoadTestAbortError(1)
             self._server_manager.auto_start_servers()
         elif is_local:
             self._server_manager.find_local_processes()
         else:
-            MockLlmLoadTest.LOGGER.info("Remote mode: targeting %s:%s", self.args.host, self.args.port)
-            MockLlmLoadTest.LOGGER.info("  Process monitoring disabled (server is not local)")
+            self.logger.info("Remote mode: targeting %s:%s", self.args.host, self.args.port)
+            self.logger.info("  Process monitoring disabled (server is not local)")
 
-        MockLlmLoadTest.LOGGER.info(
+        self.logger.info(
             "\nConfig: agent=%s, requests=%s, workers=%s, rounds=%s, host=%s, port=%s",
             self.args.agent, self.args.num_requests, self.args.max_workers,
             self.args.num_rounds, self.args.host, self.args.port,
         )
         if not self.args.no_sly_data:
-            MockLlmLoadTest.LOGGER.info("  sly_data=%s", self.args.sly_data)
-        MockLlmLoadTest.LOGGER.info("  prompt=\"%s\"", self.args.prompt)
-        MockLlmLoadTest.LOGGER.info("  settle_time=%ss", self.args.settle_time_seconds)
+            self.logger.info("  sly_data=%s", self.args.sly_data)
+        self.logger.info("  prompt=\"%s\"", self.args.prompt)
+        self.logger.info("  settle_time=%ss", self.args.settle_time_seconds)
 
         totals: Dict[str, float] = {
             "passed": 0,
@@ -167,17 +166,17 @@ class MockLlmLoadTest:
             totals = rounds_result.get("totals")
             self._leak_reporter.log_results(rounds_result)
             if is_local and not self.args.auto_start:
-                MockLlmLoadTest.LOGGER.info("\n%s", Formatters.SEPARATOR_LINE)
-                MockLlmLoadTest.LOGGER.info("  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE ON NEURO-SAN SERVER")
-                MockLlmLoadTest.LOGGER.info("  Key:   OPENAI_API_BASE")
+                self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+                self.logger.info("  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE ON NEURO-SAN SERVER")
+                self.logger.info("  Key:   OPENAI_API_BASE")
                 api_base: Optional[str] = self._server_manager.get_api_base()
-                MockLlmLoadTest.LOGGER.info("  Value: %s", api_base)
-                MockLlmLoadTest.LOGGER.info("  All agent requests are routed to the mock LLM server.")
-                MockLlmLoadTest.LOGGER.info("  To restore normal operation:")
-                MockLlmLoadTest.LOGGER.info("    1. Stop the neuro-san server")
-                MockLlmLoadTest.LOGGER.info("    2. unset OPENAI_API_BASE")
-                MockLlmLoadTest.LOGGER.info("    3. Restart: python -m neuro_san.service.main_loop.server_main_loop")
-                MockLlmLoadTest.LOGGER.info("%s", Formatters.SEPARATOR_LINE)
+                self.logger.info("  Value: %s", api_base)
+                self.logger.info("  All agent requests are routed to the mock LLM server.")
+                self.logger.info("  To restore normal operation:")
+                self.logger.info("    1. Stop the neuro-san server")
+                self.logger.info("    2. unset OPENAI_API_BASE")
+                self.logger.info("    3. Restart: python -m neuro_san.service.main_loop.server_main_loop")
+                self.logger.info("%s", Formatters.SEPARATOR_LINE)
         finally:
             if self.args.auto_start:
                 self._server_manager.stop_servers()
@@ -210,7 +209,7 @@ class MockLlmLoadTest:
         if self._test_log_path is None:
             return
         if totals.get("failed", 0) > 0:
-            MockLlmLoadTest.LOGGER.info("\nTest log saved: %s", self._test_log_path)
+            self.logger.info("\nTest log saved: %s", self._test_log_path)
         elif exists(self._test_log_path):
             remove(self._test_log_path)
 

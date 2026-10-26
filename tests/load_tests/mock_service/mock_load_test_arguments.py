@@ -35,8 +35,6 @@ class MockLoadTestArguments:
     Parses the flags, then fills in the prompt and sly-data of a known agent from AGENT_PRESETS.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     AGENT_PRESETS: Dict[str, Dict[str, Optional[str]]] = {
         "math_guy": {
             "prompt": "add",
@@ -58,6 +56,7 @@ class MockLoadTestArguments:
 
         :param usage_text: Usage examples that --help prints after the flags
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._usage_text: str = usage_text
         self._args: Optional[Namespace] = None
 
@@ -143,7 +142,7 @@ class MockLoadTestArguments:
                 preset_names: KeysView[str] = MockLoadTestArguments.AGENT_PRESETS.keys()
                 agent_names: List[str] = sorted(preset_names)
                 known_agents: str = ", ".join(agent_names)
-                MockLoadTestArguments.LOGGER.error(
+                self.logger.error(
                     """No preset for agent '%s'. Please provide --prompt explicitly.
 Known presets: %s""",
                     self._args.agent, known_agents,

@@ -44,8 +44,6 @@ class MockServerManager:
     The processes it holds are the ones the rounds take resource snapshots of.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     PROCESS_WAIT_TIMEOUT_SECONDS: int = 10
     # Sparse llm_info overlay that pins openai-class models to Chat Completions, which is the only
     # endpoint the mock LLM server implements. Relative to the repo root, like the -m module paths.
@@ -62,6 +60,7 @@ class MockServerManager:
 
         :param args: Parsed command-line arguments from MockLoadTestArguments.parse_args()
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._args: Namespace = args
         self._server_process: Optional[Process] = None
         self._mock_process: Optional[Process] = None
@@ -107,7 +106,7 @@ class MockServerManager:
         default_mock_port: str = str(MockServerManager.DEFAULT_MOCK_PORT)
         default_api_base: str = MockServerManager._build_mock_api_base(default_mock_port)
         if self._server_process is None:
-            MockServerManager.LOGGER.error(
+            self.logger.error(
                 """neuro-san server process not found.
 Start it with OPENAI_API_BASE pointing to the mock LLM server:
   export OPENAI_API_BASE=%s
@@ -115,10 +114,10 @@ Start it with OPENAI_API_BASE pointing to the mock LLM server:
                 default_api_base,
             )
             raise LoadTestAbortError(1)
-        MockServerManager.LOGGER.info("Found neuro-san server (PID %s)", self._server_process.pid)
+        self.logger.info("Found neuro-san server (PID %s)", self._server_process.pid)
 
         if self._mock_process is None:
-            MockServerManager.LOGGER.error(
+            self.logger.error(
                 """mock LLM server process not found.
 Start the mock LLM server first, then the neuro-san server:
   python -m tests.mock_llm_server.mock_llm_server --port %s
@@ -128,7 +127,7 @@ Then:
                 MockServerManager.DEFAULT_MOCK_PORT, default_api_base,
             )
             raise LoadTestAbortError(1)
-        MockServerManager.LOGGER.info("Found mock LLM server (PID %s)", self._mock_process.pid)
+        self.logger.info("Found mock LLM server (PID %s)", self._mock_process.pid)
 
         mock_port: str = self._get_mock_server_port()
         self._api_base = self._check_server_api_base(mock_port)
@@ -142,7 +141,7 @@ Then:
         mock_port: str = str(self._args.mock_port)
         api_base: str = MockServerManager._build_mock_api_base(mock_port)
 
-        MockServerManager.LOGGER.info("Auto-starting mock LLM server (log: %s)", MockServerManager.MOCK_LOG_PATH)
+        self.logger.info("Auto-starting mock LLM server (log: %s)", MockServerManager.MOCK_LOG_PATH)
         # The child process gets its own copy of the file descriptor, so this method can close the file
         # once Popen returns, and the server keeps writing to the log.
         with open(MockServerManager.MOCK_LOG_PATH, "w", encoding="utf-8") as mock_log_file:
@@ -157,7 +156,7 @@ Then:
         server_env: Dict[str, str] = environ.copy()
         server_env["OPENAI_API_BASE"] = api_base
         server_env["AGENT_LLM_INFO_FILE"] = MockServerManager.CHAT_COMPLETIONS_LLM_INFO_PATH
-        MockServerManager.LOGGER.info("Auto-starting neuro-san server (log: %s)", MockServerManager.SERVER_LOG_PATH)
+        self.logger.info("Auto-starting neuro-san server (log: %s)", MockServerManager.SERVER_LOG_PATH)
         with open(MockServerManager.SERVER_LOG_PATH, "w", encoding="utf-8") as server_log_file:
             self._auto_server_popen = Popen(  # pylint: disable=consider-using-with
                 ["python", "-m", "neuro_san.service.main_loop.server_main_loop"],
@@ -166,17 +165,17 @@ Then:
                 env=server_env,
             )
 
-        MockServerManager.LOGGER.info("Waiting %ss for servers to start...", MockServerManager.STARTUP_WAIT_SECONDS)
+        self.logger.info("Waiting %ss for servers to start...", MockServerManager.STARTUP_WAIT_SECONDS)
         sleep(MockServerManager.STARTUP_WAIT_SECONDS)
 
         if self._auto_mock_popen.poll() is not None:
-            MockServerManager.LOGGER.error("Mock LLM server exited unexpectedly. Check %s",
-                                           MockServerManager.MOCK_LOG_PATH)
+            self.logger.error("Mock LLM server exited unexpectedly. Check %s",
+                              MockServerManager.MOCK_LOG_PATH)
             raise LoadTestAbortError(1)
 
         if self._auto_server_popen.poll() is not None:
-            MockServerManager.LOGGER.error("Neuro-san server exited unexpectedly. Check %s",
-                                           MockServerManager.SERVER_LOG_PATH)
+            self.logger.error("Neuro-san server exited unexpectedly. Check %s",
+                              MockServerManager.SERVER_LOG_PATH)
             self._auto_mock_popen.terminate()
             raise LoadTestAbortError(1)
 
@@ -184,24 +183,24 @@ Then:
         self._server_process = Process(self._auto_server_popen.pid)
 
         self._api_base = api_base
-        MockServerManager.LOGGER.info("Mock LLM server ready (PID %s)", self._mock_process.pid)
-        MockServerManager.LOGGER.info("Neuro-san server ready (PID %s)", self._server_process.pid)
-        MockServerManager.LOGGER.info("  OPENAI_API_BASE=%s", self._api_base)
-        MockServerManager.LOGGER.info("  AGENT_LLM_INFO_FILE=%s", MockServerManager.CHAT_COMPLETIONS_LLM_INFO_PATH)
+        self.logger.info("Mock LLM server ready (PID %s)", self._mock_process.pid)
+        self.logger.info("Neuro-san server ready (PID %s)", self._server_process.pid)
+        self.logger.info("  OPENAI_API_BASE=%s", self._api_base)
+        self.logger.info("  AGENT_LLM_INFO_FILE=%s", MockServerManager.CHAT_COMPLETIONS_LLM_INFO_PATH)
 
     def stop_servers(self) -> None:
         """
         Terminate auto-started servers.
         """
         if self._auto_server_popen is not None:
-            MockServerManager.LOGGER.info("Stopping neuro-san server (PID %s)...", self._auto_server_popen.pid)
+            self.logger.info("Stopping neuro-san server (PID %s)...", self._auto_server_popen.pid)
             self._auto_server_popen.terminate()
             self._auto_server_popen.wait(timeout=MockServerManager.PROCESS_WAIT_TIMEOUT_SECONDS)
         if self._auto_mock_popen is not None:
-            MockServerManager.LOGGER.info("Stopping mock LLM server (PID %s)...", self._auto_mock_popen.pid)
+            self.logger.info("Stopping mock LLM server (PID %s)...", self._auto_mock_popen.pid)
             self._auto_mock_popen.terminate()
             self._auto_mock_popen.wait(timeout=MockServerManager.PROCESS_WAIT_TIMEOUT_SECONDS)
-        MockServerManager.LOGGER.info("Servers stopped.")
+        self.logger.info("Servers stopped.")
 
     def _get_mock_server_port(self) -> str:
         """
@@ -219,7 +218,7 @@ Then:
                 if arg == "--port" and index + 1 < len(cmdline):
                     return cmdline[index + 1]
         except (NoSuchProcess, AccessDenied) as error:
-            MockServerManager._log_process_read_error(DEBUG, "Could not read mock process cmdline", error)
+            self._log_process_read_error(DEBUG, "Could not read mock process cmdline", error)
         return str(MockServerManager.DEFAULT_MOCK_PORT)
 
     def _check_server_api_base(self, mock_port: str) -> Optional[str]:
@@ -237,12 +236,12 @@ Then:
         try:
             server_env = self._server_process.environ()
         except (NoSuchProcess, AccessDenied) as error:
-            MockServerManager._log_process_read_error(INFO, "Could not read server environment", error)
+            self._log_process_read_error(INFO, "Could not read server environment", error)
             return None
 
         api_base: Optional[str] = server_env.get("OPENAI_API_BASE")
         if api_base is None:
-            MockServerManager.LOGGER.error(
+            self.logger.error(
                 """neuro-san server does not have OPENAI_API_BASE set.
   Mock LLM server is running on port %s.
   Restart the server with:
@@ -252,7 +251,7 @@ Then:
             )
             raise LoadTestAbortError(1)
 
-        MockServerManager.LOGGER.info("  OPENAI_API_BASE=%s", api_base)
+        self.logger.info("  OPENAI_API_BASE=%s", api_base)
 
         # Without the overlay, model-name-only openai configs (math_guy, hello_world) use the
         # Responses API, which the mock does not serve, and every request is a 404. Warn rather
@@ -261,7 +260,7 @@ Then:
         # and DefaultLlmFactory ignores an empty path just like a missing variable.
         llm_info_file: Optional[str] = server_env.get("AGENT_LLM_INFO_FILE")
         if not llm_info_file:
-            MockServerManager.LOGGER.warning(
+            self.logger.warning(
                 """neuro-san server does not have AGENT_LLM_INFO_FILE set.
   The openai class defaults to the Responses API, which the mock LLM server does not
   serve, so model-name-only agent configs will get HTTP 404 from /v1/responses.
@@ -273,7 +272,7 @@ Then:
             )
 
         if mock_port not in api_base:
-            MockServerManager.LOGGER.error(
+            self.logger.error(
                 """OPENAI_API_BASE does not reference port %s.
   Mock LLM server is running on port %s,
   but OPENAI_API_BASE=%s
@@ -285,8 +284,7 @@ Then:
             raise LoadTestAbortError(1)
         return api_base
 
-    @staticmethod
-    def _log_process_read_error(level: int, message: str, error: NoSuchProcess | AccessDenied) -> None:
+    def _log_process_read_error(self, level: int, message: str, error: NoSuchProcess | AccessDenied) -> None:
         """
         Log a psutil read error. The error text goes through a SensitiveLogger, which respects the
         LEAF_LOG_SENSITIVE setting; when that is off, the plain logger still logs the message.
@@ -295,11 +293,11 @@ Then:
         :param message: What could not be read, without the error text
         :param error: The psutil error that was caught
         """
-        sensitive_logger: SensitiveLogger = SensitiveLogger(MockServerManager.LOGGER)
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
         if sensitive_logger.should_log():
             sensitive_logger.log(level, "%s: %s", message, error)
         else:
-            MockServerManager.LOGGER.log(level, "%s", message)
+            self.logger.log(level, "%s", message)
 
     @staticmethod
     def _build_mock_api_base(mock_port: str) -> str:

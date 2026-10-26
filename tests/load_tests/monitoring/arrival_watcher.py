@@ -48,7 +48,6 @@ class ArrivalWatcher:
     from self instead of passing them along. After start(), only the monitor thread uses the instance.
     """
 
-    LOGGER: Logger = getLogger(__name__)
     RECEIPT_FILE_NAME: str = "server_receipts.log"
 
     def __init__(self, arrival_settings: Dict[str, Any]) -> None:
@@ -61,16 +60,13 @@ class ArrivalWatcher:
                 Process for the snapshot once all requests arrive, or None) and "primary_start_pattern"
                 (regex for the log line of a primary agent request arriving)
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         primary_start_pattern: str = arrival_settings.get("primary_start_pattern")
         self._expected_count: int = arrival_settings.get("expected_count")
         self._fire_time_seconds: float = arrival_settings.get("fire_time_seconds")
         self._stop_event: Event = arrival_settings.get("stop_event")
         self._client_process: Optional[Process] = arrival_settings.get("client_process")
         self._primary_start_regex: re.Pattern = re.compile(primary_start_pattern)
-        # "Start hello_world/streaming_chat" gives the agent label "hello_world".
-        pattern_head: str = primary_start_pattern.split("/")[0]
-        head_words: List[str] = pattern_head.split(" ")
-        self._agent_label: str = head_words[-1]
         self._progress_logger: Logger = ArrivalWatcher._get_progress_logger()
 
     def start(self, server_log: str, position: int, output_dir: Optional[str] = None) -> Thread:
@@ -106,7 +102,7 @@ class ArrivalWatcher:
             else:
                 self._read_server_log(server_log, position, None)
         except OSError as exc:
-            sensitive_logger: SensitiveLogger = SensitiveLogger(ArrivalWatcher.LOGGER)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.debug("Log monitor stopped: %s", exc)
 
     def _read_server_log(self, server_log: str, position: int, receipt_file: Optional[TextIO]) -> None:
@@ -128,6 +124,10 @@ class ArrivalWatcher:
         :param server_log_file: Open server log, positioned where to start reading
         :param receipt_file: Open server_receipts.log, or None to log each receipt to the console
         """
+        # "Start hello_world/streaming_chat" gives the agent label "hello_world".
+        pattern_head: str = self._primary_start_regex.pattern.split("/")[0]
+        head_words: List[str] = pattern_head.split(" ")
+        agent_label: str = head_words[-1]
         count: int = 0
         use_dots: bool = receipt_file is not None
         while not self._stop_event.is_set() and count < self._expected_count:
@@ -141,14 +141,14 @@ class ArrivalWatcher:
             now_seconds: float = perf_counter()
             timestamp: str = strftime("%H:%M:%S", localtime())
             delta_seconds: float = now_seconds - self._fire_time_seconds
-            detail: str = (f"  [server] {self._agent_label} request {count}/{self._expected_count} received"
+            detail: str = (f"  [server] {agent_label} request {count}/{self._expected_count} received"
                            f" [{timestamp}] (+{delta_seconds:.1f}s)")
             if use_dots:
                 receipt_file.write(detail + "\n")
                 receipt_file.flush()
                 self._progress_logger.info(".")
             else:
-                ArrivalWatcher.LOGGER.info("%s", detail)
+                self.logger.info("%s", detail)
             if count >= self._expected_count:
                 self._log_all_received(use_dots, count, delta_seconds)
 
@@ -162,14 +162,14 @@ class ArrivalWatcher:
         """
         if use_dots:
             self._progress_logger.info("\n")
-            ArrivalWatcher.LOGGER.info("  All %s/%s requests received by server (%.1fs)", count, self._expected_count,
-                                       elapsed_seconds)
+            self.logger.info("  All %s/%s requests received by server (%.1fs)", count, self._expected_count,
+                             elapsed_seconds)
         snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self._client_process)
         if snapshot:
             client_rss_megabytes: float = snapshot.get("rss_megabytes")
             client_cpu_percent: float = snapshot.get("cpu_percent")
-            ArrivalWatcher.LOGGER.info("  Client AFTER: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes,
-                                       client_cpu_percent)
+            self.logger.info("  Client AFTER: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes,
+                             client_cpu_percent)
         ResourceMonitor.log_system_memory("RECEIVED")
 
     @staticmethod

@@ -43,8 +43,6 @@ class MockRoundRunner:
     and builds a resource row for each server from snapshots taken before and after the round.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     MOCK_REQUEST_TIMEOUT_SECONDS: int = 120
 
     def __init__(self, args: Namespace, prompt_file: str, server_manager: MockServerManager) -> None:
@@ -55,6 +53,7 @@ class MockRoundRunner:
         :param prompt_file: Path of the file that holds the prompt for --first_prompt_file
         :param server_manager: Holds the server processes to take snapshots of
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._args: Namespace = args
         self._prompt_file: str = prompt_file
         self._server_manager: MockServerManager = server_manager
@@ -80,13 +79,13 @@ class MockRoundRunner:
         round_number: int
         # Run each round, numbered from 1, with resource snapshots before and after it.
         for round_number in range(1, self._args.num_rounds + 1):
-            MockRoundRunner.LOGGER.info("\n%s", Formatters.SEPARATOR_LINE)
-            MockRoundRunner.LOGGER.info(
+            self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+            self.logger.info(
                 "  ROUND %s of %s (%s requests, %s workers)",
                 round_number, self._args.num_rounds,
                 self._args.num_requests, self._args.max_workers,
             )
-            MockRoundRunner.LOGGER.info("%s", Formatters.SEPARATOR_LINE)
+            self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
             server_process: Optional[Process] = self._server_manager.get_server_process()
             mock_process: Optional[Process] = self._server_manager.get_mock_process()
@@ -95,7 +94,7 @@ class MockRoundRunner:
             if before_server:
                 ResourceMonitor.log_snapshot("Server BEFORE", before_server)
 
-            MockRoundRunner.LOGGER.info(
+            self.logger.info(
                 "\nFiring %s concurrent requests with %s workers...",
                 self._args.num_requests, self._args.max_workers,
             )
@@ -105,7 +104,7 @@ class MockRoundRunner:
             totals["failed"] = totals.get("failed", 0) + round_result.get("failed")
             totals["time_seconds"] = totals.get("time_seconds", 0.0) + round_result.get("round_seconds")
 
-            MockRoundRunner.LOGGER.info("\nWaiting %ss for server cleanup...", self._args.settle_time_seconds)
+            self.logger.info("\nWaiting %ss for server cleanup...", self._args.settle_time_seconds)
             sleep(self._args.settle_time_seconds)
 
             after_server: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(server_process)
@@ -165,14 +164,14 @@ class MockRoundRunner:
         status: str = "FAIL"
         if succeeded:
             status = "OK"
-        MockRoundRunner.LOGGER.info("Request %s: %s (%.2fs)", request_id, status, elapsed_seconds)
+        self.logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed_seconds)
         if not succeeded:
             # Show last line of stderr for quick diagnosis
             stderr_text: str = result.stderr or ""
             stripped_stderr: str = stderr_text.strip()
             stderr_lines: List[str] = stripped_stderr.split("\n")
             stderr_line: str = stderr_lines[-1]
-            MockRoundRunner.LOGGER.info("  stderr: %s", stderr_line)
+            self.logger.info("  stderr: %s", stderr_line)
         request_result: Dict[str, Any] = {
             "ok": succeeded,
             "elapsed_seconds": elapsed_seconds,
@@ -204,7 +203,7 @@ class MockRoundRunner:
                 else:
                     failed += 1
         round_seconds: float = perf_counter() - start_seconds
-        MockRoundRunner.LOGGER.info("\nResult: %s passed, %s failed in %.2fs", passed, failed, round_seconds)
+        self.logger.info("\nResult: %s passed, %s failed in %.2fs", passed, failed, round_seconds)
         round_result: Dict[str, Any] = {
             "passed": passed,
             "failed": failed,

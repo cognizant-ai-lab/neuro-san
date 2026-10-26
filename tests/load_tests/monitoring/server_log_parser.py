@@ -37,10 +37,13 @@ class ServerLogParser:
     Each helper works on lines or text already read from the log, so it holds no state.
     """
 
-    LOGGER: Logger = getLogger(__name__)
+    def __init__(self) -> None:
+        """
+        Set up the logger of the parser.
+        """
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
-    @staticmethod
-    def int_group(match: Optional[re.Match]) -> int:
+    def int_group(self, match: Optional[re.Match]) -> int:
         """
         Read group 1 of a regex match as an int.
 
@@ -53,8 +56,7 @@ class ServerLogParser:
             number = int(number_text)
         return number
 
-    @staticmethod
-    def extract_token_entry(block: str) -> Optional[Dict[str, Any]]:
+    def extract_token_entry(self, block: str) -> Optional[Dict[str, Any]]:
         """
         Extract token accounting fields from a Request reporting log block.
 
@@ -71,10 +73,10 @@ class ServerLogParser:
         llm_calls_match: Optional[re.Match] = re.search(r'"successful_requests": (\d+)', block)
         # Pulls model names that start with gpt, claude, gemini or o<digit>
         model_names: List[str] = re.findall(r'"(gpt[^"]+|claude[^"]+|gemini[^"]+|o\d[^"]*)"', block)
-        total_tokens: int = ServerLogParser.int_group(total_match)
-        prompt_tokens: int = ServerLogParser.int_group(prompt_match)
-        completion_tokens: int = ServerLogParser.int_group(completion_match)
-        llm_calls: int = ServerLogParser.int_group(llm_calls_match)
+        total_tokens: int = self.int_group(total_match)
+        prompt_tokens: int = self.int_group(prompt_match)
+        completion_tokens: int = self.int_group(completion_match)
+        llm_calls: int = self.int_group(llm_calls_match)
         model: str = "unknown"
         if model_names:
             model = model_names[0]
@@ -88,8 +90,7 @@ class ServerLogParser:
         }
         return token_entry
 
-    @staticmethod
-    def collect_reporting_blocks(lines: List[str]) -> List[Dict[str, object]]:
+    def collect_reporting_blocks(self, lines: List[str]) -> List[Dict[str, object]]:
         """
         Collect Request reporting blocks with their line positions.
 
@@ -119,8 +120,7 @@ class ServerLogParser:
                     block_lines = []
         return blocks
 
-    @staticmethod
-    def resolve_network_names(blocks: List[Dict[str, object]], lines: List[str]) -> List[Dict[str, Any]]:
+    def resolve_network_names(self, blocks: List[Dict[str, object]], lines: List[str]) -> List[Dict[str, Any]]:
         """
         Match each block to its network via Done-with log lines.
 
@@ -135,11 +135,11 @@ class ServerLogParser:
         # Keep each block's token entry with the network named after it.
         for block in blocks:
             block_text: str = block.get("text", "")
-            entry: Optional[Dict[str, Any]] = ServerLogParser.extract_token_entry(block_text)
+            entry: Optional[Dict[str, Any]] = self.extract_token_entry(block_text)
             if not entry:
                 continue
             end_index: int = block.get("end_index", 0)
-            network: Optional[str] = ServerLogParser.find_network_after(lines, end_index)
+            network: Optional[str] = self.find_network_after(lines, end_index)
             if not network:
                 continue
             duration_match: Optional[re.Match] = re.search(r'"time_taken_in_seconds": ([\d.]+)', block_text)
@@ -165,8 +165,7 @@ class ServerLogParser:
             })
         return results
 
-    @staticmethod
-    def find_network_after(lines: List[str], end_index: int,
+    def find_network_after(self, lines: List[str], end_index: int,
                            lookahead_lines: int = LoadTestConstants.NETWORK_LOOKAHEAD_LINES) -> Optional[str]:
         """
         Find the network name from Done-with lines after a block.
@@ -187,8 +186,7 @@ class ServerLogParser:
                 return match.group(1)
         return None
 
-    @staticmethod
-    def collect_validation_events(lines: List[str]) -> List[Dict[str, Any]]:
+    def collect_validation_events(self, lines: List[str]) -> List[Dict[str, Any]]:
         """
         Group validation log lines by request_id.
 
@@ -220,7 +218,7 @@ class ServerLogParser:
             error_match: Optional[re.Match] = LoadTestConstants.VALIDATION_ERROR_PATTERN.search(line)
             if error_match:
                 error_list_text: str = error_match.group(1)
-                validation_errors: List[str] = ServerLogParser.parse_validation_errors(error_list_text)
+                validation_errors: List[str] = self.parse_validation_errors(error_list_text)
                 entry.get("errors").extend(validation_errors)
         results: List[Dict[str, Any]] = []
         validation_entry: Dict[str, object] = {}
@@ -243,8 +241,7 @@ class ServerLogParser:
                 })
         return results
 
-    @staticmethod
-    def parse_validation_errors(error_list_text: str) -> List[str]:
+    def parse_validation_errors(self, error_list_text: str) -> List[str]:
         """
         Read the errors out of the list text the neuro-san-studio middleware logs with "Validation errors: %s".
         Python writes each error in single quotes, or in double quotes when it holds a single quote.
@@ -260,12 +257,11 @@ class ServerLogParser:
         for single_quoted, double_quoted in LoadTestConstants.VALIDATION_ERROR_ITEM_PATTERN.findall(error_list_text):
             errors.append(single_quoted or double_quoted)
         if not errors and error_list_text != "[]":
-            ServerLogParser.LOGGER.info("Could not find a quoted error in the validation errors %s", error_list_text)
+            self.logger.info("Could not find a quoted error in the validation errors %s", error_list_text)
             errors.append(error_list_text)
         return errors
 
-    @staticmethod
-    def match_streaming_chat_pairs(lines: List[str]) -> List[Dict[str, object]]:
+    def match_streaming_chat_pairs(self, lines: List[str]) -> List[Dict[str, object]]:
         """
         Match Start/Finish pairs from server log lines.
 
@@ -298,17 +294,14 @@ class ServerLogParser:
                 timestamp_seconds = datetime.fromisoformat(timestamp_text).timestamp()
             except (ValueError, TypeError):
                 continue
-            agent_path: str = ""
             agent: str = ""
             pair_key: str = ""
             if message.startswith("Start ") and "/streaming_chat" in message:
-                agent_path = message.replace("Start ", "")
-                agent = agent_path.replace("/streaming_chat", "")
+                agent = self._streaming_chat_agent(message, "Start ")
                 pair_key = f"{agent} {request_id}"
                 starts[pair_key] = timestamp_seconds
             elif message.startswith("Finish ") and "/streaming_chat" in message:
-                agent_path = message.replace("Finish ", "")
-                agent = agent_path.replace("/streaming_chat", "")
+                agent = self._streaming_chat_agent(message, "Finish ")
                 pair_key = f"{agent} {request_id}"
                 start_seconds: Optional[float] = starts.pop(pair_key, None)
                 if start_seconds is not None:
@@ -321,8 +314,7 @@ class ServerLogParser:
                     })
         return results
 
-    @staticmethod
-    def disconnection_list(disconnections: Dict[str, Dict[str, str]]) -> List[Dict[str, str]]:
+    def disconnection_list(self, disconnections: Dict[str, Dict[str, str]]) -> List[Dict[str, str]]:
         """
         List the disconnections in first-seen order.
 
@@ -336,8 +328,7 @@ class ServerLogParser:
             disconnection_list.append(disconnection)
         return disconnection_list
 
-    @staticmethod
-    def set_cancelled_agent(cancel_match: re.Match, disconnections: Dict[str, Dict[str, str]],
+    def set_cancelled_agent(self, cancel_match: re.Match, disconnections: Dict[str, Dict[str, str]],
                             agent_by_request_id: Dict[str, str]) -> None:
         """
         Put the agent of a cancelled streaming_chat task on its disconnection, if that request disconnected.
@@ -352,8 +343,7 @@ class ServerLogParser:
         if disconnection is not None:
             disconnection.update({"agent": agent_by_request_id.get(cancelled_request_id, "unknown")})
 
-    @staticmethod
-    def map_to_client_requests(disconnections: Dict[str, Dict[str, str]], primary_request_ids: List[str]) -> None:
+    def map_to_client_requests(self, disconnections: Dict[str, Dict[str, str]], primary_request_ids: List[str]) -> None:
         """
         Map each disconnected sub-request to its parent client request.
 
@@ -370,14 +360,14 @@ class ServerLogParser:
         primary_request_id: str
         # Get the request number of each primary request.
         for primary_request_id in primary_request_ids:
-            primary_number: int = ServerLogParser.request_number(primary_request_id)
+            primary_number: int = self.request_number(primary_request_id)
             primary_numbers.append(primary_number)
 
         disconnection: Dict[str, str]
         # Find the client request that each disconnection belongs to.
         for disconnection in disconnections.values():
             request_id: str = disconnection.get("request_id", "")
-            request_number: int = ServerLogParser.request_number(request_id)
+            request_number: int = self.request_number(request_id)
             parent_index: Optional[int] = None
             index: int
             primary_number: int
@@ -390,8 +380,7 @@ class ServerLogParser:
             if parent_index is not None:
                 disconnection["client_request"] = f"request-{parent_index + 1}"
 
-    @staticmethod
-    def request_number(request_id: str) -> int:
+    def request_number(self, request_id: str) -> int:
         """
         Read the number at the end of a server request_id, used to put request_ids in order.
 
@@ -402,3 +391,15 @@ class ServerLogParser:
         if match:
             return int(match.group(1))
         return -1
+
+    def _streaming_chat_agent(self, message: str, prefix: str) -> str:
+        """
+        Get the agent name from a streaming_chat Start or Finish message.
+
+        :param message: The log message, e.g. "Start hello_world/streaming_chat"
+        :param prefix: "Start " or "Finish "
+        :return: The agent name, e.g. "hello_world"
+        """
+        agent_path: str = message.replace(prefix, "")
+        agent: str = agent_path.replace("/streaming_chat", "")
+        return agent

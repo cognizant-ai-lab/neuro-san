@@ -67,7 +67,7 @@ class TestArrivalWatcher(TestCase):
             server_log: str = TestArrivalWatcher._write_log(log_dir)
             settings: Dict[str, Any] = TestArrivalWatcher._settings()
             watcher: ArrivalWatcher = ArrivalWatcher(settings)
-            with self.assertLogs("tests.load_tests.monitoring.arrival_watcher", level="INFO") as captured:
+            with self.assertLogs("ArrivalWatcher", level="INFO") as captured:
                 monitor: Thread = watcher.start(server_log, 0)
                 monitor.join(timeout=10)
             receipt_path: str = join(log_dir, ArrivalWatcher.RECEIPT_FILE_NAME)
