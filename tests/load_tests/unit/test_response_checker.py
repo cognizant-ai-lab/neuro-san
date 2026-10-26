@@ -113,9 +113,11 @@ class TestResponseChecker(TestCase):
         while len(long_line) <= LoadTestConstants.FAILURE_REASON_LINE_LIMIT:
             long_line += "x"
         long_message: str = "\n" + long_line + "\nsecond line"
-        first_line: str = ResponseChecker._first_line(long_message)  # pylint: disable=protected-access
-        self.assertEqual(LoadTestConstants.FAILURE_REASON_LINE_LIMIT, len(first_line))
-        self.assertTrue(first_line.endswith("..."))
+        first_line: str = ResponseChecker.first_line(long_message)
+        first_line_length: int = len(first_line)
+        ends_with_dots: bool = first_line.endswith("...")
+        self.assertEqual(LoadTestConstants.FAILURE_REASON_LINE_LIMIT, first_line_length)
+        self.assertTrue(ends_with_dots)
 
     @staticmethod
     def _processor(answer: str, sly_data: Optional[Dict[str, Any]] = None) -> BasicMessageProcessor:

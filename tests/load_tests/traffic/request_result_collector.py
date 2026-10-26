@@ -108,7 +108,7 @@ class RequestResultCollector:
         """
         Give in-flight requests a short grace to wind down after Ctrl-C.
 
-        Anything still stuck after the grace stays pending, without blocking on it.
+        Anything still stuck after the grace, or cancelled before it started, stays pending, without blocking on it.
         """
         grace_deadline_seconds: float = perf_counter() + RequestResultCollector.INTERRUPT_GRACE_SECONDS
         remaining_seconds: float = 0.0
@@ -123,7 +123,8 @@ class RequestResultCollector:
             except FutureTimeoutError:
                 pass
             except CancelledError:
-                self._pending_futures.discard(future)
+                # A request cancelled before it started stays pending, so _collect_killed() records it as KILLED.
+                pass
 
     def _collect_killed(self, reason: str) -> int:
         """

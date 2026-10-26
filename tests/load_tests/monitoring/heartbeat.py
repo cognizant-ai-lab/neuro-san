@@ -80,12 +80,13 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         # timing.  When set, the heartbeat parses primary
         # streaming_chat Start/Finish pairs to report cumulative
         # server-side min/avg/max durations.
-        timing: Dict[str, Any] = {}
+        # Mixed values: a ServerLogMonitor, an int position and pattern strings.
+        server_log_settings: Dict[str, Any] = {}
         if server_log_timing is not None:
-            timing = server_log_timing
-        self._log_monitor: Optional[ServerLogMonitor] = timing.get("log_monitor")
-        self._log_start_position: Optional[int] = timing.get("log_start_position")
-        primary_start_pattern: Optional[str] = timing.get("primary_start_pattern")
+            server_log_settings = server_log_timing
+        self._log_monitor: Optional[ServerLogMonitor] = server_log_settings.get("log_monitor")
+        self._log_start_position: Optional[int] = server_log_settings.get("log_start_position")
+        primary_start_pattern: Optional[str] = server_log_settings.get("primary_start_pattern")
         self._primary_start_regex: Optional[re.Pattern] = None
         if primary_start_pattern:
             self._primary_start_regex = re.compile(primary_start_pattern)

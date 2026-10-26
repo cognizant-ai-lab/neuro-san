@@ -14,6 +14,7 @@
 #
 # END COPYRIGHT
 from typing import Dict
+from typing import Optional
 from unittest import TestCase
 
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
@@ -49,9 +50,12 @@ class TestStageResourceSampler(TestCase):
         }
         self.assertTrue(server_alive)
         self.assertEqual(expected_metrics, server_metrics)
-        self.assertIsNone(sampler.get_peak_server_threads())
-        self.assertIsNone(sampler.get_peak_client_rss_megabytes())
-        self.assertIsNone(sampler.get_peak_server_rss_megabytes())
+        peak_server_threads: Optional[int] = sampler.get_peak_server_threads()
+        peak_client_rss_megabytes: Optional[float] = sampler.get_peak_client_rss_megabytes()
+        peak_server_rss_megabytes: Optional[float] = sampler.get_peak_server_rss_megabytes()
+        self.assertIsNone(peak_server_threads)
+        self.assertIsNone(peak_client_rss_megabytes)
+        self.assertIsNone(peak_server_rss_megabytes)
 
     def test_system_readings_keep_their_peaks(self) -> None:
         """
@@ -64,6 +68,9 @@ class TestStageResourceSampler(TestCase):
         sampler.sample_system_threads()
         self.assertIn("syscpu:", cpu_text)
         self.assertNotEqual("", memory_text)
-        self.assertIsNotNone(sampler.get_peak_system_cpu_percent())
-        self.assertIsNotNone(sampler.get_peak_system_memory())
-        self.assertIsNotNone(sampler.get_peak_system_threads())
+        peak_system_cpu_percent: Optional[float] = sampler.get_peak_system_cpu_percent()
+        peak_system_memory: Optional[Dict[str, float]] = sampler.get_peak_system_memory()
+        peak_system_threads: Optional[int] = sampler.get_peak_system_threads()
+        self.assertIsNotNone(peak_system_cpu_percent)
+        self.assertIsNotNone(peak_system_memory)
+        self.assertIsNotNone(peak_system_threads)

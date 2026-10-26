@@ -86,37 +86,28 @@ class TrafficRunner:
                                                allow_caching=self._args.allow_caching)
         start_unix_seconds: float = time()
         start_seconds: float = perf_counter()
-        request_settings: Dict[str, Any] = {
-            "host": self._args.host,
-            "port": self._args.port,
-            "agent": self._args.agent,
-            "timeout_seconds": self._args.request_timeout,
-            "idle_timeout_seconds": self._args.idle_timeout,
-            "use_https": self._args.https,
-            "chat_filter_type": self._args.chat_filter.upper(),
-        }
+        request_settings: Dict[str, Any] = self._request_settings()
         request_result: AgentRequestResult = self._executor.execute_request(request_settings, prompt)
         elapsed_seconds: float = perf_counter() - start_seconds
         status: str = request_result.get_status()
         failure_reason: Optional[str] = self._failure_reason(request_result, global_request_id)
         if status == LoadTestConstants.STATUS_CREATED and failure_reason:
             status = LoadTestConstants.STATUS_FAILED
-
-        error: Optional[str] = None
-        if status != LoadTestConstants.STATUS_CREATED:
-            error = failure_reason
         time_to_first_response_seconds: float = request_result.get_time_to_first_response_seconds()
+        end_unix_seconds: float = start_unix_seconds + elapsed_seconds
         result: Dict[str, Any] = {
             "request_id": f"request-{request_id}",
             "status": status,
             "elapsed": elapsed_seconds,
             "time_to_first_response": time_to_first_response_seconds,
             "start_time": start_unix_seconds,
-            "end_time": start_unix_seconds + elapsed_seconds,
+            "end_time": end_unix_seconds,
             "prompt": prompt,
             "failure_reason": failure_reason,
-            "error": error,
+            "error": None,
         }
+        if status != LoadTestConstants.STATUS_CREATED:
+            result["error"] = failure_reason
         self._request_recorder.record_request(request_id, output_dir, request_result, result)
         return result
 
@@ -153,13 +144,13 @@ class TrafficRunner:
             heartbeat = self._create_heartbeat(server_process, client_process, plan, log_monitor)
             heartbeat_thread = TrafficRunner._start_heartbeat_thread(heartbeat, futures_ref, plan, start_seconds,
                                                                      heartbeat_events)
-            heartbeat_events.get("ready_event").wait()
+            TrafficRunner._wait_for_event(heartbeat_events, "ready_event")
             self._submit_requests(pool, plan, futures_ref, heartbeat)
-            heartbeat_events.get("fires_done_event").set()
+            TrafficRunner._set_event(heartbeat_events, "fires_done_event")
             collector: RequestResultCollector = RequestResultCollector(futures_ref, results_list, start_seconds)
             interrupted = collector.collect_with_timeout(self._args.stage_timeout, self._cancel_event)
         finally:
-            heartbeat_events.get("stop_event").set()
+            TrafficRunner._set_event(heartbeat_events, "stop_event")
             if heartbeat_thread is not None:
                 heartbeat_thread.join(timeout=LoadTestConstants.THREAD_JOIN_TIMEOUT_SECONDS)
             pool.shutdown(wait=not interrupted, cancel_futures=True)
@@ -167,6 +158,46 @@ class TrafficRunner:
         # The heartbeat thread was joined above, so its peaks are final.
         return TrafficRunner._build_stage_result(total_time_seconds, results_list, heartbeat,
                                                  heartbeat_events, interrupted)
+
+    def _request_settings(self) -> Dict[str, Any]:
+        """
+        Build the connection settings of one request from the CLI arguments.
+
+        :return: The settings AgentRequestExecutor.execute_request() takes
+        """
+        chat_filter_type: str = self._args.chat_filter.upper()
+        request_settings: Dict[str, Any] = {
+            "host": self._args.host,
+            "port": self._args.port,
+            "agent": self._args.agent,
+            "timeout_seconds": self._args.request_timeout,
+            "idle_timeout_seconds": self._args.idle_timeout,
+            "use_https": self._args.https,
+            "chat_filter_type": chat_filter_type,
+        }
+        return request_settings
+
+    @staticmethod
+    def _wait_for_event(heartbeat_events: Dict[str, Event], name: str) -> None:
+        """
+        Block until one heartbeat event is set.
+
+        :param heartbeat_events: The stage's heartbeat events, by name
+        :param name: Name of the event to wait for
+        """
+        event: Event = heartbeat_events.get(name)
+        event.wait()
+
+    @staticmethod
+    def _set_event(heartbeat_events: Dict[str, Event], name: str) -> None:
+        """
+        Set one heartbeat event.
+
+        :param heartbeat_events: The stage's heartbeat events, by name
+        :param name: Name of the event to set
+        """
+        event: Event = heartbeat_events.get(name)
+        event.set()
 
     def _run_one_tracked(self, request_id: int, global_request_id: int, output_dir: Optional[str],
                          heartbeat: Heartbeat) -> Dict[str, Any]:

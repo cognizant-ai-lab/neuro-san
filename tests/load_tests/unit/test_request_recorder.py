@@ -59,7 +59,7 @@ class TestRequestRecorder(TestCase):
 
     def test_failed_request_is_logged_to_the_console(self) -> None:
         """
-        A FAILED request is logged with its reason instead of being written to progress.log.
+        A FAILED request is logged to the console with its reason.
         """
         args: Namespace = Namespace(include_tokens=False)
         recorder: RequestRecorder = RequestRecorder(args)

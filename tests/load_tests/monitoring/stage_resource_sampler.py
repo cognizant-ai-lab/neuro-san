@@ -18,8 +18,8 @@ from logging import Logger
 from logging import getLogger
 from typing import Any
 from typing import Dict
-from typing import NamedTuple
 from typing import Optional
+from typing import Union
 
 from psutil import AccessDenied
 from psutil import NoSuchProcess
@@ -63,7 +63,7 @@ class StageResourceSampler:
         self._swap_warned: bool = False
         # The stage's peak readings, keyed by the get_peak_*() name without "get_peak_".
         # A key is missing until a reading above zero is taken, so the stage summary leaves the peak out.
-        self._peaks: Dict[str, Any] = {}
+        self._peaks: Dict[str, Union[int, float, Dict[str, float]]] = {}
         # Prime the non-blocking system CPU counter so the first real
         # sample reflects usage since the heartbeat started rather
         # than returning 0.0.
@@ -145,7 +145,8 @@ class StageResourceSampler:
         if self._client_process is None:
             return
         try:
-            memory_info: NamedTuple = self._client_process.memory_info()
+            # psutil returns its private pmem named tuple, which has no public type to name.
+            memory_info: Any = self._client_process.memory_info()
             rss_megabytes: float = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
             peak_client_rss_megabytes: Optional[float] = self._peaks.get("client_rss_megabytes")
             if StageResourceSampler.is_new_peak(rss_megabytes, peak_client_rss_megabytes):
@@ -204,7 +205,7 @@ class StageResourceSampler:
 
     def system_memory_info(self) -> str:
         """
-        Read the system memory for the progress line, keeping it when it is a new peak.
+        Read the system memory for the progress line, recording it as the peak when it is a new peak.
 
         :return: The system memory part of the progress line
         """
@@ -217,7 +218,7 @@ class StageResourceSampler:
 
     def format_system_cpu(self) -> str:
         """
-        Format whole-box CPU utilization with peak-so-far.
+        Format whole-box CPU utilization with peak-so-far, recording the peak.
 
         Uses non-blocking ``cpu_percent`` (usage since the previous
         sample) and tracks the peak across the run.  0-100% across
@@ -270,7 +271,8 @@ class StageResourceSampler:
         if self._server_process is None:
             return server_memory
         try:
-            memory_info: NamedTuple = self._server_process.memory_full_info()
+            # psutil returns its private pfullmem named tuple, which has no public type to name.
+            memory_info: Any = self._server_process.memory_full_info()
             server_memory["rss_megabytes"] = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
             server_memory["swap_megabytes"] = memory_info.swap / ResourceMonitor.ONE_MEGABYTE
         except (NoSuchProcess, AccessDenied) as error:
@@ -299,7 +301,8 @@ class StageResourceSampler:
         """
         if self._out_of_memory_warned:
             return
-        virtual_memory_stats: NamedTuple = virtual_memory()
+        # psutil returns its private svmem named tuple, which has no public type to name.
+        virtual_memory_stats: Any = virtual_memory()
         used_fraction: float = virtual_memory_stats.percent / 100.0
         if used_fraction >= StageResourceSampler.OUT_OF_MEMORY_WARNING_THRESHOLD:
             self._out_of_memory_warned = True
@@ -309,7 +312,8 @@ class StageResourceSampler:
                             f" ({available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB total) — risk of OOM kill")
             self.logger.warning("%s", warning)
             self._progress_log_writer.write_to_file(warning)
-            swap_memory_stats: NamedTuple = swap_memory()
+            # psutil returns its private sswap named tuple, which has no public type to name.
+            swap_memory_stats: Any = swap_memory()
             if swap_memory_stats.total > 0 and swap_memory_stats.used > 0:
                 swap_used_gigabytes: float = swap_memory_stats.used / ResourceMonitor.ONE_GIGABYTE
                 swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f} GB"
@@ -324,7 +328,8 @@ class StageResourceSampler:
 
         :return: Dict with "text" (the progress line part), "memory_percent" and "available_gigabytes"
         """
-        virtual_memory_stats: NamedTuple = virtual_memory()
+        # psutil returns its private svmem named tuple, which has no public type to name.
+        virtual_memory_stats: Any = virtual_memory()
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         line: str = ResourceMonitor.system_memory_text(virtual_memory_stats)
         system_memory: Dict[str, Any] = {

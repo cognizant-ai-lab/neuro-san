@@ -26,10 +26,11 @@ from tests.load_tests.load_test_constants import LoadTestConstants
 
 class ProgressLogWriter:
     """
-    Writes the heartbeat's progress lines and resource warnings to progress.log and to the console.
+    Writes the heartbeat's progress lines, resource warnings and RequestRecorder's request lines to progress.log,
+    and the heartbeat's lines to the console.
 
-    Heartbeat and StageResourceSampler share one writer per stage, so the blank line before the first console
-    line is written only once.
+    Heartbeat and StageResourceSampler share one writer per stage; only Heartbeat writes console lines, so the
+    blank line before the first console line is written only once.
     """
 
     # Write a console progress line every this many heartbeat ticks.
@@ -49,7 +50,7 @@ class ProgressLogWriter:
         """
         Append a line to progress.log, when output_dir is set.
 
-        The file is opened for each line in append mode, so the request lines TrafficRunner writes there stay.
+        The file is opened for each line in append mode, so the request lines RequestRecorder writes there stay.
 
         :param line: The line to write
         :param end: Text written after the line. Heartbeat.progress_heartbeat() writes "" with end "" to create the file

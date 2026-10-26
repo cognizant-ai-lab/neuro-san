@@ -35,15 +35,20 @@ class TestRequestResultCollector(TestCase):
         """
         Every finished future gives its result, and the collection is not interrupted.
         """
-        futures: List[Future] = [TestRequestResultCollector._done_future(1), TestRequestResultCollector._done_future(2)]
+        first_future: Future = TestRequestResultCollector._done_future(1)
+        second_future: Future = TestRequestResultCollector._done_future(2)
+        futures: List[Future] = [first_future, second_future]
         results: List[Dict[str, Any]] = []
-        collector: RequestResultCollector = RequestResultCollector(futures, results, perf_counter())
-        interrupted: bool = collector.collect_with_timeout(None, Event())
+        start_seconds: float = perf_counter()
+        collector: RequestResultCollector = RequestResultCollector(futures, results, start_seconds)
+        cancel_event: Event = Event()
+        interrupted: bool = collector.collect_with_timeout(None, cancel_event)
         request_ids: List[Any] = []
         result: Dict[str, Any]
         # Keep the request id of each collected result.
         for result in results:
-            request_ids.append(result.get("request_id"))
+            request_id: Any = result.get("request_id")
+            request_ids.append(request_id)
         sorted_request_ids: List[Any] = sorted(request_ids)
         self.assertFalse(interrupted)
         self.assertEqual([1, 2], sorted_request_ids)
@@ -53,14 +58,22 @@ class TestRequestResultCollector(TestCase):
         A future still running at the stage timeout is recorded as KILLED by --stage-timeout.
         """
         results: List[Dict[str, Any]] = []
-        collector: RequestResultCollector = RequestResultCollector([Future()], results, perf_counter())
-        with self.assertLogs("RequestResultCollector", level="WARNING"):
-            interrupted: bool = collector.collect_with_timeout(0.1, Event())
-        self.assertFalse(interrupted)
-        self.assertEqual(1, len(results))
+        unfinished_future: Future = Future()
+        start_seconds: float = perf_counter()
+        collector: RequestResultCollector = RequestResultCollector([unfinished_future], results, start_seconds)
+        cancel_event: Event = Event()
+        with self.assertLogs("RequestResultCollector", level="WARNING") as captured:
+            interrupted: bool = collector.collect_with_timeout(0.1, cancel_event)
+        warning_line: str = captured.output[0]
+        result_count: int = len(results)
         killed_result: Dict[str, Any] = results[0]
-        self.assertEqual(LoadTestConstants.STATUS_KILLED, killed_result.get("status"))
-        self.assertEqual("Killed by --stage-timeout", killed_result.get("stderr"))
+        status: str = killed_result.get("status")
+        stderr: str = killed_result.get("stderr")
+        self.assertFalse(interrupted)
+        self.assertIn("Stage timeout (0.1s) reached", warning_line)
+        self.assertEqual(1, result_count)
+        self.assertEqual(LoadTestConstants.STATUS_KILLED, status)
+        self.assertEqual("Killed by --stage-timeout", stderr)
 
     def test_ctrl_c_stops_the_collection(self) -> None:
         """
@@ -72,15 +85,46 @@ class TestRequestResultCollector(TestCase):
         running_future: Future = Future()
         running_future.set_running_or_notify_cancel()
         results: List[Dict[str, Any]] = []
-        collector: RequestResultCollector = RequestResultCollector([running_future], results, perf_counter())
+        start_seconds: float = perf_counter()
+        collector: RequestResultCollector = RequestResultCollector([running_future], results, start_seconds)
         with patch.object(RequestResultCollector, "INTERRUPT_GRACE_SECONDS", 0.1), \
-                self.assertLogs("RequestResultCollector", level="WARNING"):
+                self.assertLogs("RequestResultCollector", level="WARNING") as captured:
             interrupted: bool = collector.collect_with_timeout(None, cancel_event)
-        self.assertTrue(interrupted)
-        self.assertEqual(1, len(results))
+        warning_line: str = captured.output[0]
+        result_count: int = len(results)
         killed_result: Dict[str, Any] = results[0]
-        self.assertEqual(LoadTestConstants.STATUS_KILLED, killed_result.get("status"))
-        self.assertEqual("Killed by Ctrl-C interrupt", killed_result.get("stderr"))
+        status: str = killed_result.get("status")
+        stderr: str = killed_result.get("stderr")
+        self.assertTrue(interrupted)
+        self.assertIn("Interrupted (Ctrl-C)", warning_line)
+        self.assertEqual(1, result_count)
+        self.assertEqual(LoadTestConstants.STATUS_KILLED, status)
+        self.assertEqual("Killed by Ctrl-C interrupt", stderr)
+
+    def test_ctrl_c_records_never_started_requests_as_killed(self) -> None:
+        """
+        A request cancelled by Ctrl-C before it started is recorded as KILLED, not dropped.
+        """
+        cancel_event: Event = Event()
+        cancel_event.set()
+        # A pending future that is not running is cancelled by the collection, as a queued request is.
+        queued_future: Future = Future()
+        results: List[Dict[str, Any]] = []
+        start_seconds: float = perf_counter()
+        collector: RequestResultCollector = RequestResultCollector([queued_future], results, start_seconds)
+        with patch.object(RequestResultCollector, "INTERRUPT_GRACE_SECONDS", 0.1), \
+                self.assertLogs("RequestResultCollector", level="WARNING") as captured:
+            interrupted: bool = collector.collect_with_timeout(None, cancel_event)
+        warning_line: str = captured.output[0]
+        result_count: int = len(results)
+        killed_result: Dict[str, Any] = results[0]
+        status: str = killed_result.get("status")
+        is_cancelled: bool = queued_future.cancelled()
+        self.assertTrue(interrupted)
+        self.assertIn("Interrupted (Ctrl-C)", warning_line)
+        self.assertTrue(is_cancelled)
+        self.assertEqual(1, result_count)
+        self.assertEqual(LoadTestConstants.STATUS_KILLED, status)
 
     @staticmethod
     def _done_future(request_id: int) -> Future:

@@ -31,6 +31,7 @@ from typing import Optional
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 
 from tests.load_tests.load_test_constants import LoadTestConstants
+from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.sly_data_flattener import SlyDataFlattener
@@ -155,13 +156,15 @@ class RequestRecorder:
         :param models_dict: Token Accounting "models" dict, provider -> model -> usage
         :return: First model name found, or "unknown"
         """
+        # Each provider value is normally a model -> usage dict; anything else is skipped.
         provider_models: Any
         # Return the first model name of the first provider that has one.
         for provider_models in models_dict.values():
             if isinstance(provider_models, dict):
+                provider_usage: Dict[str, Any] = provider_models
                 model_name: str
                 # Return the first model name of this provider.
-                for model_name in provider_models:
+                for model_name in provider_usage.keys():
                     return model_name
         return "unknown"
 
@@ -177,11 +180,16 @@ class RequestRecorder:
         :return: All model names across all providers
         """
         all_models: List[str] = []
+        # Each provider value is normally a model -> usage dict; anything else is skipped.
         provider_models: Any
         # Collect the model names of every provider.
         for provider_models in models_dict.values():
             if isinstance(provider_models, dict):
-                all_models.extend(provider_models.keys())
+                provider_usage: Dict[str, Any] = provider_models
+                model_name: str
+                # Collect each model name of this provider.
+                for model_name in provider_usage.keys():
+                    all_models.append(model_name)
         return all_models
 
     def _log_request_result(self, request_id: int, result: Dict[str, Any],
@@ -222,7 +230,8 @@ class RequestRecorder:
         value: str
         # Log each parsed sly_data field.
         for field, value in parsed_fields.items():
-            self.logger.info("  %s: %s", field, value or "")
+            field_value: str = value or ""
+            self.logger.info("  %s: %s", field, field_value)
         if failure_reason:
             self.logger.info("  reason: %s", failure_reason)
         if is_failure:
@@ -242,7 +251,6 @@ class RequestRecorder:
         :param elapsed_seconds: Request duration in seconds
         :param parsed_fields: Flattened sly_data string fields of the response
         """
-        path: str = join(output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
         field_parts: List[str] = []
         key: str
         value: str
@@ -252,9 +260,9 @@ class RequestRecorder:
             field_parts.append(f"{key}: {field_value}")
         fields_text: str = "  ".join(field_parts)
         duration_text: str = Formatters.fmt_duration(elapsed_seconds, precision=2)
-        line: str = f"Request {request_id}: {status} ({duration_text})  {fields_text}\n"
-        with open(path, "a", encoding="utf-8") as progress_log:
-            progress_log.write(line)
+        line: str = f"Request {request_id}: {status} ({duration_text})  {fields_text}"
+        progress_log_writer: ProgressLogWriter = ProgressLogWriter(output_dir)
+        progress_log_writer.write_to_file(line)
 
     @staticmethod
     def _save_request_output(output_dir: Optional[str], request_id: int, stdout: str, stderr: str) -> None:

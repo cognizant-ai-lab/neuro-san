@@ -48,7 +48,8 @@ class ResponseChecker:
         self.logger: Logger = getLogger(self.__class__.__name__)
         self._profile: AgentProfile = profile
 
-    def check_response(self, processor: BasicMessageProcessor, response_checks: Dict[str, Any]) -> Optional[str]:
+    def check_response(self, processor: Optional[BasicMessageProcessor],
+                       response_checks: Dict[str, Any]) -> Optional[str]:
         """
         Apply the data-driven response checks to one completed request.
 
@@ -61,7 +62,7 @@ class ResponseChecker:
         assertions instead of raising, so one request never stops the
         run.
 
-        :param processor: The BasicMessageProcessor that saw the whole response stream
+        :param processor: The BasicMessageProcessor that saw the whole response stream, or None when there is none
         :param response_checks: The hocon ``response`` block for this request's prompt
         :return: A one-line reason when any check failed, else None
         """
@@ -117,13 +118,15 @@ class ResponseChecker:
         test_key: str
         # Keep each test key the block has, with one key per sly_data field.
         for test_key in DataDrivenTestsDriver.TEST_KEYS:
+            # A test key holds a dict, a list or a plain value, depending on the evaluator.
             checks: Any = block.get(test_key)
             if checks is None:
                 continue
             if test_key == "sly_data" and isinstance(checks, dict):
+                sly_data_checks: Dict[str, Any] = checks
                 field: str
                 # One sly_data.<field> key per field.
-                for field in checks:
+                for field in sly_data_checks.keys():
                     keys.append(f"{test_key}.{field}")
             else:
                 keys.append(test_key)
@@ -146,12 +149,12 @@ class ResponseChecker:
         # One reason per new failure, labelled with its key.
         for failure in new_failures:
             failure_text: str = str(failure)
-            first_line: str = ResponseChecker._first_line(failure_text)
+            first_line: str = ResponseChecker.first_line(failure_text)
             reasons.append(f"{key}: {first_line}")
         return reasons
 
     @staticmethod
-    def _first_line(message: str) -> str:
+    def first_line(message: str) -> str:
         """
         Return the first non-empty line of an assertion message, shortened.
 
