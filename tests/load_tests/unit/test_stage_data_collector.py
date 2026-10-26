@@ -58,7 +58,7 @@ class TestStageDataCollector(TestCase):
         post_stage_data: Dict[str, Any] = {}
         # sleep() is patched so the test does not wait out the settle time.
         with patch("tests.load_tests.reporting.stage_data_collector.sleep"):
-            with self.assertLogs(StageDataCollector.LOGGER, level="INFO") as captured:
+            with self.assertLogs(data_collector.logger, level="INFO") as captured:
                 post_stage_data = data_collector.collect_post_stage_data(post_stage_inputs)
         after_server: Optional[Dict[str, Any]] = post_stage_data.get("after_server")
         log_text: str = "\n".join(captured.output)

@@ -55,8 +55,6 @@ class RunOutputWriter:
     summary.txt, and the OUTPUT FILES list at the end of the run.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     def __init__(self, args: Namespace, output_parts: Dict[str, Any]) -> None:
         """
         Keep the run's arguments and the parts the output files are built from.
@@ -65,6 +63,7 @@ class RunOutputWriter:
         :param output_parts: A dict with "server_checker" (the ServerChecker), "profile" (the AgentProfile),
             "hocon_files" (fixture HOCON file paths) and "resource_reporter" (the ResourceReporter)
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
         self.server_checker: ServerChecker = output_parts.get("server_checker")
         self.profile: AgentProfile = output_parts.get("profile")
@@ -217,9 +216,9 @@ class RunOutputWriter:
         try:
             rename(self._output_dir, new_path)
             self._output_dir = new_path
-            RunOutputWriter.LOGGER.info("  Renamed output to: %s", new_path)
+            self.logger.info("  Renamed output to: %s", new_path)
         except OSError as exc:
-            RunOutputWriter.LOGGER.warning("  Could not rename output dir: %s", exc)
+            self.logger.warning("  Could not rename output dir: %s", exc)
 
     def finalize_test_log(self, stage_summaries: List[Dict[str, Any]], history_recorder: HistoryRecorder) -> None:
         """
@@ -244,19 +243,19 @@ class RunOutputWriter:
         label: str = "OUTPUT FILES"
         if has_failures:
             label = "OUTPUT FILES (with failures)"
-        RunOutputWriter.LOGGER.info("\n%s", Formatters.SEPARATOR_LINE)
-        RunOutputWriter.LOGGER.info("  %s", label)
-        RunOutputWriter.LOGGER.info("%s", Formatters.SEPARATOR_LINE)
-        RunOutputWriter.LOGGER.info("  Directory:   %s", self._output_dir)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  %s", label)
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  Directory:   %s", self._output_dir)
         json_path: str = join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         if isfile(json_path):
-            RunOutputWriter.LOGGER.info("  Raw results: %s", json_path)
+            self.logger.info("  Raw results: %s", json_path)
         requests_dir: str = join(self._output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         if isdir(requests_dir):
-            RunOutputWriter.LOGGER.info("  Requests:    %s", requests_dir)
+            self.logger.info("  Requests:    %s", requests_dir)
         stdout_log_path: Optional[str] = self._run_log.get_path()
         if stdout_log_path is not None:
-            RunOutputWriter.LOGGER.info("  Stdout log:  %s", stdout_log_path)
+            self.logger.info("  Stdout log:  %s", stdout_log_path)
         history_recorder.log_existing_history_files()
         # Close the run log last so OUTPUT FILES is captured
         self._run_log.close()

@@ -82,7 +82,7 @@ class TestServerLogTailer(TestCase):
         With fewer Start lines than expected, the round stops at the stage timeout and logs a warning.
         """
         self._write_log([TestServerLogTailer.START_LINE])
-        with self.assertLogs("tests.load_tests.monitoring.server_log_tailer", level="WARNING") as captured:
+        with self.assertLogs("ServerLogTailer", level="WARNING") as captured:
             tail_result: Dict[str, Any] = self._tail(expected_count=3, stage_timeout_seconds=0)
         warning_text: str = captured.output[0]
         received_count: int = tail_result.get("count")

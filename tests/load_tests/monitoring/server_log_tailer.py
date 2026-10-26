@@ -65,7 +65,7 @@ class ServerLogTailer:
         self.server_log: Optional[str] = args.server_log
         self.server_process: Optional[Process] = server_process
         self.log_monitor: Optional[ServerLogMonitor] = log_monitor
-        self.logger: Logger = getLogger(__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def tail_server_log(self, round_values: Dict[str, Any]) -> Dict[str, Any]:
         """

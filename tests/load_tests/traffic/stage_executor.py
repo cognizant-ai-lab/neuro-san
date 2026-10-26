@@ -53,8 +53,6 @@ class StageExecutor:
     Stops early at the --max-requests cap, at --total-timeout, or when a stage must abort the test.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     # 60 "#" characters: the line around the round header.
     ROUND_HEADER_LINE: str = "############################################################"
 
@@ -68,6 +66,7 @@ class StageExecutor:
             None), "resource_reporter" (the ResourceReporter), "server_process" (the local server process, or None)
             and "output_dir" (the run's output directory)
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
         self.runner: TrafficRunner = runner
         self.profile: AgentProfile = executor_parts.get("profile")
@@ -115,9 +114,9 @@ class StageExecutor:
         # Run every stage once per round, until the request cap, the total timeout or a stage stops the test.
         for round_num in range(1, self.args.num_rounds + 1):
             if self.args.num_rounds > 1:
-                StageExecutor.LOGGER.info("\n%s", StageExecutor.ROUND_HEADER_LINE)
-                StageExecutor.LOGGER.info("  ROUND %s of %s", round_num, self.args.num_rounds)
-                StageExecutor.LOGGER.info("%s", StageExecutor.ROUND_HEADER_LINE)
+                self.logger.info("\n%s", StageExecutor.ROUND_HEADER_LINE)
+                self.logger.info("  ROUND %s of %s", round_num, self.args.num_rounds)
+                self.logger.info("%s", StageExecutor.ROUND_HEADER_LINE)
             keep_running: bool = self._run_round(round_num, run_state)
             if not keep_running:
                 break
@@ -192,7 +191,7 @@ class StageExecutor:
         can_start: bool = True
         if total_sent >= total_cap:
             total_planned: int = sum(stages) * self.args.num_rounds
-            StageExecutor.LOGGER.warning(
+            self.logger.warning(
                 """
 WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests completed.
          Use --max-requests %s to run all planned requests.""",
@@ -223,7 +222,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if elapsed_seconds < limit_seconds:
             return False
         elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
-        StageExecutor.LOGGER.warning(
+        self.logger.warning(
             """
   ABORT: --total-timeout (%ss) reached after %s.
   Stopping test and reporting available results.""",
@@ -314,17 +313,17 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         num_concurrent: int = stage_inputs.get("num_concurrent")
         stage_num: int = stage_inputs.get("stage_num")
         round_num: int = stage_inputs.get("round_num")
-        StageExecutor.LOGGER.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
         stage_label: str = f"{actual_requests} requests (max {stage_workers} workers)"
         if self.args.ramp:
             stage_label = f"[STAGE {stage_num}] {stage_label}"
         if self.args.num_rounds > 1:
             stage_label += f" (round {round_num})"
-        StageExecutor.LOGGER.info("  %s", stage_label)
-        StageExecutor.LOGGER.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  %s", stage_label)
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if actual_requests < num_concurrent:
-            StageExecutor.LOGGER.info("  (Capped from %s to %s by --max-requests)", num_concurrent, actual_requests)
+            self.logger.info("  (Capped from %s to %s by --max-requests)", num_concurrent, actual_requests)
 
     def _start_stage(self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -589,14 +588,13 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         if before_server:
             ResourceMonitor.log_snapshot("Server BEFORE", before_server)
         elif not self.args.client_only:
-            StageExecutor.LOGGER.info("  Server BEFORE: not available (server not running)")
+            self.logger.info("  Server BEFORE: not available (server not running)")
 
         before_client: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_process)
         if before_client:
             client_rss_megabytes: float = before_client.get("rss_megabytes")
             client_cpu_percent: float = before_client.get("cpu_percent")
-            StageExecutor.LOGGER.info("  Client BEFORE: RSS %.1f MB, CPU %.1f%%",
-                                      client_rss_megabytes, client_cpu_percent)
+            self.logger.info("  Client BEFORE: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
 
         ResourceMonitor.log_system_memory("BEFORE")
         before_snapshots: Dict[str, Optional[Dict[str, Any]]] = {
@@ -623,9 +621,8 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
             try:
                 fire_threads = f"  threads: {self.server_process.num_threads()}"
             except (NoSuchProcess, AccessDenied) as exc:
-                StageExecutor.LOGGER.debug("Thread count unavailable: %s", exc)
+                self.logger.debug("Thread count unavailable: %s", exc)
         fire_label: str = str(actual_requests)
         if probe_result is not None:
             fire_label = f"{actual_requests} ({actual_requests - 1} + 1 probe)"
-        StageExecutor.LOGGER.info("\nFiring %s %s requests... [%s]%s",
-                                  fire_label, self.args.agent, fire_timestamp, fire_threads)
+        self.logger.info("\nFiring %s %s requests... [%s]%s", fire_label, self.args.agent, fire_timestamp, fire_threads)

@@ -46,8 +46,6 @@ class StageDataCollector:
     after the stage, the resource rows, and the server log analysis.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     def __init__(self, args: Namespace, collector_parts: Dict[str, Any]) -> None:
         """
         Keep the run's arguments and the parts the stage data is read from.
@@ -57,6 +55,7 @@ class StageDataCollector:
             None), "resource_reporter" (the ResourceReporter), "server_process" (the local server process, or None)
             and "output_dir" (the run's output directory)
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
         self.profile: AgentProfile = collector_parts.get("profile")
         self.log_monitor: Optional[ServerLogMonitor] = collector_parts.get("log_monitor")
@@ -118,13 +117,13 @@ class StageDataCollector:
         settle_end_local: struct_time = localtime(settle_end_seconds)
         settle_end: str = strftime("%H:%M:%S", settle_end_local)
         settle_text: str = DurationParser.format_minutes_seconds(self.args.settle_time)
-        StageDataCollector.LOGGER.info("\n  Settle: waited %s for server cleanup [%s]", settle_text, settle_end)
+        self.logger.info("\n  Settle: waited %s for server cleanup [%s]", settle_text, settle_end)
 
         after_server: Optional[Dict[str, Any]] = self.snapshot_server_process()
         if after_server:
             ResourceMonitor.log_snapshot("Server AFTER", after_server)
         elif not self.args.client_only:
-            StageDataCollector.LOGGER.info("  Server AFTER: not available (server not running)")
+            self.logger.info("  Server AFTER: not available (server not running)")
         return after_server
 
     def _add_resource_rows(self, post_stage_inputs: Dict[str, Any], after_server: Optional[Dict[str, Any]]) -> None:
@@ -169,9 +168,9 @@ class StageDataCollector:
         if has_server_log:
             server_log_analysis = self._analyze_stage_log(log_position, results, actual_requests)
         else:
-            StageDataCollector._log_client_token_usage(results, self._output_dir)
+            self._log_client_token_usage(results)
             if self.args.level != LoadTestConstants.LEVEL_MIN:
-                StageDataCollector.LOGGER.info("\n  Server-side validation: not available (no --server-log)")
+                self.logger.info("\n  Server-side validation: not available (no --server-log)")
         return server_log_analysis
 
     def _analyze_stage_log(self, log_position: Optional[int], results: List[Dict[str, Any]],
@@ -197,7 +196,7 @@ class StageDataCollector:
         validation_events: List[Dict[str, Any]] = self.log_monitor.parse_validation_events_since(log_position)
         StageSummaryBuilder.enrich_failure_reasons(results, validation_events)
         if token_data:
-            StageDataCollector.LOGGER.info("\n  Token usage (from server log):")
+            self.logger.info("\n  Token usage (from server log):")
             TokenLogWriter.log_token_summary(
                 results, output_dir=self._output_dir,
                 network_tokens=network_tokens,
@@ -243,13 +242,11 @@ class StageDataCollector:
                 result["client_llm_calls"] = result.get("llm_calls", 0)
         StageSummaryBuilder.attach_token_data(stage_results, token_data)
 
-    @staticmethod
-    def _log_client_token_usage(results: List[Dict[str, Any]], output_dir: Optional[str]) -> None:
+    def _log_client_token_usage(self, results: List[Dict[str, Any]]) -> None:
         """
         Log the client token usage of a stage when there is no server log.
 
         :param results: Request results of the stage
-        :param output_dir: The run's output directory
         """
         has_token_data: bool = False
         request_result: Dict[str, Any]
@@ -260,5 +257,5 @@ class StageDataCollector:
                 break
         if has_token_data:
             token_source: str = "HTTP token_accounting"
-            StageDataCollector.LOGGER.info("\n  Token usage (from %s):", token_source)
-            TokenLogWriter.log_token_summary(results, output_dir=output_dir)
+            self.logger.info("\n  Token usage (from %s):", token_source)
+            TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)

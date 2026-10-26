@@ -70,14 +70,13 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
     usage examples.
     """
 
-    LOGGER: Logger = getLogger(__name__)
-
     def __init__(self, args: Namespace) -> None:
         """
         Initialize the load test CLI with parsed arguments.
 
         :param args: Parsed command-line arguments
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
         self.input_validator = InputValidator(args)
         self.hocon_files: List[str] = self.input_validator.validate_fixtures_hocon_dir()
@@ -136,8 +135,8 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             return self._run_server_only()
 
         if not is_local:
-            LoadTestCli.LOGGER.info("Remote mode: targeting %s:%s", self.args.host, self.args.port)
-            LoadTestCli.LOGGER.info("  Process monitoring disabled (server is not local)")
+            self.logger.info("Remote mode: targeting %s:%s", self.args.host, self.args.port)
+            self.logger.info("  Process monitoring disabled (server is not local)")
 
         # Server-only runs return above, so only --client-only is left of the split modes here.
         monitor_resources: bool = level != LoadTestConstants.LEVEL_MIN or self.args.client_only
@@ -224,17 +223,17 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             level = LoadTestConstants.LEVEL_MIN
             self.args.level = LoadTestConstants.LEVEL_MIN
         elif level == LoadTestConstants.LEVEL_MIN:
-            LoadTestCli.LOGGER.error(
+            self.logger.error(
                 "--level min requires --client-only or "
                 "--server-only. For an all-in-one run use "
                 "--level norm or --level adv.",
             )
             raise SystemExit(1)
         if self.args.client_only and self.args.server_only:
-            LoadTestCli.LOGGER.error("--client-only and --server-only are mutually exclusive.")
+            self.logger.error("--client-only and --server-only are mutually exclusive.")
             raise SystemExit(1)
         if self.args.client_only and self.args.server_log is not None:
-            LoadTestCli.LOGGER.error("--client-only cannot be used with --server-log (server log is remote).")
+            self.logger.error("--client-only cannot be used with --server-log (server log is remote).")
             raise SystemExit(1)
         if self.args.server_only and self.args.server_log is None:
             self.args.server_log = "auto"
@@ -252,7 +251,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                 and not self.args.no_server_log
                 and self.args.server_log is None):
             if self.args.host not in LoadTestConstants.LOCAL_HOSTS:
-                LoadTestCli.LOGGER.error(
+                self.logger.error(
                     "--level %s needs a local server to read "
                     "server.log. Use --client-only for a remote "
                     "server, or pass --server-log <path>.",
@@ -273,7 +272,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         :param is_local: True when the server host is local
         """
         if self.args.client_only:
-            LoadTestCli.LOGGER.info("Client-only mode: skipping server process detection.")
+            self.logger.info("Client-only mode: skipping server process detection.")
         elif self.args.server_only:
             self.server_process = EnvironmentValidator.find_local_server(self.args)
         elif is_local:
@@ -292,7 +291,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
 
         :return: The exit code of the server-only monitor
         """
-        LoadTestCli.LOGGER.info(
+        self.logger.info(
             "\nConfig: agent=%s, mode=server-only, "
             "num_requests=%s, host=%s, port=%s, "
             "stage_timeout=%ss",
@@ -301,7 +300,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             self.args.stage_timeout,
         )
         if self.server_log:
-            LoadTestCli.LOGGER.info("  server_log=%s", self.server_log)
+            self.logger.info("  server_log=%s", self.server_log)
         output_base: str = self._output_writer.output_base()
         monitor_parts: Dict[str, Any] = {
             "server_process": self.server_process,
@@ -330,7 +329,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         if self.args.ramp:
             mode = "ramp"
         profile_source: str = self._output_writer.profile_source()
-        LoadTestCli.LOGGER.info(
+        self.logger.info(
             "\nConfig: agent=%s, mode=%s, level=%s, "
             "stages=%s, rounds=%s, max_requests=%s, host=%s, port=%s, "
             "timeout=%ss, idle_timeout=%ss, "
@@ -342,19 +341,19 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             prompt_mode, profile_source,
         )
         if monitor_resources:
-            LoadTestCli.LOGGER.info("  settle_time=%ss", self.args.settle_time)
+            self.logger.info("  settle_time=%ss", self.args.settle_time)
         if self.server_log:
-            LoadTestCli.LOGGER.info("  server_log=%s", self.server_log)
+            self.logger.info("  server_log=%s", self.server_log)
         else:
-            LoadTestCli.LOGGER.info("  server_log=none")
+            self.logger.info("  server_log=none")
         probe_tokens: Optional[int] = None
         if self.probe_result:
             probe_tokens = self.probe_result.get("total_tokens")
         estimated_tokens: Optional[int] = self.profile.get_estimated_tokens_per_request()
         if probe_tokens:
-            LoadTestCli.LOGGER.info("  tokens_per_request=%s (measured by probe)", f"{probe_tokens:,}")
+            self.logger.info("  tokens_per_request=%s (measured by probe)", f"{probe_tokens:,}")
         elif estimated_tokens:
-            LoadTestCli.LOGGER.info("  estimated_tokens_per_request=%s", f"{estimated_tokens:,}")
+            self.logger.info("  estimated_tokens_per_request=%s", f"{estimated_tokens:,}")
 
     def _run_stages(self, level: str, run_inputs: Dict[str, Any]) -> int:
         """
@@ -386,7 +385,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                 self._interrupted = True
 
             if self._interrupted:
-                LoadTestCli.LOGGER.warning(
+                self.logger.warning(
                     "\n  Test interrupted (Ctrl-C) — the results "
                     "below cover only the requests that completed "
                     "before the interrupt.",
@@ -410,7 +409,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             if self._interrupted:
                 self._output_writer.rename_interrupted()
         except KeyboardInterrupt:
-            LoadTestCli.LOGGER.info("\n  Interrupted — saving partial results...")
+            self.logger.info("\n  Interrupted — saving partial results...")
             self._output_writer.export_raw_json(stage_summaries, exit_code=2)
             self._output_writer.rename_interrupted()
             exit_code = 2
@@ -472,7 +471,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                 pool_analyzer: PoolAnalyzer = PoolAnalyzer(stage_summaries)
                 pool_analyzer.log_pool_reuse_analysis()
             else:
-                LoadTestCli.LOGGER.info("\n  Pool reuse analysis: not available (no --server-log)")
+                self.logger.info("\n  Pool reuse analysis: not available (no --server-log)")
 
     def _install_interrupt_handler(self) -> Optional[Union[Callable, int]]:
         """
@@ -507,7 +506,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         if not self._cancel_event.is_set():
             self._cancel_event.set()
             self._interrupted = True
-            LoadTestCli.LOGGER.warning(
+            self.logger.warning(
                 "\n  Ctrl-C received — stopping and gathering "
                 "results for completed requests (press Ctrl-C "
                 "again to force-quit)...",
@@ -533,10 +532,10 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         failed: int = total - passed
 
         if failed > 0:
-            LoadTestCli.LOGGER.info("\nLOAD TEST FAILED: %s/%s requests failed", failed, total)
+            self.logger.info("\nLOAD TEST FAILED: %s/%s requests failed", failed, total)
             return 1
 
-        LoadTestCli.LOGGER.info("\nLOAD TEST PASSED: all %s requests completed successfully", total)
+        self.logger.info("\nLOAD TEST PASSED: all %s requests completed successfully", total)
         return 0
 
     @staticmethod

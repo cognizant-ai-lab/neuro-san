@@ -46,7 +46,7 @@ class TestStageExecutor(TestCase):
         clock_readings: List[float] = [0.0, 1205.0]
         stages_outcome: Dict[str, Any] = {}
         with patch("tests.load_tests.traffic.stage_executor.perf_counter", side_effect=clock_readings):
-            with self.assertLogs(StageExecutor.LOGGER, level="WARNING") as captured:
+            with self.assertLogs(stage_executor.logger, level="WARNING") as captured:
                 stages_outcome = stage_executor.run_all_stages(run_inputs)
         aborted: bool = stages_outcome.get("aborted")
         stage_summaries: List[Dict[str, Any]] = stages_outcome.get("stage_summaries")
