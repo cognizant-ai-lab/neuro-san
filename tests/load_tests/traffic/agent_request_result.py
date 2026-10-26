@@ -29,35 +29,24 @@ class AgentRequestResult:
     ``TrafficRunner`` to build the ``RequestResult`` that goes into the report.
     """
 
-    # One argument per field of the request outcome; nothing to group.
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def __init__(
-            self,
-            status: str,
-            processor: Optional[BasicMessageProcessor],
-            response_text: str,
-            time_to_first_response_seconds: float,
-            token_accounting: Dict[str, Any],
-    ) -> None:
+    def __init__(self, status: str, response: Dict[str, Any]) -> None:
         """
         Constructor.
 
         :param status: STATUS_CREATED, STATUS_FAILED or STATUS_TIMEOUT
-        :param processor: The BasicMessageProcessor that saw the whole stream
-                          (answer, structure, sly_data); None when the request
-                          did not complete
-        :param response_text: The agent's final answer, or the traceback when
-                              the request failed before completing
-        :param time_to_first_response_seconds: Seconds until the first streamed
-                                               message; 0.0 when none arrived
-        :param token_accounting: Token usage reported by the server, empty
-                                 when not available
+        :param response: What the stream produced, each key optional:
+                         "processor" (the BasicMessageProcessor that saw the whole stream
+                         (answer, structure, sly_data); None when the request did not complete),
+                         "response_text" (the agent's final answer, or the traceback when the request
+                         failed before completing; default ""), "time_to_first_response_seconds"
+                         (seconds until the first streamed message; default 0.0) and
+                         "token_accounting" (token usage reported by the server; default {})
         """
         self._status: str = status
-        self._processor: Optional[BasicMessageProcessor] = processor
-        self._response_text: str = response_text
-        self._time_to_first_response_seconds: float = time_to_first_response_seconds
-        self._token_accounting: Dict[str, Any] = token_accounting
+        self._processor: Optional[BasicMessageProcessor] = response.get("processor")
+        self._response_text: str = response.get("response_text", "")
+        self._time_to_first_response_seconds: float = response.get("time_to_first_response_seconds", 0.0)
+        self._token_accounting: Dict[str, Any] = response.get("token_accounting", {})
 
     def get_status(self) -> str:
         """

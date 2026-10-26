@@ -14,7 +14,7 @@
 #
 # END COPYRIGHT
 
-import os
+from os import environ
 from typing import Dict
 from typing import List
 from unittest import TestCase
@@ -42,7 +42,7 @@ class TestEnvironmentValidator(TestCase):
         """
         OPENAI_API_BASE set and no mock_llm_server: the run goes on and the value is logged.
         """
-        with patch.dict(os.environ, {"OPENAI_API_BASE": GATEWAY_URL}), \
+        with patch.dict(environ, {"OPENAI_API_BASE": GATEWAY_URL}), \
                 patch.object(ResourceMonitor, "find_process", return_value=None), \
                 self.assertLogs(VALIDATOR_LOGGER_NAME, level="INFO") as logs:
             EnvironmentValidator.validate_environment()
@@ -54,12 +54,13 @@ class TestEnvironmentValidator(TestCase):
         A running mock_llm_server stops the run, with or without OPENAI_API_BASE.
         """
         mock_server_process = MagicMock(pid=MOCK_PID)
-        with patch.dict(os.environ, {"OPENAI_API_BASE": GATEWAY_URL}), \
+        with patch.dict(environ, {"OPENAI_API_BASE": GATEWAY_URL}), \
                 patch.object(ResourceMonitor, "find_process", return_value=mock_server_process), \
                 self.assertLogs(VALIDATOR_LOGGER_NAME, level="ERROR") as logs, \
                 self.assertRaises(LoadTestAbortError) as raised:
             EnvironmentValidator.validate_environment()
-        self.assertEqual(raised.exception.get_exit_code(), 1)
+        exit_code: int = raised.exception.get_exit_code()
+        self.assertEqual(exit_code, 1)
         expected_pid_text: str = f"PID {MOCK_PID}"
         self.assertIn(expected_pid_text, logs.output[0])
 
@@ -67,9 +68,9 @@ class TestEnvironmentValidator(TestCase):
         """
         Neither OPENAI_API_BASE nor mock_llm_server: the run goes on.
         """
-        environment_without_api_base: Dict[str, str] = dict(os.environ)
+        environment_without_api_base: Dict[str, str] = dict(environ)
         environment_without_api_base.pop("OPENAI_API_BASE", None)
-        with patch.dict(os.environ, environment_without_api_base, clear=True), \
+        with patch.dict(environ, environment_without_api_base, clear=True), \
                 patch.object(ResourceMonitor, "find_process", return_value=None), \
                 self.assertLogs(VALIDATOR_LOGGER_NAME, level="INFO") as logs:
             EnvironmentValidator.validate_environment()
