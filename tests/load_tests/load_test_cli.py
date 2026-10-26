@@ -406,13 +406,15 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                 exit_code = 2
             elif not self._aborted:
                 exit_code = self._check_results(stage_summaries)
-            self._output_writer.export_raw_json(stage_summaries, exit_code, estimated_tokens_per_request)
+            self._output_writer.export_raw_json(stage_summaries, exit_code=exit_code,
+                                                estimated_tokens_per_request=estimated_tokens_per_request)
             self._output_writer.maybe_write_summary(stage_summaries, server_chat_timing)
             if self._interrupted:
                 self._output_writer.rename_interrupted()
         except KeyboardInterrupt:
             self.logger.info("\n  Interrupted — saving partial results...")
-            self._output_writer.export_raw_json(stage_summaries, 2, estimated_tokens_per_request)
+            self._output_writer.export_raw_json(stage_summaries, exit_code=2,
+                                                estimated_tokens_per_request=estimated_tokens_per_request)
             self._output_writer.rename_interrupted()
             exit_code = 2
         finally:

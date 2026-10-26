@@ -44,7 +44,7 @@ class TestStageSummaryBuilder(TestCase):
         before_client: Optional[Dict[str, Any]] = snapshot_values.get("before_client")
         peak_system_memory: Optional[Dict[str, float]] = snapshot_values.get("peak_system_memory")
         after_sys: Optional[Dict[str, float]] = snapshot_values.get("after_sys")
-        summary: Dict[str, Any] = StageSummaryBuilder.build_stage_summary({
+        summary_inputs: Dict[str, Any] = {
             "stage_num": 1,
             "round_num": 2,
             "actual_requests": 3,
@@ -70,7 +70,8 @@ class TestStageSummaryBuilder(TestCase):
             "before_client": before_client,
             "peak_system_memory": peak_system_memory,
             "after_system": after_sys,
-        })
+        }
+        summary: Dict[str, Any] = StageSummaryBuilder.build_stage_summary(summary_inputs)
         return summary
 
     def test_attach_token_data_matches_by_request_number(self) -> None:

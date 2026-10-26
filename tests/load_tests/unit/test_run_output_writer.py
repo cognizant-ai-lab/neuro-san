@@ -127,7 +127,7 @@ class TestRunOutputWriter(TestCase):
             "elapsed": max(elapsed_values_seconds),
         }]
 
-        self._export_writer().export_raw_json(stage_summaries, 0, 1000)
+        self._export_writer().export_raw_json(stage_summaries, exit_code=0, estimated_tokens_per_request=1000)
 
         path: str = join(self._dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(path, "r", encoding="utf-8") as handle:
