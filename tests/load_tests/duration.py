@@ -81,12 +81,14 @@ class DurationParser:
         Return a time waited or taken as minutes and seconds.
 
         :param seconds: Duration in seconds, e.g. 105
-        :return: The duration text, e.g. "1m 45s" for 105, "2m 0s" for 120 and "45s" for 45
+        :return: The duration text, e.g. "1m 45s" for 105, "2m 0s" for 120, "45s" for 45 and "0.4s" for 0.4
         """
-        whole_seconds: int = round(seconds)
+        tenths_seconds: float = round(seconds, 1)
         seconds_per_minute: int = DurationParser._UNITS.get("m")
-        duration_text: str = f"{whole_seconds}s"
-        if whole_seconds >= seconds_per_minute:
+        # Under a minute, keep one decimal without a trailing ".0": 0.4 is "0.4s" and 45.0 is "45s".
+        duration_text: str = f"{tenths_seconds:g}s"
+        if tenths_seconds >= seconds_per_minute:
+            whole_seconds: int = round(seconds)
             # Whole minutes: int() drops the fraction, so 105 seconds is 1 minute.
             minutes: int = int(whole_seconds / seconds_per_minute)
             remainder_seconds: int = whole_seconds - minutes * seconds_per_minute
