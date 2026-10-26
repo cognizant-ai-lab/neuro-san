@@ -29,17 +29,18 @@ class TrafficRunnerTestHelpers:
     """
 
     @staticmethod
-    def create_runner(stage_timeout_seconds: Optional[float] = None) -> TrafficRunner:
+    def create_runner(stage_timeout_seconds: Optional[float] = None, chat_filter: str = "maximal") -> TrafficRunner:
         """
         Return a runner over a one-prompt profile with every argument run_one_http() and run_stage() read.
 
         :param stage_timeout_seconds: Seconds after which run_stage() kills unfinished requests, or None
+        :param chat_filter: "maximal", or "minimal" as --minimal gives
         :return: The runner
         """
         profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
         args: Namespace = Namespace(
             same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
-            chat_filter="maximal", request_timeout=5.0, idle_timeout=5.0, include_tokens=False,
+            chat_filter=chat_filter, request_timeout=5.0, idle_timeout=5.0, include_tokens=False,
             stage_timeout=stage_timeout_seconds)
         stop_event: Event = Event()
         return TrafficRunner(args, profile, stop_event)
