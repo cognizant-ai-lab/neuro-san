@@ -68,7 +68,7 @@ class ArrivalWatcher:
         self._stop_event: Event = arrival_settings.get("stop_event")
         self._client_process: Optional[Process] = arrival_settings.get("client_process")
         self._primary_start_regex: re.Pattern = re.compile(primary_start_pattern)
-        self._progress_logger: Logger = ArrivalWatcher._get_progress_logger()
+        self._progress_logger: Logger = self._get_progress_logger()
 
     def start(self, server_log: str, position: int, output_dir: Optional[str] = None) -> Thread:
         """
@@ -175,8 +175,7 @@ class ArrivalWatcher:
                              client_cpu_percent)
         ResourceMonitor.log_system_memory("RECEIVED")
 
-    @staticmethod
-    def _get_progress_logger() -> Logger:
+    def _get_progress_logger(self) -> Logger:
         """
         Get the logger for the console progress dots, set up on first use.
 
@@ -185,7 +184,7 @@ class ArrivalWatcher:
 
         :return: The progress logger
         """
-        progress_logger: Logger = getLogger(__name__ + ".progress")
+        progress_logger: Logger = getLogger(self.__class__.__name__ + ".progress")
         progress_logger.propagate = False
         if not progress_logger.handlers:
             progress_handler: StreamHandler = StreamHandler(stdout)
