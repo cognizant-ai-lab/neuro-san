@@ -29,6 +29,8 @@ import tornado.web
 
 from tests.record_playback_llm_server.cassette import Cassette
 from tests.record_playback_llm_server.chat_completions_handler import ChatCompletionsHandler
+from tests.record_playback_llm_server.cors_policy import CorsPolicy
+from tests.record_playback_llm_server.cors_request_handler import CorsRequestHandler
 from tests.record_playback_llm_server.health_handler import HealthHandler
 from tests.record_playback_llm_server.playback_delay import PlaybackDelay
 from tests.record_playback_llm_server.models_handler import ModelsHandler
@@ -89,8 +91,14 @@ class RecordPlaybackLlmServer:
     DEFAULT_CASSETTE: str = "./llm_cassette.json"
 
     @staticmethod
-    def build_app(state: ProxyState) -> tornado.web.Application:
-        """Construct the Tornado Application with all routes wired up."""
+    def build_app(state: ProxyState, cors: Optional[CorsPolicy] = None) -> tornado.web.Application:
+        """
+        Construct the Tornado Application with all routes wired up.
+        :param state: The process-wide ProxyState.
+        :param cors: The cross-origin policy every handler answers with, or
+                     None to admit no browser page.
+        :return: The application.
+        """
         return tornado.web.Application(
             [
                 (r"/v1/chat/completions", ChatCompletionsHandler,
@@ -98,7 +106,8 @@ class RecordPlaybackLlmServer:
                 (r"/v1/models", ModelsHandler,
                  {"state": state, "upstream_path": "/models"}),
                 (r"/healthz", HealthHandler),
-            ]
+            ],
+            **{CorsRequestHandler.SETTING_NAME: cors or CorsPolicy()}
         )
 
     @staticmethod
@@ -132,6 +141,14 @@ class RecordPlaybackLlmServer:
                             help="Lower bound in seconds for --delay-mode random (default: 0.0)")
         parser.add_argument("--delay-max", type=float, default=0.0,
                             help="Upper bound in seconds for --delay-mode random (default: 0.0)")
+        parser.add_argument("--allow-origin", action="append", default=[], metavar="ORIGIN",
+                            help="Admit a browser page on this origin, e.g. http://alpha.localhost:8080; "
+                                 "repeat the flag or separate origins with commas, and use '*' for every "
+                                 "origin (default: no browser page is admitted)")
+        parser.add_argument("--allow-any-origin", action="store_true",
+                            help="Admit a browser page on every origin. Same as --allow-origin '*', without "
+                                 "the quoting a shell needs. Suits a test machine of your own; on a shared "
+                                 "machine name the origins instead")
         return parser.parse_args(argv)
 
     @classmethod
@@ -251,17 +268,33 @@ class RecordPlaybackLlmServer:
             return default
         return value
 
+    @staticmethod
+    def build_cors(args: argparse.Namespace) -> CorsPolicy:
+        """
+        Build the cross-origin policy from the parsed args.
+        :param args: The parsed command line.
+        :return: The policy, which admits nothing unless a flag names an origin.
+        """
+        origins: List[str] = list(args.allow_origin)
+        if args.allow_any_origin:
+            origins.append(CorsPolicy.WILDCARD)
+        return CorsPolicy.from_values(origins)
+
     @classmethod
     async def run(cls, args: argparse.Namespace) -> None:
         """Build the app, start listening, and wait forever."""
         state: ProxyState = cls.build_state(args)
-        app = cls.build_app(state)
+        cors: CorsPolicy = cls.build_cors(args)
+        app = cls.build_app(state, cors)
         app.listen(args.port, address=args.host)
         logging.info(
             "record-playback-llm listening on http://%s:%d "
             "(mode=%s, multi_response=%s, delay_mode=%s, cassette=%s, entries=%d)",
             args.host, args.port, state.mode, state.multi_response,
             state.playback_delay.mode, args.cassette, len(state.cassette))
+        if cors.is_enabled():
+            admitted: str = CorsPolicy.WILDCARD if cors.allow_any else ", ".join(cors.origins)
+            logging.info("browser pages admitted from %s", admitted)
         await asyncio.Event().wait()
 
     @classmethod

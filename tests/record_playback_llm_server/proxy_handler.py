@@ -35,11 +35,12 @@ import tornado.iostream
 import tornado.web
 import tornado.ioloop
 
+from tests.record_playback_llm_server.cors_request_handler import CorsRequestHandler
 from tests.record_playback_llm_server.proxy_state import ProxyState
 from tests.record_playback_llm_server.request_canonicalizer import RequestCanonicalizer
 
 
-class ProxyHandler(tornado.web.RequestHandler):
+class ProxyHandler(CorsRequestHandler):
     """
     Shared record/playback/hybrid logic for the proxy endpoints.
 

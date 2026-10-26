@@ -17,10 +17,10 @@
 
 from __future__ import annotations
 
-import tornado.web
+from tests.record_playback_llm_server.cors_request_handler import CorsRequestHandler
 
 
-class HealthHandler(tornado.web.RequestHandler):
+class HealthHandler(CorsRequestHandler):
     """
     Liveness probe at GET /healthz. Returns a fixed JSON object so external
     schedulers (Kubernetes, Docker, etc.) can confirm the process is up.

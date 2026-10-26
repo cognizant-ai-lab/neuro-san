@@ -147,6 +147,47 @@ python -m tests.record_playback_llm_server.record_playback_llm_server \
 | `--delay-mode` | `none` | Up-front per-response delay before serving a cache hit: `none`, `recorded`, `fixed`, `random`. |
 | `--delay-seconds` | `0.0` | Delay for `--delay-mode fixed`. |
 | `--delay-min` / `--delay-max` | `0.0` / `0.0` | Range for `--delay-mode random` (uniform). |
+| `--allow-origin` | none | Admit a browser page on this origin. Repeatable, comma separated, or `*`. |
+| `--allow-any-origin` | off | Admit a browser page on every origin. Needs no quoting. |
+
+### Calling the proxy from a browser page
+
+A neuro-san process calls this proxy directly. A page in a browser cannot: the
+page is on an origin of its own, so the browser first asks the proxy for
+permission with an `OPTIONS` request, and hides the real answer unless the
+proxy admits the page. `--allow-origin` is that permission, and it is off until
+an operator names an origin:
+
+```bash
+python -m tests.record_playback_llm_server.record_playback_llm_server \
+    --mode playback --cassette ./session.cassette.json \
+    --allow-origin http://alpha.localhost:8080
+```
+
+The proxy then answers an `OPTIONS` preflight with 204 and puts
+`Access-Control-Allow-Origin` on every answer it gives that page, errors
+included, so a 504 playback miss reaches the page as a 504 and not as an opaque
+network failure. An origin nobody named is answered exactly as before: 405 to
+the preflight, and no permission header.
+
+Named origins are matched whole, so `http://alpha.localhost:8080` does not
+admit `https://alpha.localhost:8080` or any other port. Credentials are never
+allowed; a key in an `Authorization` header is an ordinary header to CORS and
+travels normally.
+
+To admit every page instead of naming them, use `--allow-any-origin`:
+
+```bash
+python -m tests.record_playback_llm_server.record_playback_llm_server \
+    --mode playback --cassette ./session.cassette.json --allow-any-origin
+```
+
+It is the same as `--allow-origin '*'`, and it exists because a bare `*` is a
+shell glob: unquoted, the shell replaces it with the file names in the working
+directory, and the proxy then admits nothing that looks like an origin. The
+switch suits a test machine of your own. On a machine others reach, name the
+origins, because every page in the browser may then call the proxy, spend the
+upstream key it is recording with, and read the cassette's answers.
 
 ### Playback delay
 
