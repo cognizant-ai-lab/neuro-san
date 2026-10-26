@@ -105,6 +105,19 @@ class TestTrafficRunner(TestCase):
         self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, status)
         self.assertIsNone(failure_reason)
 
+    def test_timed_out_request_keeps_its_read_timeout_reason(self) -> None:
+        """
+        A TIMEOUT request that ran out of the read timeout reports the reason AgentRequestExecutor gave.
+        """
+        reason: str = "requests.exceptions.ConnectionError: HTTPConnectionPool(host='h', port=1): Read timed out."
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_TIMEOUT,
+                                                                {"failure_reason": reason})
+        result: Dict[str, Any] = self._run_one_http(request_result)
+        status: str = result.get("status")
+        failure_reason: Optional[str] = result.get("failure_reason")
+        self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, status)
+        self.assertEqual(reason, failure_reason)
+
     def test_run_stage_collects_every_request(self) -> None:
         """
         run_stage() returns one result per request, numbered from the plan's global offset.
