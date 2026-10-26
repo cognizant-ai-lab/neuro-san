@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import re
+from re import Match
+from re import search
 from typing import Any
 from typing import Dict
 from typing import List
@@ -29,142 +30,52 @@ class StageSummaryBuilder:
     """
 
     @staticmethod
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches
-    def build_stage_summary(
-            stage_num: int,
-            round_num: int,
-            actual_requests: int,
-            counts: Dict[str, Any],
-            elapsed: float,
-            retries: Dict[str, int],
-            total_retries: int,
-            amplification: float,
-            results: List[Dict[str, Any]],
-            server_counts: Dict[str, Any],
-            disconnections: List[Dict[str, str]],
-            server_errors: List[Dict[str, str]],
-            tool_warnings: List[Dict[str, str]],
-            network_tokens: List[Dict[str, Any]],
-            validation_events: List[Dict[str, Any]],
-            has_server_log: bool,
-            has_tokens: bool,
-            monitor_resources: bool,
-            before_server: Optional[Dict[str, Any]],
-            after_server: Optional[Dict[str, Any]],
-            peak_threads: Optional[int],
-            peak_server_rss: Optional[float],
-            before_client: Optional[Dict[str, Any]] = None,
-            peak_client: Optional[Dict[str, Any]] = None,
-            settled_client: Optional[Dict[str, Any]] = None,
-            before_system_memory_percent: Optional[float] = None,
-            after_system_memory_percent: Optional[float] = None,
-            peak_system_memory: Optional[Dict[str, float]] = None,
-            peak_system_cpu_percent: Optional[float] = None,
-            before_sys: Optional[Dict[str, float]] = None,
-            after_sys: Optional[Dict[str, float]] = None,
-            peak_system_threads: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    def build_stage_summary(stage_values: Dict[str, Any]) -> Dict[str, Any]:
         """
         Assemble the stage summary dict.
 
-        :param stage_num: Stage number
-        :param round_num: Round number
-        :param actual_requests: Number of requests sent in this stage
-        :param counts: Request counts by status
-        :param elapsed: Stage time in seconds
-        :param retries: Retry counts by kind
-        :param total_retries: Total number of retries
-        :param amplification: Server requests per client request
-        :param results: Request results of the stage
-        :param server_counts: Request counts from the server log
-        :param disconnections: Disconnections from the server log
-        :param server_errors: Server errors from the server log
-        :param tool_warnings: Tool warnings from the server log
-        :param network_tokens: Token usage per agent network from the server log
-        :param validation_events: Validation events from the server log
-        :param has_server_log: True when the server log can be read
-        :param has_tokens: True when token data is reported
-        :param monitor_resources: True to add the server thread and RSS snapshots
-        :param before_server: Server snapshot before the stage, or None
-        :param after_server: Server snapshot after the stage, or None
-        :param peak_threads: Peak server thread count, or None
-        :param peak_server_rss: Peak server RSS, or None
-        :param before_client: Client snapshot before the stage, or None
-        :param peak_client: Peak client snapshot during the stage, or None
-        :param settled_client: Client snapshot after the stage, or None
-        :param before_system_memory_percent: System memory percent before the stage, or None
-        :param after_system_memory_percent: System memory percent after the stage, or None
-        :param peak_system_memory: Peak system memory snapshot, or None
-        :param peak_system_cpu_percent: Peak system CPU percent, or None
-        :param before_sys: System snapshot before the stage, or None
-        :param after_sys: System snapshot after the stage, or None
-        :param peak_system_threads: Peak system thread count, or None
+        :param stage_values: A dict with
+            "stage_num", "round_num", "actual_requests" (number of requests sent in this stage), "counts"
+            (request counts by status), "elapsed" (stage time in seconds), "retries" (retry counts by kind),
+            "total_retries", "amplification" (server requests per client request), "results" (request results of
+            the stage), "server_counts" (request counts from the server log), "disconnections", "server_errors",
+            "tool_warnings", "network_tokens" and "validation_events" (from the server log), "has_server_log",
+            "has_tokens", "monitor_resources" (True to add the server thread and RSS snapshots), and the optional
+            snapshots and values "before_server", "after_server", "peak_threads", "peak_server_rss", "before_client",
+            "peak_client", "settled_client", "before_system_memory_percent", "after_system_memory_percent",
+            "peak_system_memory", "peak_system_cpu_percent", "before_sys", "after_sys" and "peak_system_threads"
+            (None when not measured)
         :return: A dictionary with "stage", "round", "concurrent", "counts", "elapsed", "retries", "total_retries",
             "amplification", "results", "primary_started", "primary_finished", "total_started", "total_finished",
             "disconnections", "server_errors", "tool_warnings", "network_tokens", "validation_events",
             "has_server_log" and "has_tokens", plus the "before_*", "after_*" and "peak_*" thread, RSS and system
             keys whose snapshot or value is given
         """
+        server_counts: Dict[str, Any] = stage_values.get("server_counts")
         summary_entry: Dict[str, Any] = {
-            "stage": stage_num,
-            "round": round_num,
-            "concurrent": actual_requests,
-            "counts": counts,
-            "elapsed": elapsed,
-            "retries": retries,
-            "total_retries": total_retries,
-            "amplification": amplification,
-            "results": results,
+            "stage": stage_values.get("stage_num"),
+            "round": stage_values.get("round_num"),
+            "concurrent": stage_values.get("actual_requests"),
+            "counts": stage_values.get("counts"),
+            "elapsed": stage_values.get("elapsed"),
+            "retries": stage_values.get("retries"),
+            "total_retries": stage_values.get("total_retries"),
+            "amplification": stage_values.get("amplification"),
+            "results": stage_values.get("results"),
             "primary_started": server_counts.get("primary_started"),
             "primary_finished": server_counts.get("primary_finished"),
             "total_started": server_counts.get("total_started"),
             "total_finished": server_counts.get("total_finished"),
-            "disconnections": disconnections,
-            "server_errors": server_errors,
-            "tool_warnings": tool_warnings,
-            "network_tokens": network_tokens,
-            "validation_events": validation_events,
-            "has_server_log": has_server_log,
-            "has_tokens": has_tokens,
+            "disconnections": stage_values.get("disconnections"),
+            "server_errors": stage_values.get("server_errors"),
+            "tool_warnings": stage_values.get("tool_warnings"),
+            "network_tokens": stage_values.get("network_tokens"),
+            "validation_events": stage_values.get("validation_events"),
+            "has_server_log": stage_values.get("has_server_log"),
+            "has_tokens": stage_values.get("has_tokens"),
         }
-        # The *_server_rss and *_client_rss values are in MB. The keys keep their names without a unit: saved
-        # runs hold them, and cross_run_comparison.py and summary_file_writer.py read them from old runs too.
-        if monitor_resources:
-            if before_server:
-                summary_entry["before_threads"] = before_server.get("threads")
-                summary_entry["before_server_rss"] = before_server.get("rss_megabytes")
-            if after_server:
-                summary_entry["after_threads"] = after_server.get("threads")
-                summary_entry["after_server_rss"] = after_server.get("rss_megabytes")
-        if peak_threads is not None:
-            summary_entry["peak_threads"] = peak_threads
-        if peak_server_rss is not None:
-            summary_entry["peak_server_rss"] = peak_server_rss
-        if before_client:
-            summary_entry["before_client_rss"] = before_client.get("rss_megabytes")
-        if settled_client:
-            summary_entry["after_client_rss"] = settled_client.get("rss_megabytes")
-        if peak_client:
-            summary_entry["peak_client_rss"] = peak_client.get("rss_megabytes")
-        if before_system_memory_percent is not None:
-            summary_entry["before_sys_mem_pct"] = before_system_memory_percent
-        if after_system_memory_percent is not None:
-            summary_entry["after_sys_mem_pct"] = after_system_memory_percent
-        if peak_system_memory is not None:
-            summary_entry["peak_sys_mem_pct"] = peak_system_memory.get("memory_percent")
-            summary_entry["peak_sys_mem_avail_gb"] = peak_system_memory.get("available_gigabytes")
-        if peak_system_cpu_percent is not None:
-            summary_entry["peak_sys_cpu"] = peak_system_cpu_percent
-        if before_sys:
-            summary_entry["before_sys_mem_avail_gb"] = before_sys.get("mem_avail_gb")
-            summary_entry["before_sys_cpu"] = before_sys.get("cpu_pct")
-            summary_entry["before_sys_threads"] = before_sys.get("threads")
-        if after_sys:
-            summary_entry["after_sys_mem_avail_gb"] = after_sys.get("mem_avail_gb")
-            summary_entry["after_sys_cpu"] = after_sys.get("cpu_pct")
-            summary_entry["after_sys_threads"] = after_sys.get("threads")
-        if peak_system_threads is not None:
-            summary_entry["peak_sys_threads"] = peak_system_threads
+        StageSummaryBuilder._add_server_and_client_keys(summary_entry, stage_values)
+        StageSummaryBuilder._add_system_keys(summary_entry, stage_values)
         return summary_entry
 
     @staticmethod
@@ -238,6 +149,77 @@ class StageSummaryBuilder:
             result["failure_reason"] = existing + suffix
 
     @staticmethod
+    def _add_server_and_client_keys(summary_entry: Dict[str, Any], stage_values: Dict[str, Any]) -> None:
+        """
+        Add the server thread and RSS keys and the client RSS keys whose snapshot or value is given.
+
+        :param summary_entry: The stage summary dict, updated in place
+        :param stage_values: The dict given to build_stage_summary()
+        """
+        monitor_resources: bool = stage_values.get("monitor_resources")
+        before_server: Optional[Dict[str, Any]] = stage_values.get("before_server")
+        after_server: Optional[Dict[str, Any]] = stage_values.get("after_server")
+        peak_threads: Optional[int] = stage_values.get("peak_threads")
+        peak_server_rss: Optional[float] = stage_values.get("peak_server_rss")
+        before_client: Optional[Dict[str, Any]] = stage_values.get("before_client")
+        settled_client: Optional[Dict[str, Any]] = stage_values.get("settled_client")
+        peak_client: Optional[Dict[str, Any]] = stage_values.get("peak_client")
+        # The *_server_rss and *_client_rss values are in MB. The keys keep their names without a unit: saved
+        # runs hold them, and cross_run_comparison.py and summary_file_writer.py read them from old runs too.
+        if monitor_resources:
+            if before_server:
+                summary_entry["before_threads"] = before_server.get("threads")
+                summary_entry["before_server_rss"] = before_server.get("rss_megabytes")
+            if after_server:
+                summary_entry["after_threads"] = after_server.get("threads")
+                summary_entry["after_server_rss"] = after_server.get("rss_megabytes")
+        if peak_threads is not None:
+            summary_entry["peak_threads"] = peak_threads
+        if peak_server_rss is not None:
+            summary_entry["peak_server_rss"] = peak_server_rss
+        if before_client:
+            summary_entry["before_client_rss"] = before_client.get("rss_megabytes")
+        if settled_client:
+            summary_entry["after_client_rss"] = settled_client.get("rss_megabytes")
+        if peak_client:
+            summary_entry["peak_client_rss"] = peak_client.get("rss_megabytes")
+
+    @staticmethod
+    def _add_system_keys(summary_entry: Dict[str, Any], stage_values: Dict[str, Any]) -> None:
+        """
+        Add the system memory, CPU and thread keys whose snapshot or value is given.
+
+        :param summary_entry: The stage summary dict, updated in place
+        :param stage_values: The dict given to build_stage_summary()
+        """
+        before_system_memory_percent: Optional[float] = stage_values.get("before_system_memory_percent")
+        after_system_memory_percent: Optional[float] = stage_values.get("after_system_memory_percent")
+        peak_system_memory: Optional[Dict[str, float]] = stage_values.get("peak_system_memory")
+        peak_system_cpu_percent: Optional[float] = stage_values.get("peak_system_cpu_percent")
+        before_sys: Optional[Dict[str, float]] = stage_values.get("before_sys")
+        after_sys: Optional[Dict[str, float]] = stage_values.get("after_sys")
+        peak_system_threads: Optional[int] = stage_values.get("peak_system_threads")
+        if before_system_memory_percent is not None:
+            summary_entry["before_sys_mem_pct"] = before_system_memory_percent
+        if after_system_memory_percent is not None:
+            summary_entry["after_sys_mem_pct"] = after_system_memory_percent
+        if peak_system_memory is not None:
+            summary_entry["peak_sys_mem_pct"] = peak_system_memory.get("memory_percent")
+            summary_entry["peak_sys_mem_avail_gb"] = peak_system_memory.get("available_gigabytes")
+        if peak_system_cpu_percent is not None:
+            summary_entry["peak_sys_cpu"] = peak_system_cpu_percent
+        if before_sys:
+            summary_entry["before_sys_mem_avail_gb"] = before_sys.get("mem_avail_gb")
+            summary_entry["before_sys_cpu"] = before_sys.get("cpu_pct")
+            summary_entry["before_sys_threads"] = before_sys.get("threads")
+        if after_sys:
+            summary_entry["after_sys_mem_avail_gb"] = after_sys.get("mem_avail_gb")
+            summary_entry["after_sys_cpu"] = after_sys.get("cpu_pct")
+            summary_entry["after_sys_threads"] = after_sys.get("threads")
+        if peak_system_threads is not None:
+            summary_entry["peak_sys_threads"] = peak_system_threads
+
+    @staticmethod
     def _request_id_sort_key(item: Dict[str, Any]) -> int:
         """
         Sort key for a result or token entry by the number at the end of its request_id.
@@ -256,7 +238,8 @@ class StageSummaryBuilder:
         :param request_id: Request id such as "request-3"
         :return: The number at the end of request_id, or 0 when it has none
         """
-        match: Optional[re.Match] = re.search(r"(\d+)$", request_id)
+        # The digits at the end of the id, e.g. "12" in "request-12".
+        match: Optional[Match] = search(r"(\d+)$", request_id)
         if match is None:
             return 0
         digits: str = match.group(1)

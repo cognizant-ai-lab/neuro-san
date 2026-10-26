@@ -14,8 +14,10 @@
 #
 # END COPYRIGHT
 
-import argparse
-import os
+from argparse import ArgumentParser
+from argparse import Namespace
+from argparse import RawDescriptionHelpFormatter
+from os import environ
 from typing import Dict
 from typing import List
 from typing import Set
@@ -28,11 +30,11 @@ class LoadTestArguments:
     """
     Defines and parses the load test's command-line arguments.
     Holds the argparse definition for every load-test flag, plus the detection of which flags the user actually passed,
-    which the orchestrator needs in order to leave explicit values alone when it applies level-based defaults.
+    so apply_level_defaults() leaves explicit values alone. apply_scale() applies the --scale factor.
     """
 
     @staticmethod
-    def parse_args(epilog: str) -> argparse.Namespace:
+    def parse_args(epilog: str) -> Namespace:
         """
         Parse command-line arguments for the load test.
 
@@ -42,8 +44,8 @@ class LoadTestArguments:
         :param epilog: Text shown at the end of --help
         :return: Parsed arguments, with explicit_args set to the dest names the user passed
         """
-        parser: argparse.ArgumentParser = LoadTestArguments._create_parser(epilog)
-        args: argparse.Namespace = parser.parse_args()
+        parser: ArgumentParser = LoadTestArguments._create_parser(epilog)
+        args: Namespace = parser.parse_args()
         # Track which args the user explicitly provided so
         # level-based defaults do not override them.
         explicit: Set[str] = LoadTestArguments._explicit_args(parser, args)
@@ -55,7 +57,53 @@ class LoadTestArguments:
         return args
 
     @staticmethod
-    def _create_parser(epilog: str) -> argparse.ArgumentParser:
+    def apply_level_defaults(args: Namespace, explicit_args: Set[str]) -> None:
+        """
+        Override argparse defaults with level-specific values.
+
+        Only applies when the user did not explicitly set the flag.
+        adv: LoadTestConstants.ADV_NUM_REQUESTS requests, LoadTestConstants.ADV_NUM_ROUNDS rounds (stress test).
+
+        --full-concurrency matches workers to num-requests so every
+        request fires at once.  Otherwise workers stay at the
+        conservative --max-workers default and a warning is shown if
+        max-workers < num-requests.
+
+        :param args: Parsed arguments, updated in place
+        :param explicit_args: Dest names the user passed on the command line
+        """
+        if args.level == LoadTestConstants.LEVEL_ADV:
+            if "num_requests" not in explicit_args:
+                args.num_requests = LoadTestConstants.ADV_NUM_REQUESTS
+            if "num_rounds" not in explicit_args:
+                args.num_rounds = LoadTestConstants.ADV_NUM_ROUNDS
+
+        if "max_workers" not in explicit_args and args.full_concurrency:
+            args.max_workers = args.num_requests
+
+    @staticmethod
+    def apply_scale(args: Namespace) -> None:
+        """
+        Multiply load parameters by --scale factor.
+
+        Applied after level defaults so that both explicit
+        values and level defaults are scaled uniformly.
+
+        :param args: Parsed command-line arguments, scaled in place
+        """
+        factor: int = args.scale
+        if factor <= 1:
+            return
+        args.num_requests *= factor
+        args.max_workers *= factor
+        args.request_timeout *= factor
+        args.idle_timeout *= factor
+        args.stage_timeout *= factor
+        if args.total_timeout > 0:
+            args.total_timeout *= factor
+
+    @staticmethod
+    def _create_parser(epilog: str) -> ArgumentParser:
         """
         Build the parser that holds every load-test flag.
 
@@ -73,9 +121,9 @@ class LoadTestArguments:
         idle_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS)
         stage_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_STAGE_TIMEOUT_SECONDS)
         settle_time_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_SETTLE_TIME_SECONDS)
-        parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        parser: ArgumentParser = ArgumentParser(
             description="Load-test neuro-san agent networks with real LLM calls.",
-            formatter_class=argparse.RawDescriptionHelpFormatter,
+            formatter_class=RawDescriptionHelpFormatter,
             epilog=epilog,
         )
 
@@ -91,7 +139,7 @@ class LoadTestArguments:
         parser.add_argument(
             "--profile-path",
             type=str,
-            default=os.environ.get("LOAD_TEST_PROFILE_PATH"),
+            default=environ.get("LOAD_TEST_PROFILE_PATH"),
             help="""
             Directory containing agent profile JSON files.
             The filename is derived from --agent (e.g. basic/smart_home → smart_home.json).
@@ -470,7 +518,7 @@ class LoadTestArguments:
         return parser
 
     @staticmethod
-    def _explicit_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Set[str]:
+    def _explicit_args(parser: ArgumentParser, args: Namespace) -> Set[str]:
         """
         Return the dest names the user actually passed.
 

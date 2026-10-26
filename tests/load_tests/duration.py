@@ -14,7 +14,7 @@
 #
 # END COPYRIGHT
 
-import argparse
+from argparse import ArgumentTypeError
 from typing import Dict
 
 
@@ -38,21 +38,22 @@ class DurationParser:
         """
         text: str = str(value).strip().lower()
         if not text:
-            raise argparse.ArgumentTypeError("empty duration")
+            raise ArgumentTypeError("empty duration")
         unit: int = 1
-        if text[-1] in DurationParser._UNITS:
-            unit = DurationParser._UNITS[text[-1]]
+        # pylint: disable=consider-iterating-dictionary
+        if text[-1] in DurationParser._UNITS.keys():
+            unit = DurationParser._UNITS.get(text[-1])
             text = text[:-1]
         seconds: float = 0.0
         try:
             seconds = float(text) * unit
         except ValueError as exc:
-            raise argparse.ArgumentTypeError(
+            raise ArgumentTypeError(
                 f"invalid duration '{value}': use seconds or a s/m/h "
                 "suffix, e.g. 90s, 20m, 2h"
             ) from exc
         if seconds < 0:
-            raise argparse.ArgumentTypeError(f"duration must be non-negative: '{value}'")
+            raise ArgumentTypeError(f"duration must be non-negative: '{value}'")
         return int(round(seconds))
 
     @staticmethod
