@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
+
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -31,6 +33,8 @@ from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_openai.chat_models.base import ChatOpenAI
+
+from neuro_san.internals.run_context.langchain.llms.translate_options import TranslateOptions
 
 
 # ChatOpenAI already sits deep in langchain's class tree; one more level is unavoidable here.
@@ -169,3 +173,20 @@ class ToolStrictChatOpenAI(ChatOpenAI):
             flat.update(converted)
             return flat
         return tool
+
+    #
+    # Below here are static items used stricture only for TypeScript translation.
+    #
+
+    @staticmethod
+    def kwargs_constructor(kwargs: Dict[str, Any]) -> ToolStrictChatOpenAI:
+        """
+        Constructs a ToolStrictChatOpenAI from the keyword arguments dictionary.
+
+        :param kwargs: The keyword arguments to pass to the constructor
+        :return: A ToolStrictChatOpenAI
+        """
+        translate_options: TranslateOptions = TranslateOptions()
+        translated: Dict[str, Any] = translate_options(kwargs)
+        instance: ToolStrictChatOpenAI = ToolStrictChatOpenAI(**translated)
+        return instance
