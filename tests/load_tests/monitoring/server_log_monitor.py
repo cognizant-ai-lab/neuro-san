@@ -365,24 +365,27 @@ class ServerLogMonitor:
         self._parser.map_to_client_requests(disconnections, primary_request_ids)
         return self._parser.disconnection_list(disconnections)
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def start_log_monitor(self, position: Optional[int], expected_count: int, fire_time_seconds: float,
-                          stop_event: Event, client_process: Optional[Process],
-                          primary_start_pattern: str, output_dir: Optional[str] = None) -> Optional[Thread]:
+    def start_log_monitor(self, monitor_settings: Dict[str, Any]) -> Optional[Thread]:
         """
         Start a background thread to monitor server log for request arrivals.
 
-        :param position: Server log offset to start reading from, or None
-        :param expected_count: Number of arrivals to wait for
-        :param fire_time_seconds: time.perf_counter() value taken when the stage fired
-        :param stop_event: Event that tells the monitor thread to stop
-        :param client_process: Client process for the snapshot once all requests arrive, or None
-        :param primary_start_pattern: Regex for the log line of a primary agent request arriving
-        :param output_dir: Directory for server_receipts.log, or None for console only
+        :param monitor_settings: A dict with "position" (server log offset to start reading from, or None),
+            "expected_count" (number of arrivals to wait for), "fire_time_seconds" (time.perf_counter() value taken
+            when the stage fired), "stop_event" (Event that tells the monitor thread to stop), "client_process"
+            (client process for the snapshot once all requests arrive, or None), "primary_start_pattern" (regex for
+            the log line of a primary agent request arriving) and "output_dir" (directory for server_receipts.log,
+            or None for console only)
         :return: The started monitor thread, or None if monitoring is not available
         """
+        position: Optional[int] = monitor_settings.get("position")
         if self._server_log is None or position is None:
             return None
+        expected_count: int = monitor_settings.get("expected_count")
+        fire_time_seconds: float = monitor_settings.get("fire_time_seconds")
+        stop_event: Event = monitor_settings.get("stop_event")
+        client_process: Optional[Process] = monitor_settings.get("client_process")
+        primary_start_pattern: str = monitor_settings.get("primary_start_pattern")
+        output_dir: Optional[str] = monitor_settings.get("output_dir")
         arrival_settings: Dict[str, Any] = {
             "expected_count": expected_count,
             "fire_time_seconds": fire_time_seconds,

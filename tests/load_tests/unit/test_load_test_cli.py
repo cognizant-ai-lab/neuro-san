@@ -28,7 +28,7 @@ DECLINED_EXIT_CODE: int = 0
 FAILED_CHECK_EXIT_CODE: int = 1
 
 
-class TestLoadTestAbortExit(TestCase):
+class TestLoadTestCli(TestCase):
     """
     Unit tests for LoadTestCli.main() and LoadTestAbortError.
 
