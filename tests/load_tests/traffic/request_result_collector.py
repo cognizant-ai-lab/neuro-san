@@ -31,7 +31,7 @@ from typing import Set
 from tests.load_tests.load_test_constants import LoadTestConstants
 
 
-class FutureCollector:
+class RequestResultCollector:
     """
     Collects the results of a stage's request futures for TrafficRunner.run_stage().
 
@@ -110,7 +110,7 @@ class FutureCollector:
 
         Anything still stuck after the grace stays pending, without blocking on it.
         """
-        grace_deadline_seconds: float = perf_counter() + FutureCollector.INTERRUPT_GRACE_SECONDS
+        grace_deadline_seconds: float = perf_counter() + RequestResultCollector.INTERRUPT_GRACE_SECONDS
         remaining_seconds: float = 0.0
         future: Future
         # Wait for each pending request until the grace runs out.
