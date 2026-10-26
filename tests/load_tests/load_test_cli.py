@@ -440,7 +440,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         summary_reporter: SummaryReporter = SummaryReporter(
             stage_summaries,
             neuro_san_version=neuro_san_version,
-            client_token_source="HTTP token_accounting",
+            client_token_source=LoadTestConstants.CLIENT_TOKEN_SOURCE,
         )
         if len(stage_summaries) > 1:
             summary_reporter.log_ramp_summary(is_ramp=self.args.ramp)

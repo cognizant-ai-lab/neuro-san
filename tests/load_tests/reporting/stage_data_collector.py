@@ -259,6 +259,6 @@ class StageDataCollector:
                 has_token_data = True
                 break
         if has_token_data:
-            token_source: str = "HTTP token_accounting"
+            token_source: str = LoadTestConstants.CLIENT_TOKEN_SOURCE
             self.logger.info("\n  Token usage (from %s):", token_source)
             TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)
