@@ -333,9 +333,10 @@ class ServerLogTailer:
         elapsed_seconds: float = 0.0
         if phase == 1 and received_count >= expected_count:
             elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
+            all_received_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
             self.logger.info(
-                "\n  All %d request(s) received (%.1fs). Monitoring until processing completes...",
-                expected_count, elapsed_seconds,
+                "\n  All %d request(s) received (%s). Monitoring until processing completes...",
+                expected_count, all_received_text,
             )
             phase = 2
             tail_state["phase"] = phase
@@ -380,10 +381,11 @@ class ServerLogTailer:
             timestamp = ServerLogTailer._timestamp_now()
             elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             if received_count <= ServerLogTailer.LOG_LIMIT_REQUESTS or received_count == expected_count:
+                received_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
                 self.logger.info(
-                    "  [server] request %d/%d received [%s] (+%.1fs)",
+                    "  [server] request %d/%d received [%s] (+%s)",
                     received_count, expected_count,
-                    timestamp, elapsed_seconds,
+                    timestamp, received_text,
                 )
         if primary_finish_regex.search(line):
             completed_count += 1
@@ -394,10 +396,11 @@ class ServerLogTailer:
             if phase == 2:
                 total_requests = received_count
             if completed_count <= ServerLogTailer.LOG_LIMIT_REQUESTS or completed_count == total_requests:
+                completed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
                 self.logger.info(
-                    "  [server] request %d/%d completed [%s] (+%.1fs)",
+                    "  [server] request %d/%d completed [%s] (+%s)",
                     completed_count, total_requests,
-                    timestamp, elapsed_seconds,
+                    timestamp, completed_text,
                 )
 
     def _sample_resources(self, tail_state: Dict[str, Any]) -> None:
