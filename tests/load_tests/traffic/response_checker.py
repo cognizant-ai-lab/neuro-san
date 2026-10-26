@@ -110,6 +110,11 @@ class ResponseChecker:
         """
         Return the test keys of a response block.
 
+        This repeats the top level of the key walk in DataDrivenTestsDriver.test_response_keys(), which walks
+        the deeper keys itself. The walk stays here because the AgentEvaluator messages in neuro_san/test do not
+        name the key they check, and making them do so would change the messages of every data-driven test,
+        not only the load test's.
+
         :param block: A hocon ``response`` block
         :return: text and structure when present, plus sly_data.<field>
                  for each field under sly_data

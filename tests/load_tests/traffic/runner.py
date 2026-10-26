@@ -231,6 +231,9 @@ class TrafficRunner:
             response_checks: Dict[str, Any] = self._profile.get_response(global_request_id,
                                                                          same_prompt=self._args.same_prompt)
             return self._response_checker.check_response(processor, response_checks)
+        failure_reason: Optional[str] = request_result.get_failure_reason()
+        if failure_reason:
+            return failure_reason
         if status != LoadTestConstants.STATUS_FAILED:
             return None
         if not RequestStatusPolicy.is_traceback(status, response_text):
