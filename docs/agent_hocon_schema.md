@@ -30,7 +30,7 @@ does **not** catch:
   `function.invocation`, among others).
 
 For those checks, use [`hocon_validator_cli`](./hocon_validator_cli.md), which runs the full neuro-san
-validation chain plus lint warnings.
+validation chain.
 
 ## Validate the parsed config, not the raw text
 
@@ -51,4 +51,4 @@ must be configured to strip the quotes around keys that had to be quoted in the 
 carrying their quotes and the schema silently matches everything.
 
 For full validation, use [`hocon_validator_cli`](./hocon_validator_cli.md): it runs the full neuro-san
-validation chain plus the lint warnings described in that document.
+validation chain described in that document.
