@@ -78,6 +78,12 @@ class RunOutputWriter:
         """
         return self._output_dir
 
+    def get_resource_reporter(self) -> ResourceReporter:
+        """
+        :return: The ResourceReporter of the run
+        """
+        return self.resource_reporter
+
     def profile_source(self) -> str:
         """
         Describe where the profile came from, for logs and raw_results.json.

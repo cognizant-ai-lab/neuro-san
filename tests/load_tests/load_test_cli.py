@@ -40,6 +40,7 @@ from psutil import Process
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.load_test_arguments import LoadTestArguments
+from tests.load_tests.monitoring.server_link import ServerLink
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.monitoring.server_only_monitor import ServerOnlyMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
@@ -56,13 +57,14 @@ from tests.load_tests.reporting.summary import SummaryReporter
 from tests.load_tests.reporting.trend_history import TrendHistory
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.traffic.stage_executor import StageExecutor
+from tests.load_tests.traffic.stage_run import StageRun
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 from tests.load_tests.validation.server_checker import ServerChecker
 
 
-class LoadTestCli:  # pylint: disable=too-many-instance-attributes
+class LoadTestCli:
     """
     Runs the full load test workflow for neuro-san agent networks.
 
@@ -78,32 +80,22 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
-        self.input_validator = InputValidator(args)
-        self.hocon_files: List[str] = self.input_validator.validate_fixtures_hocon_dir()
+        input_validator: InputValidator = InputValidator(args)
+        hocon_files: List[str] = input_validator.validate_fixtures_hocon_dir()
         self.profile: AgentProfile = AgentProfileFactory().create(
             args.agent, args.profile_path, args.project_root,
-            hocon_files=self.hocon_files,
+            hocon_files=hocon_files,
         )
-        self.server_process: Optional[Process] = None
-        self.server_log: Optional[str] = args.server_log
-        self.log_monitor: Optional[ServerLogMonitor] = None
-        if self.server_log:
-            self.log_monitor = ServerLogMonitor(self.server_log)
+        self.server_link: ServerLink = ServerLink(args)
         self._cancel_event: Event = Event()
         self.runner: TrafficRunner = TrafficRunner(args, self.profile, self._cancel_event)
-        self.resource_reporter = ResourceReporter()
-        self.probe_result: Optional[Dict[str, Any]] = None
-        self._aborted: bool = False
-        self._interrupted: bool = False
-        self.server_checker: ServerChecker = ServerChecker(args)
+        resource_reporter: ResourceReporter = ResourceReporter()
         output_parts: Dict[str, Any] = {
-            "server_checker": self.server_checker,
-            "hocon_files": self.hocon_files,
-            "resource_reporter": self.resource_reporter,
+            "server_checker": self.server_link.get_server_checker(),
+            "hocon_files": hocon_files,
+            "resource_reporter": resource_reporter,
         }
         self._output_writer: RunOutputWriter = RunOutputWriter(args, output_parts)
-        output_base: str = self._output_writer.output_base()
-        self._history_recorder: HistoryRecorder = HistoryRecorder(args, output_base)
 
     def run(self) -> int:
         """
@@ -114,19 +106,22 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         :raises SystemExit: When the arguments don't fit together
         :raises LoadTestAbortError: When the server can't be reached or the --server-log file is not found
         """
-        level: str = self._check_mode_args()
-        stale_log_age_minutes: Optional[int] = self.server_checker.validate_server_log()
+        input_validator: InputValidator = InputValidator(self.args)
+        level: str = self._check_mode_args(input_validator)
+        server_checker: ServerChecker = self.server_link.get_server_checker()
+        stale_log_age_minutes: Optional[int] = server_checker.validate_server_log()
 
-        stages: List[int] = self.input_validator.resolve_stages()
-        total_cap: int = self.input_validator.resolve_max_requests(stages)
+        stages: List[int] = input_validator.resolve_stages()
+        total_cap: int = input_validator.resolve_max_requests(stages)
 
         self._output_writer.setup_test_log()
+        probe_result: Optional[Dict[str, Any]] = None
         if not self.args.server_only:
-            self.server_checker.preflight_server_check()
+            server_checker.preflight_server_check()
             output_dir: Optional[str] = self._output_writer.get_output_dir()
-            self.probe_result = self.input_validator.confirm_cost(stages, total_cap, runner=self.runner,
-                                                                  output_dir=output_dir,
-                                                                  stale_log_age_minutes=stale_log_age_minutes)
+            probe_result = input_validator.confirm_cost(stages, total_cap, runner=self.runner,
+                                                        output_dir=output_dir,
+                                                        stale_log_age_minutes=stale_log_age_minutes)
 
         is_local: bool = self.args.host in LoadTestConstants.LOCAL_HOSTS
         self._find_server(is_local)
@@ -139,16 +134,17 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
 
         # Server-only runs return above, so only --client-only is left of the split modes here.
         monitor_resources: bool = level != LoadTestConstants.LEVEL_MIN or self.args.client_only
-        self._log_run_config(level, stages, total_cap, monitor_resources)
         primary_start_pattern: str = self.profile.get_primary_start_pattern()
+        server_log: Optional[str] = self.server_link.get_server_log()
         run_inputs: Dict[str, Any] = {
             "stages": stages,
             "total_cap": total_cap,
             "monitor_resources": monitor_resources,
-            "has_server_log": self.server_log is not None,
-            "probe_result": self.probe_result,
+            "has_server_log": server_log is not None,
+            "probe_result": probe_result,
             "primary_start_pattern": primary_start_pattern,
         }
+        self._log_run_config(level, run_inputs)
         exit_code: int = self._run_stages(level, run_inputs)
         return exit_code
 
@@ -158,7 +154,7 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
 
         :return: True when Ctrl-C stops the run
         """
-        return self._interrupted
+        return self._cancel_event.is_set()
 
     @staticmethod
     def main() -> None:
@@ -213,11 +209,12 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             _exit(exit_code)
         raise SystemExit(exit_code)
 
-    def _check_mode_args(self) -> str:
+    def _check_mode_args(self, input_validator: InputValidator) -> str:
         """
         Check that the mode arguments fit together, fill in the server log and level defaults,
         then validate the agent name and the environment.
 
+        :param input_validator: Checks the agent name
         :return: The test level
         :raises SystemExit: When the arguments don't fit together
         """
@@ -263,10 +260,11 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                     level,
                 )
                 raise SystemExit(1)
-            self.server_checker.confirm_no_server_log(level)
+            server_checker: ServerChecker = self.server_link.get_server_checker()
+            server_checker.confirm_no_server_log(level)
         LoadTestArguments.apply_level_defaults(self.args, self.args.explicit_args)
         LoadTestArguments.apply_scale(self.args)
-        self.input_validator.validate_agent_name()
+        input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
         return level
 
@@ -276,19 +274,18 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
 
         :param is_local: True when the server host is local
         """
+        server_process: Optional[Process] = None
         if self.args.client_only:
             self.logger.info("Client-only mode: skipping server process detection.")
         elif self.args.server_only:
-            self.server_process = EnvironmentValidator.find_local_server(self.args)
+            server_process = EnvironmentValidator.find_local_server(self.args)
         elif is_local:
-            self.server_process = EnvironmentValidator.find_local_server(self.args)
+            server_process = EnvironmentValidator.find_local_server(self.args)
 
         if self.args.server_log == "auto":
-            self.args.server_log = EnvironmentValidator.auto_detect_server_log(self.server_process)
+            self.args.server_log = EnvironmentValidator.auto_detect_server_log(server_process)
 
-        self.server_log = self.args.server_log
-        if self.server_log:
-            self.log_monitor = ServerLogMonitor(self.server_log)
+        self.server_link.set_server(server_process, self.args.server_log)
 
     def _run_server_only(self) -> int:
         """
@@ -304,27 +301,32 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             self.args.host, self.args.port,
             self.args.stage_timeout,
         )
-        if self.server_log:
-            self.logger.info("  server_log=%s", self.server_log)
+        server_log: Optional[str] = self.server_link.get_server_log()
+        if server_log:
+            self.logger.info("  server_log=%s", server_log)
         output_base: str = self._output_writer.output_base()
+        history_recorder: HistoryRecorder = HistoryRecorder(self.args, output_base)
         monitor_parts: Dict[str, Any] = {
-            "server_process": self.server_process,
-            "log_monitor": self.log_monitor,
-            "history_recorder": self._history_recorder,
-            "server_checker": self.server_checker,
+            "server_process": self.server_link.get_server_process(),
+            "log_monitor": self.server_link.get_log_monitor(),
+            "history_recorder": history_recorder,
+            "server_checker": self.server_link.get_server_checker(),
         }
         server_only_monitor: ServerOnlyMonitor = ServerOnlyMonitor(self.args, self.profile, monitor_parts)
         return server_only_monitor.run(output_base)
 
-    def _log_run_config(self, level: str, stages: List[int], total_cap: int, monitor_resources: bool) -> None:
+    def _log_run_config(self, level: str, run_inputs: Dict[str, Any]) -> None:
         """
         Log the config of the run.
 
         :param level: The test level
-        :param stages: Request count of each stage, in order
-        :param total_cap: Most requests to send in the whole test
-        :param monitor_resources: True when resource snapshots are taken around each stage
+        :param run_inputs: The run_inputs dict of StageRun
         """
+        stages: List[int] = run_inputs.get("stages")
+        total_cap: int = run_inputs.get("total_cap")
+        monitor_resources: bool = run_inputs.get("monitor_resources")
+        probe_result: Optional[Dict[str, Any]] = run_inputs.get("probe_result")
+        server_log: Optional[str] = self.server_link.get_server_log()
         prompt_mode: str = "varied"
         if self.args.same_prompt:
             prompt_mode = "same"
@@ -347,13 +349,13 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         )
         if monitor_resources:
             self.logger.info("  settle_time=%ss", self.args.settle_time)
-        if self.server_log:
-            self.logger.info("  server_log=%s", self.server_log)
+        if server_log:
+            self.logger.info("  server_log=%s", server_log)
         else:
             self.logger.info("  server_log=none")
         probe_tokens: Optional[int] = None
-        if self.probe_result:
-            probe_tokens = self.probe_result.get("total_tokens")
+        if probe_result:
+            probe_tokens = probe_result.get("total_tokens")
         estimated_tokens: Optional[int] = self.profile.get_estimated_tokens_per_request()
         if probe_tokens:
             self.logger.info("  tokens_per_request=%s (measured by probe)", f"{probe_tokens:,}")
@@ -365,32 +367,26 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         Run the stages, log the results, and save the output files, also after Ctrl-C.
 
         :param level: The test level
-        :param run_inputs: The run_inputs dict of StageExecutor.run_all_stages()
+        :param run_inputs: The run_inputs dict of StageRun
         :return: The exit code: 0 when every request passes, 1 on failures or an abort, 2 on Ctrl-C
         """
         stage_summaries: List[Dict[str, Any]] = []
         exit_code: int = 1
+        log_monitor: Optional[ServerLogMonitor] = self.server_link.get_log_monitor()
         pre_test_log_position: Optional[int] = None
-        if self.server_log:
-            pre_test_log_position = self.log_monitor.read_position()
+        if self.server_link.get_server_log():
+            pre_test_log_position = log_monitor.read_position()
         estimated_tokens_per_request: Optional[int] = self.profile.get_estimated_tokens_per_request()
-        executor_parts: Dict[str, Any] = {
-            "profile": self.profile,
-            "log_monitor": self.log_monitor,
-            "resource_reporter": self.resource_reporter,
-            "server_process": self.server_process,
-            "output_dir": self._output_writer.get_output_dir(),
-        }
-        stage_executor: StageExecutor = StageExecutor(self.args, self.runner, executor_parts)
+        stage_run: StageRun = self._new_stage_run(run_inputs)
         prev_sigint_handler: Optional[Union[Callable, int]] = self._install_interrupt_handler()
         try:
-            stages_outcome: Dict[str, Any] = stage_executor.run_all_stages(run_inputs)
+            stages_outcome: Dict[str, Any] = stage_run.run()
             stage_summaries = stages_outcome.get("stage_summaries")
-            self._aborted = stages_outcome.get("aborted")
-            if stages_outcome.get("interrupted"):
-                self._interrupted = True
+            aborted: bool = stages_outcome.get("aborted")
+            # The Ctrl-C handler sets the cancel event, so it tells whether the run was interrupted.
+            interrupted: bool = self._cancel_event.is_set()
 
-            if self._interrupted:
+            if interrupted:
                 self.logger.warning(
                     "\n  Test interrupted (Ctrl-C) — the results "
                     "below cover only the requests that completed "
@@ -400,20 +396,21 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
             self._log_results(stage_summaries)
 
             server_chat_timing: List[Dict[str, object]] = []
-            if self.server_log and pre_test_log_position is not None:
-                server_chat_timing = self.log_monitor.parse_streaming_chat_timing_since(pre_test_log_position)
+            # The log position is only read when there is a server log.
+            if pre_test_log_position is not None:
+                server_chat_timing = log_monitor.parse_streaming_chat_timing_since(pre_test_log_position)
 
             monitor_resources: bool = run_inputs.get("monitor_resources")
             self._log_server_analysis(level, stage_summaries, monitor_resources)
 
-            if self._interrupted:
+            if interrupted:
                 exit_code = 2
-            elif not self._aborted:
+            elif not aborted:
                 exit_code = self._check_results(stage_summaries)
             self._output_writer.export_raw_json(stage_summaries, exit_code=exit_code,
                                                 estimated_tokens_per_request=estimated_tokens_per_request)
             self._output_writer.maybe_write_summary(stage_summaries, server_chat_timing)
-            if self._interrupted:
+            if interrupted:
                 self._output_writer.rename_interrupted()
         except KeyboardInterrupt:
             self.logger.info("\n  Interrupted — saving partial results...")
@@ -424,11 +421,40 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         finally:
             if prev_sigint_handler is not None:
                 signal(SIGINT, prev_sigint_handler)
-            server_ns_version: Optional[str] = self.server_checker.get_server_ns_version()
-            self._history_recorder.append_client_record(stage_summaries, server_ns_version)
-            self._output_writer.finalize_test_log(stage_summaries, self._history_recorder)
+            self._record_history(stage_summaries)
 
         return exit_code
+
+    def _new_stage_run(self, run_inputs: Dict[str, Any]) -> StageRun:
+        """
+        Make the StageExecutor of this run and the StageRun that runs its stages.
+
+        :param run_inputs: The run_inputs dict of StageRun
+        :return: The StageRun, with its clock started
+        """
+        executor_parts: Dict[str, Any] = {
+            "profile": self.profile,
+            "log_monitor": self.server_link.get_log_monitor(),
+            "resource_reporter": self._output_writer.get_resource_reporter(),
+            "server_process": self.server_link.get_server_process(),
+            "output_dir": self._output_writer.get_output_dir(),
+        }
+        stage_executor: StageExecutor = StageExecutor(self.args, self.runner, executor_parts)
+        stage_run: StageRun = StageRun(self.args, stage_executor, run_inputs)
+        return stage_run
+
+    def _record_history(self, stage_summaries: List[Dict[str, Any]]) -> None:
+        """
+        Add the run to the history file and finish the test log, also after Ctrl-C.
+
+        :param stage_summaries: One summary dict per stage that ran
+        """
+        server_checker: ServerChecker = self.server_link.get_server_checker()
+        server_ns_version: Optional[str] = server_checker.get_server_ns_version()
+        output_base: str = self._output_writer.output_base()
+        history_recorder: HistoryRecorder = HistoryRecorder(self.args, output_base)
+        history_recorder.append_client_record(stage_summaries, server_ns_version)
+        self._output_writer.finalize_test_log(stage_summaries, history_recorder)
 
     def _log_results(self, stage_summaries: List[Dict[str, Any]]) -> None:
         """
@@ -436,7 +462,8 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
 
         :param stage_summaries: One summary dict per stage
         """
-        neuro_san_version: Optional[str] = self.server_checker.resolve_ns_version()
+        server_checker: ServerChecker = self.server_link.get_server_checker()
+        neuro_san_version: Optional[str] = server_checker.resolve_ns_version()
         summary_reporter: SummaryReporter = SummaryReporter(
             stage_summaries,
             neuro_san_version=neuro_san_version,
@@ -470,12 +497,14 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                 if started_count:
                     total_server_calls += started_count
 
-            self.resource_reporter.log_combined_analysis(total_client_requests, total_server_calls)
+            resource_reporter: ResourceReporter = self._output_writer.get_resource_reporter()
+            resource_reporter.log_combined_analysis(total_client_requests, total_server_calls)
             disconnection_reporter: DisconnectionReporter = DisconnectionReporter(stage_summaries)
             disconnection_reporter.log_disconnection_summary()
 
         if level == LoadTestConstants.LEVEL_ADV:
-            if self.server_log is not None:
+            server_log: Optional[str] = self.server_link.get_server_log()
+            if server_log is not None:
                 pool_analyzer: PoolAnalyzer = PoolAnalyzer(stage_summaries)
                 pool_analyzer.log_pool_reuse_analysis()
             else:
@@ -513,7 +542,6 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         """
         if not self._cancel_event.is_set():
             self._cancel_event.set()
-            self._interrupted = True
             self.logger.warning(
                 "\n  Ctrl-C received — stopping and gathering "
                 "results for completed requests (press Ctrl-C "

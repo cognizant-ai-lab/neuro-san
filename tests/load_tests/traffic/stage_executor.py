@@ -48,12 +48,9 @@ from tests.load_tests.validation.output_validator import OutputValidator
 
 class StageExecutor:
     """
-    Runs the stages of one load test, round by round, and builds the summary dict of each stage.
-    Stops early at the --max-requests cap, at --total-timeout, or when a stage must abort the test.
+    Runs one stage of a load test and builds its summary dict, and checks --total-timeout.
+    StageRun runs the stages round by round.
     """
-
-    # 60 "#" characters: the line around the round header.
-    ROUND_HEADER_LINE: str = "############################################################"
 
     def __init__(self, args: Namespace, runner: TrafficRunner, executor_parts: Dict[str, Any]) -> None:
         """
@@ -80,130 +77,7 @@ class StageExecutor:
         }
         self._data_collector: StageDataCollector = StageDataCollector(args, collector_parts)
 
-    def run_all_stages(self, run_inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Execute all stages of the load test, collecting data per stage.
-
-        :param run_inputs: A dict with "stages" (request count of each stage, in order), "total_cap" (most requests
-            to send in the whole test), "monitor_resources" (True to take resource snapshots around each stage),
-            "has_server_log" (True when the server log can be read), "probe_result" (result of the dry-run probe
-            to count in the first stage, or None) and "primary_start_pattern" (server log pattern of a primary
-            request start)
-        :return: A dict with "stage_summaries" (one summary dict per stage that runs), "aborted" (True when a stage
-            or --total-timeout stops the test) and "interrupted" (True when Ctrl-C stops a stage)
-        """
-        stages: List[int] = run_inputs.get("stages")
-        only_stage: bool = len(stages) == 1 and self.args.num_rounds == 1
-        test_start_seconds: float = perf_counter()
-        run_state: Dict[str, Any] = {
-            "stages": stages,
-            "total_cap": run_inputs.get("total_cap"),
-            "monitor_resources": run_inputs.get("monitor_resources"),
-            "has_server_log": run_inputs.get("has_server_log"),
-            "probe_result": run_inputs.get("probe_result"),
-            "primary_start_pattern": run_inputs.get("primary_start_pattern"),
-            "only_stage": only_stage,
-            "test_start_seconds": test_start_seconds,
-            "total_sent": 0,
-            "stage_summaries": [],
-            "aborted": False,
-            "interrupted": False,
-        }
-
-        round_num: int
-        # Run every stage once per round, until the request cap, the total timeout or a stage stops the test.
-        for round_num in range(1, self.args.num_rounds + 1):
-            if self.args.num_rounds > 1:
-                self.logger.info("\n%s", StageExecutor.ROUND_HEADER_LINE)
-                self.logger.info("  ROUND %s of %s", round_num, self.args.num_rounds)
-                self.logger.info("%s", StageExecutor.ROUND_HEADER_LINE)
-            keep_running: bool = self._run_round(round_num, run_state)
-            if not keep_running:
-                break
-
-        stages_outcome: Dict[str, Any] = {
-            "stage_summaries": run_state.get("stage_summaries"),
-            "aborted": run_state.get("aborted"),
-            "interrupted": run_state.get("interrupted"),
-        }
-        return stages_outcome
-
-    def _run_round(self, round_num: int, run_state: Dict[str, Any]) -> bool:
-        """
-        Run the stages of one round.
-
-        :param round_num: Round number, starting at 1
-        :param run_state: The run state dict of run_all_stages(). Its "total_sent", "probe_result",
-            "stage_summaries", "aborted" and "interrupted" values are updated as the stages run.
-        :return: True when the next round can run, False when the request cap, the total timeout or a stage
-            stops the test
-        """
-        stages: List[int] = run_state.get("stages")
-        total_cap: int = run_state.get("total_cap")
-        stage_summaries: List[Dict[str, Any]] = run_state.get("stage_summaries")
-        test_start_seconds: float = run_state.get("test_start_seconds")
-        stage_index: int
-        num_concurrent: int
-        # Run each stage, stopping at the request cap or the total timeout.
-        for stage_index, num_concurrent in enumerate(stages):
-            if self._request_cap_reached(run_state):
-                return False
-            if self._total_timeout_reached(test_start_seconds):
-                run_state["aborted"] = True
-                return False
-
-            total_sent: int = run_state.get("total_sent")
-            remaining: int = total_cap - total_sent
-            actual_requests: int = min(num_concurrent, remaining)
-            # The requests sent by earlier stages come first, so total_sent is also this stage's request offset.
-            stage_inputs: Dict[str, Any] = {
-                "actual_requests": actual_requests,
-                "num_concurrent": num_concurrent,
-                "stage_num": stage_index + 1,
-                "round_num": round_num,
-                "global_offset": total_sent,
-                "monitor_resources": run_state.get("monitor_resources"),
-                "has_server_log": run_state.get("has_server_log"),
-                "probe_result": run_state.get("probe_result"),
-                "only_stage": run_state.get("only_stage"),
-                "primary_start_pattern": run_state.get("primary_start_pattern"),
-            }
-            stage_result: Dict[str, Any] = self._run_single_stage(stage_inputs)
-
-            run_state["total_sent"] = total_sent + actual_requests
-            if stage_result.get("probe_used"):
-                run_state["probe_result"] = None
-            stage_summary: Dict[str, Any] = stage_result.get("summary")
-            stage_summaries.append(stage_summary)
-            if stage_result.get("interrupted"):
-                run_state["interrupted"] = True
-            if stage_result.get("should_abort"):
-                run_state["aborted"] = True
-                return False
-        return True
-
-    def _request_cap_reached(self, run_state: Dict[str, Any]) -> bool:
-        """
-        Check the request cap before a stage, and log how to run all planned requests when it is reached.
-
-        :param run_state: The run state dict of run_all_stages()
-        :return: True when the --max-requests cap is reached
-        """
-        stages: List[int] = run_state.get("stages")
-        total_cap: int = run_state.get("total_cap")
-        total_sent: int = run_state.get("total_sent")
-        cap_reached: bool = total_sent >= total_cap
-        if cap_reached:
-            total_planned: int = sum(stages) * self.args.num_rounds
-            self.logger.warning(
-                """
-WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests completed.
-         Use --max-requests %s to run all planned requests.""",
-                total_cap, total_sent, total_planned, total_planned,
-            )
-        return cap_reached
-
-    def _total_timeout_reached(self, test_start_seconds: float) -> bool:
+    def total_timeout_reached(self, test_start_seconds: float) -> bool:
         """
         Check if total-timeout has been exceeded.
 
@@ -228,7 +102,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         )
         return True
 
-    def _run_single_stage(self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def run_single_stage(self, stage_inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute one stage of the load test.
 
@@ -292,7 +166,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Return the most worker threads a stage uses: its request count with --ramp, else --max-workers.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :return: Most worker threads the stage uses
         """
         stage_workers: int = self.args.max_workers
@@ -304,7 +178,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Log the header of a stage: its request count, worker count and round.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_workers: Most worker threads the stage uses
         """
         actual_requests: int = stage_inputs.get("actual_requests")
@@ -327,7 +201,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Log the stage header and take the server log position and the resource snapshots before the stage.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :return: Dict with "stage_workers" (most worker threads), "log_position" (server log offset, or None),
             "client_process" (the client process, or None without resource monitoring), "before_server" and
             "before_client" (snapshots, or None), "stage_requests" (number of requests to fire, without the probe)
@@ -374,7 +248,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Fire the requests of a stage while the server log monitor runs, then take the client snapshots.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
         :return: The stage run dict of TrafficRunner.run_stage(), with the probe counted in "results" and
             "total_time_seconds", plus "system_before" (system snapshot before the requests), "peak_client" (peak
@@ -436,7 +310,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Start the server log monitor thread of a stage.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
         :param stop_event: Event that stops the monitor when the stage ends
         :return: The monitor thread, or None when the server log can't be read
@@ -463,7 +337,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Count the results and the server retries of a stage, log them, and decide if the test must stop.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
         :param stage_run: The dict from _fire_stage()
         :return: Dict with "counts" (result counts), "retries" (retry count per error type), "total_retries",
@@ -499,7 +373,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Count the server retries of a stage from the server log.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
         :return: Dict with "retries" (retry count per error type, empty without a server log), "total_retries" and
             "amplification" (server calls per request, 1.0 without a server log)
@@ -528,7 +402,7 @@ WARNING: Reached --max-requests cap (%s). Only %s of %s total planned requests c
         """
         Log the retry activity of a stage, then settle, snapshot and analyze the server log.
 
-        :param stage_inputs: The stage_inputs dict of _run_single_stage()
+        :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
         :param stage_run: The dict from _fire_stage()
         :param stage_check: The dict from _check_stage()
