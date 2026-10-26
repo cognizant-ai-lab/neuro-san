@@ -169,11 +169,13 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         epilog: str = cleandoc(LoadTestCli.__doc__)
         args: Namespace = LoadTestArguments.parse_args(epilog)
         if args.rebuild:
-            ResultsRebuilder(args.rebuild, force=args.rebuild_all).run()
+            rebuilder: ResultsRebuilder = ResultsRebuilder(args.rebuild, force=args.rebuild_all)
+            rebuilder.run()
             return
         if args.trend:
             trend_agent_filter: Optional[List[str]] = LoadTestCli._agent_filter(args)
-            TrendHistory(args.trend, agent_filter=trend_agent_filter).run()
+            trend_history: TrendHistory = TrendHistory(args.trend, agent_filter=trend_agent_filter)
+            trend_history.run()
             return
         if args.compare:
             agent_filter: Optional[List[str]] = LoadTestCli._agent_filter(args)
@@ -183,13 +185,15 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
                 run_name: str
                 # Keep each comma-separated run name, without its spaces.
                 for run_name in args.compare_runs.split(","):
-                    run_filter.append(run_name.strip())
-            CrossRunComparison(
+                    trimmed_name: str = run_name.strip()
+                    run_filter.append(trimmed_name)
+            comparison: CrossRunComparison = CrossRunComparison(
                 args.compare,
                 agent_filter=agent_filter,
                 baseline_requests=args.compare_baseline,
                 run_filter=run_filter,
-            ).run()
+            )
+            comparison.run()
             return
         load_test_cli: Optional[LoadTestCli] = None
         exit_code: int = 0
@@ -556,7 +560,8 @@ class LoadTestCli:  # pylint: disable=too-many-instance-attributes
         name: str
         # Keep each comma-separated agent name, without its spaces.
         for name in args.compare_agent.split(","):
-            agent_names.append(name.strip())
+            agent_name: str = name.strip()
+            agent_names.append(agent_name)
         return agent_names
 
 

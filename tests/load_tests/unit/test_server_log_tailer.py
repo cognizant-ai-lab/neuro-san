@@ -121,7 +121,8 @@ class TestServerLogTailer(TestCase):
         """
         self._write_log([])
         # The fake clock starts the round at 0 and reads 105 seconds on every later call.
-        clock_readings: chain = chain([0.0], repeat(105.0))
+        later_readings: repeat = repeat(105.0)
+        clock_readings: chain = chain([0.0], later_readings)
         with patch("tests.load_tests.monitoring.server_log_tailer.perf_counter", side_effect=clock_readings):
             with self.assertLogs(level="INFO") as captured:
                 self._tail(expected_count=1, stage_timeout_seconds=30)

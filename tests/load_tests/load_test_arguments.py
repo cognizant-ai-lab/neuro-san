@@ -20,6 +20,7 @@ from argparse import RawDescriptionHelpFormatter
 from os import environ
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Set
 
 from tests.load_tests.load_test_constants import LoadTestConstants
@@ -110,12 +111,7 @@ class LoadTestArguments:
         :param epilog: Text shown at the end of --help
         :return: The parser, ready to read the command line
         """
-        stage_texts: List[str] = []
-        stage: int
-        # Turn each default stage into text for the --stages help, e.g. "10,30,50,100".
-        for stage in LoadTestConstants.DEFAULT_STAGES:
-            stage_texts.append(str(stage))
-        default_stages_text: str = ",".join(stage_texts)
+        default_stages_text: str = LoadTestArguments._default_stages_text()
         # Durations shown after %(default)s in the timeout help texts, e.g. "20m" for 1200 seconds.
         request_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_TIMEOUT_SECONDS)
         idle_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS)
@@ -136,10 +132,11 @@ class LoadTestArguments:
             Must be registered in the server's AGENT_REGISTRY_PATH.
             """,
         )
+        profile_path_default: Optional[str] = environ.get("LOAD_TEST_PROFILE_PATH")
         parser.add_argument(
             "--profile-path",
             type=str,
-            default=environ.get("LOAD_TEST_PROFILE_PATH"),
+            default=profile_path_default,
             help="""
             Directory containing agent profile JSON files.
             The filename is derived from --agent (e.g. basic/smart_home → smart_home.json).
@@ -518,6 +515,22 @@ class LoadTestArguments:
         return parser
 
     @staticmethod
+    def _default_stages_text() -> str:
+        """
+        Return the default stages as text for the --stages help.
+
+        :return: The stages joined by commas, e.g. "10,30,50,100"
+        """
+        stage_texts: List[str] = []
+        stage: int
+        # Turn each default stage into text.
+        for stage in LoadTestConstants.DEFAULT_STAGES:
+            stage_text: str = str(stage)
+            stage_texts.append(stage_text)
+        default_stages_text: str = ",".join(stage_texts)
+        return default_stages_text
+
+    @staticmethod
     def _explicit_args(parser: ArgumentParser, args: Namespace) -> Set[str]:
         """
         Return the dest names the user actually passed.
@@ -541,8 +554,10 @@ class LoadTestArguments:
         parser.set_defaults(**sentinel_defaults)
         explicit: Set[str] = set()
         value: object
+        parsed_args: Namespace = parser.parse_args()
+        parsed_values: Dict[str, object] = vars(parsed_args)
         # Keep each dest whose value is not the sentinel.
-        for name, value in vars(parser.parse_args()).items():
+        for name, value in parsed_values.items():
             if value is not sentinel:
                 explicit.add(name)
         return explicit

@@ -129,7 +129,8 @@ class TestRunOutputWriter(TestCase):
         writer: RunOutputWriter = self._export_writer()
         writer.export_raw_json(stage_summaries, exit_code=0, estimated_tokens_per_request=1000)
 
-        path: str = join(writer.get_output_dir(), LoadTestConstants.RAW_RESULTS_FILE_NAME)
+        output_dir: Optional[str] = writer.get_output_dir()
+        path: str = join(output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(path, "r", encoding="utf-8") as handle:
             raw_data: Dict[str, Any] = load(handle)
         aggregates: Dict[str, Any] = raw_data.get("aggregates", {})
@@ -147,7 +148,9 @@ class TestRunOutputWriter(TestCase):
         get_user.return_value = "alice"
         get_temp_dir.return_value = "/tmp"
 
-        self.assertEqual(TestRunOutputWriter._output_base_writer().output_base(), "/tmp/load_test_alice")
+        writer: RunOutputWriter = TestRunOutputWriter._output_base_writer()
+        output_base: str = writer.output_base()
+        self.assertEqual(output_base, "/tmp/load_test_alice")
 
     @patch("tests.load_tests.reporting.run_output_writer.getuser")
     def test_output_dir_argument_wins(self, get_user: MagicMock) -> None:
@@ -158,7 +161,9 @@ class TestRunOutputWriter(TestCase):
         """
         get_user.side_effect = AssertionError("user name not needed")
 
-        self.assertEqual(TestRunOutputWriter._output_base_writer(output_dir="/data/runs").output_base(), "/data/runs")
+        writer: RunOutputWriter = TestRunOutputWriter._output_base_writer(output_dir="/data/runs")
+        output_base: str = writer.output_base()
+        self.assertEqual(output_base, "/data/runs")
 
     @patch("tests.load_tests.reporting.run_output_writer.getuid")
     @patch("tests.load_tests.reporting.run_output_writer.gettempdir")
@@ -177,7 +182,9 @@ class TestRunOutputWriter(TestCase):
         get_temp_dir.return_value = "/tmp"
         get_uid.return_value = 1000
 
-        self.assertEqual(TestRunOutputWriter._output_base_writer().output_base(), "/tmp/load_test_1000")
+        writer: RunOutputWriter = TestRunOutputWriter._output_base_writer()
+        output_base: str = writer.output_base()
+        self.assertEqual(output_base, "/tmp/load_test_1000")
 
     @patch("tests.load_tests.reporting.run_output_writer.gettempdir")
     @patch("tests.load_tests.reporting.run_output_writer.getuser")
@@ -191,7 +198,9 @@ class TestRunOutputWriter(TestCase):
         get_user.return_value = "CORP\\alice"
         get_temp_dir.return_value = "/tmp"
 
-        self.assertEqual(TestRunOutputWriter._output_base_writer().output_base(), "/tmp/load_test_CORP_alice")
+        writer: RunOutputWriter = TestRunOutputWriter._output_base_writer()
+        output_base: str = writer.output_base()
+        self.assertEqual(output_base, "/tmp/load_test_CORP_alice")
 
     def test_average_latency_is_the_mean_request_time(self) -> None:
         """
