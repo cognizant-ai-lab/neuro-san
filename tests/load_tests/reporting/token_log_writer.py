@@ -31,6 +31,9 @@ class TokenLogWriter:
     """
     Reports token usage for a load-test run: totals on the console and
     per-request, per-agent detail in server_tokens.log.
+
+    _write_token_file() opens server_tokens.log once and passes the open file to each _write_* method,
+    which adds its own lines.
     """
 
     @staticmethod

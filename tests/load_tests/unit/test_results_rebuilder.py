@@ -267,10 +267,16 @@ class TestResultsRebuilder(TestCase):
             args: Namespace = Namespace()
             with patch("sys.argv", argv):
                 args = LoadTestArguments.parse_args("")
+            # No process lookup, so a neuro-san server or mock_llm_server running on this machine
+            # does not stop the run.
             with patch("tests.load_tests.traffic.agent_request_executor.AgentRequestExecutor.execute_request",
                        side_effect=answer), \
                     patch("tests.load_tests.validation.environment_validator.EnvironmentValidator.is_port_open",
-                          return_value=True):
+                          return_value=True), \
+                    patch("tests.load_tests.monitoring.resource_monitor.ResourceMonitor.find_process",
+                          return_value=None), \
+                    patch("tests.load_tests.monitoring.resource_monitor.ResourceMonitor.find_process_by_port",
+                          return_value=None):
                 LoadTestCli(args).run()
             run_dir: str = self._run_dir(output_base)
             raw_results_path: str = join(run_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)

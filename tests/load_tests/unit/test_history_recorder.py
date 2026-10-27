@@ -112,7 +112,18 @@ class TestHistoryRecorder(TestCase):
                 {"duration_seconds": 2.0, "start_ts": 10.0, "finish_ts": 12.0},
                 {"duration_seconds": 4.0, "start_ts": 11.0, "finish_ts": 15.0},
             ]
-            recorder.append_server_record(None, 2, 2, 6.0, {"rss_megabytes": 2048.0}, None, primary_pairs, None, None)
+            round_record: Dict[str, Any] = {
+                "neuro_san_version": None,
+                "expected": 2,
+                "count": 2,
+                "elapsed_seconds": 6.0,
+                "peak_server": {"rss_megabytes": 2048.0},
+                "peak_system_cpu_percent": None,
+                "primary_pairs": primary_pairs,
+                "server_errors": None,
+                "tool_warnings": None,
+            }
+            recorder.append_server_record(round_record)
             history_path: str = join(base, LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME)
             records = TestHistoryRecorder._read_records(history_path)
         record: Dict[str, Any] = records[0]

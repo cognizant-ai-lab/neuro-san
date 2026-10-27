@@ -91,6 +91,8 @@ class LoadTestConstants:
     PROGRESS_LOG_FILE_NAME: str = "progress.log"
     SERVER_TOKENS_LOG_FILE_NAME: str = "server_tokens.log"
     STDOUT_LOG_FILE_NAME: str = "stdout.log"
+    # End of each request's stdout file name in the requests folder: request_<id>_stdout.txt.
+    REQUEST_STDOUT_FILE_SUFFIX: str = "_stdout.txt"
     LEGACY_RUN_LOG_FILE_NAME: str = "load_test.log"
     # Folder in each run directory with one stdout (and stderr) file per request.
     REQUESTS_DIR_NAME: str = "requests"

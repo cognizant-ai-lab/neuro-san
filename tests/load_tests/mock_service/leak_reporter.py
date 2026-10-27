@@ -22,7 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 

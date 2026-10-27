@@ -55,7 +55,10 @@ class TableFormatter:
             column_patterns.append(f"{{:>{column_width}}}")
         format_pattern: str = "  ".join(column_patterns)
         logger.info("%s", format_pattern.format(*header))
-        logger.info("%s", "-" * (sum(column_widths) + 2 * (len(header) - 1)))
+        # The rule is as wide as the header row: the column widths plus 2 spaces between columns.
+        rule_width: int = sum(column_widths) + 2 * (len(header) - 1)
+        rule_line: str = "".ljust(rule_width, "-")
+        logger.info("%s", rule_line)
         # One line per row.
         for row in rows:
             logger.info("%s", format_pattern.format(*row))

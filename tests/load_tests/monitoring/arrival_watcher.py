@@ -37,8 +37,8 @@ from typing import TextIO
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class ArrivalWatcher:

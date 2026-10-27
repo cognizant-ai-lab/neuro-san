@@ -278,7 +278,7 @@ class RequestRecorder:
             return
         requests_dir: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         makedirs(requests_dir, exist_ok=True)
-        stdout_path: str = join(requests_dir, f"request_{request_id}_stdout.txt")
+        stdout_path: str = join(requests_dir, f"request_{request_id}{LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX}")
         with open(stdout_path, "w", encoding="utf-8") as stdout_file:
             stdout_file.write(stdout)
         if stderr and stderr.strip():

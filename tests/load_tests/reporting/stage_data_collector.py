@@ -29,11 +29,11 @@ from typing import Optional
 
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.stage_summary_builder import StageSummaryBuilder
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter

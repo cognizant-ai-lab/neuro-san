@@ -229,9 +229,10 @@ class ResultsRebuilder:
                 continue
             with open(path, "r", encoding="utf-8") as file_handle:
                 line: str
+                match: Optional[re.Match] = None
                 # Keep the last status line seen for each request.
                 for line in file_handle:
-                    match: Optional[re.Match] = ResultsRebuilder.TIMING_RE.search(line)
+                    match = ResultsRebuilder.TIMING_RE.search(line)
                     if match:
                         request_id: int = int(match.group(1))
                         status: str = match.group(2)
@@ -255,9 +256,10 @@ class ResultsRebuilder:
                 continue
             with open(log_path, "r", encoding="utf-8") as file_handle:
                 line: str
+                match: Optional[re.Match] = None
                 # Keep the last agent and request count lines seen.
                 for line in file_handle:
-                    match: Optional[re.Match] = ResultsRebuilder.CONFIG_AGENT_RE.search(line)
+                    match = ResultsRebuilder.CONFIG_AGENT_RE.search(line)
                     if match:
                         agent = match.group(1).strip()
                     match = ResultsRebuilder.CONFIG_NUM_REQ_RE.search(line)
@@ -275,11 +277,12 @@ class ResultsRebuilder:
         """
         results: List[Dict[str, Any]] = []
         filename: str
+        match: Optional[re.Match] = None
         # Build one result from each request stdout file.
         for filename in sorted(os.listdir(requests_dir)):
-            if not filename.endswith("_stdout.txt"):
+            if not filename.endswith(LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX):
                 continue
-            match: Optional[re.Match] = re.search(r"request_(\d+)_stdout", filename)
+            match = re.search(r"request_(\d+)_stdout", filename)
             if not match:
                 continue
             request_id: int = int(match.group(1))
@@ -363,11 +366,12 @@ class ResultsRebuilder:
         """
         cache: Dict[int, str] = {}
         filename: str
+        match: Optional[re.Match] = None
         # Cache each request stdout file by request number.
         for filename in os.listdir(requests_dir):
-            if not filename.endswith("_stdout.txt"):
+            if not filename.endswith(LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX):
                 continue
-            match: Optional[re.Match] = re.search(r"request_(\d+)_stdout", filename)
+            match = re.search(r"request_(\d+)_stdout", filename)
             if not match:
                 continue
             request_id: int = int(match.group(1))

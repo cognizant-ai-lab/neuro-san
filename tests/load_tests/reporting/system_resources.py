@@ -39,7 +39,7 @@ from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# A whole-system snapshot: mem_pct, mem_avail_gb, cpu_pct, threads (a count).
+# A whole-system snapshot: memory_percent, available_gigabytes, cpu_percent, threads (a count).
 # SummaryReporter builds snapshots from stage summaries, so a value is None when a summary lacks it.
 SystemSnapshot = Dict[str, Optional[float]]
 
@@ -106,7 +106,7 @@ class SystemResources:
         Capture a point-in-time whole-system snapshot.
 
         :param cpu_interval_seconds: Seconds to sample CPU usage over
-        :return: A dictionary with "mem_pct", "mem_avail_gb", "cpu_pct" and "threads"
+        :return: A dictionary with "memory_percent", "available_gigabytes", "cpu_percent" and "threads"
         """
         # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         memory_stats: Any = virtual_memory()
@@ -114,9 +114,9 @@ class SystemResources:
         cpu_percentage: float = cpu_percent(interval=cpu_interval_seconds)
         thread_count: int = cls.total_threads()
         system_snapshot: SystemSnapshot = {
-            "mem_pct": memory_stats.percent,
-            "mem_avail_gb": available_gigabytes,
-            "cpu_pct": cpu_percentage,
+            "memory_percent": memory_stats.percent,
+            "available_gigabytes": available_gigabytes,
+            "cpu_percent": cpu_percentage,
             "threads": thread_count,
         }
         return system_snapshot
@@ -199,12 +199,12 @@ class SystemResources:
         row_text: str = ""
         # One memory row per snapshot that has it.
         for tag, snapshot in snapshots_by_tag.items():
-            if snapshot is not None and snapshot.get("mem_pct") is not None:
+            if snapshot is not None and snapshot.get("memory_percent") is not None:
                 row_text = cls._format_memory_row(snapshot, total_gigabytes)
                 cls._log_row("System memory", tag, row_text)
         # One CPU row per snapshot that has it.
         for tag, snapshot in snapshots_by_tag.items():
-            if snapshot is not None and snapshot.get("cpu_pct") is not None:
+            if snapshot is not None and snapshot.get("cpu_percent") is not None:
                 row_text = cls._format_cpu_row(snapshot, core_count)
                 cls._log_row("System CPU", tag, row_text)
         # One threads row per snapshot that has it.
@@ -229,12 +229,12 @@ class SystemResources:
         """
         Format a memory row: used / free / percent.
 
-        :param snapshot: System snapshot; log_section passes only one whose "mem_pct" is not None
+        :param snapshot: System snapshot; log_section passes only one whose "memory_percent" is not None
         :param total_gigabytes: Total system memory in GB
-        :return: e.g. '8192 MB used / 7.5 GB free (50% used)', with 'n/a free' when "mem_avail_gb" is None
+        :return: e.g. '8192 MB used / 7.5 GB free (50% used)', with 'n/a free' when "available_gigabytes" is None
         """
-        memory_percentage: Optional[float] = snapshot.get("mem_pct", 0.0)
-        available_gigabytes: Optional[float] = snapshot.get("mem_avail_gb", 0.0)
+        memory_percentage: Optional[float] = snapshot.get("memory_percent", 0.0)
+        available_gigabytes: Optional[float] = snapshot.get("available_gigabytes", 0.0)
         used_fraction: float = memory_percentage / ResourceMonitor.ONE_HUNDRED_PERCENT
         used_gigabytes: float = used_fraction * total_gigabytes
         used_megabytes: float = used_gigabytes * ResourceMonitor.MEGABYTES_PER_GIGABYTE
@@ -249,11 +249,11 @@ class SystemResources:
         """
         Format a CPU row: percent and core-equivalents.
 
-        :param snapshot: System snapshot; log_section passes only one whose "cpu_pct" is not None
+        :param snapshot: System snapshot; log_section passes only one whose "cpu_percent" is not None
         :param core_count: Number of CPU cores
         :return: e.g. '50% (2.00 of 4 cores)'
         """
-        cpu_percentage: Optional[float] = snapshot.get("cpu_pct", 0.0)
+        cpu_percentage: Optional[float] = snapshot.get("cpu_percent", 0.0)
         cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percentage, core_count)
         return f"{cpu_percentage:.0f}% ({cores_in_use:.2f} of {core_count} cores)"
 

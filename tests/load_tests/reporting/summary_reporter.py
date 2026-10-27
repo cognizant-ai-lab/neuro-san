@@ -43,7 +43,7 @@ class SummaryReporter:
     """
 
     def __init__(self, stage_summaries: List[Dict[str, Any]], neuro_san_version: Optional[str] = None,
-                 client_token_source: str = "HTTP token_accounting") -> None:
+                 client_token_source: str = LoadTestConstants.CLIENT_TOKEN_SOURCE) -> None:
         """
         Constructor.
 
@@ -323,7 +323,7 @@ class SummaryReporter:
             result: Dict[str, Any]
             # Stop at the first result with client tokens.
             for result in summary.get("results", []):
-                if "client_total_tokens" in result:
+                if "client_total_tokens" in result.keys():
                     return True
         return False
 
@@ -387,9 +387,9 @@ class SummaryReporter:
             if memory_percentage is None:
                 continue
             snapshot: SystemSnapshot = {
-                "mem_pct": memory_percentage,
-                "mem_avail_gb": summary.get(prefix + "mem_avail_gb"),
-                "cpu_pct": summary.get(prefix + "cpu"),
+                "memory_percent": memory_percentage,
+                "available_gigabytes": summary.get(prefix + "mem_avail_gb"),
+                "cpu_percent": summary.get(prefix + "cpu"),
                 "threads": summary.get(prefix + "threads"),
             }
             if edge == "before":
@@ -431,9 +431,9 @@ class SummaryReporter:
                 and peak_threads is None):
             return None
         return {
-            "mem_pct": peak_memory_percentage,
-            "mem_avail_gb": peak_available_gigabytes,
-            "cpu_pct": peak_cpu_percentage,
+            "memory_percent": peak_memory_percentage,
+            "available_gigabytes": peak_available_gigabytes,
+            "cpu_percent": peak_cpu_percentage,
             "threads": peak_threads,
         }
 

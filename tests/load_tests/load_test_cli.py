@@ -53,7 +53,7 @@ from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.run_output_writer import RunOutputWriter
-from tests.load_tests.reporting.summary import SummaryReporter
+from tests.load_tests.reporting.summary_reporter import SummaryReporter
 from tests.load_tests.reporting.trend_history import TrendHistory
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.traffic.stage_executor import StageExecutor

@@ -134,14 +134,7 @@ class HistoryRecorder:
         successful: bool = completed > 0 and record.get("neuro_san_version") != "unknown"
         self._write_record(record, successful)
 
-    # Each record field comes from one argument, so the server-only round passes them all.
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-    def append_server_record(self, neuro_san_version: Optional[str], expected: int, received: int,
-                             elapsed_seconds: float, peak_server: Optional[Dict[str, Any]],
-                             peak_system_cpu_percent: Optional[float],
-                             primary_pairs: Optional[List[Dict[str, Any]]],
-                             server_errors: Optional[List[Dict[str, str]]],
-                             tool_warnings: Optional[List[Dict[str, str]]]) -> None:
+    def append_server_record(self, round_record: Dict[str, Any]) -> None:
         """
         Append one trend record for a server-only round.
 
@@ -149,64 +142,99 @@ class HistoryRecorder:
         server-side processing durations from the primary agent's Start/Finish log pairs. Keyed with
         mode="server-only" so it is distinguishable from client records in the same file.
 
-        :param neuro_san_version: Server neuro-san version, or None when unknown
-        :param expected: Number of requests the round expects
-        :param received: Number of requests the server received
-        :param elapsed_seconds: Round wall time in seconds
-        :param peak_server: Peak server snapshot with "rss_megabytes", or None
-        :param peak_system_cpu_percent: Peak system CPU percent over all cores, or None
-        :param primary_pairs: Primary agent Start/Finish pairs with "duration_seconds", "start_ts" and
-            "finish_ts", or None
-        :param server_errors: Server errors found in the server log, or None
-        :param tool_warnings: Tool warnings found in the server log, or None
+        :param round_record: The server-only round, as ServerOnlyMonitor builds it. Keys read here:
+            "neuro_san_version": server neuro-san version, or None when unknown
+            "expected": number of requests the round expects
+            "count": number of requests the server received
+            "elapsed_seconds": round wall time in seconds
+            "peak_server": peak server snapshot with "rss_megabytes", or None
+            "peak_system_cpu_percent": peak system CPU percent over all cores, or None
+            "primary_pairs": primary agent Start/Finish pairs with "duration_seconds", "start_ts" and
+                "finish_ts", or None
+            "server_errors": server errors found in the server log, or None
+            "tool_warnings": tool warnings found in the server log, or None
         """
-        pairs: List[Dict[str, Any]] = primary_pairs or []
-        durations_seconds: List[float] = []
-        pair: Dict[str, Any]
-        # Collect the positive server-side duration of each primary request.
-        for pair in pairs:
-            pair_duration: Any = pair.get("duration_seconds")
-            if not isinstance(pair_duration, (int, float)):
-                continue
-            pair_duration_seconds: float = pair_duration
-            if pair_duration_seconds > 0:
-                durations_seconds.append(float(pair_duration_seconds))
+        pairs: List[Dict[str, Any]] = round_record.get("primary_pairs") or []
+        durations_seconds: List[float] = HistoryRecorder._positive_durations(pairs)
         avg_duration_seconds: float = HistoryRecorder._average(durations_seconds)
-        cpu_percent: float = peak_system_cpu_percent or 0.0
-        core_count: int = cpu_count() or 1
-        cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percent, core_count)
-        peak_cpu_cores: float = round(cores_in_use, 2)
-        peak_memory_gigabytes: Optional[float] = None
-        if peak_server:
-            peak_rss_megabytes: float = peak_server.get("rss_megabytes", 0.0)
-            peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
-            peak_memory_gigabytes = round(peak_gigabytes, 2)
+        peak_cpu_cores: float = HistoryRecorder._peak_cpu_cores(round_record)
+        peak_memory_gigabytes: Optional[float] = HistoryRecorder._peak_memory_gigabytes(round_record)
         first_completed_seconds: float = HistoryRecorder._time_to_first_completed(pairs)
-        errors: List[Dict[str, str]] = server_errors or []
-        warnings: List[Dict[str, str]] = tool_warnings or []
-        error_count: int = len(errors)
-        warning_count: int = len(warnings)
+        errors: List[Dict[str, str]] = round_record.get("server_errors") or []
+        warnings: List[Dict[str, str]] = round_record.get("tool_warnings") or []
+        received: int = round_record.get("count")
+        elapsed_seconds: float = round_record.get("elapsed_seconds")
         record: Dict[str, Any] = {
             "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "neuro_san_version": neuro_san_version or "unknown",
+            "neuro_san_version": round_record.get("neuro_san_version") or "unknown",
             "host": self._args.host,
             "agent": self._args.agent,
             "mode": "server-only",
-            "expected_requests": expected,
+            "expected_requests": round_record.get("expected"),
             "received_requests": received,
             "peak_cpu_cores": peak_cpu_cores,
             "peak_memory_gb": peak_memory_gigabytes,
             "time_to_first_completed_s": first_completed_seconds,
             "avg_duration_s": avg_duration_seconds,
             "wall_time_s": round(elapsed_seconds, 2),
-            "server_error_count": error_count,
-            "tool_warning_count": warning_count,
+            "server_error_count": len(errors),
+            "tool_warning_count": len(warnings),
             "server_errors": errors,
             "tool_warnings": warnings,
         }
         HistoryRecorder._add_completed_within_counts(record, durations_seconds)
         successful: bool = received > 0 and record.get("neuro_san_version") != "unknown"
         self._write_record(record, successful)
+
+    @staticmethod
+    def _positive_durations(pairs: List[Dict[str, Any]]) -> List[float]:
+        """
+        Collect the positive server-side duration of each primary request.
+
+        :param pairs: Primary agent Start/Finish pairs with "duration_seconds"
+        :return: The durations in seconds that are numbers above 0, in pair order
+        """
+        durations_seconds: List[float] = []
+        pair: Dict[str, Any]
+        # Keep each numeric duration above 0.
+        for pair in pairs:
+            pair_duration: Any = pair.get("duration_seconds")
+            if not isinstance(pair_duration, (int, float)):
+                continue
+            pair_duration_seconds: float = float(pair_duration)
+            if pair_duration_seconds > 0:
+                durations_seconds.append(pair_duration_seconds)
+        return durations_seconds
+
+    @staticmethod
+    def _peak_cpu_cores(round_record: Dict[str, Any]) -> float:
+        """
+        Turn the round's peak system CPU percent into CPU cores in use.
+
+        :param round_record: The server-only round; its "peak_system_cpu_percent" is over all cores, or None
+            (counts as 0)
+        :return: Cores in use, rounded to 2 decimals
+        """
+        peak_system_cpu_percent: Optional[float] = round_record.get("peak_system_cpu_percent")
+        cpu_percent: float = peak_system_cpu_percent or 0.0
+        core_count: int = cpu_count() or 1
+        cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percent, core_count)
+        return round(cores_in_use, 2)
+
+    @staticmethod
+    def _peak_memory_gigabytes(round_record: Dict[str, Any]) -> Optional[float]:
+        """
+        Turn the round's peak server RSS into gigabytes.
+
+        :param round_record: The server-only round; its "peak_server" is a snapshot with "rss_megabytes", or None
+        :return: Peak RSS in GB rounded to 2 decimals, or None when there is no snapshot
+        """
+        peak_server: Optional[Dict[str, Any]] = round_record.get("peak_server")
+        if not peak_server:
+            return None
+        peak_rss_megabytes: float = peak_server.get("rss_megabytes", 0.0)
+        peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
+        return round(peak_gigabytes, 2)
 
     def _write_record(self, record: Dict[str, Any], successful: bool) -> None:
         """

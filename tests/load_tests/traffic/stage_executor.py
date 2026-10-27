@@ -33,10 +33,10 @@ from psutil import AccessDenied
 from psutil import NoSuchProcess
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.stage_data_collector import StageDataCollector
 from tests.load_tests.reporting.stage_summary_builder import StageSummaryBuilder
@@ -143,8 +143,8 @@ class StageExecutor:
             "before_client": stage_start.get("before_client"),
             "peak_client": stage_run.get("peak_client"),
             "settled_client": stage_run.get("settled_client"),
-            "before_system_memory_percent": system_before.get("mem_pct"),
-            "after_system_memory_percent": system_after.get("mem_pct"),
+            "before_system_memory_percent": system_before.get("memory_percent"),
+            "after_system_memory_percent": system_after.get("memory_percent"),
             "peak_system_memory": stage_run.get("peak_system_memory"),
             "peak_system_cpu_percent": stage_run.get("peak_system_cpu_percent"),
             "before_system": system_before,

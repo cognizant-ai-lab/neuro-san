@@ -41,6 +41,9 @@ class SummaryFileWriter:
 
     Collects data from stage summaries and optional server timing
     to produce a single text file for quick review.
+
+    write() builds one lines list, each _write_* method appends its section to it, and write() saves
+    the file once at the end, so a failed section never leaves a half-written summary.txt.
     """
 
     def __init__(self, stage_summaries: List[Dict[str, Any]], args: Namespace,

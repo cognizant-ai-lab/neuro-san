@@ -210,12 +210,12 @@ class StageSummaryBuilder:
         if peak_system_cpu_percent is not None:
             summary_entry["peak_sys_cpu"] = peak_system_cpu_percent
         if before_sys:
-            summary_entry["before_sys_mem_avail_gb"] = before_sys.get("mem_avail_gb")
-            summary_entry["before_sys_cpu"] = before_sys.get("cpu_pct")
+            summary_entry["before_sys_mem_avail_gb"] = before_sys.get("available_gigabytes")
+            summary_entry["before_sys_cpu"] = before_sys.get("cpu_percent")
             summary_entry["before_sys_threads"] = before_sys.get("threads")
         if after_sys:
-            summary_entry["after_sys_mem_avail_gb"] = after_sys.get("mem_avail_gb")
-            summary_entry["after_sys_cpu"] = after_sys.get("cpu_pct")
+            summary_entry["after_sys_mem_avail_gb"] = after_sys.get("available_gigabytes")
+            summary_entry["after_sys_cpu"] = after_sys.get("cpu_percent")
             summary_entry["after_sys_threads"] = after_sys.get("threads")
         if peak_system_threads is not None:
             summary_entry["peak_sys_threads"] = peak_system_threads

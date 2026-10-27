@@ -32,7 +32,7 @@ from typing import Optional
 
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
 from tests.load_tests.monitoring.server_duration_reader import ServerDurationReader

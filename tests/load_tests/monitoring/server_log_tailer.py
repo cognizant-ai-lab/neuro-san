@@ -34,11 +34,11 @@ from psutil import Process
 from psutil import cpu_percent
 from psutil import virtual_memory
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.system_resources import SystemResources
 
 
