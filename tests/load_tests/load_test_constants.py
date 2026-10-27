@@ -83,6 +83,9 @@ class LoadTestConstants:
     # Both thresholds, shortest first: the order of the history columns.
     HISTORY_THRESHOLDS_SECONDS: List[int] = [HISTORY_SHORT_THRESHOLD_SECONDS, HISTORY_LONG_THRESHOLD_SECONDS]
 
+    # Where the client token counts come from, as printed in the token usage lines.
+    CLIENT_TOKEN_SOURCE: str = "HTTP token_accounting"
+
     # Files in each run directory. LEGACY_RUN_LOG_FILE_NAME is the other run log name the rebuild reads.
     RAW_RESULTS_FILE_NAME: str = "raw_results.json"
     PROGRESS_LOG_FILE_NAME: str = "progress.log"

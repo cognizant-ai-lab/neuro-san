@@ -14,21 +14,22 @@
 #
 # END COPYRIGHT
 
-import threading
-import time
-from argparse import Namespace
 from functools import partial
+from time import sleep
+from time import time
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from unittest import TestCase
+from unittest.mock import MagicMock
 from unittest.mock import patch
+
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
-from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
@@ -36,116 +37,93 @@ from tests.load_tests.traffic.stage_plan import StagePlan
 from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestHelpers
 
 
-class TestRunnerResponseChecks(TestCase):
+class TestTrafficRunner(TestCase):
     """
-    TrafficRunner.check_response hands the hocon response block to
-    DataDrivenTestsDriver.test_response_keys and turns the captured
-    assertion failures into a failure reason; failure_patterns go
-    through the same path as text.not_keywords.
-
-    Also covers the failure reason run_one_http() gives each request status,
+    Unit tests for TrafficRunner: the failure reason run_one_http() gives each request status,
     and how run_stage() collects results and kills requests past --stage-timeout.
     """
-
-    def test_no_checks_passes(self) -> None:
-        """
-        An empty response block and no failure_patterns never fail.
-        """
-        reason: Optional[str] = self._runner().check_response(self._processor("hi"), {})
-        self.assertIsNone(reason)
-
-    def test_not_value_requires_present_non_empty_sly_data(self) -> None:
-        """
-        sly_data.<key>: { not_value: "" } fails on a missing or empty key.
-        """
-        checks: Dict[str, Any] = {"sly_data": {"agent_reservations": {"not_value": ""}}}
-        runner: TrafficRunner = self._runner()
-        reservations: List[Dict[str, Any]] = [{"reservation_id": "r-1"}]
-        with_reservations: BasicMessageProcessor = self._processor("ok", {"agent_reservations": reservations})
-        without_reservations: BasicMessageProcessor = self._processor("ok", {"agent_network_name": "n"})
-        empty_reservations: BasicMessageProcessor = self._processor("ok", {"agent_reservations": ""})
-        self.assertIsNone(runner.check_response(with_reservations, checks))
-        self.assertIn("agent_reservations", runner.check_response(without_reservations, checks))
-        self.assertIn("agent_reservations", runner.check_response(empty_reservations, checks))
-
-    def test_keywords_check_on_answer_text(self) -> None:
-        """
-        text: { keywords: [...] } is applied to the answer.
-        """
-        checks: Dict[str, Any] = {"text": {"keywords": ["Bonjour"]}}
-        runner: TrafficRunner = self._runner()
-        self.assertIsNone(runner.check_response(self._processor("Bonjour!"), checks))
-        self.assertIsNotNone(runner.check_response(self._processor("Hello!"), checks))
-
-    def test_failure_patterns_fail_the_request(self) -> None:
-        """
-        failure_patterns are checked as text.not_keywords.
-        """
-        runner: TrafficRunner = self._runner(["No fully-specified LLM found"])
-        self.assertIsNone(runner.check_response(self._processor("fine"), {}))
-        reason: Optional[str] = runner.check_response(self._processor("Error: No fully-specified LLM found"), {})
-        self.assertIn("No fully-specified LLM found", reason)
-
-    def test_all_failures_are_reported(self) -> None:
-        """
-        Every failed check appears in the reason, not just the first.
-        """
-        checks: Dict[str, Any] = {"sly_data": {"a": {"not_value": ""}, "b": {"not_value": ""}}}
-        reason: Optional[str] = self._runner().check_response(self._processor("ok", {}), checks)
-        self.assertIn("sly_data.a", reason)
-        self.assertIn("sly_data.b", reason)
 
     def test_created_request_keeps_timing_and_timestamps(self) -> None:
         """
         A CREATED request with passing checks has no failure, a duration and wall-clock start/end times.
         """
-        start_wall_clock_seconds: float = time.time()
-        answer_processor: BasicMessageProcessor = self._processor("hi")
-        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_CREATED, answer_processor,
-                                                                "hi", 0.1, {})
+        start_wall_clock_seconds: float = time()
+        answer_processor: BasicMessageProcessor = TestTrafficRunner._processor("hi")
+        response: Dict[str, Any] = {
+            "processor": answer_processor,
+            "response_text": "hi",
+            "time_to_first_response_seconds": 0.1,
+        }
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_CREATED, response)
         result: Dict[str, Any] = self._run_one_http(request_result)
-        self.assertEqual(LoadTestConstants.STATUS_CREATED, result.get("status"))
-        self.assertIsNone(result.get("failure_reason"))
-        self.assertIsNone(result.get("error"))
-        self.assertGreaterEqual(result.get("elapsed"), 0.0)
-        self.assertGreaterEqual(result.get("start_time"), start_wall_clock_seconds)
-        self.assertAlmostEqual(result.get("start_time") + result.get("elapsed"), result.get("end_time"))
+        status: str = result.get("status")
+        failure_reason: Optional[str] = result.get("failure_reason")
+        error: Optional[str] = result.get("error")
+        elapsed_seconds: float = result.get("elapsed")
+        start_time: float = result.get("start_time")
+        end_time: float = result.get("end_time")
+        expected_end_time: float = start_time + elapsed_seconds
+        self.assertEqual(LoadTestConstants.STATUS_CREATED, status)
+        self.assertIsNone(failure_reason)
+        self.assertIsNone(error)
+        self.assertGreaterEqual(elapsed_seconds, 0.0)
+        self.assertGreaterEqual(start_time, start_wall_clock_seconds)
+        self.assertAlmostEqual(expected_end_time, end_time)
 
     def test_failed_request_with_traceback_reports_its_last_line(self) -> None:
         """
         A FAILED request whose response text is a traceback reports the traceback's last line.
         """
         traceback: str = "Traceback (most recent call last):\n  File \"x.py\"\nValueError: boom"
-        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, None, traceback, 0.0,
-                                                                {})
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED,
+                                                                {"response_text": traceback})
         result: Dict[str, Any] = self._run_one_http(request_result)
-        self.assertEqual(LoadTestConstants.STATUS_FAILED, result.get("status"))
-        self.assertEqual("ValueError: boom", result.get("failure_reason"))
-        self.assertEqual("ValueError: boom", result.get("error"))
+        status: str = result.get("status")
+        failure_reason: Optional[str] = result.get("failure_reason")
+        error: Optional[str] = result.get("error")
+        self.assertEqual(LoadTestConstants.STATUS_FAILED, status)
+        self.assertEqual("ValueError: boom", failure_reason)
+        self.assertEqual("ValueError: boom", error)
 
     def test_failed_request_without_response_text(self) -> None:
         """
         A FAILED request with no response text reports an empty response.
         """
-        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, None, "", 0.0, {})
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, {})
         result: Dict[str, Any] = self._run_one_http(request_result)
-        self.assertEqual("empty response from agent", result.get("failure_reason"))
+        failure_reason: Optional[str] = result.get("failure_reason")
+        self.assertEqual("empty response from agent", failure_reason)
 
     def test_timed_out_request_has_no_failure_reason(self) -> None:
         """
         A TIMEOUT request keeps its status and has no failure reason.
         """
-        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_TIMEOUT, None, "", 0.0, {})
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_TIMEOUT, {})
         result: Dict[str, Any] = self._run_one_http(request_result)
-        self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, result.get("status"))
-        self.assertIsNone(result.get("failure_reason"))
+        status: str = result.get("status")
+        failure_reason: Optional[str] = result.get("failure_reason")
+        self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, status)
+        self.assertIsNone(failure_reason)
+
+    def test_timed_out_request_keeps_its_read_timeout_reason(self) -> None:
+        """
+        A TIMEOUT request that ran out of the read timeout reports the reason AgentRequestExecutor gave.
+        """
+        reason: str = "requests.exceptions.ConnectionError: HTTPConnectionPool(host='h', port=1): Read timed out."
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_TIMEOUT,
+                                                                {"failure_reason": reason})
+        result: Dict[str, Any] = self._run_one_http(request_result)
+        status: str = result.get("status")
+        failure_reason: Optional[str] = result.get("failure_reason")
+        self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, status)
+        self.assertEqual(reason, failure_reason)
 
     def test_run_stage_collects_every_request(self) -> None:
         """
         run_stage() returns one result per request, numbered from the plan's global offset.
         """
         stage: Optional[Dict[str, Any]] = None
-        fake_request: partial = partial(TestRunnerResponseChecks._fake_request, 0.0)
+        fake_request: partial = partial(TestTrafficRunner._fake_request, 0.0)
         with patch.object(TrafficRunner, "run_one_http", side_effect=fake_request):
             stage = TrafficRunnerTestHelpers.create_runner().run_stage(StagePlan(3, 2, 10, None))
         global_ids: List[int] = []
@@ -163,7 +141,7 @@ class TestRunnerResponseChecks(TestCase):
         Requests still running at --stage-timeout come back KILLED with the reason as stderr.
         """
         stage: Optional[Dict[str, Any]] = None
-        fake_request: partial = partial(TestRunnerResponseChecks._fake_request, 0.5)
+        fake_request: partial = partial(TestTrafficRunner._fake_request, 0.5)
         with patch.object(TrafficRunner, "run_one_http", side_effect=fake_request):
             runner: TrafficRunner = TrafficRunnerTestHelpers.create_runner(stage_timeout_seconds=0.1)
             stage = runner.run_stage(StagePlan(2, 2, 0, None))
@@ -181,7 +159,7 @@ class TestRunnerResponseChecks(TestCase):
         run_stage() returns the heartbeat's system peaks read after join(), and None for unmonitored processes.
         """
         stage: Optional[Dict[str, Any]] = None
-        fake_request: partial = partial(TestRunnerResponseChecks._fake_request, 0.0)
+        fake_request: partial = partial(TestTrafficRunner._fake_request, 0.0)
         with patch.object(TrafficRunner, "run_one_http", side_effect=fake_request):
             stage = TrafficRunnerTestHelpers.create_runner().run_stage(StagePlan(1, 1, 0, None))
         self.assertIsNone(stage.get("peak_server_threads"))
@@ -207,6 +185,25 @@ class TestRunnerResponseChecks(TestCase):
             TrafficRunnerTestHelpers.create_runner().run_stage(StagePlan(3, 1, 0, None))
         self.assertEqual(2, count_failed_request.call_count)
 
+    def test_minimal_sends_the_minimal_chat_filter(self) -> None:
+        """
+        With --minimal, the state the request starts from asks the server for the MINIMAL chat filter.
+        """
+        answer_processor: BasicMessageProcessor = TestTrafficRunner._processor("hi")
+        input_processor: MagicMock = MagicMock()
+        input_processor.process_once.return_value = {"last_chat_response": "hi"}
+        input_processor.get_message_processor.return_value = answer_processor
+        runner: TrafficRunner = TrafficRunnerTestHelpers.create_runner(chat_filter="minimal")
+        with patch("tests.load_tests.traffic.agent_request_executor.HttpServiceAgentSession"), \
+                patch("tests.load_tests.traffic.agent_request_executor.StreamingInputProcessor",
+                      return_value=input_processor):
+            runner.run_one_http(1, 0)
+        # call_args.args holds the positional arguments of the one process_once() call: the state.
+        state: Dict[str, Any] = input_processor.process_once.call_args.args[0]
+        state_extractor: DictionaryExtractor = DictionaryExtractor(state)
+        chat_filter_type: str = state_extractor.get("chat_filter.chat_filter_type")
+        self.assertEqual("MINIMAL", chat_filter_type)
+
     @staticmethod
     def _processor(answer: str, sly_data: Optional[Dict[str, Any]] = None) -> BasicMessageProcessor:
         """
@@ -219,21 +216,17 @@ class TestRunnerResponseChecks(TestCase):
         :return: The processor
         """
         processor: BasicMessageProcessor = BasicMessageProcessor()
-        processor.process_message({"type": "AI", "text": answer})
+        processor.process_message({
+            "type": "AI",
+            "text": answer,
+        })
         if sly_data is not None:
-            processor.process_message({"type": "AGENT_FRAMEWORK", "chat_context": {}, "sly_data": sly_data})
+            processor.process_message({
+                "type": "AGENT_FRAMEWORK",
+                "chat_context": {},
+                "sly_data": sly_data,
+            })
         return processor
-
-    @staticmethod
-    def _runner(failure_patterns: Optional[List[str]] = None) -> TrafficRunner:
-        """
-        Return a runner over a one-prompt profile.
-
-        :param failure_patterns: failure_patterns of the profile, or None for none
-        :return: The runner
-        """
-        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
-        return TrafficRunner(Namespace(same_prompt=False), profile, threading.Event())
 
     def _run_one_http(self, request_result: AgentRequestResult) -> Dict[str, Any]:
         """
@@ -257,7 +250,7 @@ class TestRunnerResponseChecks(TestCase):
         :param output_dir: Directory for per-request output files, or None
         :return: A CREATED request result
         """
-        time.sleep(delay_seconds)
+        sleep(delay_seconds)
         fake_result: Dict[str, Any] = {
             "request_id": f"request-{request_id}",
             "status": LoadTestConstants.STATUS_CREATED,

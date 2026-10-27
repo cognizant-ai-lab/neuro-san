@@ -640,8 +640,8 @@ The `gemini` class accepts a few parameters that only matter for Gemini thinking
   a value the model does not support:
     - Gemini 3 Pro: `"low"` or `"high"` (default `"high"`).
     - Gemini 3 Flash: `"minimal"`, `"low"`, `"medium"` or `"high"` (default `"high"`).
-    - Gemini 3.7 Flash and Gemini 3.8 Flash: `"low"`, `"medium"` or `"high"` (default `"medium"`). `"minimal"`
-      is not supported and returns an error.
+    - Gemini 3.8 Flash: `"low"`, `"medium"` or `"high"` (default `"medium"`). `"minimal"` is not supported and
+      returns an error.
 - `thinking_budget`: an integer number of thinking tokens for Gemini 2.5 models. `0` disables thinking where the
   model allows it, `-1` lets the model decide, and a positive integer caps the budget. Gemini 3 and later use
   `thinking_level` instead; when both are set, langchain keeps `thinking_level` and drops `thinking_budget`.

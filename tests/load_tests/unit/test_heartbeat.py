@@ -14,10 +14,12 @@
 #
 # END COPYRIGHT
 
-import os
-import threading
-import time
+from os.path import join
 from tempfile import TemporaryDirectory
+from threading import Event
+from time import perf_counter
+from typing import Any
+from typing import Dict
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -31,7 +33,7 @@ from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestH
 
 class TestHeartbeat(TestCase):
     """
-    Unit tests for Heartbeat: its progress.log lines, its failed-request count and its peak readings.
+    Unit tests for Heartbeat: its progress.log lines and its failed-request count.
 
     Heartbeat writes its progress lines to progress.log without removing the request lines TrafficRunner writes there.
     """
@@ -42,24 +44,28 @@ class TestHeartbeat(TestCase):
         """
         runner: TrafficRunner = TrafficRunnerTestHelpers.create_runner()
         processor: BasicMessageProcessor = BasicMessageProcessor()
-        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_CREATED, processor, "hi", 0.1,
-                                                                {})
+        response: Dict[str, Any] = {
+            "processor": processor,
+            "response_text": "hi",
+            "time_to_first_response_seconds": 0.1,
+        }
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_CREATED, response)
+        progress_text: str = ""
         with TemporaryDirectory() as output_dir:
             with patch("tests.load_tests.traffic.agent_request_executor.AgentRequestExecutor.execute_request",
                        return_value=request_result):
                 runner.run_one_http(1, 0, output_dir)
             heartbeat: Heartbeat = Heartbeat(None, output_dir=output_dir)
-            start_seconds: float = time.perf_counter()
+            start_seconds: float = perf_counter()
+            heartbeat_events: Dict[str, Event] = {}
+            event_name: str
             # With every event already set, progress_heartbeat() writes one tick and returns.
-            stop_event: threading.Event = TestHeartbeat._set_event()
-            ready_event: threading.Event = TestHeartbeat._set_event()
-            fires_done_event: threading.Event = TestHeartbeat._set_event()
-            server_dead_event: threading.Event = TestHeartbeat._set_event()
-            heartbeat.progress_heartbeat([], 1, start_seconds, stop_event, ready_event, fires_done_event,
-                                         server_dead_event)
-            progress_log_path: str = os.path.join(output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
+            for event_name in ["stop_event", "ready_event", "fires_done_event", "server_dead_event"]:
+                heartbeat_events[event_name] = TestHeartbeat._set_event()
+            heartbeat.progress_heartbeat([], 1, start_seconds, heartbeat_events)
+            progress_log_path: str = join(output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
             with open(progress_log_path, encoding="utf-8") as progress_log:
-                progress_text: str = progress_log.read()
+                progress_text = progress_log.read()
         self.assertIn("Request 1: CREATED", progress_text)
         self.assertIn("[progress] 0 of 1 completed", progress_text)
 
@@ -73,22 +79,22 @@ class TestHeartbeat(TestCase):
         heartbeat.count_failed_request()
         self.assertEqual(2, heartbeat.get_failed_request_count())
 
-    def test_peaks_ignore_zero_and_lower_readings(self) -> None:
+    def test_duration_stats_print_minutes_and_seconds(self) -> None:
         """
-        A peak is only kept for a reading above zero and above the peak so far.
+        Request durations of a minute or more print as minutes and seconds, shorter ones as seconds.
         """
-        self.assertFalse(Heartbeat.is_new_peak(0, None))
-        self.assertTrue(Heartbeat.is_new_peak(5, None))
-        self.assertFalse(Heartbeat.is_new_peak(5, 5))
-        self.assertTrue(Heartbeat.is_new_peak(6.5, 5))
+        stats_text: str = Heartbeat.format_duration_stats([45.7, 90.2, 125.9])
+        no_stats_text: str = Heartbeat.format_duration_stats([])
+        self.assertEqual("45s min / 1m 27s avg / 2m 5s max", stats_text)
+        self.assertEqual("n/a", no_stats_text)
 
     @staticmethod
-    def _set_event() -> threading.Event:
+    def _set_event() -> Event:
         """
         Make an event that is already set.
 
         :return: The set event
         """
-        event: threading.Event = threading.Event()
+        event: Event = Event()
         event.set()
         return event
