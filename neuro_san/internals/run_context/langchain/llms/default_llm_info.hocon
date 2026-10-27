@@ -42,48 +42,6 @@
         "use_model_name": "gpt-6-astra"
     },
 
-    "o3-mini": {
-        "use_model_name": "o3-mini-2025-01-31",
-    },
-    "o3-mini-2025-01-31": {
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/o3-mini",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 100000,
-        "knowledge_cutoff": "09/30/2023",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.0011,
-        "price_per_1k_output_tokens": 0.0044,
-        "model_launch_date": "2025-01-31",
-        "model_retirement_date": "2026-10-23",
-    },
-
-    "o1": {
-        "use_model_name": "o1-2024-12-17",
-    },
-    "o1-2024-12-17": {
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/o1",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 100000,
-        "knowledge_cutoff": "09/30/2023",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.015,
-        "price_per_1k_output_tokens": 0.060,
-        "model_launch_date": "2024-12-17",
-        "model_retirement_date": "2026-10-23",
-    },
-
     "gpt-6.1-sol": {
         "class": "openai",
         "model_info_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
@@ -343,7 +301,6 @@
         "price_per_1k_input_tokens": 0.0002,
         "price_per_1k_output_tokens": 0.00125,
         "model_launch_date": "2026-03-17",
-        # The deprecations page lists this model by its bare name, "gpt-5.4-nano".
         "model_retirement_date": "2027-04-01",
     },
     "gpt-5.2": {
@@ -384,7 +341,6 @@
         "price_per_1k_input_tokens": 0.0015,
         "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2025-11-13",
-        # The deprecations page lists this model by its bare name, "gpt-5.1".
         "model_retirement_date": "2027-04-01",
     },
     "gpt-5": {
@@ -450,23 +406,6 @@
     "gpt-4o": {
         "use_model_name": "gpt-4o-2024-08-06",
     },
-    "gpt-4o-2024-05-13": {
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-4o",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 128000,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "09/30/2023",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.005,
-        "price_per_1k_output_tokens": 0.015,
-        "model_launch_date": "2024-05-13",
-        "model_retirement_date": "2026-10-23",
-    },
     "gpt-4o-2024-08-06": {
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-4o",
@@ -523,91 +462,12 @@
         "model_retirement_date": "2027-01-14",
     },
 
-    "gpt-4-turbo": {
-        "use_model_name": "gpt-4-turbo-2024-04-09",
-    },
-    "gpt-4-turbo-2024-04-09": {
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-4-turbo",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 128000,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "11/30/2023",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.010,
-        "price_per_1k_output_tokens": 0.030,
-        "model_launch_date": "2024-04-09",
-        "model_retirement_date": "2026-10-23",
-    },
-
-    "gpt-4": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "use_model_name": "gpt-4-0613",
-    },
-    "gpt-4-0613": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-4",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ ],
-        "context_window_size": 8192,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "11/30/2023",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.030,
-        "price_per_1k_output_tokens": 0.060,
-        "model_launch_date": "2023-06-13",
-        "model_retirement_date": "2026-10-23",
-    },
-
-    "gpt-3.5-turbo": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "use_model_name": "gpt-3.5-turbo-0125",
-    },
-    "gpt-3.5-turbo-16k": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "use_model_name": "gpt-3.5-turbo-0125",
-    },
-    "gpt-3.5-turbo-0125": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [],
-        "context_window_size": 16384,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "08/31/2021",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.0005,
-        "price_per_1k_output_tokens": 0.0015,
-        "model_launch_date": "2024-01-25",
-        "model_retirement_date": "2026-10-23",
-    },
-
     # Azure models
     #
     # Shorthand entries for Azure deployments of the OpenAI models above. An llm_config can instead say
     # "class": "azure-openai" with any OpenAI model_name from this file and its own deployment_name, which
     # works for every model, not only the ones listed here. See neuro_san/registries/music_nerd_pro_llm_azure.hocon.
 
-    # Shorthand for the "gpt-3.5-turbo" entry above; drop it when that entry goes. Azure does not list
-    # gpt-35-turbo on its model retirement schedule or among the models its Responses API serves, so expect
-    # this entry to fail on Azure.
-    "azure-gpt-3.5-turbo": {
-        "class": "azure-openai",
-        "use_model_name": "gpt-3.5-turbo-0125",
-        "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-35"
-    },
     "azure-gpt-5.4": {
         "class": "azure-openai",
         "use_model_name": "gpt-5.4-2026-03-05",
@@ -628,14 +488,6 @@
         "use_model_name": "gpt-5.4-pro-2026-03-05",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2C-global-standard&pivots=azure-openai#gpt-54"
     },
-    # Shorthand for the "gpt-4" entry above; drop it when that entry goes. Azure does not list the original
-    # gpt-4 on its model retirement schedule or among the models its Responses API serves, so expect this
-    # entry to fail on Azure.
-    "azure-gpt-4": {
-        "class": "azure-openai",
-        "use_model_name": "gpt-4-0613",
-        "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-4-and-gpt-4-turbo-models"
-    },
     "azure-gpt-4o-mini": {
         "class": "azure-openai",
         "use_model_name": "gpt-4o-mini-2024-07-18",
@@ -651,17 +503,6 @@
         "use_model_name": "gpt-4.1-2025-04-14",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-4-and-gpt-4-turbo-models"
     },
-    "azure-o1": {
-        "class": "azure-openai",
-        "use_model_name": "o1-2024-12-17",
-        "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#o-series-models"
-    },
-    "azure-o3-mini": {
-        "class": "azure-openai",
-        "use_model_name": "o3-mini-2025-01-31",
-        "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#o-series-models"
-    },
-
 
     # Anthropic models
 
@@ -1377,25 +1218,6 @@
         "model_launch_date": "2026-09-02",
         "model_retirement_date": null,
     },
-    "gemini-3.7-flash": {
-        "class": "gemini",
-        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio", "pdf"],
-            "output": [ "text"],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 65536,
-        # https://deepmind.google/models/model-cards/gemini-3-7-flash/
-        "knowledge_cutoff": "03/2026",
-        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
-        # This price is effective until Dec 31, 2026 after that it will be doubled.
-        "price_per_1k_input_tokens": 0.00075,
-        "price_per_1k_output_tokens": 0.00375,
-        "model_launch_date": "2026-08-13",
-        "model_retirement_date": null,
-    },
     "gemini-3.6-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash",
@@ -1413,23 +1235,6 @@
         "price_per_1k_input_tokens": 0.00075,
         "price_per_1k_output_tokens": 0.00375,
         "model_launch_date": "2026-07-21",
-        "model_retirement_date": null,
-    },
-    "gemini-3.5-flash": {
-        "class": "gemini",
-        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio", "pdf"],
-            "output": [ "text"],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 65536,
-        "knowledge_cutoff": "01/2025",
-        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
-        "price_per_1k_input_tokens": 0.0015,
-        "price_per_1k_output_tokens": 0.009,
-        "model_launch_date": "2026-05-19",
         "model_retirement_date": null,
     },
     "gemini-3.5-flash-lite": {
@@ -2017,9 +1822,6 @@
                 # Supported models
                 # - Gemini 3 Pro (gemini-3-pro-preview): supported values are "low", "high" (default)
                 # - Gemini 3 Flash (gemini-3-flash-preview): supported values are "minimal", "low", "medium", "high" (default)
-                # - Gemini 3.7 Flash (gemini-3.7-flash): supported values are "low", "medium" (default), "high".
-                #   "minimal" is not supported and the API returns an error.
-                #   See https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
                 # - Gemini 3.8 Flash (gemini-3.8-flash): supported values are "low", "medium" (default), "high".
                 #   "minimal" is not supported and the API returns an error.
                 #   See https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
