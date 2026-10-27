@@ -24,8 +24,6 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-from typing_extensions import override
-
 from langchain_core.tools import BaseTool
 
 from neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator import ExternalAgentToolCreator
@@ -45,22 +43,6 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
 
     EXTERNAL_AGENT_NAME: str = "/network_b"
     AGENT_LOCATION: str = "agent 'researcher' of agent network 'deep/math_guy'"
-
-    @override
-    def setUp(self) -> None:
-        """
-        The synthesis warning is deduplicated per-process via a class-level
-        set. Clear it before each test so tests stay order-independent.
-        """
-        ExternalAgentToolCreator.synthesis_warned.clear()
-
-    @override
-    def tearDown(self) -> None:
-        """
-        Clear the per-process synthesis warning set again so a test that
-        triggered the warning leaves nothing behind for later modules.
-        """
-        ExternalAgentToolCreator.synthesis_warned.clear()
 
     def make_creator(self, function_json: Dict[str, Any]) -> ExternalAgentToolCreator:
         """
@@ -290,7 +272,6 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         for bad_parameters in bad_parameters_cases:
             with self.subTest(bad_parameters=bad_parameters):
                 # Each case gets a fresh warning set, so no case depends on an earlier one.
-                ExternalAgentToolCreator.synthesis_warned.clear()
                 creator: ExternalAgentToolCreator = self.make_creator({
                     "description": "Answers music questions.",
                     "parameters": bad_parameters
