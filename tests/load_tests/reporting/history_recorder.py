@@ -150,8 +150,8 @@ class HistoryRecorder:
             "elapsed_seconds": round wall time in seconds
             "peak_server": peak server snapshot with "rss_megabytes", or None
             "peak_system_cpu_percent": peak system CPU percent over all cores, or None
-            "primary_pairs": primary agent Start/Finish pairs with "duration_seconds", "start_ts" and
-                "finish_ts", or None
+            "primary_pairs": primary agent Start/Finish pairs with "duration_seconds", "start_seconds" and
+                "finish_seconds", or None
             "server_errors": server errors found in the server log, or None
             "tool_warnings": tool warnings found in the server log, or None
         """
@@ -298,8 +298,11 @@ class HistoryRecorder:
         Merge the results, server errors, tool warnings and elapsed time of every stage.
 
         :param stage_summaries: Stage summaries of the run
-        :return: A dictionary with "results", "server_errors" and "tool_warnings" lists over all stages,
-            and "wall_time_seconds", the sum of the stage "elapsed" times rounded to 2 decimals
+        :return: A dict with the following keys:
+            "results"            Request results over all stages
+            "server_errors"      Server errors over all stages
+            "tool_warnings"      Tool warnings over all stages
+            "wall_time_seconds"  Sum of the stage "elapsed" times, rounded to 2 decimals
         """
         results: List[Dict[str, Any]] = []
         server_errors: List[Dict[str, str]] = []
@@ -332,8 +335,9 @@ class HistoryRecorder:
         Collect the duration and the time to first response of each successful request.
 
         :param results: Request results of the run
-        :return: A dictionary with "durations_seconds", the "elapsed" time of each successful request, and
-            "first_response_seconds", each positive "time_to_first_response" of a successful request
+        :return: A dict with the following keys:
+            "durations_seconds"       The "elapsed" time of each successful request
+            "first_response_seconds"  Each positive "time_to_first_response" of a successful request
         """
         durations_seconds: List[float] = []
         first_response_seconds: List[float] = []
@@ -393,7 +397,7 @@ class HistoryRecorder:
         This is the server-side time; it is not the client's per-request time to first response, which the
         server log has no way to measure.
 
-        :param primary_pairs: Primary agent Start/Finish pairs with "start_ts" and "finish_ts"
+        :param primary_pairs: Primary agent Start/Finish pairs with "start_seconds" and "finish_seconds"
         :return: The seconds, rounded to 2 decimals, or 0.0 when no primary request has a Start and a Finish
         """
         first_start_seconds: Optional[float] = None
@@ -401,15 +405,15 @@ class HistoryRecorder:
         pair: Dict[str, Any]
         # Keep the earliest Start and the earliest Finish time.
         for pair in primary_pairs:
-            start_ts: Any = pair.get("start_ts")
-            if isinstance(start_ts, (int, float)):
-                start_seconds: float = start_ts
+            pair_start_seconds: Any = pair.get("start_seconds")
+            if isinstance(pair_start_seconds, (int, float)):
+                start_seconds: float = pair_start_seconds
                 if first_start_seconds is None:
                     first_start_seconds = start_seconds
                 first_start_seconds = min(first_start_seconds, start_seconds)
-            finish_ts: Any = pair.get("finish_ts")
-            if isinstance(finish_ts, (int, float)):
-                finish_seconds: float = finish_ts
+            pair_finish_seconds: Any = pair.get("finish_seconds")
+            if isinstance(pair_finish_seconds, (int, float)):
+                finish_seconds: float = pair_finish_seconds
                 if first_finish_seconds is None:
                     first_finish_seconds = finish_seconds
                 first_finish_seconds = min(first_finish_seconds, finish_seconds)

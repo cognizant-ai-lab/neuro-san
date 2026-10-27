@@ -94,6 +94,8 @@ class LoadTestConstants:
     # End of each request's stdout file name in the requests folder: request_<id>_stdout.txt.
     REQUEST_STDOUT_FILE_SUFFIX: str = "_stdout.txt"
     # End of each request's stderr file name in the requests folder: request_<id>_stderr.txt.
+    # Console logging setup of both load-test CLIs, in tests/load_tests: the dictConfig schema of the logging module.
+    LOGGING_CONFIG_FILE: str = "logging.hocon"
     REQUEST_STDERR_FILE_SUFFIX: str = "_stderr.txt"
     # A request stdout file name, built from REQUEST_STDOUT_FILE_SUFFIX. Group 1 is the request number.
     REQUEST_STDOUT_FILE_PATTERN: re.Pattern = re.compile(r"request_(\d+)" + re.escape(REQUEST_STDOUT_FILE_SUFFIX))

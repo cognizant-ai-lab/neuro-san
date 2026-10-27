@@ -33,9 +33,13 @@ class TestStageSummaryBuilder(TestCase):
         """
         Build a stage summary with fixed stage fields and the given snapshots.
 
-        :param snapshot_values: A dict with "monitor_resources" (True to add the server thread and RSS snapshots)
-            and any of "before_server", "after_server", "before_client", "peak_system_memory" and "after_sys"
-            (snapshots; a missing one is None)
+        :param snapshot_values: A dict with the following keys; a missing snapshot is None:
+            "monitor_resources"   True to add the server thread and RSS snapshots
+            "before_server"       Server snapshot before the stage
+            "after_server"        Server snapshot after the stage
+            "before_client"       Client snapshot before the stage
+            "peak_system_memory"  Peak system memory
+            "after_sys"           System snapshot after the stage
         :return: The stage summary dict from build_stage_summary()
         """
         monitor_resources: bool = snapshot_values.get("monitor_resources")
@@ -49,7 +53,7 @@ class TestStageSummaryBuilder(TestCase):
             "round_num": 2,
             "actual_requests": 3,
             "counts": {"ok": 3},
-            "elapsed_seconds": 1.5,
+            "total_time_seconds": 1.5,
             "retries": {},
             "total_retries": 0,
             "amplification": 1.0,
@@ -65,13 +69,14 @@ class TestStageSummaryBuilder(TestCase):
             "monitor_resources": monitor_resources,
             "before_server": before_server,
             "after_server": after_server,
-            "peak_threads": None,
+            "peak_server_threads": None,
             "peak_server_rss_megabytes": None,
             "before_client": before_client,
             "peak_system_memory": peak_system_memory,
             "after_system": after_sys,
         }
-        summary: Dict[str, Any] = StageSummaryBuilder.build_stage_summary(summary_inputs)
+        summary_builder: StageSummaryBuilder = StageSummaryBuilder(summary_inputs)
+        summary: Dict[str, Any] = summary_builder.build_stage_summary()
         return summary
 
     def test_attach_token_data_matches_by_request_number(self) -> None:

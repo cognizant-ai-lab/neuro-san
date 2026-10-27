@@ -237,8 +237,10 @@ class RequestRecorder:
 
     def _log_error_text(self, failure_reason: Optional[str], is_failure: bool, stderr: str) -> None:
         """
-        Log a request's failure reason and, for a failed request, the last stderr line. Both hold the error
-        message, so they go through a SensitiveLogger: with LEAF_LOG_SENSITIVE off, neither is logged.
+        Log a request's failure reason, or for a failed request without one, the last stderr line. The reason of a
+        raised error already names its cause, and the last traceback line is the session client's help text.
+        Both hold the error message, so they go through a SensitiveLogger: with LEAF_LOG_SENSITIVE off, neither is
+        logged.
 
         :param failure_reason: The request's failure reason, or None
         :param is_failure: True when the request's status is a failure
@@ -247,7 +249,7 @@ class RequestRecorder:
         sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
         if failure_reason:
             sensitive_logger.info("  reason: %s", failure_reason)
-        if is_failure:
+        if is_failure and not failure_reason:
             last_error_line: Optional[str] = OutputParser.last_stderr_line(stderr)
             if last_error_line and last_error_line.strip():
                 sensitive_logger.info("  stderr: %s", last_error_line)
