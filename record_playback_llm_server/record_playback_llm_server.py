@@ -22,18 +22,22 @@ import asyncio
 import logging
 import os
 
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 
 import tornado.web
 
-from tests.record_playback_llm_server.cassette import Cassette
-from tests.record_playback_llm_server.chat_completions_handler import ChatCompletionsHandler
-from tests.record_playback_llm_server.health_handler import HealthHandler
-from tests.record_playback_llm_server.playback_delay import PlaybackDelay
-from tests.record_playback_llm_server.models_handler import ModelsHandler
-from tests.record_playback_llm_server.proxy_state import ProxyState
-from tests.record_playback_llm_server.upstream_client import UpstreamClient
+from record_playback_llm_server.cassette import Cassette
+from record_playback_llm_server.chat_completions_handler import ChatCompletionsHandler
+from record_playback_llm_server.cors_policy import CorsPolicy
+from record_playback_llm_server.cors_request_handler import CorsRequestHandler
+from record_playback_llm_server.health_handler import HealthHandler
+from record_playback_llm_server.playback_delay import PlaybackDelay
+from record_playback_llm_server.models_handler import ModelsHandler
+from record_playback_llm_server.proxy_state import ProxyState
+from record_playback_llm_server.upstream_client import UpstreamClient
 
 
 class RecordPlaybackLlmServer:
@@ -89,17 +93,26 @@ class RecordPlaybackLlmServer:
     DEFAULT_CASSETTE: str = "./llm_cassette.json"
 
     @staticmethod
-    def build_app(state: ProxyState) -> tornado.web.Application:
-        """Construct the Tornado Application with all routes wired up."""
-        return tornado.web.Application(
-            [
-                (r"/v1/chat/completions", ChatCompletionsHandler,
-                 {"state": state, "upstream_path": "/chat/completions"}),
-                (r"/v1/models", ModelsHandler,
-                 {"state": state, "upstream_path": "/models"}),
-                (r"/healthz", HealthHandler),
-            ]
-        )
+    def build_app(state: ProxyState, cors: Optional[CorsPolicy] = None) -> tornado.web.Application:
+        """
+        Construct the Tornado Application with all routes wired up.
+        :param state: The process-wide ProxyState.
+        :param cors: The cross-origin policy every handler answers with, or
+                     None to admit no browser page.
+        :return: The application.
+        """
+        chat_options: Dict[str, Any] = {"state": state, "upstream_path": "/chat/completions"}
+        models_options: Dict[str, Any] = {"state": state, "upstream_path": "/models"}
+        routes: List[Any] = [
+            (r"/v1/chat/completions", ChatCompletionsHandler, chat_options),
+            (r"/v1/models", ModelsHandler, models_options),
+            (r"/healthz", HealthHandler),
+        ]
+        policy: CorsPolicy = cors
+        if policy is None:
+            policy = CorsPolicy()
+        settings: Dict[str, Any] = {CorsRequestHandler.SETTING_NAME: policy}
+        return tornado.web.Application(routes, **settings)
 
     @staticmethod
     def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -132,6 +145,14 @@ class RecordPlaybackLlmServer:
                             help="Lower bound in seconds for --delay-mode random (default: 0.0)")
         parser.add_argument("--delay-max", type=float, default=0.0,
                             help="Upper bound in seconds for --delay-mode random (default: 0.0)")
+        parser.add_argument("--allow-origin", action="append", default=[], metavar="ORIGIN",
+                            help="Admit a browser page on this origin, e.g. http://alpha.localhost:8080; "
+                                 "repeat the flag or separate origins with commas, and use '*' for every "
+                                 "origin (default: no browser page is admitted)")
+        parser.add_argument("--allow-any-origin", action="store_true",
+                            help="Admit a browser page on every origin. Same as --allow-origin '*', without "
+                                 "the quoting a shell needs. Suits a test machine of your own; on a shared "
+                                 "machine name the origins instead")
         return parser.parse_args(argv)
 
     @classmethod
@@ -251,17 +272,36 @@ class RecordPlaybackLlmServer:
             return default
         return value
 
+    @staticmethod
+    def build_cors(args: argparse.Namespace) -> CorsPolicy:
+        """
+        Build the cross-origin policy from the parsed args.
+        :param args: The parsed command line.
+        :return: The policy, which admits nothing unless a flag names an origin.
+        """
+        origins: List[str] = list(args.allow_origin)
+        if args.allow_any_origin:
+            origins.append(CorsPolicy.WILDCARD)
+        return CorsPolicy.from_values(origins)
+
     @classmethod
     async def run(cls, args: argparse.Namespace) -> None:
         """Build the app, start listening, and wait forever."""
         state: ProxyState = cls.build_state(args)
-        app = cls.build_app(state)
+        cors: CorsPolicy = cls.build_cors(args)
+        app = cls.build_app(state, cors)
         app.listen(args.port, address=args.host)
         logging.info(
             "record-playback-llm listening on http://%s:%d "
             "(mode=%s, multi_response=%s, delay_mode=%s, cassette=%s, entries=%d)",
             args.host, args.port, state.mode, state.multi_response,
             state.playback_delay.mode, args.cassette, len(state.cassette))
+        enabled: bool = cors.is_enabled()
+        if enabled:
+            admitted: str = CorsPolicy.WILDCARD
+            if not cors.allow_any:
+                admitted = ", ".join(cors.origins)
+            logging.info("browser pages admitted from %s", admitted)
         await asyncio.Event().wait()
 
     @classmethod
