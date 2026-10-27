@@ -212,7 +212,9 @@ class TestRunOutputWriter(TestCase):
         server_checker: MagicMock = MagicMock()
         server_checker.resolve_ns_version.return_value = "1.0.0"
         output_parts: Dict[str, Any] = {"server_checker": server_checker}
-        with patch("tests.load_tests.reporting.run_output_writer.RunLog"):
+        # Built inside patch.dict: the writer reads LEAF_LOG_SENSITIVE when it is built.
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                patch("tests.load_tests.reporting.run_output_writer.RunLog"):
             writer: RunOutputWriter = RunOutputWriter(args, output_parts)
             writer.setup_test_log()
         output_dir: str = writer.get_output_dir()
@@ -220,8 +222,7 @@ class TestRunOutputWriter(TestCase):
         # A plain file at the new name makes the folder rename fail.
         with open(new_path, "w", encoding="utf-8") as blocker_file:
             blocker_file.write("not a folder\n")
-        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
-                self.assertLogs("RunOutputWriter", level="WARNING") as captured:
+        with self.assertLogs("RunOutputWriter", level="WARNING") as captured:
             writer.rename_interrupted()
         expected_line: str = (f"WARNING:RunOutputWriter:  Could not rename output dir {output_dir} to {new_path}:"
                               " NotADirectoryError")

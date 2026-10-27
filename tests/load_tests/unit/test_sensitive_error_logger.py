@@ -17,7 +17,6 @@
 from logging import Logger
 from logging import getLogger
 from os import environ
-from typing import List
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -26,8 +25,8 @@ from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogg
 
 class TestSensitiveErrorLogger(TestCase):
     """
-    Tests for SensitiveErrorLogger: the error text shows only when sensitive logging is on, and each record names
-    the code that called it.
+    Tests for SensitiveErrorLogger: a caught error shows as text only when sensitive logging is on, other values
+    stay as they are, and each record names the code that logged it.
     """
 
     LOGGER_NAME: str = "tests.load_tests.unit.test_sensitive_error_logger"
@@ -38,10 +37,10 @@ class TestSensitiveErrorLogger(TestCase):
         """
         logger: Logger = getLogger(TestSensitiveErrorLogger.LOGGER_NAME)
         error: OSError = OSError("disk full")
-        message_values: List[str] = ["out.txt"]
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "true"}), \
                 self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="WARNING") as captured:
-            SensitiveErrorLogger.warning(logger, error, "Could not write %s: %s", message_values)
+            error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
+            error_logger.warning("Could not write %s: %s", "out.txt", error)
         expected_line: str = f"WARNING:{TestSensitiveErrorLogger.LOGGER_NAME}:Could not write out.txt: disk full"
         self.assertEqual(captured.output, [expected_line])
 
@@ -51,10 +50,10 @@ class TestSensitiveErrorLogger(TestCase):
         """
         logger: Logger = getLogger(TestSensitiveErrorLogger.LOGGER_NAME)
         error: OSError = OSError("disk full")
-        message_values: List[str] = ["out.txt"]
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
                 self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="WARNING") as captured:
-            SensitiveErrorLogger.warning(logger, error, "Could not write %s: %s", message_values)
+            error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
+            error_logger.warning("Could not write %s: %s", "out.txt", error)
         expected_line: str = f"WARNING:{TestSensitiveErrorLogger.LOGGER_NAME}:Could not write out.txt: OSError"
         self.assertEqual(captured.output, [expected_line])
 
@@ -66,7 +65,8 @@ class TestSensitiveErrorLogger(TestCase):
         error: ValueError = ValueError("no such process")
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "true"}), \
                 self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="DEBUG") as captured:
-            SensitiveErrorLogger.debug(logger, error, "Thread count unavailable: %s", [])
+            error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
+            error_logger.debug("Thread count unavailable: %s", error)
         expected_line: str = f"DEBUG:{TestSensitiveErrorLogger.LOGGER_NAME}:Thread count unavailable: no such process"
         self.assertEqual(captured.output, [expected_line])
 
@@ -78,16 +78,30 @@ class TestSensitiveErrorLogger(TestCase):
         error: ValueError = ValueError("no such process")
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
                 self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="DEBUG") as captured:
-            SensitiveErrorLogger.debug(logger, error, "Thread count unavailable: %s", [])
+            error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
+            error_logger.debug("Thread count unavailable: %s", error)
         expected_line: str = f"DEBUG:{TestSensitiveErrorLogger.LOGGER_NAME}:Thread count unavailable: ValueError"
+        self.assertEqual(captured.output, [expected_line])
+
+    def test_values_that_are_not_errors_stay_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false a line without a caught error is logged as it is.
+        """
+        logger: Logger = getLogger(TestSensitiveErrorLogger.LOGGER_NAME)
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="INFO") as captured:
+            error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
+            error_logger.info("Wrote %s rows to %s", 3, "out.txt")
+        expected_line: str = f"INFO:{TestSensitiveErrorLogger.LOGGER_NAME}:Wrote 3 rows to out.txt"
         self.assertEqual(captured.output, [expected_line])
 
     def test_log_record_points_at_the_caller(self) -> None:
         """
-        The log record names the method that called warning(), not a SensitiveErrorLogger method.
+        The log record names the method that logged the line, not a SensitiveErrorLogger method.
         """
         logger: Logger = getLogger(TestSensitiveErrorLogger.LOGGER_NAME)
         error: OSError = OSError("disk full")
         with self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="WARNING") as captured:
-            SensitiveErrorLogger.warning(logger, error, "Could not write: %s", [])
+            error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
+            error_logger.warning("Could not write: %s", error)
         self.assertEqual(captured.records[0].funcName, "test_log_record_points_at_the_caller")

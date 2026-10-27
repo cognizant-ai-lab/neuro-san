@@ -282,6 +282,6 @@ class RequestRecorder:
         with open(stdout_path, "w", encoding="utf-8") as stdout_file:
             stdout_file.write(stdout)
         if stderr and stderr.strip():
-            stderr_path: str = join(requests_dir, f"request_{request_id}_stderr.txt")
+            stderr_path: str = join(requests_dir, f"request_{request_id}{LoadTestConstants.REQUEST_STDERR_FILE_SUFFIX}")
             with open(stderr_path, "w", encoding="utf-8") as stderr_file:
                 stderr_file.write(stderr)

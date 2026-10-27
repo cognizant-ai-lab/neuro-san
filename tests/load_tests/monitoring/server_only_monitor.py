@@ -402,9 +402,9 @@ Waiting for %d request(s) in server log...
             "peak_system_cpu_percent": tail_result.get("peak_sys_cpu_percent"),
             "server_errors": server_errors,
             "tool_warnings": tool_warnings,
-            "neuro_san_version": self.server_checker.get_server_ns_version(),
-            "primary_pairs": primary_pairs,
         }
+        round_results["neuro_san_version"] = self.server_checker.get_server_ns_version()
+        round_results["primary_pairs"] = primary_pairs
         self._export_server_only_json(round_results)
         self.history_recorder.append_server_record(round_results)
 

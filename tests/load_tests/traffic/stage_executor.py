@@ -63,7 +63,8 @@ class StageExecutor:
             None), "resource_reporter" (the ResourceReporter), "server_process" (the local server process, or None)
             and "output_dir" (the run's output directory)
         """
-        self.logger: Logger = getLogger(self.__class__.__name__)
+        class_logger: Logger = getLogger(self.__class__.__name__)
+        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
         self.args: Namespace = args
         self.runner: TrafficRunner = runner
         self.log_monitor: Optional[ServerLogMonitor] = executor_parts.get("log_monitor")
@@ -503,7 +504,7 @@ class StageExecutor:
             try:
                 fire_threads = f"  threads: {self.server_process.num_threads()}"
             except (NoSuchProcess, AccessDenied) as exc:
-                SensitiveErrorLogger.debug(self.logger, exc, "Thread count unavailable: %s", [])
+                self.logger.debug("Thread count unavailable: %s", exc)
         fire_label: str = str(actual_requests)
         if probe_result is not None:
             fire_label = f"{actual_requests} ({actual_requests - 1} + 1 probe)"

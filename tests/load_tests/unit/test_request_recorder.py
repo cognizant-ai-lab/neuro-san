@@ -32,6 +32,9 @@ class TestRequestRecorder(TestCase):
     Unit tests for RequestRecorder: the files it saves, the progress.log line and the token data it adds.
     """
 
+    STDOUT_FILE_NAME: str = f"request_1{LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX}"
+    STDERR_FILE_NAME: str = f"request_1{LoadTestConstants.REQUEST_STDERR_FILE_SUFFIX}"
+
     def test_created_request_is_saved_and_written_to_progress_log(self) -> None:
         """
         A CREATED request saves its answer under requests/ and writes its line to progress.log.
@@ -45,10 +48,12 @@ class TestRequestRecorder(TestCase):
         progress_text: str = ""
         with TemporaryDirectory() as output_dir:
             recorder.record_request(1, output_dir, request_result, result)
-            stdout_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME, "request_1_stdout.txt")
+            stdout_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME,
+                                    TestRequestRecorder.STDOUT_FILE_NAME)
             with open(stdout_path, encoding="utf-8") as stdout_file:
                 stdout_text = stdout_file.read()
-            stderr_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME, "request_1_stderr.txt")
+            stderr_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME,
+                                    TestRequestRecorder.STDERR_FILE_NAME)
             stderr_saved: bool = exists(stderr_path)
             self.assertFalse(stderr_saved)
             progress_log_path: str = join(output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)

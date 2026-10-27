@@ -63,7 +63,8 @@ class RunOutputWriter:
         :param output_parts: A dict with "server_checker" (the ServerChecker), "hocon_files" (fixture HOCON file
             paths) and "resource_reporter" (the ResourceReporter)
         """
-        self.logger: Logger = getLogger(self.__class__.__name__)
+        class_logger: Logger = getLogger(self.__class__.__name__)
+        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
         self.args: Namespace = args
         self.server_checker: ServerChecker = output_parts.get("server_checker")
         self.hocon_files: List[str] = output_parts.get("hocon_files")
@@ -225,8 +226,7 @@ class RunOutputWriter:
             self._output_dir = new_path
             self.logger.info("  Renamed output to: %s", new_path)
         except OSError as exc:
-            message_values: List[str] = [self._output_dir, new_path]
-            SensitiveErrorLogger.warning(self.logger, exc, "  Could not rename output dir %s to %s: %s", message_values)
+            self.logger.warning("  Could not rename output dir %s to %s: %s", self._output_dir, new_path, exc)
 
     def finalize_test_log(self, stage_summaries: List[Dict[str, Any]], history_recorder: HistoryRecorder) -> None:
         """

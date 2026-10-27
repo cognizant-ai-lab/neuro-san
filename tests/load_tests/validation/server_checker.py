@@ -25,7 +25,6 @@ from os.path import isfile
 from time import time
 from typing import Any
 from typing import Dict
-from typing import List
 from typing import Optional
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -55,7 +54,8 @@ class ServerChecker:
         :param args: Parsed command-line arguments
         """
         self.args: Namespace = args
-        self.logger: Logger = getLogger(__name__)
+        class_logger: Logger = getLogger(__name__)
+        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
         self._server_ns_version: Optional[str] = None
 
     def preflight_server_check(self) -> None:
@@ -114,8 +114,7 @@ class ServerChecker:
             server_version = extractor.get("versions.neuro-san")
             return server_version
         except (URLError, OSError, ValueError) as exc:
-            message_values: List[str] = [url]
-            SensitiveErrorLogger.debug(self.logger, exc, "Could not fetch server version from %s: %s", message_values)
+            self.logger.debug("Could not fetch server version from %s: %s", url, exc)
             return None
 
     def resolve_ns_version(self) -> Optional[str]:

@@ -62,9 +62,10 @@ class TestServerChecker(TestCase):
         With LEAF_LOG_SENSITIVE=false the debug line names the URL and only the error type.
         """
         args: Namespace = TestServerChecker._args(None, port=1)
-        server_checker: ServerChecker = ServerChecker(args)
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
                 self.assertLogs("tests.load_tests.validation.server_checker", level="DEBUG") as captured:
+            # Built inside patch.dict: the checker reads LEAF_LOG_SENSITIVE when it is built.
+            server_checker: ServerChecker = ServerChecker(args)
             server_checker.fetch_server_version()
         expected_line: str = ("DEBUG:tests.load_tests.validation.server_checker:Could not fetch server version"
                               " from http://localhost:1/healthz: URLError")

@@ -57,6 +57,7 @@ class HistoryRecorder:
         """
         self._args: Namespace = args
         self._output_base: str = output_base
+        self.error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
 
     def get_history_path(self, successful: bool = True) -> str:
         """
@@ -157,35 +158,64 @@ class HistoryRecorder:
         """
         pairs: List[Dict[str, Any]] = round_record.get("primary_pairs") or []
         durations_seconds: List[float] = HistoryRecorder._positive_durations(pairs)
+        record: Dict[str, Any] = self._server_round_record(round_record, pairs, durations_seconds)
+        HistoryRecorder._add_server_log_findings(record, round_record)
+        HistoryRecorder._add_completed_within_counts(record, durations_seconds)
+        received: int = record.get("received_requests")
+        successful: bool = received > 0 and record.get("neuro_san_version") != "unknown"
+        self._write_record(record, successful)
+
+    def _server_round_record(self, round_record: Dict[str, Any], pairs: List[Dict[str, Any]],
+                             durations_seconds: List[float]) -> Dict[str, Any]:
+        """
+        Build the trend record of a server-only round, from its timestamp up to its wall time.
+
+        :param round_record: The server-only round; append_server_record() lists the keys read here
+        :param pairs: The round's primary agent Start/Finish pairs
+        :param durations_seconds: The positive server-side duration of each primary request, in seconds
+        :return: The record with the version, host, agent, request counts, resource peaks and timings
+        """
         avg_duration_seconds: float = HistoryRecorder._average(durations_seconds)
         peak_cpu_cores: float = HistoryRecorder._peak_cpu_cores(round_record)
         peak_memory_gigabytes: Optional[float] = HistoryRecorder._peak_memory_gigabytes(round_record)
         first_completed_seconds: float = HistoryRecorder._time_to_first_completed(pairs)
-        errors: List[Dict[str, str]] = round_record.get("server_errors") or []
-        warnings: List[Dict[str, str]] = round_record.get("tool_warnings") or []
+        neuro_san_version: str = round_record.get("neuro_san_version") or "unknown"
+        expected: int = round_record.get("expected")
         received: int = round_record.get("count")
         elapsed_seconds: float = round_record.get("elapsed_seconds")
+        wall_time_seconds: float = round(elapsed_seconds, 2)
         record: Dict[str, Any] = {
             "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "neuro_san_version": round_record.get("neuro_san_version") or "unknown",
+            "neuro_san_version": neuro_san_version,
             "host": self._args.host,
             "agent": self._args.agent,
             "mode": "server-only",
-            "expected_requests": round_record.get("expected"),
+            "expected_requests": expected,
             "received_requests": received,
             "peak_cpu_cores": peak_cpu_cores,
             "peak_memory_gb": peak_memory_gigabytes,
             "time_to_first_completed_s": first_completed_seconds,
             "avg_duration_s": avg_duration_seconds,
-            "wall_time_s": round(elapsed_seconds, 2),
-            "server_error_count": len(errors),
-            "tool_warning_count": len(warnings),
-            "server_errors": errors,
-            "tool_warnings": warnings,
+            "wall_time_s": wall_time_seconds,
         }
-        HistoryRecorder._add_completed_within_counts(record, durations_seconds)
-        successful: bool = received > 0 and record.get("neuro_san_version") != "unknown"
-        self._write_record(record, successful)
+        return record
+
+    @staticmethod
+    def _add_server_log_findings(record: Dict[str, Any], round_record: Dict[str, Any]) -> None:
+        """
+        Add the round's server errors and tool warnings, each with its count, to the trend record.
+
+        :param record: The trend record to add the 4 keys to
+        :param round_record: The server-only round; its "server_errors" and "tool_warnings" lists, or None
+        """
+        errors: List[Dict[str, str]] = round_record.get("server_errors") or []
+        warnings: List[Dict[str, str]] = round_record.get("tool_warnings") or []
+        error_count: int = len(errors)
+        warning_count: int = len(warnings)
+        record["server_error_count"] = error_count
+        record["tool_warning_count"] = warning_count
+        record["server_errors"] = errors
+        record["tool_warnings"] = warnings
 
     @staticmethod
     def _positive_durations(pairs: List[Dict[str, Any]]) -> List[float]:
@@ -220,7 +250,8 @@ class HistoryRecorder:
         cpu_percent: float = peak_system_cpu_percent or 0.0
         core_count: int = cpu_count() or 1
         cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percent, core_count)
-        return round(cores_in_use, 2)
+        peak_cpu_cores: float = round(cores_in_use, 2)
+        return peak_cpu_cores
 
     @staticmethod
     def _peak_memory_gigabytes(round_record: Dict[str, Any]) -> Optional[float]:
@@ -235,7 +266,8 @@ class HistoryRecorder:
             return None
         peak_rss_megabytes: float = peak_server.get("rss_megabytes", 0.0)
         peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
-        return round(peak_gigabytes, 2)
+        peak_memory_gigabytes: float = round(peak_gigabytes, 2)
+        return peak_memory_gigabytes
 
     def _write_record(self, record: Dict[str, Any], successful: bool) -> None:
         """
@@ -253,8 +285,7 @@ class HistoryRecorder:
                 handle.write(record_line)
             logger.info("  Trend history appended: %s", path)
         except OSError as exc:
-            message_values: List[str] = [path]
-            SensitiveErrorLogger.warning(logger, exc, "  Could not write trend history to %s: %s", message_values)
+            self.error_logger.warning("  Could not write trend history to %s: %s", path, exc)
 
     @staticmethod
     def _merge_stage_summaries(stage_summaries: List[Dict[str, Any]]) -> Dict[str, Any]:

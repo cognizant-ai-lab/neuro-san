@@ -39,7 +39,11 @@ from tests.load_tests.reporting.formatters import Formatters
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# A whole-system snapshot: memory_percent, available_gigabytes, cpu_percent, threads (a count).
+# A whole-system snapshot, with these keys:
+#   "memory_percent": system memory in use, in percent
+#   "available_gigabytes": system memory still available, in GB
+#   "cpu_percent": system CPU use over all cores, in percent
+#   "threads": number of threads running on the system
 # SummaryReporter builds snapshots from stage summaries, so a value is None when a summary lacks it.
 SystemSnapshot = Dict[str, Optional[float]]
 
@@ -106,7 +110,11 @@ class SystemResources:
         Capture a point-in-time whole-system snapshot.
 
         :param cpu_interval_seconds: Seconds to sample CPU usage over
-        :return: A dictionary with "memory_percent", "available_gigabytes", "cpu_percent" and "threads"
+        :return: A dictionary with these keys:
+            "memory_percent": system memory in use, in percent
+            "available_gigabytes": system memory still available, in GB
+            "cpu_percent": system CPU use over all cores, in percent, sampled over cpu_interval_seconds
+            "threads": number of threads running on the system
         """
         # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         memory_stats: Any = virtual_memory()

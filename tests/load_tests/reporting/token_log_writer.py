@@ -33,7 +33,8 @@ class TokenLogWriter:
     per-request, per-agent detail in server_tokens.log.
 
     _write_token_file() opens server_tokens.log once and passes the open file to each _write_* method,
-    which adds its own lines.
+    which adds its own lines. The helpers stay static and take the open file, so the file is opened and closed
+    in one with block in _write_token_file().
     """
 
     @staticmethod

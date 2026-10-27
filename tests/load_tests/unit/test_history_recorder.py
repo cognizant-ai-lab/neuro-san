@@ -185,10 +185,11 @@ class TestHistoryRecorder(TestCase):
         history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
         args: Namespace = Namespace(history_file=history_path, host="localhost", agent="hello_world")
         output_base: str = dirname(blocker_path)
-        recorder: HistoryRecorder = HistoryRecorder(args, output_base)
         round_record: Dict[str, Any] = TestHistoryRecorder._server_round("1.0.0", [])
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": log_sensitive}), \
                 self.assertLogs("tests.load_tests.reporting.history_recorder", level="WARNING") as captured:
+            # Built inside patch.dict: the recorder reads LEAF_LOG_SENSITIVE when it is built.
+            recorder: HistoryRecorder = HistoryRecorder(args, output_base)
             recorder.append_server_record(round_record)
         output: List[str] = captured.output
         return output

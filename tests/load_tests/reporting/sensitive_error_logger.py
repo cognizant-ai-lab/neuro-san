@@ -14,61 +14,57 @@
 #
 # END COPYRIGHT
 
-from logging import DEBUG
 from logging import Logger
-from logging import WARNING
+from logging import LoggerAdapter
+from typing import Any
 from typing import List
-from typing import Union
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from typing_extensions import override
 
 
-class SensitiveErrorLogger:
+class SensitiveErrorLogger(LoggerAdapter):
     """
-    Logs one line about a caught error. The error text can hold sensitive data, so it shows only when
-    SensitiveLogger allows it (LEAF_LOG_SENSITIVE is not "false"). Otherwise the same line holds only the error
-    type, for example FileExistsError, so the operator still sees what failed.
-    Static methods: each caller passes its own logger, so the line keeps that logger's name and handlers.
+    The logger of a class that logs caught errors. Each line goes to the wrapped logger as it is, except that a
+    caught error passed as a %s value can hold sensitive data: when SensitiveLogger does not allow it
+    (LEAF_LOG_SENSITIVE is "false"), the line shows only the error type, for example FileExistsError, so the
+    operator still sees what failed. Each record still names the code that logged the line.
+    Like SensitiveLogger, it reads LEAF_LOG_SENSITIVE once, when it is built.
     """
 
-    @staticmethod
-    def debug(logger: Logger, error: BaseException, message: str, message_values: List[str]) -> None:
+    def __init__(self, logger: Logger) -> None:
         """
-        Log a DEBUG line about a caught error.
+        Constructor.
 
-        :param logger: The logger to write the line to
-        :param error: The caught error; it fills the last %s of message
-        :param message: The %-format message; its last %s is the error
-        :param message_values: The values for the other %s of message, in order
+        :param logger: The logger to write each line to
         """
-        SensitiveErrorLogger._log(DEBUG, logger, error, message, message_values)
+        super().__init__(logger)
+        self.sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
 
-    @staticmethod
-    def warning(logger: Logger, error: BaseException, message: str, message_values: List[str]) -> None:
+    # The signature matches LoggerAdapter.log(), which takes values and keyword arguments of any type, so the
+    # *args varargs and the object and Any hints are forced here.
+    @override
+    def log(self, level: int, msg: object, *args: object, **kwargs: Any) -> None:
         """
-        Log a WARNING line about a caught error.
-
-        :param logger: The logger to write the line to
-        :param error: The caught error; it fills the last %s of message
-        :param message: The %-format message; its last %s is the error
-        :param message_values: The values for the other %s of message, in order
-        """
-        SensitiveErrorLogger._log(WARNING, logger, error, message, message_values)
-
-    @staticmethod
-    def _log(level: int, logger: Logger, error: BaseException, message: str, message_values: List[str]) -> None:
-        """
-        Log the line with the error text, or with only the error type when sensitive logging is off.
+        Log one line; when sensitive logging is off, each caught error in args shows as its type name.
 
         :param level: The logging level, such as DEBUG or WARNING
-        :param logger: The logger to write the line to
-        :param error: The caught error; it fills the last %s of message
-        :param message: The %-format message; its last %s is the error
-        :param message_values: The values for the other %s of message, in order
+        :param msg: The %-format message
+        :param args: The values for the %s of msg, in order
+        :param kwargs: The keyword arguments of Logger.log(), such as exc_info or stacklevel
         """
-        sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
-        error_text: Union[BaseException, str] = error
-        if not sensitive_logger.should_log():
-            error_text = type(error).__name__
-        # stacklevel 3 makes the log record point at the code that called debug() or warning(), not at this class.
-        logger.log(level, message, *message_values, error_text, stacklevel=3)
+        hide_errors: bool = not self.sensitive_logger.should_log()
+        log_values: List[object] = []
+        value: object
+        # Keep each value; when hide_errors is set, a caught error becomes its type name.
+        for value in args:
+            # BaseException is the base class of every exception, so this checks the interface, not one concrete class.
+            if hide_errors and isinstance(value, BaseException):
+                error_type_name: str = type(value).__name__
+                log_values.append(error_type_name)
+            else:
+                log_values.append(value)
+        # One more stack level skips this method, so the record names the code that logged the line.
+        stacklevel: int = kwargs.get("stacklevel", 1)
+        kwargs["stacklevel"] = stacklevel + 1
+        super().log(level, msg, *log_values, **kwargs)

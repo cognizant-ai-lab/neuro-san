@@ -17,6 +17,7 @@
 import json
 import logging
 import os
+# Whole re module: "from re import compile" would hide the builtin compile().
 import re
 from typing import Any
 from typing import Dict

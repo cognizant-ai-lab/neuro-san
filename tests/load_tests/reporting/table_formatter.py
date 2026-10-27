@@ -27,6 +27,9 @@ class TableFormatter:
     Formats and logs aligned console tables.
     """
 
+    # The space between two columns, in the header, the rule and each row.
+    COLUMN_GAP: str = "  "
+
     @staticmethod
     def log_table(header: List[str], rows: Sequence[Sequence[Any]]) -> None:
         """
@@ -53,10 +56,12 @@ class TableFormatter:
         # One right-aligned field per column.
         for column_width in column_widths:
             column_patterns.append(f"{{:>{column_width}}}")
-        format_pattern: str = "  ".join(column_patterns)
+        format_pattern: str = TableFormatter.COLUMN_GAP.join(column_patterns)
         logger.info("%s", format_pattern.format(*header))
-        # The rule is as wide as the header row: the column widths plus 2 spaces between columns.
-        rule_width: int = sum(column_widths) + 2 * (len(header) - 1)
+        # The rule is as wide as the header row: the column widths plus one COLUMN_GAP between columns.
+        # The width depends on the rows, so it is computed here and not kept as a constant line.
+        gap_width: int = len(TableFormatter.COLUMN_GAP)
+        rule_width: int = sum(column_widths) + gap_width * (len(header) - 1)
         rule_line: str = "".ljust(rule_width, "-")
         logger.info("%s", rule_line)
         # One line per row.
