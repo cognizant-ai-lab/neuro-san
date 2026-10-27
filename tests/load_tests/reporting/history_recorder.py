@@ -15,7 +15,6 @@
 # END COPYRIGHT
 
 from json import dumps
-import logging
 from os import makedirs
 from os.path import dirname
 from os.path import isfile
@@ -24,6 +23,7 @@ from os.path import splitext
 from time import strftime
 from argparse import Namespace
 from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -34,8 +34,6 @@ from psutil import cpu_count
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
-
-logger: Logger = logging.getLogger(__name__)
 
 
 class HistoryRecorder:
@@ -57,7 +55,8 @@ class HistoryRecorder:
         """
         self._args: Namespace = args
         self._output_base: str = output_base
-        self.error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
+        class_logger: Logger = getLogger(self.__class__.__name__)
+        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
 
     def get_history_path(self, successful: bool = True) -> str:
         """
@@ -91,7 +90,7 @@ class HistoryRecorder:
         # Log each history file that exists.
         for history_path in history_paths:
             if isfile(history_path):
-                logger.info("  History:     %s", history_path)
+                self.logger.info("  History:     %s", history_path)
 
     def append_client_record(self, stage_summaries: List[Dict[str, Any]], neuro_san_version: Optional[str]) -> None:
         """
@@ -283,9 +282,9 @@ class HistoryRecorder:
             record_line: str = dumps(record) + "\n"
             with open(path, "a", encoding="utf-8") as handle:
                 handle.write(record_line)
-            logger.info("  Trend history appended: %s", path)
+            self.logger.info("  Trend history appended: %s", path)
         except OSError as exc:
-            self.error_logger.warning("  Could not write trend history to %s: %s", path, exc)
+            self.logger.warning("  Could not write trend history to %s: %s", path, exc)
 
     @staticmethod
     def _merge_stage_summaries(stage_summaries: List[Dict[str, Any]]) -> Dict[str, Any]:

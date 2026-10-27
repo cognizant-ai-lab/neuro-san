@@ -139,7 +139,7 @@ class TestHistoryRecorder(TestCase):
             blocker_path: str = join(base, "blocker")
             output: List[str] = self._failed_write_output("true", blocker_path)
         history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
-        expected_line: str = ("WARNING:tests.load_tests.reporting.history_recorder:  Could not write trend history"
+        expected_line: str = ("WARNING:HistoryRecorder:  Could not write trend history"
                               f" to {history_path}: [Errno 17] File exists: '{blocker_path}'")
         self.assertEqual(output, [expected_line])
 
@@ -151,7 +151,7 @@ class TestHistoryRecorder(TestCase):
             blocker_path: str = join(base, "blocker")
             output: List[str] = self._failed_write_output("false", blocker_path)
         history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
-        expected_line: str = ("WARNING:tests.load_tests.reporting.history_recorder:  Could not write trend history"
+        expected_line: str = ("WARNING:HistoryRecorder:  Could not write trend history"
                               f" to {history_path}: FileExistsError")
         self.assertEqual(output, [expected_line])
 
@@ -166,9 +166,9 @@ class TestHistoryRecorder(TestCase):
             history_path = join(base, LoadTestConstants.HISTORY_FILE_NAME)
             with open(history_path, "w", encoding="utf-8") as history_file:
                 history_file.write("{}\n")
-            with self.assertLogs("tests.load_tests.reporting.history_recorder", level="INFO") as captured:
+            with self.assertLogs("HistoryRecorder", level="INFO") as captured:
                 recorder.log_existing_history_files()
-        expected_line: str = f"INFO:tests.load_tests.reporting.history_recorder:  History:     {history_path}"
+        expected_line: str = f"INFO:HistoryRecorder:  History:     {history_path}"
         self.assertEqual(captured.output, [expected_line])
 
     def _failed_write_output(self, log_sensitive: str, blocker_path: str) -> List[str]:
@@ -187,7 +187,7 @@ class TestHistoryRecorder(TestCase):
         output_base: str = dirname(blocker_path)
         round_record: Dict[str, Any] = TestHistoryRecorder._server_round("1.0.0", [])
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": log_sensitive}), \
-                self.assertLogs("tests.load_tests.reporting.history_recorder", level="WARNING") as captured:
+                self.assertLogs("HistoryRecorder", level="WARNING") as captured:
             # Built inside patch.dict: the recorder reads LEAF_LOG_SENSITIVE when it is built.
             recorder: HistoryRecorder = HistoryRecorder(args, output_base)
             recorder.append_server_record(round_record)

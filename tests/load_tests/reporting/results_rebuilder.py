@@ -15,10 +15,11 @@
 # END COPYRIGHT
 
 import json
-import logging
 import os
 # Whole re module: "from re import compile" would hide the builtin compile().
 import re
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -30,8 +31,6 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.traffic.output_parser import OutputParser
-
-logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ResultsRebuilder:
@@ -64,6 +63,7 @@ class ResultsRebuilder:
         :param output_dir: Run output directory, or a parent directory holding many runs
         :param force: True to reclassify failures in runs that already have raw_results.json
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._output_dir: str = output_dir
         self._force: bool = force
 
@@ -105,16 +105,16 @@ class ResultsRebuilder:
                 continue
             if os.path.isfile(json_path):
                 if self._force:
-                    logger.info("Reclassifying: %s", entry)
+                    self.logger.info("Reclassifying: %s", entry)
                     ResultsRebuilder(sub_dir, force=True).run()
                     reclassified += 1
                 else:
                     skipped += 1
                 continue
-            logger.info("Rebuilding: %s", entry)
+            self.logger.info("Rebuilding: %s", entry)
             ResultsRebuilder(sub_dir).run()
             rebuilt += 1
-        logger.info("Done: %s rebuilt, %s reclassified, %s skipped", rebuilt, reclassified, skipped)
+        self.logger.info("Done: %s rebuilt, %s reclassified, %s skipped", rebuilt, reclassified, skipped)
 
     def _rebuild_single(self) -> None:
         """
@@ -122,7 +122,7 @@ class ResultsRebuilder:
         """
         requests_dir: str = os.path.join(self._output_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         if not os.path.isdir(requests_dir):
-            logger.error("No %s/ directory in %s", LoadTestConstants.REQUESTS_DIR_NAME, self._output_dir)
+            self.logger.error("No %s/ directory in %s", LoadTestConstants.REQUESTS_DIR_NAME, self._output_dir)
             return
 
         timing: Dict[int, Dict[str, Any]] = self._parse_timing()
@@ -132,7 +132,7 @@ class ResultsRebuilder:
         results: List[Dict[str, Any]] = self._scan_requests(requests_dir, timing)
 
         if not results:
-            logger.error("No request files found to rebuild.")
+            self.logger.error("No request files found to rebuild.")
             return
 
         rebuilt_results: Dict[str, Any] = self._build_rebuilt_results(agent, request_count, results)
@@ -146,11 +146,11 @@ class ResultsRebuilder:
         total_requests: Optional[int] = results_extractor.get("aggregates.total_requests")
         passed_count: Optional[int] = results_extractor.get("aggregates.passed")
         failed_count: Optional[int] = results_extractor.get("aggregates.failed")
-        logger.info(
+        self.logger.info(
             "Rebuilt raw_results.json: %s requests (%s passed, %s failed)",
             total_requests, passed_count, failed_count,
         )
-        logger.info("  Saved to: %s", json_path)
+        self.logger.info("  Saved to: %s", json_path)
 
     @staticmethod
     def _build_rebuilt_results(agent: str, request_count: int, results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -405,7 +405,7 @@ class ResultsRebuilder:
 
         with open(json_path, "w", encoding="utf-8") as output_file:
             json.dump(raw_results, output_file, indent=2, default=str)
-        logger.info("  Updated %s failure reason(s)", updated)
+        self.logger.info("  Updated %s failure reason(s)", updated)
 
     @staticmethod
     def _reclassify_result(result: Dict[str, Any], stdout_cache: Dict[int, str]) -> bool:
@@ -451,7 +451,7 @@ class ResultsRebuilder:
         previous_request_count: int = config.get("num_requests", 0)
         if previous_request_count != request_count:
             config["num_requests"] = request_count
-            logger.info("  Fixed num_requests: %s -> %s", previous_request_count, request_count)
+            self.logger.info("  Fixed num_requests: %s -> %s", previous_request_count, request_count)
 
     @staticmethod
     def _resolve_status(timing_info: Dict[str, Any]) -> str:

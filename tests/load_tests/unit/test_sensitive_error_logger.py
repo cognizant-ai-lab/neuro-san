@@ -30,6 +30,7 @@ class TestSensitiveErrorLogger(TestCase):
     """
 
     LOGGER_NAME: str = "tests.load_tests.unit.test_sensitive_error_logger"
+    FILE_NAME: str = "out.txt"
 
     def test_warning_logs_the_error(self) -> None:
         """
@@ -40,8 +41,9 @@ class TestSensitiveErrorLogger(TestCase):
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "true"}), \
                 self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="WARNING") as captured:
             error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
-            error_logger.warning("Could not write %s: %s", "out.txt", error)
-        expected_line: str = f"WARNING:{TestSensitiveErrorLogger.LOGGER_NAME}:Could not write out.txt: disk full"
+            error_logger.warning("Could not write %s: %s", TestSensitiveErrorLogger.FILE_NAME, error)
+        expected_line: str = (f"WARNING:{TestSensitiveErrorLogger.LOGGER_NAME}:Could not write "
+                              f"{TestSensitiveErrorLogger.FILE_NAME}: disk full")
         self.assertEqual(captured.output, [expected_line])
 
     def test_warning_logs_only_the_error_type_when_sensitive_logging_is_off(self) -> None:
@@ -53,8 +55,9 @@ class TestSensitiveErrorLogger(TestCase):
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
                 self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="WARNING") as captured:
             error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
-            error_logger.warning("Could not write %s: %s", "out.txt", error)
-        expected_line: str = f"WARNING:{TestSensitiveErrorLogger.LOGGER_NAME}:Could not write out.txt: OSError"
+            error_logger.warning("Could not write %s: %s", TestSensitiveErrorLogger.FILE_NAME, error)
+        expected_line: str = (f"WARNING:{TestSensitiveErrorLogger.LOGGER_NAME}:Could not write "
+                              f"{TestSensitiveErrorLogger.FILE_NAME}: OSError")
         self.assertEqual(captured.output, [expected_line])
 
     def test_debug_logs_the_error(self) -> None:
@@ -91,8 +94,9 @@ class TestSensitiveErrorLogger(TestCase):
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
                 self.assertLogs(TestSensitiveErrorLogger.LOGGER_NAME, level="INFO") as captured:
             error_logger: SensitiveErrorLogger = SensitiveErrorLogger(logger)
-            error_logger.info("Wrote %s rows to %s", 3, "out.txt")
-        expected_line: str = f"INFO:{TestSensitiveErrorLogger.LOGGER_NAME}:Wrote 3 rows to out.txt"
+            error_logger.info("Wrote %s rows to %s", 3, TestSensitiveErrorLogger.FILE_NAME)
+        expected_line: str = (f"INFO:{TestSensitiveErrorLogger.LOGGER_NAME}:Wrote 3 rows to "
+                              f"{TestSensitiveErrorLogger.FILE_NAME}")
         self.assertEqual(captured.output, [expected_line])
 
     def test_log_record_points_at_the_caller(self) -> None:

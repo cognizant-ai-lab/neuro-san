@@ -54,7 +54,7 @@ class ServerChecker:
         :param args: Parsed command-line arguments
         """
         self.args: Namespace = args
-        class_logger: Logger = getLogger(__name__)
+        class_logger: Logger = getLogger(self.__class__.__name__)
         self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
         self._server_ns_version: Optional[str] = None
 

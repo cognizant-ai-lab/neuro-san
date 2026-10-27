@@ -63,11 +63,11 @@ class TestServerChecker(TestCase):
         """
         args: Namespace = TestServerChecker._args(None, port=1)
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
-                self.assertLogs("tests.load_tests.validation.server_checker", level="DEBUG") as captured:
+                self.assertLogs("ServerChecker", level="DEBUG") as captured:
             # Built inside patch.dict: the checker reads LEAF_LOG_SENSITIVE when it is built.
             server_checker: ServerChecker = ServerChecker(args)
             server_checker.fetch_server_version()
-        expected_line: str = ("DEBUG:tests.load_tests.validation.server_checker:Could not fetch server version"
+        expected_line: str = ("DEBUG:ServerChecker:Could not fetch server version"
                               " from http://localhost:1/healthz: URLError")
         self.assertEqual(captured.output, [expected_line])
 

@@ -16,6 +16,7 @@
 
 from json import dumps
 from os import close
+from os import environ
 from os import unlink
 from os.path import join
 from shutil import rmtree
@@ -25,6 +26,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from unittest import TestCase
+from unittest.mock import patch
 
 from typing_extensions import override
 
@@ -46,6 +48,8 @@ class TestTrendHistory(TestCase):
     holding it, because both are printed at the end of a run.
     """
 
+    MISSING_HISTORY_PATH: str = join("/nonexistent", LoadTestConstants.HISTORY_FILE_NAME)
+
     @override
     def setUp(self) -> None:
         """
@@ -66,7 +70,8 @@ class TestTrendHistory(TestCase):
         history_text: str = dumps({"agent": "one"}) + "\n" + dumps({"agent": "two"}) + "\n"
         self._write(history_text)
 
-        records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
+        trend_history: TrendHistory = TrendHistory(self._history_path)
+        records: List[Dict[str, Any]] = trend_history._read_records(self._history_path)
 
         agents: List[str] = TestTrendHistory._agents(records)
 
@@ -79,7 +84,8 @@ class TestTrendHistory(TestCase):
         history_text: str = dumps({"agent": "one"}) + "\n" + '{"agent": "two", "requ'
         self._write(history_text)
 
-        records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
+        trend_history: TrendHistory = TrendHistory(self._history_path)
+        records: List[Dict[str, Any]] = trend_history._read_records(self._history_path)
 
         agents: List[str] = TestTrendHistory._agents(records)
 
@@ -92,7 +98,8 @@ class TestTrendHistory(TestCase):
         history_text: str = "\n" + dumps({"agent": "one"}) + "\n\n"
         self._write(history_text)
 
-        records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
+        trend_history: TrendHistory = TrendHistory(self._history_path)
+        records: List[Dict[str, Any]] = trend_history._read_records(self._history_path)
         record_count: int = len(records)
 
         self.assertEqual(record_count, 1)
@@ -104,7 +111,8 @@ class TestTrendHistory(TestCase):
         history_text: str = "[1, 2, 3]\n" + dumps({"agent": "one"}) + "\n"
         self._write(history_text)
 
-        records: List[Dict[str, Any]] = TrendHistory._read_records(self._history_path)
+        trend_history: TrendHistory = TrendHistory(self._history_path)
+        records: List[Dict[str, Any]] = trend_history._read_records(self._history_path)
 
         agents: List[str] = TestTrendHistory._agents(records)
 
@@ -114,10 +122,24 @@ class TestTrendHistory(TestCase):
         """
         A missing file warns and returns empty rather than raising.
         """
-        with self.assertLogs("tests.load_tests.reporting.trend_history", level="WARNING") as captured_logs:
-            records: List[Dict[str, Any]] = TrendHistory._read_records("/nonexistent/history.jsonl")
+        with self.assertLogs("TrendHistory", level="WARNING") as captured_logs:
+            trend_history: TrendHistory = TrendHistory(TestTrendHistory.MISSING_HISTORY_PATH)
+            records: List[Dict[str, Any]] = trend_history._read_records(TestTrendHistory.MISSING_HISTORY_PATH)
         self.assertEqual(records, [])
-        self.assertIn("Could not read history file /nonexistent/history.jsonl", captured_logs.output[0])
+        expected_text: str = f"Could not read history file {TestTrendHistory.MISSING_HISTORY_PATH}"
+        self.assertIn(expected_text, captured_logs.output[0])
+
+    def test_unreadable_file_warning_shows_only_the_error_type_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false the warning names the file and only the error type.
+        """
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs("TrendHistory", level="WARNING") as captured_logs:
+            trend_history: TrendHistory = TrendHistory(TestTrendHistory.MISSING_HISTORY_PATH)
+            trend_history._read_records(TestTrendHistory.MISSING_HISTORY_PATH)
+        expected_line: str = (f"WARNING:TrendHistory:Could not read history file "
+                              f"{TestTrendHistory.MISSING_HISTORY_PATH}: FileNotFoundError")
+        self.assertEqual(captured_logs.output, [expected_line])
 
     def test_a_file_path_is_used_directly(self) -> None:
         """

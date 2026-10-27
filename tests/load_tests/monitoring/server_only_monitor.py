@@ -35,6 +35,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import ValuesView
 
 from psutil import Process
 from psutil import cpu_count
@@ -85,7 +86,7 @@ class ServerOnlyMonitor:
         self.history_recorder: HistoryRecorder = monitor_parts.get("history_recorder")
         self.server_checker: ServerChecker = monitor_parts.get("server_checker")
         self.server_log_tailer: ServerLogTailer = ServerLogTailer(args, server_process, self.log_monitor)
-        self.logger: Logger = getLogger(__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def run(self, output_base: str) -> int:
         """
@@ -315,7 +316,8 @@ Waiting for %d request(s) in server log...
         after_system_threads: int = SystemResources.total_threads()
         system_before: Dict[str, float] = before_values.get("system_before")
         system_peak: Dict[str, float] = ServerOnlyMonitor._system_peak(tail_result, total_gigabytes)
-        SystemResources.log_section(
+        system_resources: SystemResources = SystemResources()
+        system_resources.log_section(
             system_before,
             system_peak,
             {
@@ -348,11 +350,13 @@ Waiting for %d request(s) in server log...
         peak_system_memory_percent: float = tail_result.get("peak_sys_mem_pct")
         peak_used_fraction: float = peak_system_memory_percent / ResourceMonitor.ONE_HUNDRED_PERCENT
         peak_available_gigabytes: float = total_gigabytes - peak_used_fraction * total_gigabytes
+        peak_system_cpu_percent: Optional[float] = tail_result.get("peak_sys_cpu_percent")
+        peak_system_threads: Optional[int] = tail_result.get("peak_sys_threads")
         system_peak: Dict[str, float] = {
             "memory_percent": peak_system_memory_percent,
             "available_gigabytes": peak_available_gigabytes,
-            "cpu_percent": tail_result.get("peak_sys_cpu_percent"),
-            "threads": tail_result.get("peak_sys_threads"),
+            "cpu_percent": peak_system_cpu_percent,
+            "threads": peak_system_threads,
         }
         return system_peak
 
@@ -456,14 +460,12 @@ Waiting for %d request(s) in server log...
         :param log_position: Server log position at the start of the round
         """
         token_data: Dict[str, Dict[str, Any]] = self.log_monitor.parse_token_accounting_since(log_position)
-        token_entries: List[Dict[str, Any]] = []
-        token_entry: Dict[str, Any]
-        # Collect the token entry of each request.
-        for token_entry in token_data.values():
-            token_entries.append(token_entry)
+        token_entries: ValuesView[Dict[str, Any]] = token_data.values()
         server_stats: Optional[Dict[str, int]] = SummaryReporter.aggregate_token_entries(token_entries)
-        printed: bool = SummaryReporter.render_token_usage(None, server_stats,
-                                                           client_source=LoadTestConstants.CLIENT_TOKEN_SOURCE)
+        # A server-only round has no client stages, so the reporter gets no stage summaries.
+        summary_reporter: SummaryReporter = SummaryReporter([])
+        printed: bool = summary_reporter.render_token_usage(None, server_stats,
+                                                            client_source=LoadTestConstants.CLIENT_TOKEN_SOURCE)
         if not printed:
             return
         model_counts: Dict[str, int] = {}

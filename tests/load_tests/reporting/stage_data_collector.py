@@ -200,7 +200,8 @@ class StageDataCollector:
         StageSummaryBuilder.enrich_failure_reasons(results, validation_events)
         if token_data:
             self.logger.info("\n  Token usage (from server log):")
-            TokenLogWriter.log_token_summary(
+            token_log_writer: TokenLogWriter = TokenLogWriter()
+            token_log_writer.log_token_summary(
                 results, output_dir=self._output_dir,
                 network_tokens=network_tokens,
                 validation_events=validation_events,
@@ -261,4 +262,5 @@ class StageDataCollector:
         if has_token_data:
             token_source: str = LoadTestConstants.CLIENT_TOKEN_SOURCE
             self.logger.info("\n  Token usage (from %s):", token_source)
-            TokenLogWriter.log_token_summary(results, output_dir=self._output_dir)
+            token_log_writer: TokenLogWriter = TokenLogWriter()
+            token_log_writer.log_token_summary(results, output_dir=self._output_dir)

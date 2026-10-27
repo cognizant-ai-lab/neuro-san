@@ -43,7 +43,7 @@ class TestCrossRunComparison(TestCase):
 
     A missing, unreadable or malformed raw_results.json, or one that is not a JSON
     object, returns None (comparisons keep working) and reports the path and reason
-    through SensitiveLogger. A server_tokens.log written by TokenLogWriter gives one
+    through SensitiveErrorLogger. A server_tokens.log written by TokenLogWriter gives one
     validation-loop entry per request with at least LOOP_THRESHOLD LLM calls.
     A table cell shows "-" for a metric of 0 or less, else the value with its percent change.
     """
@@ -62,12 +62,14 @@ class TestCrossRunComparison(TestCase):
         """
         path: str = self._write(dumps({"config": {"agent": "hello_world", "num_requests": 3}}))
 
-        with patch("tests.load_tests.reporting.cross_run_comparison.SensitiveLogger") as mock_cls:
-            metrics: Optional[Dict[str, Any]] = CrossRunComparison._extract_metrics(path, "run-1")
+        with patch("tests.load_tests.reporting.cross_run_comparison.SensitiveErrorLogger") as mock_cls:
+            comparison: CrossRunComparison = CrossRunComparison(self._dir)
+            metrics: Optional[Dict[str, Any]] = comparison._extract_metrics(path, "run-1")
 
         self.assertIsNotNone(metrics)
         self.assertEqual(metrics.get("agent"), "hello_world")
-        mock_cls.assert_not_called()
+        mock_logger: MagicMock = mock_cls.return_value
+        mock_logger.error.assert_not_called()
 
     def test_missing_file_is_logged_and_returns_none(self) -> None:
         """
@@ -135,8 +137,9 @@ class TestCrossRunComparison(TestCase):
                 "reporting_agent": "hello_world",
             },
         ]
-        with self.assertLogs("tests.load_tests.reporting.token_log_writer", level="INFO"):
-            TokenLogWriter.log_token_summary(results, output_dir=self._dir)
+        with self.assertLogs("TokenLogWriter", level="INFO"):
+            token_log_writer: TokenLogWriter = TokenLogWriter()
+            token_log_writer.log_token_summary(results, output_dir=self._dir)
 
         log_path: str = join(self._dir, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
         loops: List[Dict[str, Any]] = CrossRunComparison._parse_validation_loops(log_path)
@@ -193,14 +196,15 @@ class TestCrossRunComparison(TestCase):
 
     def _assert_logged_none(self, path: str) -> Union[OSError, ValueError, str]:
         """
-        Assert _extract_metrics(path, ...) returns None and logs the path via SensitiveLogger.
+        Assert _extract_metrics(path, ...) returns None and logs the path via SensitiveErrorLogger.
 
         :param path: raw_results.json path to extract metrics from
         :return: The logged reason: the exception, or a message when no exception was raised
         """
-        with patch("tests.load_tests.reporting.cross_run_comparison.SensitiveLogger") as mock_cls:
+        with patch("tests.load_tests.reporting.cross_run_comparison.SensitiveErrorLogger") as mock_cls:
             mock_logger: MagicMock = mock_cls.return_value
-            metrics: Optional[Dict[str, Any]] = CrossRunComparison._extract_metrics(path, "run-1")
+            comparison: CrossRunComparison = CrossRunComparison(self._dir)
+            metrics: Optional[Dict[str, Any]] = comparison._extract_metrics(path, "run-1")
 
         self.assertIsNone(metrics)
         mock_logger.error.assert_called_once()

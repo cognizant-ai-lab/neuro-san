@@ -126,6 +126,8 @@ class StageExecutor:
             post_stage_data = self._collect_after_stage(stage_inputs, stage_start, stage_run, stage_check)
         system_before: Dict[str, Optional[float]] = stage_run.get("system_before")
         system_after: Dict[str, Optional[float]] = SystemResources.snapshot()
+        before_system_memory_percent: Optional[float] = system_before.get("memory_percent")
+        after_system_memory_percent: Optional[float] = system_after.get("memory_percent")
         stage_values: Dict[str, Any] = {
             "stage_num": stage_inputs.get("stage_num"),
             "round_num": stage_inputs.get("round_num"),
@@ -145,8 +147,8 @@ class StageExecutor:
             "before_client": stage_start.get("before_client"),
             "peak_client": stage_run.get("peak_client"),
             "settled_client": stage_run.get("settled_client"),
-            "before_system_memory_percent": system_before.get("memory_percent"),
-            "after_system_memory_percent": system_after.get("memory_percent"),
+            "before_system_memory_percent": before_system_memory_percent,
+            "after_system_memory_percent": after_system_memory_percent,
             "peak_system_memory": stage_run.get("peak_system_memory"),
             "peak_system_cpu_percent": stage_run.get("peak_system_cpu_percent"),
             "before_system": system_before,
