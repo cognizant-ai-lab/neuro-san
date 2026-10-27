@@ -50,13 +50,13 @@ class CassetteCleaner:
     Usage:
         export PYTHONPATH=$(pwd)
         # Non-destructive: writes <cassette>.clean.json next to the input.
-        python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json
+        python -m record_playback_llm_server.cleanup_cassette session.cassette.json
 
         # Overwrite in place (a <cassette>.bak copy is made first).
-        python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --in-place
+        python -m record_playback_llm_server.cleanup_cassette session.cassette.json --in-place
 
         # Report what would change without writing anything.
-        python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --dry-run
+        python -m record_playback_llm_server.cleanup_cassette session.cassette.json --dry-run
     """
 
     @staticmethod
