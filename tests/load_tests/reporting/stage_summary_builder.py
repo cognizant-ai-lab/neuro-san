@@ -74,8 +74,8 @@ class StageSummaryBuilder:
         """
         Assemble the stage summary dict.
 
-        :return: A dict with the following keys, plus the keys _add_server_and_client_keys() and
-            _add_system_keys() add:
+        :return: A dict with the following keys, plus the keys _add_server_log_keys(), _add_server_and_client_keys()
+            and _add_system_keys() add:
             "stage"              Stage number, starting at 1
             "round"              Round number, starting at 1
             "concurrent"         Number of requests sent in this stage
@@ -85,6 +85,37 @@ class StageSummaryBuilder:
             "total_retries"      Number of retries of all kinds
             "amplification"      Server requests per client request
             "results"            Request results of the stage
+        """
+        stage_num: int = self.stage_values.get("stage_num")
+        round_num: int = self.stage_values.get("round_num")
+        actual_requests: int = self.stage_values.get("actual_requests")
+        counts: Dict[str, Any] = self.stage_values.get("counts")
+        total_time_seconds: float = self.stage_values.get("total_time_seconds")
+        retries: Dict[str, int] = self.stage_values.get("retries")
+        total_retries: int = self.stage_values.get("total_retries")
+        amplification: float = self.stage_values.get("amplification")
+        results: List[Dict[str, Any]] = self.stage_values.get("results")
+        summary_entry: Dict[str, Any] = {
+            "stage": stage_num,
+            "round": round_num,
+            "concurrent": actual_requests,
+            "counts": counts,
+            "elapsed": total_time_seconds,
+            "retries": retries,
+            "total_retries": total_retries,
+            "amplification": amplification,
+            "results": results,
+        }
+        self._add_server_log_keys(summary_entry)
+        self._add_server_and_client_keys(summary_entry)
+        self._add_system_keys(summary_entry)
+        return summary_entry
+
+    def _add_server_log_keys(self, summary_entry: Dict[str, Any]) -> None:
+        """
+        Add the server log keys and the two flags of the stage.
+
+        :param summary_entry: The stage summary dict, updated in place with the following keys:
             "primary_started"    Primary agent requests started, from the server log, or None
             "primary_finished"   Primary agent requests finished, from the server log, or None
             "total_started"      Requests started by all agents, from the server log, or None
@@ -97,15 +128,6 @@ class StageSummaryBuilder:
             "has_server_log"     True when the server log can be read
             "has_tokens"         True when token data is included
         """
-        stage_num: int = self.stage_values.get("stage_num")
-        round_num: int = self.stage_values.get("round_num")
-        actual_requests: int = self.stage_values.get("actual_requests")
-        counts: Dict[str, Any] = self.stage_values.get("counts")
-        total_time_seconds: float = self.stage_values.get("total_time_seconds")
-        retries: Dict[str, int] = self.stage_values.get("retries")
-        total_retries: int = self.stage_values.get("total_retries")
-        amplification: float = self.stage_values.get("amplification")
-        results: List[Dict[str, Any]] = self.stage_values.get("results")
         # An aborted stage skips the server log analysis, so its server log keys are missing and read as None.
         stage_extractor: DictionaryExtractor = DictionaryExtractor(self.stage_values)
         primary_started: Optional[int] = stage_extractor.get("server_counts.primary_started")
@@ -119,31 +141,17 @@ class StageSummaryBuilder:
         validation_events: List[Dict[str, Any]] = self.stage_values.get("validation_events", [])
         has_server_log: bool = self.stage_values.get("has_server_log")
         has_tokens: bool = self.stage_values.get("has_tokens")
-        summary_entry: Dict[str, Any] = {
-            "stage": stage_num,
-            "round": round_num,
-            "concurrent": actual_requests,
-            "counts": counts,
-            "elapsed": total_time_seconds,
-            "retries": retries,
-            "total_retries": total_retries,
-            "amplification": amplification,
-            "results": results,
-            "primary_started": primary_started,
-            "primary_finished": primary_finished,
-            "total_started": total_started,
-            "total_finished": total_finished,
-            "disconnections": disconnections,
-            "server_errors": server_errors,
-            "tool_warnings": tool_warnings,
-            "network_tokens": network_tokens,
-            "validation_events": validation_events,
-            "has_server_log": has_server_log,
-            "has_tokens": has_tokens,
-        }
-        self._add_server_and_client_keys(summary_entry)
-        self._add_system_keys(summary_entry)
-        return summary_entry
+        summary_entry["primary_started"] = primary_started
+        summary_entry["primary_finished"] = primary_finished
+        summary_entry["total_started"] = total_started
+        summary_entry["total_finished"] = total_finished
+        summary_entry["disconnections"] = disconnections
+        summary_entry["server_errors"] = server_errors
+        summary_entry["tool_warnings"] = tool_warnings
+        summary_entry["network_tokens"] = network_tokens
+        summary_entry["validation_events"] = validation_events
+        summary_entry["has_server_log"] = has_server_log
+        summary_entry["has_tokens"] = has_tokens
 
     @staticmethod
     def attach_token_data(results: List[Dict[str, Any]], token_data: Dict[str, Dict[str, Any]]) -> None:
