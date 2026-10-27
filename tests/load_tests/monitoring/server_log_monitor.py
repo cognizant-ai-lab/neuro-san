@@ -369,12 +369,14 @@ class ServerLogMonitor:
         """
         Start a background thread to monitor server log for request arrivals.
 
-        :param monitor_settings: A dict with "position" (server log offset to start reading from, or None),
-            "expected_count" (number of arrivals to wait for), "fire_time_seconds" (time.perf_counter() value taken
-            when the stage fired), "stop_event" (Event that tells the monitor thread to stop), "client_process"
-            (client process for the snapshot once all requests arrive, or None), "primary_start_pattern" (regex for
-            the log line of a primary agent request arriving) and "output_dir" (directory for server_receipts.log,
-            or None for console only)
+        :param monitor_settings: A dict with the following keys:
+            "position"               Server log position from read_position() to start reading from, or None
+            "expected_count"         Number of arrivals to wait for
+            "fire_time_seconds"      time.perf_counter() value in seconds taken when the stage fired
+            "stop_event"             Event that tells the monitor thread to stop
+            "client_process"         Client process for the snapshot once all requests arrive, or None
+            "primary_start_pattern"  Regex for the log line of a primary agent request arriving
+            "output_dir"             Directory for server_receipts.log, or None for console only
         :return: The started monitor thread, or None if monitoring is not available
         """
         position: Optional[int] = monitor_settings.get("position")
