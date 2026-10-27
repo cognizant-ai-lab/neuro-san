@@ -14,15 +14,12 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from __future__ import annotations
-
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Sequence
-from typing import Set
 from typing import Type
 from typing import Union
 
@@ -34,8 +31,6 @@ from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_openai.chat_models.base import ChatOpenAI
-
-from neuro_san.internals.run_context.langchain.llms.translate_options import TranslateOptions
 
 
 # ChatOpenAI already sits deep in langchain's class tree; one more level is unavoidable here.
@@ -108,9 +103,8 @@ class ToolStrictChatOpenAI(ChatOpenAI):
         # True where its response_format rule fires (unless the caller said False), else the value above.
         forced_strict: bool = langchain_decides and effective_strict is not False
         written_strict: Optional[bool] = True if forced_strict else effective_strict
-        strict_tools: List[Any] = self.with_strict_on_preformatted(tools, written_strict)
         runnable: Runnable[LanguageModelInput, AIMessage] = super().bind_tools(
-            strict_tools,
+            self.with_strict_on_preformatted(tools, written_strict),
             tool_choice=tool_choice,
             strict=effective_strict,
             parallel_tool_calls=parallel_tool_calls,
@@ -174,82 +168,3 @@ class ToolStrictChatOpenAI(ChatOpenAI):
             flat.update(converted)
             return flat
         return tool
-
-    #
-    # Below here are static items used stricture only for TypeScript translation.
-    #
-
-    # Translations of Python ChatOpenAI keyword arguments to TypeScript keyword arguments
-    RENAMED: Dict[str, str] = {
-        "model_name": "model",
-        "model": "model",
-        "temperature": "temperature",
-        "max_tokens": "maxTokens",
-        "top_p": "topP",
-        "presence_penalty": "presencePenalty",
-        "frequency_penalty": "frequencyPenalty",
-        "logit_bias": "logitBias",
-        "logprobs": "logprobs",
-        "top_logprobs": "topLogprobs",
-        "seed": "seed",
-        "stop": "stop",
-        "request_timeout": "timeout",
-        "max_retries": "maxRetries",
-        "reasoning": "reasoning",
-        "reasoning_effort": "reasoningEffort",
-        "verbosity": "verbosity",
-        "use_responses_api": "useResponsesApi",
-        "streaming": "streaming",
-        "stream_usage": "streamUsage",
-        "verbose": "verbose",
-        "openai_api_key": "apiKey",
-        "api_key": "apiKey",
-        # The default strict value for function tools, which the generated
-        # ToolStrictChatOpenAI reads back as its tool_strict.
-        "tool_strict": "supportsStrictToolCalling",
-    }
-
-    # Options which need to be nested in the TypeScript configuration
-    NESTED: Dict[str, str] = {
-        "openai_api_base": "baseURL",
-        "base_url": "baseURL",
-        "openai_organization": "organization",
-        "organization": "organization",
-    }
-
-    DROPPED: Set[str] = set([
-        "async_client",
-        "root_async_client",
-        "client",
-        "http_client",
-        "openai_proxy",
-        "tiktoken_model_name",
-    ])
-
-    OPTIONS_KEY_TO_ENV_VAR: Dict[str, str] = {
-        "apiKey": "OPENAI_API_KEY",
-    }
-
-    NESTED_KEY_TO_ENV_VAR: Dict[str, str] = {
-        "baseURL": "OPENAI_API_BASE",
-    }
-
-    @staticmethod
-    def kwargs_constructor(kwargs: Dict[str, Any]) -> ToolStrictChatOpenAI:
-        """
-        Constructs a ToolStrictChatOpenAI from the keyword arguments dictionary.
-
-        :param kwargs: The keyword arguments to pass to the constructor
-        :return: A ToolStrictChatOpenAI
-        """
-        translate_options: TranslateOptions = TranslateOptions(
-            ToolStrictChatOpenAI.RENAMED,
-            ToolStrictChatOpenAI.NESTED,
-            "configuration",
-            ToolStrictChatOpenAI.DROPPED,
-            ToolStrictChatOpenAI.OPTIONS_KEY_TO_ENV_VAR,
-            ToolStrictChatOpenAI.NESTED_KEY_TO_ENV_VAR
-        )
-        translated: Dict[str, Any] = translate_options.translate(kwargs)
-        instance: ToolStrictChatOpenAI = ToolStrictChatOpenAI(**translated)
-        return instance
