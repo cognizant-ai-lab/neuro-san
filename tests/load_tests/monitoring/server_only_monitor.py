@@ -35,6 +35,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import ValuesView
 
 from psutil import Process
 from psutil import cpu_count
@@ -52,7 +53,7 @@ from tests.load_tests.reporting.history_recorder import HistoryRecorder
 from tests.load_tests.reporting.latency_analyzer import COMPLETION_MILESTONES
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.run_namer import RunNamer
-from tests.load_tests.reporting.summary import SummaryReporter
+from tests.load_tests.reporting.summary_reporter import SummaryReporter
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.validation.output_validator import OutputValidator
 from tests.load_tests.validation.server_checker import ServerChecker
@@ -85,7 +86,7 @@ class ServerOnlyMonitor:
         self.history_recorder: HistoryRecorder = monitor_parts.get("history_recorder")
         self.server_checker: ServerChecker = monitor_parts.get("server_checker")
         self.server_log_tailer: ServerLogTailer = ServerLogTailer(args, server_process, self.log_monitor)
-        self.logger: Logger = getLogger(__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def run(self, output_base: str) -> int:
         """
@@ -288,9 +289,9 @@ Waiting for %d request(s) in server log...
             "before_server": before_server,
             "before_system_memory_percent": before_memory_stats.percent,
             "system_before": {
-                "mem_pct": before_memory_stats.percent,
-                "mem_avail_gb": before_available_gigabytes,
-                "cpu_pct": before_system_cpu_percent,
+                "memory_percent": before_memory_stats.percent,
+                "available_gigabytes": before_available_gigabytes,
+                "cpu_percent": before_system_cpu_percent,
                 "threads": before_system_threads,
             },
         }
@@ -315,13 +316,14 @@ Waiting for %d request(s) in server log...
         after_system_threads: int = SystemResources.total_threads()
         system_before: Dict[str, float] = before_values.get("system_before")
         system_peak: Dict[str, float] = ServerOnlyMonitor._system_peak(tail_result, total_gigabytes)
-        SystemResources.log_section(
+        system_resources: SystemResources = SystemResources()
+        system_resources.log_section(
             system_before,
             system_peak,
             {
-                "mem_pct": after_memory_stats.percent,
-                "mem_avail_gb": after_available_gigabytes,
-                "cpu_pct": after_system_cpu_percent,
+                "memory_percent": after_memory_stats.percent,
+                "available_gigabytes": after_available_gigabytes,
+                "cpu_percent": after_system_cpu_percent,
                 "threads": after_system_threads,
             },
         )
@@ -339,16 +341,22 @@ Waiting for %d request(s) in server log...
 
         :param tail_result: The dict ServerLogTailer.tail_server_log() returns
         :param total_gigabytes: Total system memory in GB
-        :return: Dict with "mem_pct", "mem_avail_gb", "cpu_pct" (None when not sampled) and "threads"
+        :return: Dict with these keys:
+            "memory_percent": peak system memory use in percent
+            "available_gigabytes": system memory left at that peak, in GB
+            "cpu_percent": peak system CPU percent, or None when not sampled
+            "threads": peak system thread count
         """
         peak_system_memory_percent: float = tail_result.get("peak_sys_mem_pct")
         peak_used_fraction: float = peak_system_memory_percent / ResourceMonitor.ONE_HUNDRED_PERCENT
         peak_available_gigabytes: float = total_gigabytes - peak_used_fraction * total_gigabytes
+        peak_system_cpu_percent: Optional[float] = tail_result.get("peak_sys_cpu_percent")
+        peak_system_threads: Optional[int] = tail_result.get("peak_sys_threads")
         system_peak: Dict[str, float] = {
-            "mem_pct": peak_system_memory_percent,
-            "mem_avail_gb": peak_available_gigabytes,
-            "cpu_pct": tail_result.get("peak_sys_cpu_percent"),
-            "threads": tail_result.get("peak_sys_threads"),
+            "memory_percent": peak_system_memory_percent,
+            "available_gigabytes": peak_available_gigabytes,
+            "cpu_percent": peak_system_cpu_percent,
+            "threads": peak_system_threads,
         }
         return system_peak
 
@@ -399,28 +407,10 @@ Waiting for %d request(s) in server log...
             "server_errors": server_errors,
             "tool_warnings": tool_warnings,
         }
+        round_results["neuro_san_version"] = self.server_checker.get_server_ns_version()
+        round_results["primary_pairs"] = primary_pairs
         self._export_server_only_json(round_results)
-        self._append_history_record(round_results, primary_pairs)
-
-    def _append_history_record(self, round_results: Dict[str, Any], primary_pairs: List[Dict[str, Any]]) -> None:
-        """
-        Append the round's record to the server history file.
-
-        :param round_results: The dict _export_server_only_json() gets
-        :param primary_pairs: Primary-agent Start/Finish pairs of the round
-        """
-        server_ns_version: Optional[str] = self.server_checker.get_server_ns_version()
-        expected_count: int = round_results.get("expected")
-        received_count: int = round_results.get("count")
-        elapsed_seconds: float = round_results.get("elapsed_seconds")
-        peak_server: Optional[Dict[str, Any]] = round_results.get("peak_server")
-        peak_system_cpu_percent: float = round_results.get("peak_system_cpu_percent")
-        server_errors: List[Dict[str, str]] = round_results.get("server_errors")
-        tool_warnings: List[Dict[str, str]] = round_results.get("tool_warnings")
-        self.history_recorder.append_server_record(
-            server_ns_version, expected_count, received_count, elapsed_seconds, peak_server, peak_system_cpu_percent,
-            primary_pairs, server_errors, tool_warnings,
-        )
+        self.history_recorder.append_server_record(round_results)
 
     @staticmethod
     def _round_kernel_breakdown(peak_server: Optional[Dict[str, Any]],
@@ -470,13 +460,12 @@ Waiting for %d request(s) in server log...
         :param log_position: Server log position at the start of the round
         """
         token_data: Dict[str, Dict[str, Any]] = self.log_monitor.parse_token_accounting_since(log_position)
-        token_entries: List[Dict[str, Any]] = []
-        token_entry: Dict[str, Any]
-        # Collect the token entry of each request.
-        for token_entry in token_data.values():
-            token_entries.append(token_entry)
+        token_entries: ValuesView[Dict[str, Any]] = token_data.values()
         server_stats: Optional[Dict[str, int]] = SummaryReporter.aggregate_token_entries(token_entries)
-        printed: bool = SummaryReporter.render_token_usage(None, server_stats, client_source="HTTP token_accounting")
+        # A server-only round has no client stages, so the reporter gets no stage summaries.
+        summary_reporter: SummaryReporter = SummaryReporter([])
+        printed: bool = summary_reporter.render_token_usage(None, server_stats,
+                                                            client_source=LoadTestConstants.CLIENT_TOKEN_SOURCE)
         if not printed:
             return
         model_counts: Dict[str, int] = {}

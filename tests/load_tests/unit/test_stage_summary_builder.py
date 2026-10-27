@@ -140,7 +140,7 @@ class TestStageSummaryBuilder(TestCase):
             "after_server": {"threads": 12, "rss_megabytes": 120.0},
             "before_client": {"rss_megabytes": 50.0},
             "peak_system_memory": {"memory_percent": 40.0, "available_gigabytes": 8.0},
-            "after_sys": {"mem_avail_gb": 7.5, "cpu_pct": 20.0, "threads": 300},
+            "after_sys": {"available_gigabytes": 7.5, "cpu_percent": 20.0, "threads": 300},
         })
         self.assertEqual(summary.get("before_threads"), 10)
         self.assertEqual(summary.get("after_server_rss"), 120.0)

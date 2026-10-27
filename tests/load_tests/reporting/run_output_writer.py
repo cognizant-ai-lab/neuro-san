@@ -36,6 +36,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
@@ -224,7 +226,13 @@ class RunOutputWriter:
             self._output_dir = new_path
             self.logger.info("  Renamed output to: %s", new_path)
         except OSError as exc:
-            self.logger.warning("  Could not rename output dir: %s", exc)
+            # Caught-exception text goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is off, the plain
+            # logger still names both folders.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.warning("  Could not rename output dir %s to %s: %s", self._output_dir, new_path, exc)
+            else:
+                self.logger.warning("  Could not rename output dir %s to %s", self._output_dir, new_path)
 
     def finalize_test_log(self, stage_summaries: List[Dict[str, Any]], history_recorder: HistoryRecorder) -> None:
         """
