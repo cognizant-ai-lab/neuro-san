@@ -15,6 +15,7 @@
 # END COPYRIGHT
 from json import JSONDecodeError
 from json import dumps
+from os import environ
 from os.path import join
 from shutil import rmtree
 from tempfile import mkdtemp
@@ -25,7 +26,6 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 from unittest import TestCase
-from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from typing_extensions import override
@@ -43,8 +43,8 @@ class TestCrossRunComparison(TestCase):
 
     A missing, unreadable or malformed raw_results.json, or one that is not a JSON
     object, returns None (comparisons keep working) and reports the path and reason
-    through SensitiveErrorLogger. A server_tokens.log written by TokenLogWriter gives one
-    validation-loop entry per request with at least LOOP_THRESHOLD LLM calls.
+    through SensitiveLogger, or only the path with LEAF_LOG_SENSITIVE=false. A server_tokens.log written by
+    TokenLogWriter gives one validation-loop entry per request with at least LOOP_THRESHOLD LLM calls.
     A table cell shows "-" for a metric of 0 or less, else the value with its percent change.
     """
 
@@ -62,14 +62,12 @@ class TestCrossRunComparison(TestCase):
         """
         path: str = self._write(dumps({"config": {"agent": "hello_world", "num_requests": 3}}))
 
-        with patch("tests.load_tests.reporting.cross_run_comparison.SensitiveErrorLogger") as mock_cls:
+        with self.assertNoLogs("CrossRunComparison", level="ERROR"):
             comparison: CrossRunComparison = CrossRunComparison(self._dir)
             metrics: Optional[Dict[str, Any]] = comparison._extract_metrics(path, "run-1")
 
         self.assertIsNotNone(metrics)
         self.assertEqual(metrics.get("agent"), "hello_world")
-        mock_logger: MagicMock = mock_cls.return_value
-        mock_logger.error.assert_not_called()
 
     def test_missing_file_is_logged_and_returns_none(self) -> None:
         """
@@ -79,6 +77,18 @@ class TestCrossRunComparison(TestCase):
 
         reason: Union[OSError, ValueError, str] = self._assert_logged_none(missing_path)
         self.assertIsInstance(reason, FileNotFoundError)
+
+    def test_missing_file_names_only_the_path_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false a missing file still logs an error line with its path, but no error text.
+        """
+        missing_path: str = join(self._dir, "does_not_exist.json")
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs("CrossRunComparison", level="ERROR") as captured:
+            comparison: CrossRunComparison = CrossRunComparison(self._dir)
+            metrics: Optional[Dict[str, Any]] = comparison._extract_metrics(missing_path, "run-1")
+        self.assertIsNone(metrics)
+        self.assertEqual(captured.output, [f"ERROR:CrossRunComparison:Could not read {missing_path}"])
 
     def test_malformed_json_is_logged_and_returns_none(self) -> None:
         """
@@ -196,19 +206,20 @@ class TestCrossRunComparison(TestCase):
 
     def _assert_logged_none(self, path: str) -> Union[OSError, ValueError, str]:
         """
-        Assert _extract_metrics(path, ...) returns None and logs the path via SensitiveErrorLogger.
+        Assert _extract_metrics(path, ...) returns None and logs one error line with the path, with
+        LEAF_LOG_SENSITIVE=true.
 
         :param path: raw_results.json path to extract metrics from
         :return: The logged reason: the exception, or a message when no exception was raised
         """
-        with patch("tests.load_tests.reporting.cross_run_comparison.SensitiveErrorLogger") as mock_cls:
-            mock_logger: MagicMock = mock_cls.return_value
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "true"}), \
+                self.assertLogs("CrossRunComparison", level="ERROR") as captured:
             comparison: CrossRunComparison = CrossRunComparison(self._dir)
             metrics: Optional[Dict[str, Any]] = comparison._extract_metrics(path, "run-1")
 
         self.assertIsNone(metrics)
-        mock_logger.error.assert_called_once()
-        logged_args: Tuple[Any, ...] = mock_logger.error.call_args.args
+        self.assertEqual(len(captured.records), 1)
+        logged_args: Tuple[Any, ...] = captured.records[0].args
         self.assertIn(path, logged_args)
         reason: Union[OSError, ValueError, str] = logged_args[-1]
         return reason

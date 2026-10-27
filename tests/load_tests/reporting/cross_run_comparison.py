@@ -28,13 +28,13 @@ from typing import List
 from typing import Optional
 from typing import Set
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
-from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 
@@ -67,8 +67,7 @@ class CrossRunComparison:
         :param baseline_requests: Leave out runs with fewer requests than this; 0 keeps every run
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
-        class_logger: Logger = getLogger(self.__class__.__name__)
-        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._base_dir: str = base_dir
         self._agent_filter: Set[str] = set()
         if agent_filter:
@@ -168,7 +167,7 @@ class CrossRunComparison:
         try:
             raw_results = EasyJsonPersistence(full_ref=json_path, must_exist=True).restore()
         except (JSONDecodeError, OSError) as error:
-            self.logger.error("Could not read %s: %s", json_path, error)
+            self._log_read_error(json_path, error)
             return None
         if raw_results is None:
             # EasyJsonPersistence returns None when the JSON is a list or a single value.
@@ -205,6 +204,20 @@ class CrossRunComparison:
             "fail_breakdown": CrossRunComparison._classify_failures(all_results),
         }
         return run_metrics
+
+    def _log_read_error(self, json_path: str, error: Exception) -> None:
+        """
+        Log that a run's raw_results.json could not be read. The error text goes through a SensitiveLogger;
+        when LEAF_LOG_SENSITIVE is off, the plain logger still names the file.
+
+        :param json_path: Path to the run's raw_results.json
+        :param error: The JSONDecodeError or OSError raised while reading it
+        """
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        if sensitive_logger.should_log():
+            sensitive_logger.error("Could not read %s: %s", json_path, error)
+        else:
+            self.logger.error("Could not read %s", json_path)
 
     @staticmethod
     def _created_results(all_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

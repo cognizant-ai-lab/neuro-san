@@ -14,6 +14,7 @@
 #
 # END COPYRIGHT
 from argparse import Namespace
+from os import environ
 from os.path import exists
 from os.path import join
 from tempfile import TemporaryDirectory
@@ -21,6 +22,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from unittest import TestCase
+from unittest.mock import patch
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
@@ -71,10 +73,25 @@ class TestRequestRecorder(TestCase):
         request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, {})
         result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)
         result["failure_reason"] = "empty response from agent"
-        with self.assertLogs("RequestRecorder", level="INFO") as captured:
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "true"}), \
+                self.assertLogs("RequestRecorder", level="INFO") as captured:
             recorder.record_request(2, None, request_result, result)
         self.assertIn("Request 2: FAILED (1.00s)", captured.output[0])
         self.assertIn("  reason: empty response from agent", captured.output[1])
+
+    def test_failed_request_reason_is_not_logged_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false a FAILED request logs its status line, but not its reason.
+        """
+        args: Namespace = Namespace(include_tokens=False)
+        recorder: RequestRecorder = RequestRecorder(args)
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, {})
+        result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)
+        result["failure_reason"] = "empty response from agent"
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs("RequestRecorder", level="INFO") as captured:
+            recorder.record_request(2, None, request_result, result)
+        self.assertEqual(captured.output, ["INFO:RequestRecorder:Request 2: FAILED (1.00s)"])
 
     def test_token_accounting_is_added_to_the_result(self) -> None:
         """

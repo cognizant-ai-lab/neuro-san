@@ -129,16 +129,15 @@ class TestTrendHistory(TestCase):
         expected_text: str = f"Could not read history file {TestTrendHistory.MISSING_HISTORY_PATH}"
         self.assertIn(expected_text, captured_logs.output[0])
 
-    def test_unreadable_file_warning_shows_only_the_error_type_when_sensitive_logging_is_off(self) -> None:
+    def test_unreadable_file_warning_has_no_error_text_when_sensitive_logging_is_off(self) -> None:
         """
-        With LEAF_LOG_SENSITIVE=false the warning names the file and only the error type.
+        With LEAF_LOG_SENSITIVE=false the warning names the file and holds no error text.
         """
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
                 self.assertLogs("TrendHistory", level="WARNING") as captured_logs:
             trend_history: TrendHistory = TrendHistory(TestTrendHistory.MISSING_HISTORY_PATH)
             trend_history._read_records(TestTrendHistory.MISSING_HISTORY_PATH)
-        expected_line: str = (f"WARNING:TrendHistory:Could not read history file "
-                              f"{TestTrendHistory.MISSING_HISTORY_PATH}: FileNotFoundError")
+        expected_line: str = f"WARNING:TrendHistory:Could not read history file {TestTrendHistory.MISSING_HISTORY_PATH}"
         self.assertEqual(captured_logs.output, [expected_line])
 
     def test_a_file_path_is_used_directly(self) -> None:

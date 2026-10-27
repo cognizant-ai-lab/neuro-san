@@ -28,6 +28,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 
 from tests.load_tests.load_test_constants import LoadTestConstants
@@ -232,12 +233,24 @@ class RequestRecorder:
         for field, value in parsed_fields.items():
             field_value: str = value or ""
             self.logger.info("  %s: %s", field, field_value)
+        self._log_error_text(failure_reason, is_failure, stderr)
+
+    def _log_error_text(self, failure_reason: Optional[str], is_failure: bool, stderr: str) -> None:
+        """
+        Log a request's failure reason and, for a failed request, the last stderr line. Both hold the error
+        message, so they go through a SensitiveLogger: with LEAF_LOG_SENSITIVE off, neither is logged.
+
+        :param failure_reason: The request's failure reason, or None
+        :param is_failure: True when the request's status is a failure
+        :param stderr: Error text captured for the request
+        """
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
         if failure_reason:
-            self.logger.info("  reason: %s", failure_reason)
+            sensitive_logger.info("  reason: %s", failure_reason)
         if is_failure:
             last_error_line: Optional[str] = OutputParser.last_stderr_line(stderr)
             if last_error_line and last_error_line.strip():
-                self.logger.info("  stderr: %s", last_error_line)
+                sensitive_logger.info("  stderr: %s", last_error_line)
 
     @staticmethod
     def _write_result_to_file(output_dir: str, request_id: int, status: str, elapsed_seconds: float,

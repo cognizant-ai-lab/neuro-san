@@ -31,9 +31,10 @@ from typing import Optional
 
 from psutil import cpu_count
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
-from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 
 
 class HistoryRecorder:
@@ -55,8 +56,7 @@ class HistoryRecorder:
         """
         self._args: Namespace = args
         self._output_base: str = output_base
-        class_logger: Logger = getLogger(self.__class__.__name__)
-        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def get_history_path(self, successful: bool = True) -> str:
         """
@@ -284,7 +284,13 @@ class HistoryRecorder:
                 handle.write(record_line)
             self.logger.info("  Trend history appended: %s", path)
         except OSError as exc:
-            self.logger.warning("  Could not write trend history to %s: %s", path, exc)
+            # Caught-exception text goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is off, the plain
+            # logger still names the file.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.warning("  Could not write trend history to %s: %s", path, exc)
+            else:
+                self.logger.warning("  Could not write trend history to %s", path)
 
     @staticmethod
     def _merge_stage_summaries(stage_summaries: List[Dict[str, Any]]) -> Dict[str, Any]:

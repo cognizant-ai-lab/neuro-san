@@ -29,11 +29,11 @@ from typing import Optional
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.load_test_constants import LoadTestConstants
-from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -54,8 +54,7 @@ class ServerChecker:
         :param args: Parsed command-line arguments
         """
         self.args: Namespace = args
-        class_logger: Logger = getLogger(self.__class__.__name__)
-        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._server_ns_version: Optional[str] = None
 
     def preflight_server_check(self) -> None:
@@ -114,7 +113,10 @@ class ServerChecker:
             server_version = extractor.get("versions.neuro-san")
             return server_version
         except (URLError, OSError, ValueError) as exc:
-            self.logger.debug("Could not fetch server version from %s: %s", url, exc)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            sensitive_logger.debug("Could not fetch server version from %s: %s", url, exc)
+            if not sensitive_logger.should_log():
+                self.logger.debug("Could not fetch server version: %s", type(exc).__name__)
             return None
 
     def resolve_ns_version(self) -> Optional[str]:

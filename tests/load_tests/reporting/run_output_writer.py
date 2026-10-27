@@ -36,6 +36,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.formatters import Formatters
@@ -44,7 +46,6 @@ from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.run_log import RunLog
 from tests.load_tests.reporting.run_namer import RunNamer
-from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 from tests.load_tests.reporting.summary_file_writer import SummaryFileWriter
 from tests.load_tests.validation.server_checker import ServerChecker
 
@@ -63,8 +64,7 @@ class RunOutputWriter:
         :param output_parts: A dict with "server_checker" (the ServerChecker), "hocon_files" (fixture HOCON file
             paths) and "resource_reporter" (the ResourceReporter)
         """
-        class_logger: Logger = getLogger(self.__class__.__name__)
-        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
         self.server_checker: ServerChecker = output_parts.get("server_checker")
         self.hocon_files: List[str] = output_parts.get("hocon_files")
@@ -226,7 +226,13 @@ class RunOutputWriter:
             self._output_dir = new_path
             self.logger.info("  Renamed output to: %s", new_path)
         except OSError as exc:
-            self.logger.warning("  Could not rename output dir %s to %s: %s", self._output_dir, new_path, exc)
+            # Caught-exception text goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is off, the plain
+            # logger still names both folders.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.warning("  Could not rename output dir %s to %s: %s", self._output_dir, new_path, exc)
+            else:
+                self.logger.warning("  Could not rename output dir %s to %s", self._output_dir, new_path)
 
     def finalize_test_log(self, stage_summaries: List[Dict[str, Any]], history_recorder: HistoryRecorder) -> None:
         """

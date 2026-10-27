@@ -57,18 +57,17 @@ class TestServerChecker(TestCase):
         server_version: Optional[str] = server_checker.fetch_server_version()
         self.assertIsNone(server_version)
 
-    def test_fetch_failure_logs_the_url_and_only_the_error_type(self) -> None:
+    def test_fetch_failure_logs_only_the_error_type(self) -> None:
         """
-        With LEAF_LOG_SENSITIVE=false the debug line names the URL and only the error type.
+        With LEAF_LOG_SENSITIVE=false the SensitiveLogger line is dropped and the debug line shows only the error type.
         """
         args: Namespace = TestServerChecker._args(None, port=1)
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
                 self.assertLogs("ServerChecker", level="DEBUG") as captured:
-            # Built inside patch.dict: the checker reads LEAF_LOG_SENSITIVE when it is built.
+            # The SensitiveLogger reads LEAF_LOG_SENSITIVE when it is built, inside fetch_server_version().
             server_checker: ServerChecker = ServerChecker(args)
             server_checker.fetch_server_version()
-        expected_line: str = ("DEBUG:ServerChecker:Could not fetch server version"
-                              " from http://localhost:1/healthz: URLError")
+        expected_line: str = "DEBUG:ServerChecker:Could not fetch server version: URLError"
         self.assertEqual(captured.output, [expected_line])
 
     def test_get_package_version(self) -> None:

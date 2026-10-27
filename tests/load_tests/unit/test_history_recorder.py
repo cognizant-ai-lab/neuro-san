@@ -145,14 +145,13 @@ class TestHistoryRecorder(TestCase):
 
     def test_write_failure_hides_the_error_when_sensitive_logging_is_off(self) -> None:
         """
-        With LEAF_LOG_SENSITIVE=false the warning holds the path and only the error type.
+        With LEAF_LOG_SENSITIVE=false the warning holds the path and no error text.
         """
         with TemporaryDirectory() as base:
             blocker_path: str = join(base, "blocker")
             output: List[str] = self._failed_write_output("false", blocker_path)
         history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
-        expected_line: str = ("WARNING:HistoryRecorder:  Could not write trend history"
-                              f" to {history_path}: FileExistsError")
+        expected_line: str = f"WARNING:HistoryRecorder:  Could not write trend history to {history_path}"
         self.assertEqual(output, [expected_line])
 
     def test_log_existing_history_files(self) -> None:
@@ -188,7 +187,7 @@ class TestHistoryRecorder(TestCase):
         round_record: Dict[str, Any] = TestHistoryRecorder._server_round("1.0.0", [])
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": log_sensitive}), \
                 self.assertLogs("HistoryRecorder", level="WARNING") as captured:
-            # Built inside patch.dict: the recorder reads LEAF_LOG_SENSITIVE when it is built.
+            # The SensitiveLogger reads LEAF_LOG_SENSITIVE when it is built, inside append_server_record().
             recorder: HistoryRecorder = HistoryRecorder(args, output_base)
             recorder.append_server_record(round_record)
         output: List[str] = captured.output

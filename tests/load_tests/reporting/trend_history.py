@@ -26,8 +26,9 @@ from typing import Optional
 from typing import Set
 
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.load_test_constants import LoadTestConstants
-from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 
@@ -48,8 +49,7 @@ class TrendHistory:
         :param path: History JSONL file, or a directory holding it
         :param agent_filter: Agent names to include; None or empty includes every agent
         """
-        class_logger: Logger = getLogger(self.__class__.__name__)
-        self.logger: SensitiveErrorLogger = SensitiveErrorLogger(class_logger)
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._path: str = path
         self._agent_filter: Set[str] = set()
         if agent_filter:
@@ -155,8 +155,13 @@ class TrendHistory:
                     else:
                         skipped += 1
         except OSError as exc:
-            # With LEAF_LOG_SENSITIVE=false, SensitiveErrorLogger shows only the error type.
-            self.logger.warning("Could not read history file %s: %s", history_path, exc)
+            # Caught-exception text goes through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE setting;
+            # when that is off, the plain logger still names the file.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.warning("Could not read history file %s: %s", history_path, exc)
+            else:
+                self.logger.warning("Could not read history file %s", history_path)
             return []
         if skipped:
             self.logger.warning("  Skipped %s unreadable line(s) in %s", skipped, history_path)
