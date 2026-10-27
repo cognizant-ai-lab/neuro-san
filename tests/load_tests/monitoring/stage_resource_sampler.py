@@ -28,6 +28,8 @@ from psutil import cpu_percent
 from psutil import swap_memory
 from psutil import virtual_memory
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.formatters import Formatters
@@ -152,7 +154,8 @@ class StageResourceSampler:
             if StageResourceSampler.is_new_peak(rss_megabytes, peak_client_rss_megabytes):
                 self._peaks["client_rss_megabytes"] = rss_megabytes
         except (NoSuchProcess, AccessDenied) as error:
-            self.logger.debug("Heartbeat client RSS unavailable: %s", error)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            sensitive_logger.debug("Heartbeat client RSS unavailable: %s", error)
 
     def check_server_alive(self) -> bool:
         """
@@ -186,7 +189,8 @@ class StageResourceSampler:
             else:
                 thread_info = f"  threads: {server_thread_count}"
         except (NoSuchProcess, AccessDenied) as error:
-            self.logger.debug("Heartbeat thread count unavailable: %s", error)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            sensitive_logger.debug("Heartbeat thread count unavailable: %s", error)
         server_memory: Dict[str, Optional[float]] = self._sample_server_memory()
         rss_megabytes: Optional[float] = server_memory.get("rss_megabytes")
         swap_megabytes: Optional[float] = server_memory.get("swap_megabytes")
@@ -276,7 +280,8 @@ class StageResourceSampler:
             server_memory["rss_megabytes"] = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
             server_memory["swap_megabytes"] = memory_info.swap / ResourceMonitor.ONE_MEGABYTE
         except (NoSuchProcess, AccessDenied) as error:
-            self.logger.debug("Heartbeat server memory unavailable: %s", error)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            sensitive_logger.debug("Heartbeat server memory unavailable: %s", error)
             server_memory["rss_megabytes"] = None
             server_memory["swap_megabytes"] = None
         return server_memory

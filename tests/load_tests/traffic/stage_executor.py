@@ -33,10 +33,12 @@ from psutil import AccessDenied
 from psutil import NoSuchProcess
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.stage_data_collector import StageDataCollector
 from tests.load_tests.reporting.stage_summary_builder import StageSummaryBuilder
@@ -124,6 +126,8 @@ class StageExecutor:
             post_stage_data = self._collect_after_stage(stage_inputs, stage_start, stage_run, stage_check)
         system_before: Dict[str, Optional[float]] = stage_run.get("system_before")
         system_after: Dict[str, Optional[float]] = SystemResources.snapshot()
+        before_system_memory_percent: Optional[float] = system_before.get("memory_percent")
+        after_system_memory_percent: Optional[float] = system_after.get("memory_percent")
         stage_values: Dict[str, Any] = {
             "stage_num": stage_inputs.get("stage_num"),
             "round_num": stage_inputs.get("round_num"),
@@ -143,8 +147,8 @@ class StageExecutor:
             "before_client": stage_start.get("before_client"),
             "peak_client": stage_run.get("peak_client"),
             "settled_client": stage_run.get("settled_client"),
-            "before_system_memory_percent": system_before.get("mem_pct"),
-            "after_system_memory_percent": system_after.get("mem_pct"),
+            "before_system_memory_percent": before_system_memory_percent,
+            "after_system_memory_percent": after_system_memory_percent,
             "peak_system_memory": stage_run.get("peak_system_memory"),
             "peak_system_cpu_percent": stage_run.get("peak_system_cpu_percent"),
             "before_system": system_before,
@@ -502,7 +506,8 @@ class StageExecutor:
             try:
                 fire_threads = f"  threads: {self.server_process.num_threads()}"
             except (NoSuchProcess, AccessDenied) as exc:
-                self.logger.debug("Thread count unavailable: %s", exc)
+                sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+                sensitive_logger.debug("Thread count unavailable: %s", exc)
         fire_label: str = str(actual_requests)
         if probe_result is not None:
             fire_label = f"{actual_requests} ({actual_requests - 1} + 1 probe)"

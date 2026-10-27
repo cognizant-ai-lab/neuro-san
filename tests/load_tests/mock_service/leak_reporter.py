@@ -22,7 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -139,7 +139,8 @@ class LeakReporter:
         for snapshot_row in snapshot_rows:
             cells: List[str] = LeakReporter._format_snapshot_row(snapshot_row)
             table_rows.append(cells)
-        TableFormatter.log_table(LeakReporter.HEADER, table_rows)
+        table_formatter: TableFormatter = TableFormatter()
+        table_formatter.log_table(LeakReporter.HEADER, table_rows)
 
     def _log_overall_deltas(self, label: str, rows: List[Dict[str, Any]]) -> None:
         """

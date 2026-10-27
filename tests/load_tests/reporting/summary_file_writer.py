@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from os.path import join
 from time import strftime
 from argparse import Namespace
@@ -32,8 +33,6 @@ from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.system_resources import SystemResources
 
-logger: logging.Logger = logging.getLogger(__name__)
-
 
 class SummaryFileWriter:
     """
@@ -41,6 +40,9 @@ class SummaryFileWriter:
 
     Collects data from stage summaries and optional server timing
     to produce a single text file for quick review.
+
+    write() builds one lines list, each _write_* method appends its section to it, and write() saves
+    the file once at the end, so a failed section never leaves a half-written summary.txt.
     """
 
     def __init__(self, stage_summaries: List[Dict[str, Any]], args: Namespace,
@@ -52,6 +54,7 @@ class SummaryFileWriter:
         :param args: Parsed load-test command line
         :param server_chat_timing: Per-agent timing entries from the server log, or None
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._summaries: List[Dict[str, Any]] = stage_summaries
         self._args: Namespace = args
         self._server_timing: List[Dict[str, Any]] = server_chat_timing or []
@@ -72,7 +75,7 @@ class SummaryFileWriter:
         path: str = join(output_dir, "summary.txt")
         with open(path, "w", encoding="utf-8") as file_handle:
             file_handle.write("\n".join(lines) + "\n")
-        logger.info("  Summary:     %s", path)
+        self.logger.info("  Summary:     %s", path)
         return path
 
     def _write_header(self, lines: List[str]) -> None:

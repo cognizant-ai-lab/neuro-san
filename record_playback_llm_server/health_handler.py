@@ -17,17 +17,19 @@
 
 from __future__ import annotations
 
-from tests.record_playback_llm_server.proxy_handler import ProxyHandler
+from record_playback_llm_server.cors_request_handler import CorsRequestHandler
 
 
-class ModelsHandler(ProxyHandler):
+class HealthHandler(CorsRequestHandler):
     """
-    Implements GET /v1/models by recording against, or replaying from, the
-    cassette. Most LangChain chat clients never call this, but it is proxied
-    for parity with a real OpenAI endpoint so clients that introspect models
-    still work fully offline in playback.
+    Liveness probe at GET /healthz. Returns a fixed JSON object so external
+    schedulers (Kubernetes, Docker, etc.) can confirm the process is up.
     """
 
-    async def get(self) -> None:
-        """Record or replay a models-list request."""
-        await self.handle_request("GET", b"")
+    def get(self) -> None:
+        """Return a fixed liveness payload."""
+        self.write({"status": "ok"})
+
+    def data_received(self, chunk):
+        """Required override of RequestHandler abstract method; no-op for GET."""
+        return

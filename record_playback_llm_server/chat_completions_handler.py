@@ -17,19 +17,16 @@
 
 from __future__ import annotations
 
-import tornado.web
+from record_playback_llm_server.proxy_handler import ProxyHandler
 
 
-class HealthHandler(tornado.web.RequestHandler):
+class ChatCompletionsHandler(ProxyHandler):
     """
-    Liveness probe at GET /healthz. Returns a fixed JSON object so external
-    schedulers (Kubernetes, Docker, etc.) can confirm the process is up.
+    Implements POST /v1/chat/completions by recording against, or replaying
+    from, the cassette. The streaming vs one-shot decision is taken from the
+    request body's `stream` flag, exactly as a real OpenAI endpoint would.
     """
 
-    def get(self) -> None:
-        """Return a fixed liveness payload."""
-        self.write({"status": "ok"})
-
-    def data_received(self, chunk):
-        """Required override of RequestHandler abstract method; no-op for GET."""
-        return
+    async def post(self) -> None:
+        """Record or replay a chat-completions request."""
+        await self.handle_request("POST", self.request.body or b"")

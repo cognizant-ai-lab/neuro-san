@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from os import environ
 from time import perf_counter
 from typing import Any
 from typing import Callable
@@ -112,6 +113,15 @@ class TestAgentRequestExecutor(TestCase):
         self.assertEqual(LoadTestConstants.STATUS_FAILED, status)
         self.assertEqual("requests.exceptions.ConnectionError: Connection refused", failure_reason)
         self.assertIn("Traceback", response_text)
+
+    def test_failure_debug_line_has_only_the_error_type_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false the "HTTP request failed" debug line holds the error type, not the traceback.
+        """
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs("AgentRequestExecutor", level="DEBUG") as captured:
+            TestAgentRequestExecutor._execute_failing(TestAgentRequestExecutor._refused_stream)
+        self.assertEqual(captured.output, ["DEBUG:AgentRequestExecutor:HTTP request failed: ValueError"])
 
     def test_read_timeout_is_at_most_the_request_cap(self) -> None:
         """

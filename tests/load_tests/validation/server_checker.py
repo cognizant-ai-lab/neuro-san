@@ -54,7 +54,7 @@ class ServerChecker:
         :param args: Parsed command-line arguments
         """
         self.args: Namespace = args
-        self.logger: Logger = getLogger(__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._server_ns_version: Optional[str] = None
 
     def preflight_server_check(self) -> None:

@@ -91,6 +91,12 @@ class LoadTestConstants:
     PROGRESS_LOG_FILE_NAME: str = "progress.log"
     SERVER_TOKENS_LOG_FILE_NAME: str = "server_tokens.log"
     STDOUT_LOG_FILE_NAME: str = "stdout.log"
+    # End of each request's stdout file name in the requests folder: request_<id>_stdout.txt.
+    REQUEST_STDOUT_FILE_SUFFIX: str = "_stdout.txt"
+    # End of each request's stderr file name in the requests folder: request_<id>_stderr.txt.
+    REQUEST_STDERR_FILE_SUFFIX: str = "_stderr.txt"
+    # A request stdout file name, built from REQUEST_STDOUT_FILE_SUFFIX. Group 1 is the request number.
+    REQUEST_STDOUT_FILE_PATTERN: re.Pattern = re.compile(r"request_(\d+)" + re.escape(REQUEST_STDOUT_FILE_SUFFIX))
     LEGACY_RUN_LOG_FILE_NAME: str = "load_test.log"
     # Folder in each run directory with one stdout (and stderr) file per request.
     REQUESTS_DIR_NAME: str = "requests"

@@ -49,11 +49,11 @@ interrupted or throttled recording session, making it safe for playback/hybrid:
 ```bash
 export PYTHONPATH=$(pwd)
 # Non-destructive: writes <cassette>.clean.json next to the input.
-python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json
+python -m record_playback_llm_server.cleanup_cassette session.cassette.json
 # Overwrite in place (a <cassette>.bak is made first).
-python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --in-place
+python -m record_playback_llm_server.cleanup_cassette session.cassette.json --in-place
 # Report what would be removed without writing anything.
-python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --dry-run
+python -m record_playback_llm_server.cleanup_cassette session.cassette.json --dry-run
 ```
 
 Note: cleanup is status-based; a provider that returns HTTP 200 with an error
@@ -112,25 +112,25 @@ export PYTHONPATH=$(pwd)
 # 1) Record a session against the real host (costs tokens, once).
 export RECORD_PLAYBACK_UPSTREAM_BASE_URL="https://api.openai.com/v1"
 export RECORD_PLAYBACK_UPSTREAM_API_KEY="sk-..."
-python -m tests.record_playback_llm_server.record_playback_llm_server \
+python -m record_playback_llm_server.record_playback_llm_server \
     --mode record --port 8899 --cassette ./session.cassette.json
 
 # ... run your load/integration test against neuro-san, then Ctrl-C ...
 
 # 2) Replay it forever, for free, deterministically (no env vars needed).
-python -m tests.record_playback_llm_server.record_playback_llm_server \
+python -m record_playback_llm_server.record_playback_llm_server \
     --mode playback --port 8899 --cassette ./session.cassette.json
 
 # Or self-healing playback: serve from the cassette, but fetch+record any miss.
 export RECORD_PLAYBACK_UPSTREAM_BASE_URL="https://api.openai.com/v1"
 export RECORD_PLAYBACK_UPSTREAM_API_KEY="sk-..."
-python -m tests.record_playback_llm_server.record_playback_llm_server \
+python -m record_playback_llm_server.record_playback_llm_server \
     --mode hybrid --cassette ./session.cassette.json
 
 # Capture response variability and replay it round-robin:
-python -m tests.record_playback_llm_server.record_playback_llm_server \
+python -m record_playback_llm_server.record_playback_llm_server \
     --mode record --multi-response --cassette ./session.cassette.json
-python -m tests.record_playback_llm_server.record_playback_llm_server \
+python -m record_playback_llm_server.record_playback_llm_server \
     --mode playback --multi-response --cassette ./session.cassette.json
 ```
 
@@ -147,6 +147,50 @@ python -m tests.record_playback_llm_server.record_playback_llm_server \
 | `--delay-mode` | `none` | Up-front per-response delay before serving a cache hit: `none`, `recorded`, `fixed`, `random`. |
 | `--delay-seconds` | `0.0` | Delay for `--delay-mode fixed`. |
 | `--delay-min` / `--delay-max` | `0.0` / `0.0` | Range for `--delay-mode random` (uniform). |
+| `--allow-origin` | none | Admit a browser page on this origin. Repeatable, comma separated, or `*`. |
+| `--allow-any-origin` | off | Admit a browser page on every origin. Needs no quoting. |
+
+### Calling the proxy from a browser page
+
+A neuro-san process calls this proxy directly. A page in a browser cannot: the
+page is on an origin of its own, so the browser first asks the proxy for
+permission with an `OPTIONS` request, and hides the real answer unless the
+proxy admits the page. `--allow-origin` is that permission, and it is off until
+an operator names an origin:
+
+```bash
+python -m record_playback_llm_server.record_playback_llm_server \
+    --mode playback --cassette ./session.cassette.json \
+    --allow-origin http://alpha.localhost:8080
+```
+
+The proxy then answers an `OPTIONS` preflight with 204 and puts
+`Access-Control-Allow-Origin` on every answer it gives that page, errors
+included, so a 504 playback miss reaches the page as a 504 and not as an opaque
+network failure. An origin nobody named is answered exactly as before: 405 to
+the preflight, and no permission header.
+
+Named origins are matched whole, so `http://alpha.localhost:8080` does not
+admit `https://alpha.localhost:8080` or any other port. The one port that makes
+no difference is the default port of the scheme, which a browser leaves out of
+the `Origin` header: `https://alpha.example:443` and `https://alpha.example`
+are one origin, as are `http://beta.example:80` and `http://beta.example`.
+Credentials are never allowed; a key in an `Authorization` header is an
+ordinary header to CORS and travels normally.
+
+To admit every page instead of naming them, use `--allow-any-origin`:
+
+```bash
+python -m record_playback_llm_server.record_playback_llm_server \
+    --mode playback --cassette ./session.cassette.json --allow-any-origin
+```
+
+It is the same as `--allow-origin '*'`, and it exists because a bare `*` is a
+shell glob: unquoted, the shell replaces it with the file names in the working
+directory, and the proxy then admits nothing that looks like an origin. The
+switch suits a test machine of your own. On a machine others reach, name the
+origins, because every page in the browser may then call the proxy, spend the
+upstream key it is recording with, and read the cassette's answers.
 
 ### Playback delay
 
@@ -168,11 +212,11 @@ latency: since playback rotates through the responses and each carries its own
 
 ```bash
 # Replay with each response delayed by exactly what it took to record:
-python -m tests.record_playback_llm_server.record_playback_llm_server \
+python -m record_playback_llm_server.record_playback_llm_server \
     --mode playback --cassette ./session.cassette.json --delay-mode recorded
 
 # Replay with a random 0.5–2.0s delay per response:
-python -m tests.record_playback_llm_server.record_playback_llm_server \
+python -m record_playback_llm_server.record_playback_llm_server \
     --mode playback --cassette ./session.cassette.json \
     --delay-mode random --delay-min 0.5 --delay-max 2.0
 ```
@@ -272,6 +316,9 @@ rotates through them. Single-response cassettes (with `"response"`) still
 replay unchanged, so existing fixtures keep working.
 
 ## Internal layout
+
+The proxy is a top level package of its own, beside `neuro_san`. Its tests are
+under `tests/record_playback_llm_server/`, as the repository rules require.
 
 One class per file:
 

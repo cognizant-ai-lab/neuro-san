@@ -24,7 +24,7 @@ from typing import Optional
 from typing import Set
 
 from tests.load_tests.load_test_constants import LoadTestConstants
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class LoadTestArguments:

@@ -20,9 +20,9 @@ from __future__ import annotations
 from typing import Dict
 from typing import Optional
 
-from tests.record_playback_llm_server.cassette import Cassette
-from tests.record_playback_llm_server.playback_delay import PlaybackDelay
-from tests.record_playback_llm_server.upstream_client import UpstreamClient
+from record_playback_llm_server.cassette import Cassette
+from record_playback_llm_server.playback_delay import PlaybackDelay
+from record_playback_llm_server.upstream_client import UpstreamClient
 
 
 class ProxyState:
