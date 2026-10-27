@@ -35,6 +35,7 @@ from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.config_util import ConfigUtil
+from leaf_common.logging.log_once import LogOnce
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver import Resolver
@@ -70,10 +71,6 @@ class AbstractClassActivation(AbstractCallableActivation):
     - ClassActivation: retrieves the class reference directly from the tool specification.
     - ToolboxActivation: looks up the class reference from a predefined toolbox.
     """
-
-    # Process-wide guard so the notice that class resolution is unrestricted
-    # is logged only once, not on every tool invocation.
-    _unrestricted_notice_logged: bool = False
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
@@ -410,13 +407,11 @@ Check these things:
         """
         Logs a one-time notice that CodedTool class resolution is unrestricted.
         """
-        if not AbstractClassActivation._unrestricted_notice_logged:
-            AbstractClassActivation._unrestricted_notice_logged = True
-            self.logger.info(
-                "AGENT_TOOL_PATH_ONLY is not enabled: CodedTool 'class' references "
-                "can resolve via fully-qualified import from anywhere on the PYTHONPATH. "
-                "Set AGENT_TOOL_PATH_ONLY=true to restrict resolution to the "
-                "AGENT_TOOL_PATH hierarchy.")
+        log_once: LogOnce = LogOnce(self.logger)
+        log_once.info("AGENT_TOOL_PATH_ONLY is not enabled: CodedTool 'class' references "
+                      "can resolve via fully-qualified import from anywhere on the PYTHONPATH. "
+                      "Set AGENT_TOOL_PATH_ONLY=true to restrict resolution to the "
+                      "AGENT_TOOL_PATH hierarchy.")
 
     def instantiate_coded_tool(self, python_class) -> CodedTool:
         """

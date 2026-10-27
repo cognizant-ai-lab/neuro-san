@@ -16,13 +16,15 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
-from typing import Set
 
 from copy import deepcopy
+from logging import WARNING
 
 from typing_extensions import override
 
 from langchain_core.tools.base import BaseTool
+
+from leaf_common.logging.log_once import LogOnce
 
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.run_context.langchain.tools.function_tool_creator import FunctionToolCreator
@@ -58,15 +60,6 @@ class ExternalAgentToolCreator(ToolCreator):
         },
         "required": [DEFAULT_EXTERNAL_PARAMETER_NAME]
     }
-
-    # Class-level because a creator lives for one tool reference of one
-    # request: remembers which external agents this process has already
-    # warned about synthesizing parameters for, so the warning is not
-    # repeated on every request.
-    # An agent later observed with declared parameters is removed again, so a
-    # network that is fixed and then regresses warns anew - hocon files can be
-    # edited and hot-reloaded without a server restart.
-    synthesis_warned: Set[str] = set()
 
     @override
     async def create_tool(self, tool_name: str) -> BaseTool:
@@ -175,16 +168,17 @@ class ExternalAgentToolCreator(ToolCreator):
         if parameters and not {"type", "properties", "required"}.issuperset(parameters.keys()):
             return function_json
 
-        if name not in ExternalAgentToolCreator.synthesis_warned:
-            ExternalAgentToolCreator.synthesis_warned.add(name)
-            message: str = (
-                f"The front-man of external agent {name} declares no parameters "
-                f"in its function definition, so a single required "
-                f"'{ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
-                "is being synthesized for it to receive the calling agent's request. "
-                "To control what this agent network receives, declare at least one parameter "
-                "in the function definition of its front-man."
-            )
+        log_once: LogOnce = LogOnce(self.logger)
+        message: str = (
+            f"The front-man of external agent {name} declares no parameters "
+            f"in its function definition, so a single required "
+            f"'{ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
+            "is being synthesized for it to receive the calling agent's request. "
+            "To control what this agent network receives, declare at least one parameter "
+            "in the function definition of its front-man."
+        )
+        # Still one message per tool.
+        if log_once.should_log(message, WARNING):
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
             self.logger.warning(message)
