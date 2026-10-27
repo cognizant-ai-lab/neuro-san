@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -22,8 +23,6 @@ from typing import Optional
 
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
-
-logger: logging.Logger = logging.getLogger(__name__)
 
 
 class PoolAnalyzer:
@@ -39,6 +38,7 @@ class PoolAnalyzer:
 
         :param stage_summaries: Per-stage summaries collected during the run
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._summaries: List[Dict[str, Any]] = stage_summaries
 
     # pylint: disable=too-many-locals
@@ -60,9 +60,9 @@ class PoolAnalyzer:
 
         base_threads: int = stages_with_data[0].get("before_threads")
 
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        logger.info("  EXECUTOR POOL REUSE ANALYSIS")
-        logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  EXECUTOR POOL REUSE ANALYSIS")
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Batch", "Server Calls", "New Threads",
@@ -112,13 +112,14 @@ class PoolAnalyzer:
             ]
             rows.append(row)
 
-        TableFormatter.log_table(header, rows)
+        table_formatter: TableFormatter = TableFormatter()
+
+        table_formatter.log_table(header, rows)
 
         first_demand: int = max(stages_with_data[0].get("after_threads") - stages_with_data[0].get("before_threads"), 0)
         self._log_pool_diagnostics(reuse_percentages, total_new_threads, first_demand=first_demand)
 
-    @staticmethod
-    def _log_pool_diagnostics(reuse_percentages: List[float], total_new_threads: int, first_demand: int) -> None:
+    def _log_pool_diagnostics(self, reuse_percentages: List[float], total_new_threads: int, first_demand: int) -> None:
         """
         Log summary diagnostics for pool reuse.
 
@@ -128,15 +129,15 @@ class PoolAnalyzer:
         """
         if len(reuse_percentages) < 2:
             return
-        logger.info(
+        self.logger.info(
             "\n  Pool reuse: %.1f%% (batch 1) -> %.1f%% (batch %d)",
             reuse_percentages[0], reuse_percentages[-1], len(reuse_percentages),
         )
         if total_new_threads > first_demand > 0:
             excess: int = total_new_threads - first_demand
-            logger.info(
+            self.logger.info(
                 "  WARNING: %d new threads created across all batches, but batch 1 demand was only %d.",
                 total_new_threads, first_demand,
             )
-            logger.info("           %d excess threads indicate pool lock contention in return_executor().", excess)
-            logger.info("           cancel_current_tasks() holds the pool lock for up to 5s, blocking reuse.")
+            self.logger.info("           %d excess threads indicate pool lock contention in return_executor().", excess)
+            self.logger.info("           cancel_current_tasks() holds the pool lock for up to 5s, blocking reuse.")

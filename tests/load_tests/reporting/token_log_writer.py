@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 import os
 from typing import Any
 from typing import Dict
@@ -24,17 +25,24 @@ from typing import TextIO
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 
-logger: logging.Logger = logging.getLogger(__name__)
-
 
 class TokenLogWriter:
     """
     Reports token usage for a load-test run: totals on the console and
     per-request, per-agent detail in server_tokens.log.
+
+    _write_token_file() opens server_tokens.log once and passes the open file to each _write_* method,
+    which adds its own lines. The helpers stay static and take the open file, so the file is opened and closed
+    in one with block in _write_token_file().
     """
 
-    @staticmethod
-    def log_token_summary(results: List[Dict[str, Any]], output_dir: Optional[str] = None,
+    def __init__(self) -> None:
+        """
+        Constructor.
+        """
+        self.logger: Logger = getLogger(self.__class__.__name__)
+
+    def log_token_summary(self, results: List[Dict[str, Any]], output_dir: Optional[str] = None,
                           network_tokens: Optional[List[Dict[str, Any]]] = None,
                           validation_events: Optional[List[Dict[str, Any]]] = None) -> None:
         """
@@ -59,17 +67,16 @@ class TokenLogWriter:
         if not has_tokens:
             return
         if output_dir:
-            TokenLogWriter._write_token_file(
+            self._write_token_file(
                 results, output_dir,
                 network_tokens=network_tokens,
                 validation_events=validation_events,
             )
-            TokenLogWriter._log_token_totals(results)
+            self._log_token_totals(results)
         else:
-            TokenLogWriter._log_token_per_request(results)
+            self._log_token_per_request(results)
 
-    @staticmethod
-    def _log_token_per_request(results: List[Dict[str, Any]]) -> None:
+    def _log_token_per_request(self, results: List[Dict[str, Any]]) -> None:
         """
         Log per-request token lines to the console.
 
@@ -86,7 +93,7 @@ class TokenLogWriter:
             llm_calls: int = result.get("llm_calls", 0)
             model: str = result.get("model", "unknown")
             request_id: str = result.get("request_id", "?")
-            logger.info(
+            self.logger.info(
                 "  %s: %s tokens (%s prompt + %s completion), %s LLM call(s), model=%s",
                 request_id, f"{total_tokens:,}",
                 f"{prompt_tokens:,}",
@@ -94,8 +101,7 @@ class TokenLogWriter:
                 llm_calls, model,
             )
 
-    @staticmethod
-    def _write_token_file(results: List[Dict[str, Any]], output_dir: str,
+    def _write_token_file(self, results: List[Dict[str, Any]], output_dir: str,
                           network_tokens: Optional[List[Dict[str, Any]]] = None,
                           validation_events: Optional[List[Dict[str, Any]]] = None) -> None:
         """
@@ -117,7 +123,7 @@ class TokenLogWriter:
                 if not total_tokens:
                     continue
                 TokenLogWriter._write_token_request(file_handle, result, by_request, by_validation)
-        logger.info("  Detail:  %s", path)
+        self.logger.info("  Detail:  %s", path)
 
     @staticmethod
     def _group_network_tokens(network_tokens: Optional[List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
@@ -251,8 +257,7 @@ class TokenLogWriter:
         for error in errors:
             file_handle.write(f"    - {error}\n")
 
-    @staticmethod
-    def _log_token_totals(results: List[Dict[str, Any]]) -> None:
+    def _log_token_totals(self, results: List[Dict[str, Any]]) -> None:
         """
         Log aggregate token totals to the console.
 
@@ -276,9 +281,9 @@ class TokenLogWriter:
             return
         # Whole tokens per request, rounded down, e.g. 1001 / 2 -> 500.
         average_tokens: int = int(total_tokens / count)
-        logger.info(
+        self.logger.info(
             "  Total: %s tokens (%s prompt + %s completion)",
             f"{total_tokens:,}", f"{total_prompt_tokens:,}",
             f"{total_completion_tokens:,}",
         )
-        logger.info("  %s requests, avg %s tokens/request", count, f"{average_tokens:,}")
+        self.logger.info("  %s requests, avg %s tokens/request", count, f"{average_tokens:,}")

@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -31,8 +32,6 @@ from tests.load_tests.reporting.system_resources import SystemSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
-logger: logging.Logger = logging.getLogger(__name__)
-
 
 class SummaryReporter:
     """
@@ -43,7 +42,7 @@ class SummaryReporter:
     """
 
     def __init__(self, stage_summaries: List[Dict[str, Any]], neuro_san_version: Optional[str] = None,
-                 client_token_source: str = "HTTP token_accounting") -> None:
+                 client_token_source: str = LoadTestConstants.CLIENT_TOKEN_SOURCE) -> None:
         """
         Constructor.
 
@@ -51,6 +50,7 @@ class SummaryReporter:
         :param neuro_san_version: Installed neuro-san version, or None when unknown
         :param client_token_source: Where the client token counts came from, shown in the token usage block
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._summaries: List[Dict[str, Any]] = stage_summaries
         self._neuro_san_version: Optional[str] = neuro_san_version
         self._client_token_source: str = client_token_source
@@ -61,12 +61,12 @@ class SummaryReporter:
 
         :param is_ramp: True to label each row by stage, False by round
         """
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
         title: str = "ROUND SUMMARY"
         if is_ramp:
             title = "RAMP-UP SUMMARY"
-        logger.info("  %s", title)
-        logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  %s", title)
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
         has_server_counts: bool = False
         summary: Dict[str, Any]
@@ -98,7 +98,8 @@ class SummaryReporter:
                 server_cells: List[str] = SummaryReporter._server_count_cells(summary)
                 row.extend(server_cells)
             rows.append(row)
-        TableFormatter.log_table(header, rows)
+        table_formatter: TableFormatter = TableFormatter()
+        table_formatter.log_table(header, rows)
 
     def log_overall_results(self) -> None:
         """
@@ -124,18 +125,18 @@ class SummaryReporter:
 
         total_sent: int = total_created + total_failed + total_timeout + total_killed
 
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        logger.info("  OVERALL RESULTS")
-        logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  OVERALL RESULTS")
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
         if self._neuro_san_version:
-            logger.info("  neuro-san version: %s", self._neuro_san_version)
-        logger.info("  Total requests: %s", total_sent)
-        logger.info("    Created:   %s", total_created)
-        logger.info("    Failed:    %s", total_failed)
-        logger.info("    Timed out: %s", total_timeout)
-        logger.info("    Killed:    %s", total_killed)
+            self.logger.info("  neuro-san version: %s", self._neuro_san_version)
+        self.logger.info("  Total requests: %s", total_sent)
+        self.logger.info("    Created:   %s", total_created)
+        self.logger.info("    Failed:    %s", total_failed)
+        self.logger.info("    Timed out: %s", total_timeout)
+        self.logger.info("    Killed:    %s", total_killed)
         total_time_text: str = Formatters.fmt_duration(total_time_seconds, precision=2)
-        logger.info("  Total wall time: %s", total_time_text)
+        self.logger.info("  Total wall time: %s", total_time_text)
         self._log_performance_stats()
 
         if total_retries > 0:
@@ -147,15 +148,14 @@ class SummaryReporter:
             amplification: float = 1.0
             if total_requests > 0:
                 amplification = (total_requests + total_retries) / total_requests
-            logger.info("\n  Overall retry totals:")
-            logger.info("    Total retries:   %s", total_retries)
-            logger.info("    Amplification:   %.2fx", amplification)
+            self.logger.info("\n  Overall retry totals:")
+            self.logger.info("    Total retries:   %s", total_retries)
+            self.logger.info("    Amplification:   %.2fx", amplification)
 
         self._log_llm_token_usage()
         self._log_system_resources()
 
-    @staticmethod
-    def render_token_usage(client: Optional[Dict[str, int]], server: Optional[Dict[str, int]],
+    def render_token_usage(self, client: Optional[Dict[str, int]], server: Optional[Dict[str, int]],
                            client_source: str) -> bool:
         """
         Render the LLM & TOKEN USAGE block; return True if printed.
@@ -171,13 +171,13 @@ class SummaryReporter:
         """
         if client is None and server is None:
             return False
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        logger.info("  LLM & TOKEN USAGE")
-        logger.info("%s", Formatters.SEPARATOR_LINE)
-        SummaryReporter._log_token_source(f"Client ({client_source})", client)
-        SummaryReporter._log_token_source("Server log", server)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  LLM & TOKEN USAGE")
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self._log_token_source(f"Client ({client_source})", client)
+        self._log_token_source("Server log", server)
         if client is not None and server is not None:
-            SummaryReporter._log_token_match(client, server)
+            self._log_token_match(client, server)
         return True
 
     @staticmethod
@@ -228,7 +228,7 @@ class SummaryReporter:
         """
         first_response_stats: Optional[Dict[str, float]] = self._time_to_first_response_stats()
         if first_response_stats is not None:
-            logger.info(
+            self.logger.info(
                 "  Time to first response: %s min / %s avg / %s max",
                 Formatters.fmt_duration(first_response_stats.get("min_seconds", 0)),
                 Formatters.fmt_duration(first_response_stats.get("avg_seconds", 0)),
@@ -237,7 +237,7 @@ class SummaryReporter:
 
         request_duration_stats: Optional[Dict[str, float]] = self._request_duration_stats()
         if request_duration_stats is not None:
-            logger.info(
+            self.logger.info(
                 "  Request duration: %s min / %s avg / %s max",
                 Formatters.fmt_duration(request_duration_stats.get("min_seconds", 0)),
                 Formatters.fmt_duration(request_duration_stats.get("avg_seconds", 0)),
@@ -264,12 +264,11 @@ class SummaryReporter:
         else:
             client = self._token_stats("")
             server = None
-        printed: bool = SummaryReporter.render_token_usage(client, server, client_source=self._client_token_source)
+        printed: bool = self.render_token_usage(client, server, client_source=self._client_token_source)
         if printed:
             self._log_model_distribution()
 
-    @staticmethod
-    def _log_token_source(label: str, stats: Optional[Dict[str, int]]) -> None:
+    def _log_token_source(self, label: str, stats: Optional[Dict[str, int]]) -> None:
         """
         Log one source's LLM/token lines, or 'not available'.
 
@@ -277,23 +276,22 @@ class SummaryReporter:
         :param stats: Token stats from aggregate_token_entries, or None
         """
         if stats is None:
-            logger.info("  %s: not available", label)
+            self.logger.info("  %s: not available", label)
             return
-        logger.info("  %s:", label)
-        logger.info(
+        self.logger.info("  %s:", label)
+        self.logger.info(
             "    LLM calls: %s total  (%s / %s / %s min/avg/max)",
             stats.get("calls_total", 0), stats.get("calls_min", 0),
             stats.get("calls_avg", 0), stats.get("calls_max", 0),
         )
-        logger.info(
+        self.logger.info(
             "    Tokens:    %s total  (%s / %s / %s min/avg/max),  %s prompt + %s completion",
             f"{stats.get("tok_total", 0):,}", f"{stats.get("tok_min", 0):,}",
             f"{stats.get("tok_avg", 0):,}", f"{stats.get("tok_max", 0):,}",
             f"{stats.get("prompt_total", 0):,}", f"{stats.get("comp_total", 0):,}",
         )
 
-    @staticmethod
-    def _log_token_match(client: Dict[str, int], server: Dict[str, int]) -> None:
+    def _log_token_match(self, client: Dict[str, int], server: Dict[str, int]) -> None:
         """
         Log whether client and server-log totals agree.
 
@@ -303,9 +301,9 @@ class SummaryReporter:
         calls_match: bool = client.get("calls_total", 0) == server.get("calls_total", 0)
         tokens_match: bool = client.get("tok_total", 0) == server.get("tok_total", 0)
         if calls_match and tokens_match:
-            logger.info("  Match: OK")
+            self.logger.info("  Match: OK")
             return
-        logger.info(
+        self.logger.info(
             "  Match: MISMATCH — LLM calls %s vs %s, tokens %s vs %s",
             client.get("calls_total", 0), server.get("calls_total", 0),
             f"{client.get("tok_total", 0):,}", f"{server.get("tok_total", 0):,}",
@@ -323,7 +321,7 @@ class SummaryReporter:
             result: Dict[str, Any]
             # Stop at the first result with client tokens.
             for result in summary.get("results", []):
-                if "client_total_tokens" in result:
+                if "client_total_tokens" in result.keys():
                     return True
         return False
 
@@ -361,7 +359,8 @@ class SummaryReporter:
         """
         Log the aligned SYSTEM RESOURCES before/peak/after section.
         """
-        SystemResources.log_section(
+        system_resources: SystemResources = SystemResources()
+        system_resources.log_section(
             self._sys_edge_snapshot("before"),
             self._sys_peak_snapshot(),
             self._sys_edge_snapshot("after"),
@@ -386,11 +385,14 @@ class SummaryReporter:
             memory_percentage: Optional[float] = summary.get(prefix + "mem_pct")
             if memory_percentage is None:
                 continue
+            available_gigabytes: Optional[float] = summary.get(prefix + "mem_avail_gb")
+            cpu_percentage: Optional[float] = summary.get(prefix + "cpu")
+            system_threads: Optional[int] = summary.get(prefix + "threads")
             snapshot: SystemSnapshot = {
-                "mem_pct": memory_percentage,
-                "mem_avail_gb": summary.get(prefix + "mem_avail_gb"),
-                "cpu_pct": summary.get(prefix + "cpu"),
-                "threads": summary.get(prefix + "threads"),
+                "memory_percent": memory_percentage,
+                "available_gigabytes": available_gigabytes,
+                "cpu_percent": cpu_percentage,
+                "threads": system_threads,
             }
             if edge == "before":
                 return snapshot
@@ -431,9 +433,9 @@ class SummaryReporter:
                 and peak_threads is None):
             return None
         return {
-            "mem_pct": peak_memory_percentage,
-            "mem_avail_gb": peak_available_gigabytes,
-            "cpu_pct": peak_cpu_percentage,
+            "memory_percent": peak_memory_percentage,
+            "available_gigabytes": peak_available_gigabytes,
+            "cpu_percent": peak_cpu_percentage,
             "threads": peak_threads,
         }
 
@@ -494,9 +496,9 @@ class SummaryReporter:
         # One "model (N)" part per model, most used first.
         for model_name, count in model_counts.most_common():
             model_parts.append(f"{model_name} ({count})")
-        logger.info("  LLM models: %s", ", ".join(model_parts))
+        self.logger.info("  LLM models: %s", ", ".join(model_parts))
         if fallback_requests > 0:
-            logger.info("    Fallback LLM used: %s request(s)", fallback_requests)
+            self.logger.info("    Fallback LLM used: %s request(s)", fallback_requests)
 
     def _time_to_first_response_stats(self) -> Optional[Dict[str, float]]:
         """
@@ -543,7 +545,7 @@ class SummaryReporter:
         for event in all_events:
             total_cycles += event.get("fix_cycles", 0)
             all_errors.extend(event.get("errors", []))
-        logger.info(
+        self.logger.info(
             "\n  Validation: %s of %s requests needed fixes (%s fix cycles total)",
             affected, total_requests, total_cycles,
         )
@@ -581,14 +583,13 @@ class SummaryReporter:
             average_without_fixes_seconds: float = (
                 sum(durations_without_fixes_seconds) / len(durations_without_fixes_seconds)
             )
-            logger.info(
+            self.logger.info(
                 "    Requests with fixes took %s avg vs %s avg without",
                 Formatters.fmt_duration(average_with_fixes_seconds),
                 Formatters.fmt_duration(average_without_fixes_seconds),
             )
 
-    @staticmethod
-    def _log_top_errors(all_errors: List[str]) -> None:
+    def _log_top_errors(self, all_errors: List[str]) -> None:
         """
         Log the most common validation errors.
 
@@ -602,7 +603,7 @@ class SummaryReporter:
         # One "error (Nx)" part per top error.
         for error, count in top:
             parts.append(f"{error} ({count}x)")
-        logger.info("    %s errors found: %s", len(all_errors), ", ".join(parts))
+        self.logger.info("    %s errors found: %s", len(all_errors), ", ".join(parts))
 
     def _collect_validation_events(self) -> List[Dict[str, Any]]:
         """

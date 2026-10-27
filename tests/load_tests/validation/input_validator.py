@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from os import getcwd
 from os import listdir
 from os.path import isabs
@@ -39,8 +40,6 @@ from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
-logger: logging.Logger = logging.getLogger(__name__)
-
 
 class InputValidator:
     """
@@ -60,6 +59,7 @@ class InputValidator:
 
         :param args: Parsed command-line arguments
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._args: Namespace = args
 
     def validate_agent_name(self) -> None:
@@ -71,7 +71,7 @@ class InputValidator:
         """
         agent: str = self._args.agent
         if isabs(agent):
-            logger.error(
+            self.logger.error(
                 """ERROR: --agent appears to be a filesystem path:
   %s
 
@@ -112,7 +112,7 @@ Then use:
         hocon_dir: str = join(parent_dir, agent_base_name)
 
         if not isdir(hocon_dir):
-            logger.error(
+            self.logger.error(
                 """ERROR: no hocon fixtures directory for agent '%s':
   Expected: %s
   Check --fixtures-hocon-dir / --project-root.""",
@@ -129,7 +129,7 @@ Then use:
                 hocon_files.append(file_path)
         hocon_files.sort()
         if not hocon_files:
-            logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
+            self.logger.error("ERROR: no *.hocon files found in:\n  %s", hocon_dir)
             raise LoadTestAbortError(1)
 
         return hocon_files
@@ -154,7 +154,7 @@ Then use:
                         if stage_text.strip():
                             stages.append(int(stage_text.strip()))
                 except ValueError as value_error:
-                    logger.error(
+                    self.logger.error(
                         "--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
                         self._args.stages,
                     )
@@ -167,12 +167,12 @@ Then use:
                         has_non_positive = True
                         break
                 if not stages or has_non_positive:
-                    logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
+                    self.logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
                     raise LoadTestAbortError(1)
                 return stages
             return list(LoadTestConstants.DEFAULT_STAGES)
         if self._args.num_requests <= 0:
-            logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
+            self.logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
             raise LoadTestAbortError(1)
         return [self._args.num_requests]
 
@@ -184,11 +184,11 @@ Then use:
         :return: --max-requests when given, else sum(stages) * --num-rounds
         """
         if self._args.num_rounds <= 0:
-            logger.error("--num-rounds must be a positive integer. Got: %s", self._args.num_rounds)
+            self.logger.error("--num-rounds must be a positive integer. Got: %s", self._args.num_rounds)
             raise LoadTestAbortError(1)
         if self._args.max_requests is not None:
             if self._args.max_requests <= 0:
-                logger.error("--max-requests must be a positive integer. Got: %s", self._args.max_requests)
+                self.logger.error("--max-requests must be a positive integer. Got: %s", self._args.max_requests)
                 raise LoadTestAbortError(1)
             return self._args.max_requests
         return sum(stages) * self._args.num_rounds
@@ -227,7 +227,7 @@ Then use:
                                               total_planned_requests=total_planned_requests,
                                               stale_log_age_minutes=stale_log_age_minutes)
             self._print_warnings(warnings)
-            logger.info("%s", Formatters.SEPARATOR_LINE)
+            self.logger.info("%s", Formatters.SEPARATOR_LINE)
             return None
 
         probe_result: Dict[str, Any] = {}
@@ -238,7 +238,7 @@ Then use:
         probe_elapsed_seconds: float = probe_measurements.get("elapsed_seconds", 0)
         estimated_stage_duration_seconds: float = self._estimate_stage_duration(probe_elapsed_seconds,
                                                                                 remaining_requests)
-        logger.info(
+        self.logger.info(
             "  Estimated stage duration: ~%ss (%.1fs x %s requests)",
             int(estimated_stage_duration_seconds),
             probe_elapsed_seconds,
@@ -256,16 +256,16 @@ Then use:
         )
         self._print_warnings(warnings)
 
-        logger.info(
+        self.logger.info(
             """
   Tip: use --no-dry-run to skip this confirmation.
        --no-dry-run does not auto-adjust timeouts.""",
         )
 
-        logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
         if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
-            logger.info("Aborted by user.")
+            self.logger.info("Aborted by user.")
             raise LoadTestAbortError(0)
 
         return probe_result
@@ -279,17 +279,17 @@ Then use:
         :param capped_requests: Requests after the --max-requests cap
         """
         args: Namespace = self._args
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        logger.info("  PRE-RUN SUMMARY")
-        logger.info("%s", Formatters.SEPARATOR_LINE)
-        logger.info("  Agent:    %s", args.agent)
-        logger.info("  Level:    %s", args.level)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  PRE-RUN SUMMARY")
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  Agent:    %s", args.agent)
+        self.logger.info("  Level:    %s", args.level)
         if args.ramp:
-            logger.info("  Stages:   %s", stages)
+            self.logger.info("  Stages:   %s", stages)
         round_suffix: str = ""
         if args.num_rounds > 1:
             round_suffix = "s"
-        logger.info(
+        self.logger.info(
             "  Requests: %s x %s round%s = %s total",
             args.num_requests,
             args.num_rounds,
@@ -297,13 +297,13 @@ Then use:
             total_planned_requests,
         )
         if capped_requests < total_planned_requests:
-            logger.info("  Capped:   %s (--max-requests)", capped_requests)
-        logger.info("  Workers:  %s (concurrent)", args.max_workers)
+            self.logger.info("  Capped:   %s (--max-requests)", capped_requests)
+        self.logger.info("  Workers:  %s (concurrent)", args.max_workers)
         # Whole minutes, rounded down, e.g. 150s -> 2m.
         request_timeout_minutes: int = int(args.request_timeout / 60)
         idle_timeout_minutes: int = int(args.idle_timeout / 60)
         stage_timeout_minutes: int = int(args.stage_timeout / 60)
-        logger.info(
+        self.logger.info(
             "  Timeouts: --request-timeout %ss (%sm) / --idle-timeout %ss (%sm) / --stage-timeout %ss (%sm)",
             args.request_timeout, request_timeout_minutes,
             args.idle_timeout, idle_timeout_minutes,
@@ -312,10 +312,11 @@ Then use:
         if args.total_timeout > 0:
             # Whole minutes, rounded down, e.g. 150s -> 2m.
             total_timeout_minutes: int = int(args.total_timeout / 60)
-            logger.info("            --total-timeout %ss (%sm)", args.total_timeout, total_timeout_minutes)
+            self.logger.info("            --total-timeout %ss (%sm)", args.total_timeout, total_timeout_minutes)
         else:
-            logger.info("            --total-timeout disabled")
-        SystemResources.log_prerun()
+            self.logger.info("            --total-timeout disabled")
+        system_resources: SystemResources = SystemResources()
+        system_resources.log_prerun()
 
     @staticmethod
     def _estimate_stage_duration(probe_elapsed_seconds: float, remaining_requests: int) -> float:
@@ -440,28 +441,27 @@ server log to fall back on:
             return memory_warning
         return None
 
-    @staticmethod
-    def _print_warnings(warnings: List[str]) -> None:
+    def _print_warnings(self, warnings: List[str]) -> None:
         """
         Print numbered warnings or 'No warnings'.
 
         :param warnings: Warning texts from _collect_warnings
         """
         if not warnings:
-            logger.info("\n  No warnings.")
+            self.logger.info("\n  No warnings.")
             return
 
-        logger.warning("\n  WARNINGS (%s found):", len(warnings))
+        self.logger.warning("\n  WARNINGS (%s found):", len(warnings))
         warning_number: int
         warning: str
         # Log each warning, numbered from 1, with its extra lines below it.
         for warning_number, warning in enumerate(warnings, 1):
             lines: List[str] = warning.split("\n")
-            logger.warning("  %s. %s", warning_number, lines[0])
+            self.logger.warning("  %s. %s", warning_number, lines[0])
             line: str
             # Log the rest of the warning's lines.
             for line in lines[1:]:
-                logger.warning("  %s", line)
+                self.logger.warning("  %s", line)
 
     def _run_cost_probe(self, runner: TrafficRunner,
                         output_dir: Optional[str]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -476,7 +476,7 @@ server log to fall back on:
         :return: (probe_result, probe_measurements), where probe_measurements holds tokens, cost_dollars, model and
             elapsed_seconds
         """
-        logger.info("\n  Running 1 dry-run probe to measure actual cost...")
+        self.logger.info("\n  Running 1 dry-run probe to measure actual cost...")
 
         probe_result: Dict[str, Any] = runner.run_one_http(request_id=0, global_request_id=0, output_dir=output_dir)
 
@@ -486,13 +486,13 @@ server log to fall back on:
         probe_status: str = probe_result.get("status", "FAILED")
         probe_elapsed_seconds: float = probe_result.get("elapsed", 0)
 
-        logger.info("\n  Probe request completed in %.1fs (%s)", probe_elapsed_seconds, probe_status)
+        self.logger.info("\n  Probe request completed in %.1fs (%s)", probe_elapsed_seconds, probe_status)
 
         if probe_tokens > 0:
-            logger.info("  Probe tokens: %s (model: %s, cost: $%.4f)", f"{probe_tokens:,}", probe_model,
-                        probe_cost_dollars)
+            self.logger.info("  Probe tokens: %s (model: %s, cost: $%.4f)", f"{probe_tokens:,}", probe_model,
+                             probe_cost_dollars)
         else:
-            logger.info("  No token data from probe (agent may not track tokens).")
+            self.logger.info("  No token data from probe (agent may not track tokens).")
 
         probe_measurements: Dict[str, Any] = {
             "tokens": probe_tokens,

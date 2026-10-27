@@ -15,7 +15,8 @@
 # END COPYRIGHT
 
 from json import JSONDecodeError
-import logging
+from logging import Logger
+from logging import getLogger
 from os import listdir
 from os.path import isfile
 from os.path import join
@@ -35,8 +36,6 @@ from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
-
-logger: logging.Logger = logging.getLogger(__name__)
 
 
 class CrossRunComparison:
@@ -68,6 +67,7 @@ class CrossRunComparison:
         :param baseline_requests: Leave out runs with fewer requests than this; 0 keeps every run
         :param run_filter: Run folder names to include, with no deduplication; None or empty includes every folder
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._base_dir: str = base_dir
         self._agent_filter: Set[str] = set()
         if agent_filter:
@@ -83,7 +83,7 @@ class CrossRunComparison:
         """
         all_runs: List[Dict[str, Any]] = self._collect_runs()
         if not all_runs:
-            logger.info("No raw_results.json files found in %s", self._base_dir)
+            self.logger.info("No %s files found in %s", LoadTestConstants.RAW_RESULTS_FILE_NAME, self._base_dir)
             return
         groups: Dict[str, List[Dict[str, Any]]] = self._group_by_agent(all_runs)
         agent_name: str
@@ -154,8 +154,7 @@ class CrossRunComparison:
                 by_count[count] = run
         return list(by_count.values())
 
-    @staticmethod
-    def _extract_metrics(json_path: str, folder_name: str) -> Optional[Dict[str, Any]]:
+    def _extract_metrics(self, json_path: str, folder_name: str) -> Optional[Dict[str, Any]]:
         """
         Read a run's raw_results.json and return key metrics.
 
@@ -168,11 +167,11 @@ class CrossRunComparison:
         try:
             raw_results = EasyJsonPersistence(full_ref=json_path, must_exist=True).restore()
         except (JSONDecodeError, OSError) as error:
-            SensitiveLogger(logger).error("Could not read %s: %s", json_path, error)
+            self._log_read_error(json_path, error)
             return None
         if raw_results is None:
             # EasyJsonPersistence returns None when the JSON is a list or a single value.
-            SensitiveLogger(logger).error("Could not read %s: %s", json_path, "the file is not a JSON object ({...})")
+            self.logger.error("Could not read %s: %s", json_path, "the file is not a JSON object ({...})")
             return None
 
         raw_results_extractor: DictionaryExtractor = DictionaryExtractor(raw_results)
@@ -189,13 +188,7 @@ class CrossRunComparison:
             all_results.extend(stage.get("results", []))
             stage_peak_rss_megabytes: float = stage.get("peak_server_rss", 0)
             peak_rss_megabytes = max(peak_rss_megabytes, stage_peak_rss_megabytes)
-        created_results: List[Dict[str, Any]] = []
-        result: Dict[str, Any]
-        # Keep only the results of successful requests.
-        for result in all_results:
-            if result.get("status") == LoadTestConstants.STATUS_CREATED:
-                created_results.append(result)
-
+        created_results: List[Dict[str, Any]] = CrossRunComparison._created_results(all_results)
         total_requests: int = raw_results_extractor.get("aggregates.total_requests", 0)
 
         run_metrics: Dict[str, Any] = {
@@ -211,6 +204,36 @@ class CrossRunComparison:
             "fail_breakdown": CrossRunComparison._classify_failures(all_results),
         }
         return run_metrics
+
+    def _log_read_error(self, json_path: str, error: Exception) -> None:
+        """
+        Log that a run's raw_results.json could not be read. The error text goes through a SensitiveLogger;
+        when LEAF_LOG_SENSITIVE is off, the plain logger still names the file.
+
+        :param json_path: Path to the run's raw_results.json
+        :param error: The JSONDecodeError or OSError raised while reading it
+        """
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        if sensitive_logger.should_log():
+            sensitive_logger.error("Could not read %s: %s", json_path, error)
+        else:
+            self.logger.error("Could not read %s", json_path)
+
+    @staticmethod
+    def _created_results(all_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Keep only the results of successful requests.
+
+        :param all_results: Every request result in the run
+        :return: The results whose status is LoadTestConstants.STATUS_CREATED, in the same order
+        """
+        created_results: List[Dict[str, Any]] = []
+        result: Dict[str, Any]
+        # Keep only the results of successful requests.
+        for result in all_results:
+            if result.get("status") == LoadTestConstants.STATUS_CREATED:
+                created_results.append(result)
+        return created_results
 
     @staticmethod
     def _classify_failures(all_results: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -278,17 +301,16 @@ class CrossRunComparison:
             groups.setdefault(agent, []).append(run)
         return groups
 
-    @staticmethod
-    def _log_table(runs: List[Dict[str, Any]], agent_name: str) -> None:
+    def _log_table(self, runs: List[Dict[str, Any]], agent_name: str) -> None:
         """
         Log the comparison table with pct change from baseline.
 
         :param runs: One agent's runs sorted by num_requests; the first is the baseline
         :param agent_name: Agent name shown in the table title
         """
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
-        logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
         header: List[str] = [
             "Folder", "Requests", "Succeeded",
@@ -318,7 +340,8 @@ class CrossRunComparison:
             trailing_cells: List[str] = CrossRunComparison._trailing_cells(run, deltas)
             row.extend(trailing_cells)
             rows.append(row)
-        TableFormatter.log_table(header, rows)
+        table_formatter: TableFormatter = TableFormatter()
+        table_formatter.log_table(header, rows)
 
     @staticmethod
     def _leading_cells(run: Dict[str, Any], deltas: Dict[str, float]) -> List[str]:
@@ -428,8 +451,7 @@ class CrossRunComparison:
                 loops.append(loop_entry)
         return loops
 
-    @staticmethod
-    def _print_loop_summary(folder: str, loops: List[Dict[str, Any]]) -> None:
+    def _print_loop_summary(self, folder: str, loops: List[Dict[str, Any]]) -> None:
         """
         Print aggregated validation loop stats.
 
@@ -446,12 +468,13 @@ class CrossRunComparison:
             total_retries += loop_entry.get("retries", 0)
             total_tokens += loop_entry.get("total_tokens", 0)
             total_cost_dollars += loop_entry.get("cost_usd", 0.0)
-        logger.info("")
-        logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
-        logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}", total_cost_dollars)
+        self.logger.info("")
+        self.logger.info("  Validation loops in %s (%s request(s)):", folder, len(loops))
+        self.logger.info("    Total: %s retries, %s tokens, $%.2f", total_retries, f"{total_tokens:,}",
+                         total_cost_dollars)
         # One line per validation-loop request, most retries first.
         for loop_entry in sorted(loops, key=CrossRunComparison._retries_of, reverse=True):
-            logger.info(
+            self.logger.info(
                 "    %s: %s retries, %s tokens ($%.2f)",
                 loop_entry.get("request_id", ""),
                 loop_entry.get("retries", 0),

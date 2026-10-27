@@ -36,7 +36,7 @@ class TestStageExecutor(TestCase):
         timeout_reached: bool = False
         # The fake clock reads 1205 seconds after a test start at 0.
         with patch("tests.load_tests.traffic.stage_executor.perf_counter", return_value=1205.0):
-            with self.assertLogs(stage_executor.logger, level="WARNING") as captured:
+            with self.assertLogs("StageExecutor", level="WARNING") as captured:
                 timeout_reached = stage_executor.total_timeout_reached(0.0)
         log_text: str = "\n".join(captured.output)
         self.assertTrue(timeout_reached)

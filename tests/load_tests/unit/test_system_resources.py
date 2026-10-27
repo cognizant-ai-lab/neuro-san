@@ -30,7 +30,7 @@ class TestSystemResources(TestCase):
         """
         A snapshot with the free memory gives used, free and percent.
         """
-        row_text: str = SystemResources._format_memory_row({"mem_pct": 50.0, "mem_avail_gb": 7.5}, 16.0)
+        row_text: str = SystemResources._format_memory_row({"memory_percent": 50.0, "available_gigabytes": 7.5}, 16.0)
 
         self.assertEqual("8192 MB used / 7.5 GB free (50% used)", row_text)
 
@@ -38,6 +38,6 @@ class TestSystemResources(TestCase):
         """
         A snapshot whose free memory is None gives 'n/a free' instead of raising TypeError.
         """
-        row_text: str = SystemResources._format_memory_row({"mem_pct": 50.0, "mem_avail_gb": None}, 16.0)
+        row_text: str = SystemResources._format_memory_row({"memory_percent": 50.0, "available_gigabytes": None}, 16.0)
 
         self.assertEqual("8192 MB used / n/a free (50% used)", row_text)

@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -29,8 +30,6 @@ ServerResourceRow = Dict[str, Any]
 # Keys "display" (table cells), "before", "peak" and "settled" (client snapshots)
 ClientResourceRow = Dict[str, Any]
 
-logger: logging.Logger = logging.getLogger(__name__)
-
 
 class ResourceReporter:
     """
@@ -44,6 +43,7 @@ class ResourceReporter:
         """
         Start with no server or client resource rows.
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._resource_rows: List[ServerResourceRow] = []
         self._client_rows: List[ClientResourceRow] = []
 
@@ -172,16 +172,17 @@ class ResourceReporter:
             "Threads", "Thread Delta", "Conns", "Children",
         ]
         rows: List[List[str]] = self._combined_server_rows() + self._combined_client_rows()
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
         if total_server_calls > 0:
-            logger.info(
+            self.logger.info(
                 "  RESOURCE ANALYSIS (%s client requests, %s server calls)",
                 total_client_requests, total_server_calls,
             )
         else:
-            logger.info("  RESOURCE ANALYSIS (%s total requests)", total_client_requests)
-        logger.info("%s", Formatters.SEPARATOR_LINE)
-        TableFormatter.log_table(header, rows)
+            self.logger.info("  RESOURCE ANALYSIS (%s total requests)", total_client_requests)
+        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        table_formatter: TableFormatter = TableFormatter()
+        table_formatter.log_table(header, rows)
         self._log_resource_deltas()
         self._log_client_deltas()
 
@@ -338,8 +339,7 @@ class ResourceReporter:
             ],
         )
 
-    @staticmethod
-    def _log_snapshot_deltas(label: str, before_snapshot: Dict[str, Any], after_snapshot: Dict[str, Any],
+    def _log_snapshot_deltas(self, label: str, before_snapshot: Dict[str, Any], after_snapshot: Dict[str, Any],
                              fields: List[List[str]]) -> None:
         """
         Log deltas between two ResourceSnapshots.
@@ -357,7 +357,7 @@ class ResourceReporter:
         for name, key, format_pattern in fields:
             name_length: int = len(name)
             maximum_name_length = max(maximum_name_length, name_length)
-        logger.info("\n  %s overall deltas (first stage vs last stage):", label)
+        self.logger.info("\n  %s overall deltas (first stage vs last stage):", label)
         # One delta line per field.
         for name, key, format_pattern in fields:
             delta: float = after_snapshot.get(key) - before_snapshot.get(key)
@@ -366,4 +366,4 @@ class ResourceReporter:
             sign: str = "-"
             if delta >= 0:
                 sign = "+"
-            logger.info("    %s %s%s", padded, sign, formatted)
+            self.logger.info("    %s %s%s", padded, sign, formatted)
