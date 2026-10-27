@@ -65,8 +65,8 @@ class JsonMetadata:
             "aggregates.avg_latency_seconds":
                 "Mean per-request duration. Requests overlap, so this is not total elapsed / total requests.",
             "stage_summaries[].counts":
-                "Per-status request counts: CREATED=success, FAILED=error/crash, TIMEOUT=hit hard timeout cap, "
-                "KILLED=no output for idle_timeout.",
+                "Per-status request counts: CREATED=success, FAILED=error/crash, TIMEOUT=hit request_timeout or "
+                "no output for idle_timeout, KILLED=still running at stage_timeout or Ctrl-C.",
             "stage_summaries[].retries":
                 "Server-side retries by type: neuro-san max_attempts retries (e.g. RateLimitError, APIError) plus "
                 "ProviderRetry for retries the LLM provider SDK performed internally. Empty dict means zero retries.",
@@ -91,8 +91,8 @@ class JsonMetadata:
             "stage_summaries[].peak_threads":
                 "Peak server thread count during stage execution (only present when heartbeat captured it).",
             "results[].status":
-                "CREATED=success, FAILED=error/crash, TIMEOUT=exceeded request timeout, "
-                "KILLED=no output for idle_timeout.",
+                "CREATED=success, FAILED=error/crash, TIMEOUT=hit request_timeout or no output for idle_timeout, "
+                "KILLED=still running at stage_timeout or Ctrl-C.",
             "results[].error":
                 "Error message string when status != CREATED, null on success.",
             "results[].total_tokens":
@@ -128,13 +128,13 @@ class JsonMetadata:
             "client_resource_rows[].settled":
                 "Client process snapshot after all requests completed.",
             "config.request_timeout":
-                "Hard timeout per request in seconds. Kills the request if it exceeds this limit.",
+                "Hard timeout per request in seconds. Marks the request TIMEOUT if it exceeds this limit.",
             "config.idle_timeout":
-                "Per-request idle timeout in seconds. Kills a request if no stream chunk arrives for "
+                "Per-request idle timeout in seconds. Marks a request TIMEOUT if no stream chunk arrives for "
                 "this duration. Resets on every activity.",
             "config.stage_timeout":
-                "Hard timeout for an entire stage/round in seconds. Kills all remaining in-flight "
-                "requests when the stage exceeds this limit.",
+                "Hard timeout for an entire stage/round in seconds. Marks all remaining in-flight "
+                "requests KILLED when the stage exceeds this limit.",
             "config.total_timeout":
                 "Hard timeout for the entire load test in seconds. 0 means disabled.",
             "config.settle_time":
