@@ -155,9 +155,6 @@ class ExternalAgentToolCreator(ToolCreator):
             parameters = raw_parameters
         properties: Dict[str, Any] = parameters.get("properties") or {}
         if properties:
-            # The network declares its own parameters. Re-arm the synthesis
-            # warning in case the network regresses later.
-            ExternalAgentToolCreator.synthesis_warned.discard(name)
             return function_json
 
         # A parameters block carrying anything beyond an empty properties
