@@ -41,11 +41,13 @@ class StageRun:
 
         :param args: Parsed command-line arguments
         :param stage_executor: Runs each stage and checks --total-timeout
-        :param run_inputs: A dict with "stages" (request count of each stage, in order), "total_cap" (most requests
-            to send in the whole test), "monitor_resources" (True to take resource snapshots around each stage),
-            "has_server_log" (True when the server log can be read), "probe_result" (result of the dry-run probe
-            to count in the first stage, or None) and "primary_start_pattern" (server log pattern of a primary
-            request start)
+        :param run_inputs: A dict with the following keys:
+            "stages"                 Request count of each stage, in order
+            "total_cap"              Most requests to send in the whole test
+            "monitor_resources"      True to take resource snapshots around each stage
+            "has_server_log"         True when the server log can be read
+            "probe_result"           Result of the dry-run probe to count in the first stage, or None
+            "primary_start_pattern"  Server log pattern of a primary request start
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self._stage_executor: StageExecutor = stage_executor
@@ -71,8 +73,9 @@ class StageRun:
         """
         Run every stage once per round, collecting data per stage.
 
-        :return: A dict with "stage_summaries" (one summary dict per stage that runs) and "aborted" (True when a
-            stage or --total-timeout stops the test)
+        :return: A dict with the following keys:
+            "stage_summaries"  One summary dict per stage that runs
+            "aborted"          True when a stage or --total-timeout stops the test
         """
         num_rounds: int = self._run_settings.get("num_rounds")
         round_num: int

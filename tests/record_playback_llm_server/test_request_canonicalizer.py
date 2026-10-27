@@ -21,7 +21,7 @@ from typing import Dict
 from typing import Optional
 from unittest import TestCase
 
-from tests.record_playback_llm_server.request_canonicalizer import RequestCanonicalizer
+from record_playback_llm_server.request_canonicalizer import RequestCanonicalizer
 
 
 class TestRequestCanonicalizer(TestCase):

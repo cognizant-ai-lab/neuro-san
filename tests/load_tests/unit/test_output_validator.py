@@ -25,7 +25,7 @@ from tests.load_tests.validation.output_validator import OutputValidator
 
 class TestOutputValidator(TestCase):
     """
-    Unit tests for OutputValidator.count_results().
+    Unit tests for OutputValidator.count_results() and log_stage_results().
 
     These counts drive the run's verdict and the numbers in
     raw_results.json, so a request must never vanish between the
@@ -97,3 +97,19 @@ class TestOutputValidator(TestCase):
         counts: Dict[str, Any] = OutputValidator.count_results(results)
 
         self.assertEqual(sum(counts.values()), len(results))
+
+    def test_stage_results_name_the_timeout_and_killed_limits(self) -> None:
+        """
+        The Timed out and Killed lines name the limits that give each status.
+        """
+        counts: Dict[str, Any] = OutputValidator.count_results([
+            {"status": LoadTestConstants.STATUS_TIMEOUT},
+            {"status": LoadTestConstants.STATUS_KILLED},
+        ])
+
+        with self.assertLogs(OutputValidator.__module__, level="INFO") as captured:
+            OutputValidator.log_stage_results(2, counts, 4.0, 30.0, 10.0)
+
+        output: str = "\n".join(captured.output)
+        self.assertIn("Timed out: 1  (hit 30.0s hard cap or no output for 10.0s)", output)
+        self.assertIn("Killed:  1  (still running at --stage-timeout or Ctrl-C)", output)

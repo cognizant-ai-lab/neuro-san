@@ -24,13 +24,13 @@ import pytest
 
 import tornado.web
 
-from tests.record_playback_llm_server.cassette import Cassette
-from tests.record_playback_llm_server.proxy_state import ProxyState
-from tests.record_playback_llm_server.record_playback_llm_server import RecordPlaybackLlmServer
-from tests.record_playback_llm_server.tests.counting_upstream import CountingUpstream
-from tests.record_playback_llm_server.tests.proxy_test_client import ProxyTestClient
-from tests.record_playback_llm_server.tests.rate_limited_upstream import RateLimitedUpstream
-from tests.record_playback_llm_server.tests.stream_upstream import StreamUpstream
+from record_playback_llm_server.cassette import Cassette
+from record_playback_llm_server.proxy_state import ProxyState
+from record_playback_llm_server.record_playback_llm_server import RecordPlaybackLlmServer
+from tests.record_playback_llm_server.counting_upstream import CountingUpstream
+from tests.record_playback_llm_server.proxy_test_client import ProxyTestClient
+from tests.record_playback_llm_server.rate_limited_upstream import RateLimitedUpstream
+from tests.record_playback_llm_server.stream_upstream import StreamUpstream
 
 
 class TestProxyIntegration:
