@@ -6,6 +6,7 @@ recursive-include neuro_san/api/grpc *
 recursive-include neuro_san/api/scripts *
 recursive-include neuro_san/registries *
 recursive-exclude tests *
+recursive-exclude record_playback_llm_server *
 recursive-exclude build_scripts *
 recursive-exclude neuro_san/api/grpc/__pycache__ *
 recursive-exclude neuro_san/deploy/internal *

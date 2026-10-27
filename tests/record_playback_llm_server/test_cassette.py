@@ -17,7 +17,7 @@
 
 import os
 
-from tests.record_playback_llm_server.cassette import Cassette
+from record_playback_llm_server.cassette import Cassette
 
 
 class TestCassette:

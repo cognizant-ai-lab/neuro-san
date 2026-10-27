@@ -35,9 +35,9 @@ import tornado.iostream
 import tornado.web
 import tornado.ioloop
 
-from tests.record_playback_llm_server.cors_request_handler import CorsRequestHandler
-from tests.record_playback_llm_server.proxy_state import ProxyState
-from tests.record_playback_llm_server.request_canonicalizer import RequestCanonicalizer
+from record_playback_llm_server.cors_request_handler import CorsRequestHandler
+from record_playback_llm_server.proxy_state import ProxyState
+from record_playback_llm_server.request_canonicalizer import RequestCanonicalizer
 
 
 class ProxyHandler(CorsRequestHandler):

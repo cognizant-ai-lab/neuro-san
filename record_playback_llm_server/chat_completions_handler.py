@@ -17,17 +17,16 @@
 
 from __future__ import annotations
 
-from tests.record_playback_llm_server.proxy_handler import ProxyHandler
+from record_playback_llm_server.proxy_handler import ProxyHandler
 
 
-class ModelsHandler(ProxyHandler):
+class ChatCompletionsHandler(ProxyHandler):
     """
-    Implements GET /v1/models by recording against, or replaying from, the
-    cassette. Most LangChain chat clients never call this, but it is proxied
-    for parity with a real OpenAI endpoint so clients that introspect models
-    still work fully offline in playback.
+    Implements POST /v1/chat/completions by recording against, or replaying
+    from, the cassette. The streaming vs one-shot decision is taken from the
+    request body's `stream` flag, exactly as a real OpenAI endpoint would.
     """
 
-    async def get(self) -> None:
-        """Record or replay a models-list request."""
-        await self.handle_request("GET", b"")
+    async def post(self) -> None:
+        """Record or replay a chat-completions request."""
+        await self.handle_request("POST", self.request.body or b"")

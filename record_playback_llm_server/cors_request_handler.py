@@ -25,7 +25,7 @@ from typing_extensions import override
 
 import tornado.web
 
-from tests.record_playback_llm_server.cors_policy import CorsPolicy
+from record_playback_llm_server.cors_policy import CorsPolicy
 
 
 class CorsRequestHandler(tornado.web.RequestHandler):

@@ -29,15 +29,15 @@ from typing import Optional
 
 import tornado.web
 
-from tests.record_playback_llm_server.cassette import Cassette
-from tests.record_playback_llm_server.chat_completions_handler import ChatCompletionsHandler
-from tests.record_playback_llm_server.cors_policy import CorsPolicy
-from tests.record_playback_llm_server.cors_request_handler import CorsRequestHandler
-from tests.record_playback_llm_server.health_handler import HealthHandler
-from tests.record_playback_llm_server.playback_delay import PlaybackDelay
-from tests.record_playback_llm_server.models_handler import ModelsHandler
-from tests.record_playback_llm_server.proxy_state import ProxyState
-from tests.record_playback_llm_server.upstream_client import UpstreamClient
+from record_playback_llm_server.cassette import Cassette
+from record_playback_llm_server.chat_completions_handler import ChatCompletionsHandler
+from record_playback_llm_server.cors_policy import CorsPolicy
+from record_playback_llm_server.cors_request_handler import CorsRequestHandler
+from record_playback_llm_server.health_handler import HealthHandler
+from record_playback_llm_server.playback_delay import PlaybackDelay
+from record_playback_llm_server.models_handler import ModelsHandler
+from record_playback_llm_server.proxy_state import ProxyState
+from record_playback_llm_server.upstream_client import UpstreamClient
 
 
 class RecordPlaybackLlmServer:

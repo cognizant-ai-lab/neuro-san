@@ -30,10 +30,10 @@ from tornado.httpclient import HTTPResponse
 from tornado.testing import AsyncHTTPTestCase
 from typing_extensions import override
 
-from tests.record_playback_llm_server.cassette import Cassette
-from tests.record_playback_llm_server.cors_policy import CorsPolicy
-from tests.record_playback_llm_server.proxy_state import ProxyState
-from tests.record_playback_llm_server.record_playback_llm_server import RecordPlaybackLlmServer
+from record_playback_llm_server.cassette import Cassette
+from record_playback_llm_server.cors_policy import CorsPolicy
+from record_playback_llm_server.proxy_state import ProxyState
+from record_playback_llm_server.record_playback_llm_server import RecordPlaybackLlmServer
 
 
 class TestCorsRequestHandler(AsyncHTTPTestCase):

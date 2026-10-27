@@ -22,7 +22,7 @@ from typing import List
 
 import unittest
 
-from tests.record_playback_llm_server.cors_policy import CorsPolicy
+from record_playback_llm_server.cors_policy import CorsPolicy
 
 
 class TestCorsPolicy(unittest.TestCase):

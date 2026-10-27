@@ -1,6 +1,6 @@
 # Sparse llm_info overlay for OpenAI-compatible servers that only implement /v1/chat/completions,
 # such as the bundled mock LLM server (tests/mock_llm_server) and the record/playback proxy
-# (tests/record_playback_llm_server).
+# (record_playback_llm_server).
 #
 # The "openai" class in default_llm_info.hocon defaults to the Responses API. Point the
 # AGENT_LLM_INFO_FILE environment variable at this file when starting the neuro-san server so that

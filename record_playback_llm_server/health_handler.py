@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from tests.record_playback_llm_server.cors_request_handler import CorsRequestHandler
+from record_playback_llm_server.cors_request_handler import CorsRequestHandler
 
 
 class HealthHandler(CorsRequestHandler):

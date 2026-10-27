@@ -121,7 +121,7 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
 
 ```bash
 python -m neuro_san.client.hocon_validator_cli path/to/agent.hocon --verbose   # HOCON structure, no LLM calls
-flake8 neuro_san tests                                                         # style, line length 120
+flake8 neuro_san record_playback_llm_server tests                             # style, line length 120
 build_scripts/run_pylint.sh                                                   # pylint --rcfile=.pylintrc
 
 export AGENT_TOOL_PATH="./neuro_san/coded_tools"

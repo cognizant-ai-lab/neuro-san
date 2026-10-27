@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-from tests.record_playback_llm_server.cleanup_cassette import CassetteCleaner
+from record_playback_llm_server.cleanup_cassette import CassetteCleaner
 
 
 class TestCassetteCleaner:

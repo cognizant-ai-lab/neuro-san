@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-from tests.record_playback_llm_server.playback_delay import PlaybackDelay
+from record_playback_llm_server.playback_delay import PlaybackDelay
 
 
 class TestPlaybackDelay:

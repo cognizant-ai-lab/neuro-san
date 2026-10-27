@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-from tests.record_playback_llm_server.upstream_client import UpstreamClient
+from record_playback_llm_server.upstream_client import UpstreamClient
 
 
 class TestUpstreamClient:
