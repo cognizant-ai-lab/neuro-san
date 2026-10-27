@@ -77,7 +77,7 @@ class OutputValidator:
         :param counts: Count per status from count_results
         :param elapsed_seconds: Stage wall time in seconds
         :param timeout_seconds: --request-timeout in seconds, shown in the timed-out line
-        :param idle_timeout_seconds: --idle-timeout in seconds, shown in the killed line
+        :param idle_timeout_seconds: --idle-timeout in seconds, shown in the timed-out line
         :param show_counts: False to log only the Duration/Avg line
         """
         if show_counts:
@@ -88,8 +88,9 @@ class OutputValidator:
             logger.info("\n  Requests: %s", actual_requests)
             logger.info("    Created: %s  (success criteria met)", created_count)
             logger.info("    Failed:  %s  (error or crash)", failed_count)
-            logger.info("    Timed out: %s  (hit %ss hard cap)", timeout_count, timeout_seconds)
-            logger.info("    Killed:  %s  (no output for %ss, presumed hanging)", killed_count, idle_timeout_seconds)
+            logger.info("    Timed out: %s  (hit %ss hard cap or no output for %ss)", timeout_count, timeout_seconds,
+                        idle_timeout_seconds)
+            logger.info("    Killed:  %s  (still running at --stage-timeout or Ctrl-C)", killed_count)
         average_seconds_per_request: float = 0
         if actual_requests:
             average_seconds_per_request = elapsed_seconds / actual_requests
