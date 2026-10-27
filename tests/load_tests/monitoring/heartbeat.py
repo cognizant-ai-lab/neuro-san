@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-# Whole re module: "from re import compile" would hide the builtin compile().
-import re
 from concurrent.futures import CancelledError
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -34,13 +32,15 @@ from typing import Optional
 
 from psutil import Process
 
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
-from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.monitoring.server_duration_reader import ServerDurationReader
 from tests.load_tests.monitoring.stage_resource_sampler import StageResourceSampler
+from tests.load_tests.monitoring.stall_tracker import StallTracker
 
 
-class Heartbeat:  # pylint: disable=too-many-instance-attributes
+class Heartbeat:
     """
     Logs periodic progress while requests are in-flight.
 
@@ -48,6 +48,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
     requests and request durations. StageResourceSampler takes the resource readings
     and keeps the stage's peaks; read them with the get_peak_*() methods after join(),
     which ask the sampler.
+    StallTracker notes when the done count last changed, and ServerDurationReader reads
+    the server-side durations from the server log.
     ProgressLogWriter writes the lines to progress.log and the console.
 
     Interim implementation. May be replaced by neuro-san built-in
@@ -73,23 +75,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         # Request worker threads add to this while the heartbeat thread reads it.
         self._failed_request_count: int = 0
         self._failed_request_lock: Lock = Lock()
-        # progress_heartbeat() notes when the done count last changed, to report stalled requests.
-        self._last_done_count: int = 0
-        self._last_change_seconds: float = 0.0
-        # Optional server-log source for per-request server-side
-        # timing.  When set, the heartbeat parses primary
-        # streaming_chat Start/Finish pairs to report cumulative
-        # server-side min/avg/max durations.
-        # Mixed values: a ServerLogMonitor, an int position and pattern strings.
-        server_log_settings: Dict[str, Any] = {}
-        if server_log_timing is not None:
-            server_log_settings = server_log_timing
-        self._log_monitor: Optional[ServerLogMonitor] = server_log_settings.get("log_monitor")
-        self._log_start_position: Optional[int] = server_log_settings.get("log_start_position")
-        primary_start_pattern: Optional[str] = server_log_settings.get("primary_start_pattern")
-        self._primary_start_regex: Optional[re.Pattern] = None
-        if primary_start_pattern:
-            self._primary_start_regex = re.compile(primary_start_pattern)
+        # Only the heartbeat thread reads and updates the stall tracker.
+        self._stall_tracker: StallTracker = StallTracker()
+        self._server_duration_reader: ServerDurationReader = ServerDurationReader(server_log_timing)
 
     def get_peak_server_threads(self) -> Optional[int]:
         """
@@ -175,8 +163,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         ready_event: Event = events.get("ready_event")
         fires_done_event: Event = events.get("fires_done_event")
         server_dead_event: Event = events.get("server_dead_event")
-        self._last_done_count = 0
-        self._last_change_seconds = start_seconds
+        self._stall_tracker.start(start_seconds)
         tick_count: int = 0
         self._resource_sampler.sample_client_rss()
         ready_event.set()
@@ -199,26 +186,13 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 break
 
     @staticmethod
-    def format_elapsed(seconds: int) -> str:
-        """
-        Format seconds with minutes when >= 60.
-
-        :param seconds: Elapsed seconds
-        :return: The formatted duration
-        """
-        if seconds >= 60:
-            # Whole minutes, e.g. 150 seconds -> 2 minutes
-            minutes: int = int(seconds / 60)
-            return f"{seconds}s ({minutes}m)"
-        return f"{seconds}s"
-
-    @staticmethod
     def format_duration_stats(durations: List[float]) -> str:
         """
         Format cumulative min/avg/max over durations.
 
         :param durations: Request durations in seconds
-        :return: The min/avg/max text, or "n/a" when there are no durations yet
+        :return: The min/avg/max text in whole minutes and seconds, e.g. "45s min / 1m 30s avg / 2m 5s max",
+            or "n/a" when there are no durations yet
         """
         if not durations:
             return "n/a"
@@ -230,9 +204,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         max_seconds: int = int(longest_seconds)
         average_float: float = total_seconds / duration_count
         average_seconds: int = int(average_float)
-        min_text: str = Heartbeat.format_elapsed(min_seconds)
-        average_text: str = Heartbeat.format_elapsed(average_seconds)
-        max_text: str = Heartbeat.format_elapsed(max_seconds)
+        min_text: str = DurationParser.format_minutes_seconds(min_seconds)
+        average_text: str = DurationParser.format_minutes_seconds(average_seconds)
+        max_text: str = DurationParser.format_minutes_seconds(max_seconds)
         duration_stats_text: str = f"{min_text} min / {average_text} avg / {max_text} max"
         return duration_stats_text
 
@@ -281,7 +255,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         stall_info: str = self._stall_info(done_count, total)
         readings: Dict[str, str] = self._resource_sampler.sample_server_metrics()
         fail_info: str = self._fail_info(done_count)
-        elapsed_text: str = Heartbeat.format_elapsed(elapsed_seconds)
+        elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
         progress_head: str = (f"{done_count} of {total} completed ({percent_done}%{fail_info}) --"
                               f" {elapsed_text} elapsed [{timestamp}]{stall_info}")
         readings["progress_head"] = progress_head
@@ -289,7 +263,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
 
     def _stall_info(self, done_count: int, total: int) -> str:
         """
-        Report the requests stalled since the done count last changed, and note when it changes.
+        Report the requests stalled since the done count last changed.
 
         :param done_count: Requests finished so far
         :param total: Number of requests in this stage
@@ -297,13 +271,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         """
         stall_info: str = ""
         in_flight: int = total - done_count
-        if done_count == self._last_done_count and done_count < total:
-            stall_seconds: int = int(perf_counter() - self._last_change_seconds)
-            stall_text: str = Heartbeat.format_elapsed(stall_seconds)
+        stall_seconds: Optional[int] = self._stall_tracker.stalled_seconds(done_count, total)
+        if stall_seconds is not None:
+            stall_text: str = DurationParser.format_minutes_seconds(stall_seconds)
             stall_info = f"  !! {in_flight} request(s) stalled for {stall_text}"
-        if done_count > self._last_done_count:
-            self._last_change_seconds = perf_counter()
-            self._last_done_count = done_count
         return stall_info
 
     def _fail_info(self, done_count: int) -> str:
@@ -330,7 +301,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         client_durations: List[float] = Heartbeat._client_durations(futures)
         client_stats: str = Heartbeat.format_duration_stats(client_durations)
         duration_info: str = "  dur/client: " + client_stats
-        server_durations: Optional[List[float]] = self._server_durations()
+        server_durations: Optional[List[float]] = self._server_duration_reader.read_durations()
         if server_durations is not None:
             server_stats: str = Heartbeat.format_duration_stats(server_durations)
             duration_info += "  dur/server: " + server_stats
@@ -390,38 +361,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 result = future.result()
             except (CancelledError, FutureTimeoutError):
                 continue
-            duration_seconds: Optional[float] = result.get("elapsed", result.get("duration"))
+            fallback_seconds: Optional[float] = result.get("duration")
+            duration_seconds: Optional[float] = result.get("elapsed", fallback_seconds)
             if isinstance(duration_seconds, (int, float)) and duration_seconds > 0:
-                durations.append(float(duration_seconds))
-        return durations
-
-    def _server_durations(self) -> Optional[List[float]]:
-        """
-        Collect cumulative server-side per-request durations.
-
-        Parses primary streaming_chat Start/Finish pairs from the
-        server log since the stage start position.
-
-        :return: Durations in seconds, or None when no server log is available
-                 (so the caller can render ``n/a`` and distinguish "no data source" from "no requests yet")
-        """
-        if self._log_monitor is None or self._log_start_position is None:
-            return None
-        pairs: List[Dict[str, object]] = []
-        try:
-            pairs = self._log_monitor.parse_streaming_chat_timing_since(self._log_start_position)
-        except (OSError, ValueError):
-            return []
-        durations: List[float] = []
-        pair: Dict[str, object]
-        # Keep the duration of each primary agent Start/Finish pair.
-        for pair in pairs:
-            if self._primary_start_regex is not None:
-                agent: object = pair.get("agent", "")
-                start_line: str = f"Start {agent}/streaming_chat"
-                if not self._primary_start_regex.search(start_line):
-                    continue
-            duration_seconds: object = pair.get("duration_seconds")
-            if isinstance(duration_seconds, (int, float)) and duration_seconds > 0:
-                durations.append(float(duration_seconds))
+                duration_float: float = float(duration_seconds)
+                durations.append(duration_float)
         return durations

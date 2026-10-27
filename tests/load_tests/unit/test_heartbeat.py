@@ -79,6 +79,15 @@ class TestHeartbeat(TestCase):
         heartbeat.count_failed_request()
         self.assertEqual(2, heartbeat.get_failed_request_count())
 
+    def test_duration_stats_print_minutes_and_seconds(self) -> None:
+        """
+        Request durations of a minute or more print as minutes and seconds, shorter ones as seconds.
+        """
+        stats_text: str = Heartbeat.format_duration_stats([45.7, 90.2, 125.9])
+        no_stats_text: str = Heartbeat.format_duration_stats([])
+        self.assertEqual("45s min / 1m 27s avg / 2m 5s max", stats_text)
+        self.assertEqual("n/a", no_stats_text)
+
     @staticmethod
     def _set_event() -> Event:
         """
