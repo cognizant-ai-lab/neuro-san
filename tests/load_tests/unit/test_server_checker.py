@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 from argparse import Namespace
+from os import environ
 from typing import Any
 from typing import Optional
 from unittest import TestCase
@@ -55,6 +56,19 @@ class TestServerChecker(TestCase):
         server_checker: ServerChecker = ServerChecker(args)
         server_version: Optional[str] = server_checker.fetch_server_version()
         self.assertIsNone(server_version)
+
+    def test_fetch_failure_logs_the_url_and_only_the_error_type(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false the debug line names the URL and only the error type.
+        """
+        args: Namespace = TestServerChecker._args(None, port=1)
+        server_checker: ServerChecker = ServerChecker(args)
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs("tests.load_tests.validation.server_checker", level="DEBUG") as captured:
+            server_checker.fetch_server_version()
+        expected_line: str = ("DEBUG:tests.load_tests.validation.server_checker:Could not fetch server version"
+                              " from http://localhost:1/healthz: URLError")
+        self.assertEqual(captured.output, [expected_line])
 
     def test_get_package_version(self) -> None:
         """

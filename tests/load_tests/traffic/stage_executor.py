@@ -38,6 +38,7 @@ from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
+from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 from tests.load_tests.reporting.stage_data_collector import StageDataCollector
 from tests.load_tests.reporting.stage_summary_builder import StageSummaryBuilder
 from tests.load_tests.reporting.system_resources import SystemResources
@@ -502,7 +503,7 @@ class StageExecutor:
             try:
                 fire_threads = f"  threads: {self.server_process.num_threads()}"
             except (NoSuchProcess, AccessDenied) as exc:
-                self.logger.debug("Thread count unavailable: %s", exc)
+                SensitiveErrorLogger.debug(self.logger, exc, "Thread count unavailable: %s", [])
         fire_label: str = str(actual_requests)
         if probe_result is not None:
             fire_label = f"{actual_requests} ({actual_requests - 1} + 1 probe)"

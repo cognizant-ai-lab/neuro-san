@@ -441,7 +441,8 @@ class TestResultsRebuilder(TestCase):
 
         :param request_id: Request id used in the file name and reservation id
         """
-        path: str = join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME, f"request_{request_id}_stdout.txt")
+        file_name: str = f"request_{request_id}{LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX}"
+        path: str = join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME, file_name)
         response: Dict[str, str] = {
             "reservation_id": f"abc-{request_id}",
             "agent_network_name": "music_nerd",

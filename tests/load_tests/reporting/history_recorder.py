@@ -33,6 +33,7 @@ from psutil import cpu_count
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -252,7 +253,8 @@ class HistoryRecorder:
                 handle.write(record_line)
             logger.info("  Trend history appended: %s", path)
         except OSError as exc:
-            logger.warning("  Could not write trend history to %s: %s", path, exc)
+            message_values: List[str] = [path]
+            SensitiveErrorLogger.warning(logger, exc, "  Could not write trend history to %s: %s", message_values)
 
     @staticmethod
     def _merge_stage_summaries(stage_summaries: List[Dict[str, Any]]) -> Dict[str, Any]:

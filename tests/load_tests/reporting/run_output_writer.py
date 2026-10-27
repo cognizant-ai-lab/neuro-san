@@ -44,6 +44,7 @@ from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.run_log import RunLog
 from tests.load_tests.reporting.run_namer import RunNamer
+from tests.load_tests.reporting.sensitive_error_logger import SensitiveErrorLogger
 from tests.load_tests.reporting.summary_file_writer import SummaryFileWriter
 from tests.load_tests.validation.server_checker import ServerChecker
 
@@ -224,7 +225,8 @@ class RunOutputWriter:
             self._output_dir = new_path
             self.logger.info("  Renamed output to: %s", new_path)
         except OSError as exc:
-            self.logger.warning("  Could not rename output dir: %s", exc)
+            message_values: List[str] = [self._output_dir, new_path]
+            SensitiveErrorLogger.warning(self.logger, exc, "  Could not rename output dir %s to %s: %s", message_values)
 
     def finalize_test_log(self, stage_summaries: List[Dict[str, Any]], history_recorder: HistoryRecorder) -> None:
         """

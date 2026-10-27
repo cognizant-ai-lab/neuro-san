@@ -15,13 +15,17 @@
 # END COPYRIGHT
 from argparse import Namespace
 from json import loads
+from os import environ
 from os import listdir
+from os.path import dirname
 from os.path import join
 from tempfile import TemporaryDirectory
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from unittest import TestCase
+from unittest.mock import patch
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.history_recorder import HistoryRecorder
@@ -112,17 +116,7 @@ class TestHistoryRecorder(TestCase):
                 {"duration_seconds": 2.0, "start_ts": 10.0, "finish_ts": 12.0},
                 {"duration_seconds": 4.0, "start_ts": 11.0, "finish_ts": 15.0},
             ]
-            round_record: Dict[str, Any] = {
-                "neuro_san_version": None,
-                "expected": 2,
-                "count": 2,
-                "elapsed_seconds": 6.0,
-                "peak_server": {"rss_megabytes": 2048.0},
-                "peak_system_cpu_percent": None,
-                "primary_pairs": primary_pairs,
-                "server_errors": None,
-                "tool_warnings": None,
-            }
+            round_record: Dict[str, Any] = TestHistoryRecorder._server_round(None, primary_pairs)
             recorder.append_server_record(round_record)
             history_path: str = join(base, LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME)
             records = TestHistoryRecorder._read_records(history_path)
@@ -136,6 +130,30 @@ class TestHistoryRecorder(TestCase):
             "peak_cpu_cores": 0.0,
         }
         self._assert_record_values(record, expected_values)
+
+    def test_write_failure_logs_the_error(self) -> None:
+        """
+        When the history file cannot be written, the warning holds the path and the error text.
+        """
+        with TemporaryDirectory() as base:
+            blocker_path: str = join(base, "blocker")
+            output: List[str] = self._failed_write_output("true", blocker_path)
+        history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
+        expected_line: str = ("WARNING:tests.load_tests.reporting.history_recorder:  Could not write trend history"
+                              f" to {history_path}: [Errno 17] File exists: '{blocker_path}'")
+        self.assertEqual(output, [expected_line])
+
+    def test_write_failure_hides_the_error_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false the warning holds the path and only the error type.
+        """
+        with TemporaryDirectory() as base:
+            blocker_path: str = join(base, "blocker")
+            output: List[str] = self._failed_write_output("false", blocker_path)
+        history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
+        expected_line: str = ("WARNING:tests.load_tests.reporting.history_recorder:  Could not write trend history"
+                              f" to {history_path}: FileExistsError")
+        self.assertEqual(output, [expected_line])
 
     def test_log_existing_history_files(self) -> None:
         """
@@ -152,6 +170,50 @@ class TestHistoryRecorder(TestCase):
                 recorder.log_existing_history_files()
         expected_line: str = f"INFO:tests.load_tests.reporting.history_recorder:  History:     {history_path}"
         self.assertEqual(captured.output, [expected_line])
+
+    def _failed_write_output(self, log_sensitive: str, blocker_path: str) -> List[str]:
+        """
+        Append a server-only record to blocker_path/history.jsonl, where blocker_path is a plain file, so the
+        write fails.
+
+        :param log_sensitive: The LEAF_LOG_SENSITIVE value for the run: "true" or "false"
+        :param blocker_path: Path of the plain file to create in a temporary folder
+        :return: The WARNING lines the history recorder logs
+        """
+        with open(blocker_path, "w", encoding="utf-8") as blocker_file:
+            blocker_file.write("not a folder\n")
+        history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
+        args: Namespace = Namespace(history_file=history_path, host="localhost", agent="hello_world")
+        output_base: str = dirname(blocker_path)
+        recorder: HistoryRecorder = HistoryRecorder(args, output_base)
+        round_record: Dict[str, Any] = TestHistoryRecorder._server_round("1.0.0", [])
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": log_sensitive}), \
+                self.assertLogs("tests.load_tests.reporting.history_recorder", level="WARNING") as captured:
+            recorder.append_server_record(round_record)
+        output: List[str] = captured.output
+        return output
+
+    @staticmethod
+    def _server_round(neuro_san_version: Optional[str], primary_pairs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build the server-only round dict that append_server_record() takes: 2 of 2 requests in 6 seconds.
+
+        :param neuro_san_version: Server neuro-san version, or None when unknown
+        :param primary_pairs: Primary agent Start/Finish pairs
+        :return: The round dict
+        """
+        round_record: Dict[str, Any] = {
+            "neuro_san_version": neuro_san_version,
+            "expected": 2,
+            "count": 2,
+            "elapsed_seconds": 6.0,
+            "peak_server": {"rss_megabytes": 2048.0},
+            "peak_system_cpu_percent": None,
+            "primary_pairs": primary_pairs,
+            "server_errors": None,
+            "tool_warnings": None,
+        }
+        return round_record
 
     def _assert_record_values(self, record: Dict[str, Any], expected_values: Dict[str, Any]) -> None:
         """

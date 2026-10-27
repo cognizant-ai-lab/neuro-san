@@ -280,9 +280,7 @@ class ResultsRebuilder:
         match: Optional[re.Match] = None
         # Build one result from each request stdout file.
         for filename in sorted(os.listdir(requests_dir)):
-            if not filename.endswith(LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX):
-                continue
-            match = re.search(r"request_(\d+)_stdout", filename)
+            match = LoadTestConstants.REQUEST_STDOUT_FILE_PATTERN.fullmatch(filename)
             if not match:
                 continue
             request_id: int = int(match.group(1))
@@ -369,9 +367,7 @@ class ResultsRebuilder:
         match: Optional[re.Match] = None
         # Cache each request stdout file by request number.
         for filename in os.listdir(requests_dir):
-            if not filename.endswith(LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX):
-                continue
-            match = re.search(r"request_(\d+)_stdout", filename)
+            match = LoadTestConstants.REQUEST_STDOUT_FILE_PATTERN.fullmatch(filename)
             if not match:
                 continue
             request_id: int = int(match.group(1))
