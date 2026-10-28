@@ -61,8 +61,10 @@ class RunOutputWriter:
         Keep the run's arguments and the parts the output files are built from.
 
         :param args: Parsed command-line arguments
-        :param output_parts: A dict with "server_checker" (the ServerChecker), "hocon_files" (fixture HOCON file
-            paths) and "resource_reporter" (the ResourceReporter)
+        :param output_parts: A dict with the following keys:
+            "server_checker"     The ServerChecker
+            "hocon_files"        Fixture HOCON file paths
+            "resource_reporter"  The ResourceReporter
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
@@ -296,8 +298,14 @@ class RunOutputWriter:
         Add up the request counts, time, latency, tokens and cost of the whole test.
 
         :param stage_summaries: One summary dict per stage
-        :return: The "aggregates" dict of raw_results.json: "total_requests", "passed", "failed",
-            "total_elapsed_seconds", "avg_latency_seconds", "total_tokens" and "total_cost_usd"
+        :return: The "aggregates" dict of raw_results.json, with the following keys:
+            "total_requests"         Number of requests
+            "passed"                 Number of passed requests
+            "failed"                 Number of failed requests
+            "total_elapsed_seconds"  Time of all requests in seconds
+            "avg_latency_seconds"    Average request time in seconds
+            "total_tokens"           Total tokens
+            "total_cost_usd"         Total cost in USD
         """
         all_results: List[Dict[str, Any]] = RunOutputWriter.collect_stage_results(stage_summaries)
         request_totals: Dict[str, Any] = RunOutputWriter._add_up_requests(all_results)
@@ -329,8 +337,12 @@ class RunOutputWriter:
         Add up the tokens, cost, latency and pass count of every request.
 
         :param all_results: The request results of every stage
-        :return: Dict with "total_requests", "passed", "total_tokens", "total_cost_usd" and "avg_latency_seconds"
-            (0 without requests)
+        :return: A dict with the following keys:
+            "total_requests"       Number of requests
+            "passed"               Number of passed requests
+            "total_tokens"         Total tokens
+            "total_cost_usd"       Total cost in USD
+            "avg_latency_seconds"  Average request time in seconds, 0 without requests
         """
         total_tokens: int = 0
         costs: List[float] = []

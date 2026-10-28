@@ -113,8 +113,8 @@ class TestHistoryRecorder(TestCase):
             args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
             recorder: HistoryRecorder = HistoryRecorder(args, base)
             primary_pairs: List[Dict[str, Any]] = [
-                {"duration_seconds": 2.0, "start_ts": 10.0, "finish_ts": 12.0},
-                {"duration_seconds": 4.0, "start_ts": 11.0, "finish_ts": 15.0},
+                TestHistoryRecorder._primary_pair(10.0, 12.0),
+                TestHistoryRecorder._primary_pair(11.0, 15.0),
             ]
             round_record: Dict[str, Any] = TestHistoryRecorder._server_round(None, primary_pairs)
             recorder.append_server_record(round_record)
@@ -192,6 +192,25 @@ class TestHistoryRecorder(TestCase):
             recorder.append_server_record(round_record)
         output: List[str] = captured.output
         return output
+
+    @staticmethod
+    def _primary_pair(start_seconds: float, finish_seconds: float) -> Dict[str, Any]:
+        """
+        Build one primary agent Start/Finish pair as ServerLogTailer saves it.
+
+        :param start_seconds: Server log time of the Start line in seconds
+        :param finish_seconds: Server log time of the Finish line in seconds
+        :return: A dict with the following keys:
+            "duration_seconds"  Time from Start to Finish in seconds
+            "start_seconds"     The start_seconds argument
+            "finish_seconds"    The finish_seconds argument
+        """
+        primary_pair: Dict[str, Any] = {
+            "duration_seconds": finish_seconds - start_seconds,
+            "start_seconds": start_seconds,
+            "finish_seconds": finish_seconds,
+        }
+        return primary_pair
 
     @staticmethod
     def _server_round(neuro_san_version: Optional[str], primary_pairs: List[Dict[str, Any]]) -> Dict[str, Any]:

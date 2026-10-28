@@ -75,9 +75,11 @@ class ServerOnlyMonitor:
 
         :param args: Parsed command-line arguments
         :param profile: Agent profile with the primary agent's Start and Finish patterns
-        :param monitor_parts: A dict with "server_process" (the local server process, or None when it is not
-            found), "log_monitor" (monitor of the server log), "history_recorder" (writes the history record of
-            each round) and "server_checker" (gives the neuro-san version to tag each round with)
+        :param monitor_parts: A dict with the following keys:
+            "server_process"    The local server process, or None when it is not found
+            "log_monitor"       Monitor of the server log
+            "history_recorder"  Writes the history record of each round
+            "server_checker"    Gives the neuro-san version to tag each round with
         """
         server_process: Optional[Process] = monitor_parts.get("server_process")
         self.args: Namespace = args
@@ -140,8 +142,10 @@ class ServerOnlyMonitor:
         handler so each server-only round captures its own console
         output (heartbeats + summary) in its output directory.
 
-        :param round_settings: A dict with "primary_start_regex", "primary_finish_regex" (compiled patterns for
-            the primary agent's Start and Finish lines) and "output_base" (base output directory)
+        :param round_settings: A dict with the following keys:
+            "primary_start_regex"   Compiled pattern of the primary agent's Start line
+            "primary_finish_regex"  Compiled pattern of the primary agent's Finish line
+            "output_base"           Base output directory
         :param expected_count: Number of requests the client will send
         :param round_number: Round number, starting at 1
         """
@@ -191,11 +195,14 @@ class ServerOnlyMonitor:
         Run the steps of one server-only round: snapshots, log tailing, reports, raw_results.json and the
         server log copy.
 
-        :param round_values: A dict with "expected" (requests the client will send), "round_number" (starting at
-                             1), "primary_start_regex", "primary_finish_regex" (compiled patterns for the
-                             primary agent's Start and Finish lines), "round_dir" (output directory of the
-                             round), "log_position" (server log position at the start of the round) and
-                             "round_log_path" (path of the round's stdout.log)
+        :param round_values: A dict with the following keys:
+                             "expected"              Requests the client will send
+                             "round_number"          Round number, starting at 1
+                             "primary_start_regex"   Compiled pattern of the primary agent's Start line
+                             "primary_finish_regex"  Compiled pattern of the primary agent's Finish line
+                             "round_dir"             Output directory of the round
+                             "log_position"          Server log position at the start of the round
+                             "round_log_path"        Path of the round's stdout.log
         """
         expected_count: int = round_values.get("expected")
         round_number: int = round_values.get("round_number")
@@ -259,8 +266,10 @@ Waiting for %d request(s) in server log...
         """
         Log the server and system resources before the round.
 
-        :return: Dict with "before_server" (server snapshot, or None), "before_system_memory_percent" and
-            "system_before" (the system values SystemResources.log_section() reads)
+        :return: A dict with the following keys:
+            "before_server"                 Server snapshot, or None
+            "before_system_memory_percent"  System memory use in percent
+            "before_system"                 The system values SystemResources.log_section() reads
         """
         before_server: Optional[Dict[str, Any]] = self.server_log_tailer.snapshot_server()
         if before_server:
@@ -288,7 +297,7 @@ Waiting for %d request(s) in server log...
         before_values: Dict[str, Any] = {
             "before_server": before_server,
             "before_system_memory_percent": before_memory_stats.percent,
-            "system_before": {
+            "before_system": {
                 "memory_percent": before_memory_stats.percent,
                 "available_gigabytes": before_available_gigabytes,
                 "cpu_percent": before_system_cpu_percent,
@@ -303,8 +312,10 @@ Waiting for %d request(s) in server log...
 
         :param before_values: The dict _log_before_round() returns
         :param tail_result: The dict ServerLogTailer.tail_server_log() returns
-        :return: Dict with "after_server" (server snapshot, or None), "after_kernel" (kernel memory, or None)
-            and "after_system_memory_percent"
+        :return: A dict with the following keys:
+            "after_server"                 Server snapshot, or None
+            "after_kernel"                 Kernel memory, or None
+            "after_system_memory_percent"  System memory use in percent
         """
         after_server: Optional[Dict[str, Any]] = self.server_log_tailer.snapshot_server()
         after_kernel: Optional[Dict[str, float]] = KernelMemory.read_kernel_memory()
@@ -314,11 +325,11 @@ Waiting for %d request(s) in server log...
         after_available_gigabytes: float = after_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         after_system_cpu_percent: float = cpu_percent(interval=ServerOnlyMonitor.CPU_SAMPLE_SECONDS)
         after_system_threads: int = SystemResources.total_threads()
-        system_before: Dict[str, float] = before_values.get("system_before")
+        before_system: Dict[str, float] = before_values.get("before_system")
         system_peak: Dict[str, float] = ServerOnlyMonitor._system_peak(tail_result, total_gigabytes)
         system_resources: SystemResources = SystemResources()
         system_resources.log_section(
-            system_before,
+            before_system,
             system_peak,
             {
                 "memory_percent": after_memory_stats.percent,
@@ -528,12 +539,24 @@ Waiting for %d request(s) in server log...
         """
         Write raw_results.json for a server-only round.
 
-        :param round_results: A dict with "round_dir", "expected", "count", "elapsed_seconds",
-                              "before_server", "after_server", "peak_server" (server process snapshots, or None),
-                              "peak_threads", "before_system_memory_percent", "peak_system_memory_percent",
-                              "after_system_memory_percent", "interrupted" (True when Ctrl-C stops the round),
-                              "kernel_breakdown", "avg_system_cpu_percent", "peak_system_cpu_percent",
-                              "server_errors" and "tool_warnings" (each may be None)
+        :param round_results: A dict with the following keys; the snapshot, server log and CPU keys may be None:
+                              "round_dir"                     Output directory of the round
+                              "expected"                      Requests the client will send
+                              "count"                         Requests received
+                              "elapsed_seconds"               Round time in seconds
+                              "before_server"                 Server process snapshot before the round
+                              "after_server"                  Server process snapshot after the round
+                              "peak_server"                   Peak server process snapshot
+                              "peak_threads"                  Peak server thread count
+                              "before_system_memory_percent"  System memory use in percent before the round
+                              "peak_system_memory_percent"    Peak system memory use in percent
+                              "after_system_memory_percent"   System memory use in percent after the round
+                              "interrupted"                   True when Ctrl-C stops the round
+                              "kernel_breakdown"              Kernel memory breakdown
+                              "avg_system_cpu_percent"        Average system CPU percent
+                              "peak_system_cpu_percent"       Peak system CPU percent
+                              "server_errors"                 Server errors from the server log
+                              "tool_warnings"                 Tool warnings from the server log
         """
         round_dir: str = round_results.get("round_dir")
         elapsed_seconds: float = round_results.get("elapsed_seconds")
@@ -593,10 +616,13 @@ Waiting for %d request(s) in server log...
         """
         Work out the server CPU seconds used in the round, in total and per received request.
 
-        :param round_results: The dict _export_server_only_json() gets, with "before_server", "after_server"
-            (server snapshots with "cpu_seconds", or None) and "count" (requests received)
-        :return: Dict with "server_cpu_seconds_total" and "server_cpu_seconds_per_request", each None when
-            unknown
+        :param round_results: The dict _export_server_only_json() gets. Keys read here:
+            "before_server"  Server snapshot with "cpu_seconds" before the round, or None
+            "after_server"   Server snapshot with "cpu_seconds" after the round, or None
+            "count"          Requests received
+        :return: A dict with the following keys, each None when unknown:
+            "server_cpu_seconds_total"        Server CPU seconds used in the round
+            "server_cpu_seconds_per_request"  Server CPU seconds per request received
         """
         before_server: Optional[Dict[str, Any]] = round_results.get("before_server")
         after_server: Optional[Dict[str, Any]] = round_results.get("after_server")

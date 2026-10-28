@@ -101,9 +101,9 @@ class JsonMetadata:
                 "Estimated OpenAI API cost for this request.",
             "network_tokens[].network":
                 "Sub-agent network name. For multi-agent systems (e.g. AND), each sub-network appears separately.",
-            "network_tokens[].duration":
+            "network_tokens[].duration_seconds":
                 "Server-side LLM processing time for this sub-network (excludes client overhead).",
-            "network_tokens[].cost":
+            "network_tokens[].cost_usd":
                 "Server-side cost for this sub-network.",
             "resource_rows[].before":
                 "Server process snapshot before stage execution.",
@@ -207,7 +207,7 @@ class JsonMetadata:
         """
         return {
             "elapsed": "seconds",
-            "duration": "seconds",
+            "duration_seconds": "seconds",
             "total_elapsed_seconds": "seconds",
             "avg_latency_seconds": "seconds",
             "request_timeout": "seconds",
@@ -220,7 +220,6 @@ class JsonMetadata:
             "rss_megabytes": "megabytes",
             "cpu_percent": "percent",
             "cost_usd": "USD",
-            "cost": "USD",
             "total_cost_usd": "USD",
             "total_tokens": "tokens",
             "prompt_tokens": "tokens",
