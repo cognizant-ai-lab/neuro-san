@@ -105,8 +105,14 @@ class ResourceMonitor:
         Capture a point-in-time resource snapshot of a process.
 
         :param process: Process to measure, or None
-        :return: A dictionary with "rss_megabytes", "fds", "threads", "connections", "children", "cpu_percent"
-            and "cpu_seconds"; None if the process cannot be read
+        :return: A dict with the following keys, or None if the process cannot be read:
+            "rss_megabytes"  Resident memory in MB
+            "fds"            Open file descriptors
+            "threads"        Thread count
+            "connections"    Open network connections
+            "children"       Child process count
+            "cpu_percent"    CPU percent
+            "cpu_seconds"    CPU time in seconds
         """
         if process is None:
             return None

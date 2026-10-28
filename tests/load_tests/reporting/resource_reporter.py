@@ -94,7 +94,10 @@ class ResourceReporter:
         :param stage_label: Label shown in the first column
         :param before_snapshot: Server process snapshot taken before the stage
         :param after_snapshot: Server process snapshot taken after the stage
-        :return: Dict with "display" (table cells), "before" and "after" (the snapshots)
+        :return: A dict with the following keys:
+            "display"  Table cells
+            "before"   Snapshot before the stage
+            "after"    Snapshot after the stage
         """
         display: Dict[str, str] = ResourceReporter._server_display(stage_label, before_snapshot, after_snapshot)
         row: ServerResourceRow = {
@@ -117,7 +120,11 @@ class ResourceReporter:
         :param before_snapshot: Client process snapshot taken before the stage
         :param peak_snapshot: Client process snapshot at peak RSS during the stage, or None
         :param settled_snapshot: Client process snapshot taken after the stage settled
-        :return: Dict with "display" (table cells), "before", "peak" ({} when None) and "settled" (the snapshots)
+        :return: A dict with the following keys:
+            "display"  Table cells
+            "before"   Snapshot before the stage
+            "peak"     Peak snapshot, {} when None
+            "settled"  Snapshot after the stage
         """
         before_rss_megabytes: float = before_snapshot.get("rss_megabytes")
         settled_rss_megabytes: float = settled_snapshot.get("rss_megabytes")

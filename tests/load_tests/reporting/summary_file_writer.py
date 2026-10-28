@@ -506,24 +506,25 @@ class SummaryFileWriter:
         # One timing block per server request, in id order.
         for server_request_id in sorted(by_server_id.keys()):
             entries: List[Dict[str, Any]] = by_server_id.get(server_request_id)
-            entries.sort(key=self._start_ts_of)
+            entries.sort(key=self._start_seconds_of)
             if not entries:
                 continue
-            top_start_seconds: float = entries[0].get("start_ts", 0)
+            top_start_seconds: float = entries[0].get("start_seconds", 0)
             client: Dict[str, Any] = self._match_client(top_start_seconds, client_results)
             label: str = client.get("id", server_request_id)
             self._format_request_timing(lines, label, entries, client)
         lines.append("")
 
     @staticmethod
-    def _start_ts_of(timing_entry: Dict[str, Any]) -> float:
+    def _start_seconds_of(timing_entry: Dict[str, Any]) -> float:
         """
         Sort key: the start time of a server timing entry.
 
         :param timing_entry: One server timing entry
-        :return: The entry's "start_ts", 0 if missing
+        :return: The entry's "start_seconds", 0 if missing
         """
-        return timing_entry.get("start_ts", 0)
+        start_seconds: float = timing_entry.get("start_seconds", 0)
+        return start_seconds
 
     def _collect_client_times(self) -> List[Dict[str, Any]]:
         """
@@ -581,8 +582,8 @@ class SummaryFileWriter:
         total_duration_seconds: float = 0
         if client_start_seconds and client_end_seconds:
             total_duration_seconds = client_end_seconds - client_start_seconds
-        server_start_seconds: float = top.get("start_ts", 0)
-        server_finish_seconds: float = top.get("finish_ts", 0)
+        server_start_seconds: float = top.get("start_seconds", 0)
+        server_finish_seconds: float = top.get("finish_seconds", 0)
         lines.append("")
         lines.append(f"  {request_id} ({total_duration_seconds:.1f}s total):")
         if (client_start_seconds

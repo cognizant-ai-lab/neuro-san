@@ -21,7 +21,6 @@ from logging import FileHandler
 from logging import Formatter
 from logging import INFO
 from logging import Logger
-from logging import basicConfig
 from logging import getLogger
 from os import remove
 from os.path import exists
@@ -31,6 +30,7 @@ from typing import Dict
 from typing import Optional
 
 from tests.load_tests.load_test_constants import LoadTestConstants
+from tests.load_tests.load_test_logging import LoadTestLogging
 from tests.load_tests.mock_service.leak_reporter import LeakReporter
 from tests.load_tests.mock_service.mock_load_test_arguments import MockLoadTestArguments
 from tests.load_tests.mock_service.mock_round_runner import MockRoundRunner
@@ -110,7 +110,7 @@ class MockLlmLoadTest:
 
         :raises SystemExit: With code 1 when a check stops the run
         """
-        basicConfig(level=INFO, format="%(message)s")
+        LoadTestLogging.setup()
         # --help prints the class docstring (the usage examples) after the flags, without its indentation.
         usage_text: str = cleandoc(MockLlmLoadTest.__doc__)
         argument_parser: MockLoadTestArguments = MockLoadTestArguments(usage_text)

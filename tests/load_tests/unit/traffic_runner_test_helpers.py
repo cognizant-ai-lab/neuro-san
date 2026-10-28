@@ -19,7 +19,7 @@ from threading import Event
 from typing import Optional
 
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.traffic.traffic_runner import TrafficRunner
 
 
 class TrafficRunnerTestHelpers:
