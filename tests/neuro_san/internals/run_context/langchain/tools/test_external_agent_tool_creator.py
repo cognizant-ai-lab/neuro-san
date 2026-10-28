@@ -18,13 +18,18 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from typing_extensions import override
+
 from copy import deepcopy
 
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from langchain_core.tools import BaseTool
+
+from leaf_common.logging.log_once import LogOnce
 
 from neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator import ExternalAgentToolCreator
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
@@ -43,6 +48,14 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
 
     EXTERNAL_AGENT_NAME: str = "/network_b"
     AGENT_LOCATION: str = "agent 'researcher' of agent network 'deep/math_guy'"
+
+    @override
+    def setUp(self) -> None:
+        """
+        The synthesis warning is deduplicated per-process via a class-level
+        set. Clear it before each test so tests stay order-independent.
+        """
+        patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
 
     def make_creator(self, function_json: Dict[str, Any]) -> ExternalAgentToolCreator:
         """
