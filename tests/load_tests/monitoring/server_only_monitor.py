@@ -392,8 +392,8 @@ Waiting for %d request(s) in server log...
         received_count: int = tail_result.get("count")
         elapsed_seconds: float = tail_result.get("elapsed_seconds")
         peak_server: Optional[Dict[str, Any]] = tail_result.get("peak_server")
-        primary_pairs: List[Dict[str, Any]] = self._round_primary_pairs(round_values)
-        self._log_server_completion_percentiles(primary_pairs)
+        front_man_timings: List[Dict[str, Any]] = self._round_front_man_timings(round_values)
+        self._log_server_completion_percentiles(front_man_timings)
 
         server_errors: List[Dict[str, str]] = log_monitor.scan_server_errors_since(log_position)
         self.output_validator.log_server_errors(server_errors)
@@ -421,20 +421,20 @@ Waiting for %d request(s) in server log...
             "server_errors": server_errors,
             "tool_warnings": tool_warnings,
         }
-        self._save_round_results(round_results, primary_pairs)
+        self._save_round_results(round_results, front_man_timings)
 
-    def _round_primary_pairs(self, round_values: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _round_front_man_timings(self, round_values: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Read the primary request pairs of the round from the server log.
+        Read the front-man timings of the round from the server log.
 
         :param round_values: The dict _server_only_round_body() gets
-        :return: The primary request pairs from ServerLogTailer.server_only_primary_pairs()
+        :return: The front-man timings from ServerLogTailer.server_only_front_man_timings()
         """
         log_position: Optional[int] = round_values.get("log_position")
         primary_start_regex: Pattern = round_values.get("primary_start_regex")
-        primary_pairs: List[Dict[str, Any]] = self.server_log_tailer.server_only_primary_pairs(log_position,
-                                                                                               primary_start_regex)
-        return primary_pairs
+        front_man_timings: List[Dict[str, Any]] = self.server_log_tailer.server_only_front_man_timings(
+            log_position, primary_start_regex)
+        return front_man_timings
 
     def _log_round_token_usage(self, log_monitor: ServerLogMonitor, log_position: Optional[int]) -> None:
         """
@@ -446,18 +446,18 @@ Waiting for %d request(s) in server log...
         token_data: Dict[str, Dict[str, Any]] = log_monitor.parse_token_accounting_since(log_position)
         self._log_server_only_token_usage(token_data)
 
-    def _save_round_results(self, round_results: Dict[str, Any], primary_pairs: List[Dict[str, Any]]) -> None:
+    def _save_round_results(self, round_results: Dict[str, Any], front_man_timings: List[Dict[str, Any]]) -> None:
         """
-        Add the server version and the primary pairs to the round results, then write raw_results.json and the
+        Add the server version and the front-man timings to the round results, then write raw_results.json and the
         history record.
 
         :param round_results: The round results dict of _record_round()
-        :param primary_pairs: The primary request pairs of the round from ServerLogTailer
+        :param front_man_timings: The front-man timings of the round from ServerLogTailer
         """
         server_checker: ServerChecker = self._settings.get("server_checker")
         history_recorder: HistoryRecorder = self._settings.get("history_recorder")
         round_results["neuro_san_version"] = server_checker.get_server_ns_version()
-        round_results["primary_pairs"] = primary_pairs
+        round_results["front_man_timings"] = front_man_timings
         self._export_server_only_json(round_results)
         history_recorder.append_server_record(round_results)
 
@@ -542,19 +542,19 @@ Waiting for %d request(s) in server log...
             models_text = ", ".join(model_texts)
             self.logger.info("  LLM models: %s", models_text)
 
-    def _log_server_completion_percentiles(self, primary_pairs: List[Dict[str, Any]]) -> None:
+    def _log_server_completion_percentiles(self, front_man_timings: List[Dict[str, Any]]) -> None:
         """
         Log server-side completion-duration percentiles on one line.
 
         Durations are server-side processing times (Start->Finish from
-        the primary agent's log pairs), so they run slightly shorter
+        the front-man timings), so they run slightly shorter
         than the client's end-to-end per-request duration.  Reuses
         ``LatencyAnalyzer.percentile`` and ``COMPLETION_MILESTONES`` so
         the math and labels match the client's percentile line.
 
-        :param primary_pairs: Primary-agent Start/Finish pairs, each with ``duration_seconds``
+        :param front_man_timings: Front-man Start/Finish timings, each with ``duration_seconds``
         """
-        positive_durations: List[float] = ServerLogTailer.positive_durations(primary_pairs)
+        positive_durations: List[float] = ServerLogTailer.positive_durations(front_man_timings)
         durations: List[float] = sorted(positive_durations)
         if not durations:
             return

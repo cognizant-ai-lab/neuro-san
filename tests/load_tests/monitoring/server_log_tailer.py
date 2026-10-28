@@ -116,14 +116,14 @@ class ServerLogTailer:
         server_snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self.server_process)
         return server_snapshot
 
-    def server_only_primary_pairs(self, log_position: Optional[int],
-                                  primary_start_regex: Pattern) -> List[Dict[str, Any]]:
+    def server_only_front_man_timings(self, log_position: Optional[int],
+                                      primary_start_regex: Pattern) -> List[Dict[str, Any]]:
         """
-        Primary-agent streaming_chat Start/Finish pairs since log_position.
+        Front-man streaming_chat Start/Finish timings since log_position.
 
         :param log_position: Server log position at the start of the round
         :param primary_start_regex: Compiled pattern for the primary agent's Start line
-        :return: The pairs of the primary (front-man) agent, each with "agent", "start_seconds", "finish_seconds",
+        :return: The timings of the front-man agent, each with "agent", "start_seconds", "finish_seconds",
                  "duration_seconds" and "request_id"; empty when there is no log monitor, on a read error,
                  or before a primary request completes
         """
@@ -134,17 +134,17 @@ class ServerLogTailer:
             pairs = self.log_monitor.parse_streaming_chat_timing_since(log_position)
         except (OSError, ValueError):
             return []
-        primary: List[Dict[str, Any]] = []
+        front_man_timings: List[Dict[str, Any]] = []
         agent: str = ""
         start_line: str = ""
         pair: Dict[str, Any]
-        # Keep the pairs of the primary agent.
+        # Keep the timings of the front-man agent.
         for pair in pairs:
             agent = pair.get("agent", "")
             start_line = f"Start {agent}/streaming_chat"
             if primary_start_regex.search(start_line):
-                primary.append(pair)
-        return primary
+                front_man_timings.append(pair)
+        return front_man_timings
 
     @staticmethod
     def positive_durations(pairs: List[Dict[str, Any]]) -> List[float]:
@@ -170,15 +170,15 @@ class ServerLogTailer:
         """
         Cumulative server-side min/avg/max for the primary agent.
 
-        Parses primary streaming_chat Start/Finish pairs seen since
+        Parses front-man streaming_chat Start/Finish timings seen since
         the round's log position and formats them.
 
         :param log_position: Server log position at the start of the round
         :param primary_start_regex: Compiled pattern for the primary agent's Start line
         :return: The formatted stats, or "n/a" until at least one request has completed
         """
-        primary_pairs: List[Dict[str, Any]] = self.server_only_primary_pairs(log_position, primary_start_regex)
-        durations: List[float] = ServerLogTailer.positive_durations(primary_pairs)
+        front_man_timings: List[Dict[str, Any]] = self.server_only_front_man_timings(log_position, primary_start_regex)
+        durations: List[float] = ServerLogTailer.positive_durations(front_man_timings)
         duration_stats_text: str = Heartbeat.format_duration_stats(durations)
         return duration_stats_text
 

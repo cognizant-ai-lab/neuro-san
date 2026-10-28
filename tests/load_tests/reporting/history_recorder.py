@@ -141,7 +141,7 @@ class HistoryRecorder:
         Append one trend record for a server-only round.
 
         Records the server's resource peaks (CPU cores, RSS in GB), its neuro-san version, and the
-        server-side processing durations from the primary agent's Start/Finish log pairs. Keyed with
+        server-side processing durations from the front-man Start/Finish timings. Keyed with
         mode="server-only" so it is distinguishable from client records in the same file.
 
         :param round_record: The server-only round, as ServerOnlyMonitor builds it. Keys read here:
@@ -151,34 +151,34 @@ class HistoryRecorder:
             "elapsed_seconds": round wall time in seconds
             "peak_server": peak server snapshot with "rss_megabytes", or None
             "peak_system_cpu_percent": peak system CPU percent over all cores, or None
-            "primary_pairs": primary agent Start/Finish pairs with "duration_seconds", "start_seconds" and
+            "front_man_timings": front-man Start/Finish timings with "duration_seconds", "start_seconds" and
                 "finish_seconds", or None
             "server_errors": server errors found in the server log, or None
             "tool_warnings": tool warnings found in the server log, or None
         """
-        pairs: List[Dict[str, Any]] = round_record.get("primary_pairs") or []
-        durations_seconds: List[float] = HistoryRecorder._positive_durations(pairs)
-        record: Dict[str, Any] = self._server_round_record(round_record, pairs, durations_seconds)
+        front_man_timings: List[Dict[str, Any]] = round_record.get("front_man_timings") or []
+        durations_seconds: List[float] = HistoryRecorder._positive_durations(front_man_timings)
+        record: Dict[str, Any] = self._server_round_record(round_record, front_man_timings, durations_seconds)
         HistoryRecorder._add_server_log_findings(record, round_record)
         HistoryRecorder._add_completed_within_counts(record, durations_seconds)
         received: int = record.get("received_requests")
         successful: bool = received > 0 and record.get("neuro_san_version") != "unknown"
         self._write_record(record, successful)
 
-    def _server_round_record(self, round_record: Dict[str, Any], pairs: List[Dict[str, Any]],
+    def _server_round_record(self, round_record: Dict[str, Any], front_man_timings: List[Dict[str, Any]],
                              durations_seconds: List[float]) -> Dict[str, Any]:
         """
         Build the trend record of a server-only round, from its timestamp up to its wall time.
 
         :param round_record: The server-only round; append_server_record() lists the keys read here
-        :param pairs: The round's primary agent Start/Finish pairs
+        :param front_man_timings: The round's front-man Start/Finish timings
         :param durations_seconds: The positive server-side duration of each primary request, in seconds
         :return: The record with the version, host, agent, request counts, resource peaks and timings
         """
         avg_duration_seconds: float = HistoryRecorder._average(durations_seconds)
         peak_cpu_cores: float = HistoryRecorder._peak_cpu_cores(round_record)
         peak_memory_gigabytes: Optional[float] = HistoryRecorder._peak_memory_gigabytes(round_record)
-        first_completed_seconds: float = HistoryRecorder._time_to_first_completed(pairs)
+        first_completed_seconds: float = HistoryRecorder._time_to_first_completed(front_man_timings)
         neuro_san_version: str = round_record.get("neuro_san_version") or "unknown"
         expected: int = round_record.get("expected")
         received: int = round_record.get("count")
@@ -218,23 +218,23 @@ class HistoryRecorder:
         record["tool_warnings"] = warnings
 
     @staticmethod
-    def _positive_durations(pairs: List[Dict[str, Any]]) -> List[float]:
+    def _positive_durations(front_man_timings: List[Dict[str, Any]]) -> List[float]:
         """
         Collect the positive server-side duration of each primary request.
 
-        :param pairs: Primary agent Start/Finish pairs with "duration_seconds"
-        :return: The durations in seconds that are numbers above 0, in pair order
+        :param front_man_timings: Front-man Start/Finish timings with "duration_seconds"
+        :return: The durations in seconds that are numbers above 0, in timing order
         """
         durations_seconds: List[float] = []
-        pair: Dict[str, Any]
+        timing: Dict[str, Any]
         # Keep each numeric duration above 0.
-        for pair in pairs:
-            pair_duration: Any = pair.get("duration_seconds")
-            if not isinstance(pair_duration, (int, float)):
+        for timing in front_man_timings:
+            timing_duration: Any = timing.get("duration_seconds")
+            if not isinstance(timing_duration, (int, float)):
                 continue
-            pair_duration_seconds: float = float(pair_duration)
-            if pair_duration_seconds > 0:
-                durations_seconds.append(pair_duration_seconds)
+            timing_duration_seconds: float = float(timing_duration)
+            if timing_duration_seconds > 0:
+                durations_seconds.append(timing_duration_seconds)
         return durations_seconds
 
     @staticmethod
@@ -391,30 +391,30 @@ class HistoryRecorder:
         return average
 
     @staticmethod
-    def _time_to_first_completed(primary_pairs: List[Dict[str, Any]]) -> float:
+    def _time_to_first_completed(front_man_timings: List[Dict[str, Any]]) -> float:
         """
         Return the seconds from the first request's Start to the first request's Finish.
 
         This is the server-side time; it is not the client's per-request time to first response, which the
         server log has no way to measure.
 
-        :param primary_pairs: Primary agent Start/Finish pairs with "start_seconds" and "finish_seconds"
+        :param front_man_timings: Front-man Start/Finish timings with "start_seconds" and "finish_seconds"
         :return: The seconds, rounded to 2 decimals, or 0.0 when no primary request has a Start and a Finish
         """
         first_start_seconds: Optional[float] = None
         first_finish_seconds: Optional[float] = None
-        pair: Dict[str, Any]
+        timing: Dict[str, Any]
         # Keep the earliest Start and the earliest Finish time.
-        for pair in primary_pairs:
-            pair_start_seconds: Any = pair.get("start_seconds")
-            if isinstance(pair_start_seconds, (int, float)):
-                start_seconds: float = pair_start_seconds
+        for timing in front_man_timings:
+            timing_start_seconds: Any = timing.get("start_seconds")
+            if isinstance(timing_start_seconds, (int, float)):
+                start_seconds: float = timing_start_seconds
                 if first_start_seconds is None:
                     first_start_seconds = start_seconds
                 first_start_seconds = min(first_start_seconds, start_seconds)
-            pair_finish_seconds: Any = pair.get("finish_seconds")
-            if isinstance(pair_finish_seconds, (int, float)):
-                finish_seconds: float = pair_finish_seconds
+            timing_finish_seconds: Any = timing.get("finish_seconds")
+            if isinstance(timing_finish_seconds, (int, float)):
+                finish_seconds: float = timing_finish_seconds
                 if first_finish_seconds is None:
                     first_finish_seconds = finish_seconds
                 first_finish_seconds = min(first_finish_seconds, finish_seconds)

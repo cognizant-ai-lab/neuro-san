@@ -203,7 +203,13 @@ class MockRoundRunner:
             stripped_stderr: str = stderr_text.strip()
             stderr_lines: List[str] = stripped_stderr.split("\n")
             stderr_line: str = stderr_lines[-1]
-            SensitiveLogger(self.logger).info("  stderr: %s", stderr_line)
+            # stderr can hold secrets, so it goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is off, the plain
+            # logger says it was hidden and how to show it.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.info("  stderr: %s", stderr_line)
+            else:
+                self.logger.info("  stderr: (hidden; set LEAF_LOG_SENSITIVE=true to show it)")
         request_result: Dict[str, Any] = {
             "ok": succeeded,
             "elapsed_seconds": elapsed_seconds,
