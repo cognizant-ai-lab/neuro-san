@@ -24,6 +24,7 @@ from os import sep as os_separator
 from pathlib import Path
 
 from leaf_common.resolution.resolver_util import ResolverUtil
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation
@@ -36,7 +37,6 @@ from neuro_san.internals.graph.preppers.front_man_activation_prepper import Fron
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
