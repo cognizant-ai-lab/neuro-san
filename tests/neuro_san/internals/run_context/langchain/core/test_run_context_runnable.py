@@ -48,6 +48,8 @@ from neuro_san.message.utils.content_utils import ContentUtils
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 
 from tests.neuro_san.message.content_fixtures import ContentFixtures
+from tests.neuro_san.internals.run_context.langchain.core.run_context_runnable_test_helpers import \
+    RunContextRunnableTestHelpers
 
 
 # One test module per class is the repo convention, and RunContextRunnable
@@ -72,17 +74,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
     standard blocks) when it carries block content, and keeps the plain
     text-only AIMessage shape for everything else.
     """
-
-    @staticmethod
-    def _passthrough(output: str) -> str:
-        """
-        Return the given output unchanged, standing in for ErrorDetector.handle_error
-        in tests that do not exercise error rewriting.
-
-        :param output: The chain output text handed to the error detector
-        :return: The same output, untouched
-        """
-        return output
 
     @staticmethod
     def _record(written: List[BaseMessage], message: BaseMessage, *_args: Any, **_kwargs: Any) -> None:
@@ -110,18 +101,11 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
                 return True
         return False
 
-    @staticmethod
-    def _make_runnable() -> RunContextRunnable:
-        """Build a runnable whose error detector is a pass-through."""
-        error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
-        return RunContextRunnable.model_construct(error_detector=error_detector)
-
     def test_parse_chain_result_thinking_first_returns_answer(self):
         """
         An Anthropic thinking-first AIMessage projects to its answer text.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         output = runnable.parse_chain_result(ContentFixtures.anthropic_thinking_first(), exception=None)
         self.assertEqual(output, "the answer")
 
@@ -130,7 +114,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         Text blocks after the first must not be dropped: the old flatten
         stopped at the first type=="text" block and returned "part one, ".
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         message = ContentFixtures.multi_text_blocks()
         self.assertEqual(runnable.parse_chain_result(message, exception=None), "part one, part two")
 
@@ -139,7 +123,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         List-of-strings content is legal per the pydantic annotation; the old
         flatten skipped non-dict items and returned "".
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         output = runnable.parse_chain_result(ContentFixtures.list_of_str(), exception=None)
         self.assertEqual(output, "part one, part two")
 
@@ -148,7 +132,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         The normal chain result is a dict whose "messages" hold chat history;
         the last AIMessage found there gets the same full-text projection.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         chain_result = {"messages": [
             HumanMessage(content="question"),
             ContentFixtures.anthropic_thinking_first(),
@@ -198,7 +182,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         A chain result with no AIMessage but an "output" key parses to that
         text, exactly as before the lookup moved into find_ai_message.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         output: str = runnable.parse_chain_result({"output": "Please set OPENAI_API_KEY"}, exception=None)
         self.assertEqual(output, "Please set OPENAI_API_KEY")
 
@@ -207,7 +191,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         An AgentFinish whose return_values carry only an "output" key parses to
         that text: the unwrap applies on the fallback path too.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         finish: AgentFinish = AgentFinish(return_values={"output": "done"}, log="")
         self.assertEqual(runnable.parse_chain_result(finish, exception=None), "done")
 
@@ -223,7 +207,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         message = ContentFixtures.multi_text_blocks()
 
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         parsed: str = runnable.parse_chain_result(message, exception=None)
         self.assertEqual(parsed, "part one, part two")
 
@@ -279,12 +263,12 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # A non-parse ValueError exercises the retry branch on every attempt.
         agent_chain = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=partial(TestRunContextRunnable._stream_of,
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of,
                                                             ValueError("not a parsing error")))
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -320,12 +304,12 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # A RuntimeError exercises the non-retryable broad-exception branch.
         agent_chain = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=partial(TestRunContextRunnable._stream_of,
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of,
                                                             RuntimeError("Server error '504 Gateway Time-out'")))
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -368,12 +352,13 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         rate_limit_error = RateLimitError("rate limited", response=response, body=None)
 
         agent_chain = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=[self._states(KeyError("missing field")),
-                                                     self._states(rate_limit_error)])
+        failing: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream(KeyError("missing field"))
+        rate_limited: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream(rate_limit_error)
+        agent_chain.astream = MagicMock(side_effect=[failing, rate_limited])
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -407,10 +392,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         journal: MagicMock = MagicMock()
         journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         agent_chain: MagicMock = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=partial(TestRunContextRunnable._stream_of, chain_result))
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, chain_result))
         if error_detector is None:
             error_detector = MagicMock()
-            error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+            error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
         sensitive_logger: MagicMock = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
         runnable: RunContextRunnable = RunContextRunnable.model_construct(
@@ -649,8 +634,9 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # Attempt 1 is rate limited, attempt 2 succeeds.
         agent_chain: MagicMock = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=[self._states(self._rate_limit_error()),
-                                                     self._states({"output": "the answer"})])
+        rate_limited: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream(self._rate_limit_error())
+        answered: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream({"output": "the answer"})
+        agent_chain.astream = MagicMock(side_effect=[rate_limited, answered])
         copy_update: Dict[str, Any] = {"agent_chain": agent_chain}
         retrying_runnable: RunContextRunnable = runnable.model_copy(update=copy_update)
         await retrying_runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
@@ -672,7 +658,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         rate_limit_error: RateLimitError = self._rate_limit_error()
         agent_chain: MagicMock = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=partial(self._stream_of, rate_limit_error))
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, rate_limit_error))
         tool_caller: MagicMock = MagicMock()
         tool_caller.get_agent_tool_spec = MagicMock(return_value=agent_spec)
         invocation_context: MagicMock = MagicMock()
@@ -707,32 +693,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         _ = max_execution_seconds
         return await awaitable
-
-    @staticmethod
-    async def _states(*states: Any) -> AsyncIterator[Any]:
-        """
-        Stands in for one agent_chain.astream() call: yields each state in turn.
-
-        :param states: The states to yield; an exception among them is raised in its place
-        :return: An async iterator over the states
-        """
-        state: Any = None
-        # Yield the states in order, failing where the chain would have failed.
-        for state in states:
-            if isinstance(state, BaseException):
-                raise state
-            yield state
-
-    @staticmethod
-    def _stream_of(*states: Any, **_kwargs: Any) -> AsyncIterator[Any]:
-        """
-        Builds a fresh stand-in stream for every agent_chain.astream() call.
-
-        :param states: The states to yield, bound with functools.partial
-        :param _kwargs: The keyword arguments of the astream() call; ignored
-        :return: An async iterator over the states
-        """
-        return TestRunContextRunnable._states(*states)
 
     @staticmethod
     def _rate_limit_error() -> RateLimitError:

@@ -18,7 +18,6 @@
 from functools import partial
 
 from typing import Any
-from typing import AsyncIterator
 from typing import Dict
 from typing import List
 
@@ -33,6 +32,9 @@ from langchain_core.messages.tool import ToolMessage
 
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 
+from tests.neuro_san.internals.run_context.langchain.core.run_context_runnable_test_helpers import \
+    RunContextRunnableTestHelpers
+
 
 class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
     """
@@ -41,53 +43,6 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
     pairing each call with its result, leaving out what the history already
     holds, and recording while the chain streams its states.
     """
-
-    @staticmethod
-    def _passthrough(output: str) -> str:
-        """
-        Stands in for ErrorDetector.handle_error in tests that do not rewrite errors.
-
-        :param output: The output to return unchanged
-        :return: The same output
-        """
-        return output
-
-    @staticmethod
-    def _make_runnable() -> RunContextRunnable:
-        """
-        Builds a RunContextRunnable with a pass-through error detector.
-
-        :return: A runnable whose error detector is a pass-through
-        """
-        error_detector: MagicMock = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnableToolExchange._passthrough)
-        return RunContextRunnable.model_construct(error_detector=error_detector)
-
-    @staticmethod
-    async def _states(*states: Any) -> AsyncIterator[Any]:
-        """
-        Stands in for one agent_chain.astream() call: yields each state in turn.
-
-        :param states: The states to yield; an exception among them is raised in its place
-        :return: An async iterator over the states
-        """
-        state: Any = None
-        # Yield the states in order, failing where the chain would have failed.
-        for state in states:
-            if isinstance(state, BaseException):
-                raise state
-            yield state
-
-    @staticmethod
-    def _stream_of(*states: Any, **_kwargs: Any) -> AsyncIterator[Any]:
-        """
-        Builds a fresh stand-in stream for every agent_chain.astream() call.
-
-        :param states: The states to yield, bound with functools.partial
-        :param _kwargs: The keyword arguments of the astream() call; ignored
-        :return: An async iterator over the states
-        """
-        return TestRunContextRunnableToolExchange._states(*states)
 
     @staticmethod
     def _tool_call(call_id: str) -> Dict[str, Any]:
@@ -139,7 +94,7 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         tool calls kept, and the answer left out.
         """
         human: HumanMessage = HumanMessage(content="question", id="h1")
-        runnable: RunContextRunnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
 
         exchange: List[BaseMessage] = runnable.find_tool_exchange({"messages": [human]},
                                                                   self._tool_turn_state(human))
@@ -161,7 +116,7 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         calling: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("toolu_1")])
         state: Dict[str, Any] = {"messages": [human, calling, AIMessage(content="", tool_calls=[
             self._tool_call("toolu_2")])]}
-        runnable: RunContextRunnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
 
         self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, state), [])
 
@@ -175,7 +130,7 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
                                                                self._tool_call("toolu_1")])
         result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="toolu_1")
         state: Dict[str, Any] = {"messages": [human, calling, result, AIMessage(content="the answer")]}
-        runnable: RunContextRunnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
 
         self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, state), [])
 
@@ -189,7 +144,7 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         calling: AIMessage = AIMessage(content=[], tool_calls=[self._tool_call("call_1")])
         result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1")
         state: Dict[str, Any] = {"messages": [human, calling, result, AIMessage(content="the answer")]}
-        runnable: RunContextRunnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
 
         exchange: List[BaseMessage] = runnable.find_tool_exchange({"messages": [human]}, state)
 
@@ -204,7 +159,7 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         """
         human: HumanMessage = HumanMessage(content="question", id="h1")
         state: Dict[str, Any] = self._tool_turn_state(human)
-        runnable: RunContextRunnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         # What the summarization middleware leaves behind: the state's own messages.
         runnable.chat_history = [human, state["messages"][3], state["messages"][4]]
 
@@ -222,7 +177,7 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         calling: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("toolu_1")])
         failed: ToolMessage = ToolMessage(content="denied", tool_call_id="toolu_1", status="error")
         state: Dict[str, Any] = {"messages": [human, calling, failed, AIMessage(content="the answer")]}
-        runnable: RunContextRunnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
 
         exchange: List[BaseMessage] = runnable.find_tool_exchange({"messages": [human]}, state)
 
@@ -234,7 +189,7 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         """
         human: HumanMessage = HumanMessage(content="question", id="h1")
         state: Dict[str, Any] = {"messages": [human, AIMessage(content="the answer")]}
-        runnable: RunContextRunnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
 
         self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, state), [])
         self.assertEqual(runnable.find_tool_exchange({"messages": [human]}, AIMessage(content="bare")), [])
@@ -281,9 +236,10 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         journal: MagicMock = MagicMock()
         journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
         agent_chain: MagicMock = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=partial(self._stream_of, self._tool_turn_state(human)))
+        tool_turn: Dict[str, Any] = self._tool_turn_state(human)
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, tool_turn))
         error_detector: MagicMock = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=self._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
         runnable: RunContextRunnable = RunContextRunnable.model_construct(
             journal=journal, chat_history=chat_history, agent_chain=agent_chain,
             error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
@@ -308,10 +264,10 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         journal: MagicMock = MagicMock()
         journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
         agent_chain: MagicMock = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=partial(self._stream_of, reached,
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, reached,
                                                             RuntimeError("Server error '504 Gateway Time-out'")))
         error_detector: MagicMock = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=self._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
         sensitive_logger: MagicMock = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
         runnable: RunContextRunnable = RunContextRunnable.model_construct(
@@ -343,9 +299,9 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         journal: MagicMock = MagicMock()
         journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
         agent_chain: MagicMock = MagicMock()
-        agent_chain.astream = MagicMock(side_effect=partial(self._stream_of, before, after))
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, before, after))
         error_detector: MagicMock = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=self._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
         runnable: RunContextRunnable = RunContextRunnable.model_construct(
             journal=journal, chat_history=chat_history, agent_chain=agent_chain,
             error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
