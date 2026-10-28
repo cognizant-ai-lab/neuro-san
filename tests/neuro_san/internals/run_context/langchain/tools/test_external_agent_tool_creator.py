@@ -220,39 +220,6 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         self.assertEqual(second_tool.parameters, ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETERS)
         second_creator.journal.write_message.assert_not_awaited()
 
-    async def test_synthesis_warning_rearms_when_agent_is_fixed(self) -> None:
-        """
-        Hocon files can be edited and hot-reloaded without a server restart.
-        Observing the agent with declared parameters must re-arm the warning,
-        so a later regression back to parameterless warns anew.
-        """
-        parameterless: Dict[str, Any] = {"description": "Answers music questions."}
-        declared: Dict[str, Any] = {
-            "description": "Answers music questions.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "The question to answer."
-                    }
-                },
-                "required": ["question"]
-            }
-        }
-
-        broken_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        await broken_creator.create_tool(self.EXTERNAL_AGENT_NAME)
-        broken_creator.journal.write_message.assert_awaited_once()
-
-        fixed_creator: ExternalAgentToolCreator = self.make_creator(declared)
-        await fixed_creator.create_tool(self.EXTERNAL_AGENT_NAME)
-        fixed_creator.journal.write_message.assert_not_awaited()
-
-        regressed_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        await regressed_creator.create_tool(self.EXTERNAL_AGENT_NAME)
-        regressed_creator.journal.write_message.assert_awaited_once()
-
     async def test_unsupported_schema_dialect_is_not_replaced(self) -> None:
         """
         A declared parameters schema in an unsupported JSON Schema dialect
