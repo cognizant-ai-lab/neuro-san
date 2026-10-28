@@ -207,8 +207,11 @@ class AgentRequestExecutor:
         :param timed_chat: The stream wrapper that timed the first response
         :param state: The request state after process_once()
         :param answer_text: The agent's answer
-        :return: A dictionary with "processor", "response_text", "time_to_first_response_seconds" and
-            "token_accounting"
+        :return: A dict with the following keys:
+            "processor"                       The message processor that read the whole stream
+            "response_text"                   The agent's answer
+            "time_to_first_response_seconds"  Seconds until the first streamed message
+            "token_accounting"                Token accounting of the request, {} when none
         """
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
         message_processor: BasicMessageProcessor = processor.get_message_processor()

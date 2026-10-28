@@ -30,6 +30,7 @@ from typing_extensions import override
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
+from leaf_common.logging.log_once import LogOnce
 
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
@@ -78,9 +79,6 @@ class AzureLlmPolicy(OpenAILlmPolicy):
 
     # llm_config keys of the dated Azure API that the v1 API has no use for.
     LEGACY_KEYS: List[str] = ["openai_api_version", "openai_api_type", "model_version"]
-
-    # Process-wide so the legacy-key warning appears once, not once per agent instantiation.
-    legacy_keys_warned: bool = False
 
     @override
     def __init__(self, llm: BaseLanguageModel = None) -> None:
@@ -430,11 +428,11 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             if config.get(key):
                 legacy_present.append(key)
 
-        if not legacy_present or AzureLlmPolicy.legacy_keys_warned:
+        if not legacy_present:
             return
 
-        AzureLlmPolicy.legacy_keys_warned = True
-        self.logger.warning("Ignoring llm_config key(s) %s: Azure OpenAI's v1 API takes no api-version, "
-                            "so these keys have no effect. Remove these keys from the llm_config. "
-                            "The OPENAI_API_VERSION environment variable is no longer read either.",
-                            ", ".join(legacy_present))
+        log_once: LogOnce = LogOnce(self.logger)
+        log_once.warning("Ignoring llm_config key(s) %s: Azure OpenAI's v1 API takes no api-version, "
+                         "so these keys have no effect. Remove these keys from the llm_config. "
+                         "The OPENAI_API_VERSION environment variable is no longer read either.",
+                         ", ".join(legacy_present))

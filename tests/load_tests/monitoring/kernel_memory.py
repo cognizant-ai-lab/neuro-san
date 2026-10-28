@@ -97,9 +97,16 @@ class KernelMemory:
         :param server_rss_peak_megabytes: Peak server RSS in MB (the caller passes the after-round RSS when there
                                           is no peak)
         :param log: When True, the breakdown is also logged
-        :return: A dict with "server_rss_mb", "kernel_stacks_mb", "page_tables_mb", "slab_mb", "page_cache_mb",
-                 "tcp_buffers_mb", "accounted_mb", "unaccounted_mb" and "system_total_mb", or {} when
-                 after_kernel is empty
+        :return: A dict with the following keys, all in MB, or {} when after_kernel is empty:
+                 "server_rss_mb"     Server RSS
+                 "kernel_stacks_mb"  Kernel stacks
+                 "page_tables_mb"    Page tables
+                 "slab_mb"           Kernel slab
+                 "page_cache_mb"     Page cache
+                 "tcp_buffers_mb"    TCP buffers
+                 "accounted_mb"      Sum of the parts above
+                 "unaccounted_mb"    Used memory not in the parts above
+                 "system_total_mb"   Total system memory
         """
         if not after_kernel:
             return {}

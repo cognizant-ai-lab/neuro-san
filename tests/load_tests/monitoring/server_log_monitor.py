@@ -110,8 +110,9 @@ class ServerLogMonitor:
         window is joined and matched with a DOTALL pattern.
 
         :param position: Server log position to read from, from read_position(), or None
-        :return: A list of {request_id, message} dicts with the message flattened
-                 to a single line
+        :return: A list of dicts, one per error, with the following keys:
+            "request_id"  Server request_id of the error
+            "message"     Error message, flattened to a single line
         """
         if self._server_log is None or position is None:
             return []
@@ -142,7 +143,9 @@ class ServerLogMonitor:
         count under load may point to tool-creation failures.
 
         :param position: Server log position to read from, from read_position(), or None
-        :return: A list of {request_id, message} dicts
+        :return: A list of dicts, one per warning, with the following keys:
+            "request_id"  Server request_id of the warning
+            "message"     Warning message, flattened to a single line
         """
         if self._server_log is None or position is None:
             return []
@@ -184,8 +187,12 @@ class ServerLogMonitor:
         :param position: Server log position to read from, from read_position(), or None
         :param primary_start_pattern: Pattern for the primary agent's Start line
         :param primary_finish_pattern: Pattern for the primary agent's Finish line
-        :return: A dict with "primary_started", "primary_finished", "total_started" and "total_finished"
-                 counts, all None when there is no server log or position, or no lines since position
+        :return: A dict with the following keys, all None when there is no server log or position, or no lines
+                 since position:
+                 "primary_started"   Primary agent requests started
+                 "primary_finished"  Primary agent requests finished
+                 "total_started"     Requests started, all agents
+                 "total_finished"    Requests finished, all agents
         """
         none_result: Dict[str, Optional[int]] = {
             "primary_started": None,
@@ -228,9 +235,14 @@ class ServerLogMonitor:
         Parse Request reporting entries for token accounting data.
 
         :param position: Server log position to read from, from read_position(), or None
-        :return: A dict of request_id -> token entry. Each entry has "request_id", "total_tokens",
-                 "prompt_tokens", "completion_tokens", "llm_calls" and "model", plus "reporting_agent"
-                 when a Done-with line follows the block
+        :return: A dict of request_id -> token entry. Each entry has the following keys:
+                 "request_id"         Server request id
+                 "total_tokens"       Total tokens
+                 "prompt_tokens"      Prompt tokens
+                 "completion_tokens"  Completion tokens
+                 "llm_calls"          Number of LLM calls
+                 "model"              Model name
+                 "reporting_agent"    Agent of the Done-with line after the block; only when that line follows
         """
         if self._server_log is None or position is None:
             return {}
@@ -285,8 +297,11 @@ class ServerLogMonitor:
         Groups by request_id.
 
         :param position: Server log position to read from, from read_position(), or None
-        :return: One dict with "request_id", "attempts", "fix_cycles" and "errors" for each request that
-                 needed a fix cycle, sorted by request_id
+        :return: One dict for each request that needed a fix cycle, sorted by request_id, with the following keys:
+                 "request_id"  Server request id
+                 "attempts"    Number of attempts
+                 "fix_cycles"  Number of fix cycles
+                 "errors"      Validation errors
         """
         if self._server_log is None or position is None:
             return []
@@ -300,7 +315,7 @@ class ServerLogMonitor:
         Parse Start/Finish streaming_chat entries for timing.
 
         :param position: Server log position to read from, from read_position(), or None
-        :return: A list of dicts with agent, start_ts, finish_ts,
+        :return: A list of dicts with agent, start_seconds, finish_seconds,
                  duration_seconds, and request_id for each streaming_chat pair
         """
         if self._server_log is None or position is None:

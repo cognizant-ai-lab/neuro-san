@@ -17,9 +17,7 @@
 from argparse import Namespace
 from functools import partial
 from inspect import cleandoc
-from logging import INFO
 from logging import Logger
-from logging import basicConfig
 from logging import getLogger
 from os import _exit
 from signal import SIGINT
@@ -39,6 +37,7 @@ from typing import Union
 from psutil import Process
 
 from tests.load_tests.load_test_constants import LoadTestConstants
+from tests.load_tests.load_test_logging import LoadTestLogging
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.monitoring.server_link import ServerLink
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -55,7 +54,7 @@ from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.run_output_writer import RunOutputWriter
 from tests.load_tests.reporting.summary_reporter import SummaryReporter
 from tests.load_tests.reporting.trend_history import TrendHistory
-from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.traffic.traffic_runner import TrafficRunner
 from tests.load_tests.traffic.stage_executor import StageExecutor
 from tests.load_tests.traffic.stage_run import StageRun
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
@@ -161,7 +160,7 @@ class LoadTestCli:
         """
         Entry point for the load test script.
         """
-        basicConfig(level=INFO, format="%(message)s")
+        LoadTestLogging.setup()
         epilog: str = cleandoc(LoadTestCli.__doc__)
         args: Namespace = LoadTestArguments.parse_args(epilog)
         if args.rebuild:

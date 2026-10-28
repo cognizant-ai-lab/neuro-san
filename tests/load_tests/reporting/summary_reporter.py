@@ -504,8 +504,11 @@ class SummaryReporter:
         """
         Compute min/avg/max time-to-first-response.
 
-        :return: Dictionary with "min_seconds", "avg_seconds" and "max_seconds" over the
-                 requests that received a first response; None when none did
+        :return: A dict with the following keys over the requests that received a first response, or None when
+                 none did:
+                 "min_seconds"  Shortest time to first response
+                 "avg_seconds"  Average time to first response
+                 "max_seconds"  Longest time to first response
         """
         first_response_seconds: List[float] = []
         summary: Dict[str, Any]

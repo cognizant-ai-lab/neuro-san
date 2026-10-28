@@ -64,7 +64,8 @@ class ServerDurationReader:
         """
         if self._log_monitor is None or self._log_start_position is None:
             return None
-        # Each pair has "agent" and "request_id" (str), and "start_ts", "finish_ts" and "duration_seconds" (float).
+        # Each pair has "agent" and "request_id" (str), and "start_seconds", "finish_seconds" and
+        # "duration_seconds" (float).
         pairs: List[Dict[str, Any]] = []
         try:
             pairs = self._log_monitor.parse_streaming_chat_timing_since(self._log_start_position)

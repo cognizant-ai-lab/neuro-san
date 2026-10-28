@@ -54,9 +54,12 @@ class StageDataCollector:
         Keep the run's arguments and the parts the stage data is read from.
 
         :param args: Parsed command-line arguments
-        :param collector_parts: A dict with "profile" (the AgentProfile), "log_monitor" (the ServerLogMonitor, or
-            None), "resource_reporter" (the ResourceReporter), "server_process" (the local server process, or None)
-            and "output_dir" (the run's output directory)
+        :param collector_parts: A dict with the following keys:
+            "profile"            The AgentProfile
+            "log_monitor"        The ServerLogMonitor, or None
+            "resource_reporter"  The ResourceReporter
+            "server_process"     The local server process, or None
+            "output_dir"         The run's output directory
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
@@ -70,16 +73,25 @@ class StageDataCollector:
         """
         Settle, snapshot and analyze the server log after a stage.
 
-        :param post_stage_inputs: A dict with "actual_requests" (number of requests sent in this stage),
-            "monitor_resources" (True to take the server snapshot after the stage), "has_server_log" (True when the
-            server log can be read), "log_position" (server log offset where the stage started, or None), "results"
-            (request results of the stage), "before_server" and "before_client" (snapshots before the stage, or
-            None), "peak_client" (peak client snapshot, or None), "settled_client" (client snapshot after the stage,
-            or None) and "server_log_requests" (number of stage requests in the server log, or None to use
-            actual_requests)
-        :return: A dict with "server_counts", "disconnections", "server_errors", "tool_warnings", "network_tokens"
-            and "validation_events" (see _analyze_server_log()), plus "after_server" (server snapshot after the
-            stage, or None)
+        :param post_stage_inputs: A dict with the following keys:
+            "actual_requests"      Number of requests sent in this stage
+            "monitor_resources"    True to take the server snapshot after the stage
+            "has_server_log"       True when the server log can be read
+            "log_position"         Server log offset where the stage started, or None
+            "results"              Request results of the stage
+            "before_server"        Server snapshot before the stage, or None
+            "before_client"        Client snapshot before the stage, or None
+            "peak_client"          Peak client snapshot, or None
+            "settled_client"       Client snapshot after the stage, or None
+            "server_log_requests"  Number of stage requests in the server log, or None to use actual_requests
+        :return: A dict with the following keys:
+            "server_counts"      See _analyze_server_log()
+            "disconnections"     See _analyze_server_log()
+            "server_errors"      See _analyze_server_log()
+            "tool_warnings"      See _analyze_server_log()
+            "network_tokens"     See _analyze_server_log()
+            "validation_events"  See _analyze_server_log()
+            "after_server"       Server snapshot after the stage, or None
         """
         actual_requests: int = post_stage_inputs.get("actual_requests")
         has_server_log: bool = post_stage_inputs.get("has_server_log")
@@ -157,8 +169,13 @@ class StageDataCollector:
         :param log_position: Server log offset where the stage started, or None
         :param results: Request results of the stage
         :param actual_requests: Number of stage requests expected in the server log
-        :return: Dict with "server_counts" (request counts from the log) and "disconnections", "server_errors",
-            "tool_warnings", "network_tokens" and "validation_events" (lists of dicts, empty without a server log)
+        :return: A dict with the following keys; the lists are empty without a server log:
+            "server_counts"      Request counts from the log
+            "disconnections"     List of client disconnections
+            "server_errors"      List of server errors
+            "tool_warnings"      List of tool warnings
+            "network_tokens"     List of token entries per sub-network
+            "validation_events"  List of validation events
         """
         server_log_analysis: Dict[str, Any] = {
             "server_counts": {},
