@@ -20,9 +20,7 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
-from typing import Tuple
 from typing import Type
-from typing import Union
 
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
@@ -61,6 +59,7 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         Gives each test fresh mocks and a fresh ConcreteClassActivation.
         """
         self.mock_factory: MagicMock = TestAbstractClassActivation._create_mock_factory()
+        # A plain dict, the type that AbstractCallableActivation.get_agent_tool_spec() returns.
         self.basic_agent_tool_spec: Dict[str, Any] = {
             "name": "test_tool",
             "description": "Test tool"
@@ -206,7 +205,7 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         Test instantiating a BranchActivation + CodedTool combination.
         """
         # Patch issubclass to recognize our mock as a BranchActivation
-        original_issubclass: Callable[[type, Union[type, Tuple[type, ...]]], bool] = issubclass
+        original_issubclass: Callable[[type, type], bool] = issubclass
         issubclass_stand_in: partial = partial(TestAbstractClassActivation._patched_issubclass, original_issubclass)
 
         with patch("builtins.issubclass", side_effect=issubclass_stand_in):
@@ -251,7 +250,7 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         mock_loop.run_in_executor = AsyncMock(return_value="sync_result")
         mock_executor.get_event_loop.return_value = mock_loop
 
-        invocation_context: MagicMock = self.activation_instance.run_context.get_invocation_context()
+        invocation_context: MagicMock = self.mock_run_context.get_invocation_context()
         invocation_context.get_asyncio_executor.return_value = mock_executor
 
         result: Any = await self.activation_instance.attempt_invoke(mock_tool, {"arg": "value"}, {"sly": "data"})
@@ -285,10 +284,10 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
                     class_ref="test.Class"
                 )
 
-        origin: List[Dict[str, Any]] = activation.arguments.get("origin")
-        origin_str: str = activation.arguments.get("origin_str")
-        self.assertIsNotNone(origin)
-        self.assertEqual(origin_str, "full_name")
+                origin: List[Dict[str, Any]] = activation.arguments.get("origin")
+                origin_str: str = activation.arguments.get("origin_str")
+                self.assertIsNotNone(origin)
+                self.assertEqual(origin_str, "full_name")
 
     def test_arguments_do_not_override_existing_origin(self) -> None:
         """
@@ -310,10 +309,10 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
                     class_ref="test.Class"
                 )
 
-        origin: List[Dict[str, Any]] = activation.arguments.get("origin")
-        origin_str: str = activation.arguments.get("origin_str")
-        self.assertEqual(origin, existing_origin)
-        self.assertEqual(origin_str, "custom_str")
+                origin: List[Dict[str, Any]] = activation.arguments.get("origin")
+                origin_str: str = activation.arguments.get("origin_str")
+                self.assertEqual(origin, existing_origin)
+                self.assertEqual(origin_str, "custom_str")
 
     def test_reservationist_initialization_when_allowed(self) -> None:
         """
@@ -341,11 +340,9 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
                     class_ref="test.Class"
                 )
 
-        self.assertIsNotNone(activation.reservationist)
-        reservationist: Reservationist = activation.arguments.get("reservationist")
-        self.assertIsNotNone(reservationist)
-
-    # The static methods below are this class's own helpers, not overrides.
+                self.assertIsNotNone(activation.reservationist)
+                reservationist: Reservationist = activation.arguments.get("reservationist")
+                self.assertIsNotNone(reservationist)
 
     @staticmethod
     def _create_mock_factory() -> MagicMock:
@@ -406,14 +403,14 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         return resolver
 
     @staticmethod
-    def _patched_issubclass(original_issubclass: Callable[[type, Union[type, Tuple[type, ...]]], bool],
-                            checked_class: type, classinfo: Union[type, Tuple[type, ...]]) -> bool:
+    def _patched_issubclass(original_issubclass: Callable[[type, type], bool], checked_class: type,
+                            classinfo: type) -> bool:
         """
         Stands in for issubclass() so that MockBranchActivationTool counts as a BranchActivation.
 
         :param original_issubclass: The real issubclass() to call for every other check
         :param checked_class: The class to check
-        :param classinfo: The class or tuple of classes to check against
+        :param classinfo: The class to check against
         :return: True if checked_class counts as a subclass of classinfo
         """
         if checked_class == MockBranchActivationTool and classinfo == BranchActivation:

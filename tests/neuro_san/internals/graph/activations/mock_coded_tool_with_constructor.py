@@ -34,6 +34,7 @@ class MockCodedToolWithConstructor(CodedTool):
 
         :param required_arg: Any value. The argument only makes the constructor invalid for a CodedTool.
         """
+        # Any type works: only the constructor's argument count matters.
         self.required_arg: Any = required_arg
 
     @override

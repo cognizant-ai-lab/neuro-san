@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import WARNING
 
 from typing import Any
 from typing import Dict
@@ -230,7 +230,7 @@ class TestToolboxFactory(TestCase):
             mock_tool_class.return_value = mock_instance
 
             # ToolboxFactory logs through logging.warning(), so the record goes to the root logger.
-            with self.assertLogs(level=logging.WARNING) as captured_logs:
+            with self.assertLogs(level=WARNING) as captured_logs:
                 self.factory.create_tool_from_toolbox("community_tool", {})
 
         log_text: str = "\n".join(captured_logs.output)
@@ -263,6 +263,8 @@ class TestToolboxFactory(TestCase):
         from both toolbox entry points.
         """
         bad_classes: List[Any] = [None, 123, ""]
+        bad_class: Any
+        # Check each bad class value with both toolbox entry points
         for bad_class in bad_classes:
             with self.subTest(bad_class=bad_class):
                 self.factory.toolbox_infos = {
@@ -380,6 +382,7 @@ class TestToolboxFactory(TestCase):
         :return: A MagicMock that stands in for a BaseTool instance
         """
         mock_tool: MagicMock = MagicMock(spec=BaseTool)
+        # spec=BaseTool does not give the name and tags fields, so set them by hand.
         mock_tool.name = MagicMock(spec=str)
         mock_tool.tags = MagicMock(spec=list)
         return mock_tool

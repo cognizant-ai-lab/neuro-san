@@ -31,8 +31,6 @@ class MockBranchActivationTool(CodedTool):
     Tests patch issubclass() so that AbstractClassActivation treats it as a BranchActivation.
     """
 
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
                  args: Dict[str, Any],
@@ -47,6 +45,7 @@ class MockBranchActivationTool(CodedTool):
         :param agent_tool_spec: The dictionary describing the JSON agent tool
         :param sly_data: A dictionary of private data that does not go to the LLM
         """
+        # The values have different types (RunContext, AgentToolFactory, dicts), hence Any.
         self._init_params: Dict[str, Any] = {
             "parent_run_context": parent_run_context,
             "factory": factory,
@@ -59,7 +58,8 @@ class MockBranchActivationTool(CodedTool):
         """
         Gets the constructor parameters.
 
-        :return: A dictionary of the parameters passed to the constructor, keyed by parameter name
+        :return: A dictionary with "parent_run_context", "factory", "args", "agent_tool_spec" and "sly_data",
+                 each the constructor argument of that name
         """
         return self._init_params
 
