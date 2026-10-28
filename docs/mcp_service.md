@@ -187,7 +187,7 @@ replicated from neuro-san OpenAPI specification:
                           "items": {
                             "$ref": "#/components/schemas/ToolCall"
                           },
-                          "description": "Optional tool calls an AI message made. Each is answered by the AGENT_TOOL_RESULT message that follows with the matching tool_call_id."
+                          "description": "Optional tool calls an AI message made. Each is answered by the AGENT_TOOL_RESULT message that follows with the matching tool_call_id. A chat history keeps both, so the next turn sees where a value came from."
                         },
                         "tool_call_id": {
                           "type": "string",
