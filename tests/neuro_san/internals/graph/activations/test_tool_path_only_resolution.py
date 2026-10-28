@@ -32,6 +32,8 @@ from unittest.mock import patch
 
 from typing_extensions import override
 
+from leaf_common.logging.log_once import LogOnce
+
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import ConcreteClassActivation
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import CREATE_RUN_CONTEXT_PATH
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import GET_FULL_NAME_FROM_ORIGIN_PATH
@@ -58,6 +60,10 @@ class TestToolPathOnlyResolution(TestCase):
         """
         Create a mock RunContext and activations pointed at the two test tool roots.
         """
+        patcher: Any = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.mock_run_context = MagicMock()
 
         # Create a mock journal with async write_message

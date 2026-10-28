@@ -47,6 +47,8 @@ from openai import DEFAULT_MAX_RETRIES
 from openai import OpenAIError
 from openai.resources.responses import AsyncResponses
 
+from leaf_common.logging.log_once import LogOnce
+
 from neuro_san.internals.run_context.langchain.llms.azure_llm_policy import AzureLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
@@ -130,6 +132,10 @@ class TestAzureLlmPolicy(TestCase):
         Clears every environment variable the policy reads, resets the one-time warning flag, and
         starts the lists that tearDown() releases.
         """
+        patcher: Any = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         # addCleanup() restores the environment (including deletions) even when tearDown() fails part-way.
