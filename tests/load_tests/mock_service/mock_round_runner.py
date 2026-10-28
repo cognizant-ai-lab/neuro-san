@@ -30,9 +30,9 @@ from typing import Optional
 
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.mock_service.mock_server_manager import MockServerManager
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 
 

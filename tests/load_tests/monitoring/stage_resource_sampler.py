@@ -28,6 +28,8 @@ from psutil import cpu_percent
 from psutil import swap_memory
 from psutil import virtual_memory
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.formatters import Formatters
@@ -100,8 +102,10 @@ class StageResourceSampler:
         """
         Read the stage's highest system memory use.
 
-        :return: Dict with "memory_percent" and "available_gigabytes" at the highest system memory use of the stage,
-            or None
+        :return: None before any sample, else a dict read at the highest system memory use of the stage, with
+            the following keys:
+            "memory_percent"       System memory use in percent
+            "available_gigabytes"  Available system memory in GB
         """
         peak_system_memory: Optional[Dict[str, float]] = self._peaks.get("system_memory")
         return peak_system_memory
@@ -152,7 +156,8 @@ class StageResourceSampler:
             if StageResourceSampler.is_new_peak(rss_megabytes, peak_client_rss_megabytes):
                 self._peaks["client_rss_megabytes"] = rss_megabytes
         except (NoSuchProcess, AccessDenied) as error:
-            self.logger.debug("Heartbeat client RSS unavailable: %s", error)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            sensitive_logger.debug("Heartbeat client RSS unavailable: %s", error)
 
     def check_server_alive(self) -> bool:
         """
@@ -171,7 +176,9 @@ class StageResourceSampler:
         """
         Sample server thread count and RSS, keeping each when it is a new peak.
 
-        :return: Dict with "thread_info" and "server_rss_info", the parts of the progress line
+        :return: A dict with the server parts of the progress line, with the following keys:
+            "thread_info"      Server thread count text, or ""
+            "server_rss_info"  Server RSS and swap text, or ""
         """
         thread_info: str = ""
         server_rss_info: str = ""
@@ -186,7 +193,8 @@ class StageResourceSampler:
             else:
                 thread_info = f"  threads: {server_thread_count}"
         except (NoSuchProcess, AccessDenied) as error:
-            self.logger.debug("Heartbeat thread count unavailable: %s", error)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            sensitive_logger.debug("Heartbeat thread count unavailable: %s", error)
         server_memory: Dict[str, Optional[float]] = self._sample_server_memory()
         rss_megabytes: Optional[float] = server_memory.get("rss_megabytes")
         swap_megabytes: Optional[float] = server_memory.get("swap_megabytes")
@@ -250,7 +258,7 @@ class StageResourceSampler:
 
         :param thread_info: Thread count text, or ""
         :param server_rss_info: RSS and swap text, or ""
-        :return: Dict with "thread_info" and "server_rss_info"
+        :return: The dict sample_server_metrics() returns
         """
         server_metrics: Dict[str, str] = {
             "thread_info": thread_info,
@@ -262,7 +270,9 @@ class StageResourceSampler:
         """
         Sample server RSS and swap in MB.
 
-        :return: Dict with "rss_megabytes" and "swap_megabytes", each None if unavailable
+        :return: A dict with the following keys:
+            "rss_megabytes"   Server RSS in MB, or None if unavailable
+            "swap_megabytes"  Server swap in MB, or None if unavailable
         """
         server_memory: Dict[str, Optional[float]] = {
             "rss_megabytes": None,
@@ -276,7 +286,8 @@ class StageResourceSampler:
             server_memory["rss_megabytes"] = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
             server_memory["swap_megabytes"] = memory_info.swap / ResourceMonitor.ONE_MEGABYTE
         except (NoSuchProcess, AccessDenied) as error:
-            self.logger.debug("Heartbeat server memory unavailable: %s", error)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            sensitive_logger.debug("Heartbeat server memory unavailable: %s", error)
             server_memory["rss_megabytes"] = None
             server_memory["swap_megabytes"] = None
         return server_memory
@@ -326,7 +337,10 @@ class StageResourceSampler:
         """
         Format total system memory usage for the progress line.
 
-        :return: Dict with "text" (the progress line part), "memory_percent" and "available_gigabytes"
+        :return: A dict with the following keys:
+            "text"                 The progress line part
+            "memory_percent"       System memory use in percent
+            "available_gigabytes"  System memory left, in GB
         """
         # psutil returns its private svmem named tuple, which has no public type to name.
         virtual_memory_stats: Any = virtual_memory()

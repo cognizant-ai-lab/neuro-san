@@ -16,13 +16,9 @@
 
 # Plain "import re": "from re import compile" would hide the builtin compile().
 import re
-from logging import Formatter
-from logging import INFO
 from logging import Logger
-from logging import StreamHandler
 from logging import getLogger
 from os.path import join
-from sys import stdout
 from threading import Event
 from threading import Thread
 from time import localtime
@@ -37,8 +33,8 @@ from typing import TextIO
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class ArrivalWatcher:
@@ -55,11 +51,12 @@ class ArrivalWatcher:
         """
         Store the stage settings for the monitor thread.
 
-        :param arrival_settings: A dictionary with "expected_count" (number of arrivals to wait for),
-                "fire_time_seconds" (perf_counter() value taken when the stage fired), "stop_event"
-                (Event that tells the monitor thread to stop), "client_process" (client
-                Process for the snapshot once all requests arrive, or None) and "primary_start_pattern"
-                (regex for the log line of a primary agent request arriving)
+        :param arrival_settings: A dict with the following keys:
+            "expected_count"         Number of arrivals to wait for
+            "fire_time_seconds"      perf_counter() value taken when the stage fired
+            "stop_event"             Event that tells the monitor thread to stop
+            "client_process"         Client Process for the snapshot once all requests arrive, or None
+            "primary_start_pattern"  Regex for the log line of a primary agent request arriving
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         primary_start_pattern: str = arrival_settings.get("primary_start_pattern")
@@ -68,7 +65,8 @@ class ArrivalWatcher:
         self._stop_event: Event = arrival_settings.get("stop_event")
         self._client_process: Optional[Process] = arrival_settings.get("client_process")
         self._primary_start_regex: re.Pattern = re.compile(primary_start_pattern)
-        self._progress_logger: Logger = self._get_progress_logger()
+        # tests/load_tests/logging.hocon sends this logger to ProgressStreamHandler, so the dots stay on one line.
+        self._progress_logger: Logger = getLogger(self.__class__.__name__ + "Progress")
 
     def start(self, server_log: str, position: int, output_dir: Optional[str] = None) -> Thread:
         """
@@ -174,22 +172,3 @@ class ArrivalWatcher:
             self.logger.info("  Client AFTER: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes,
                              client_cpu_percent)
         ResourceMonitor.log_system_memory("RECEIVED")
-
-    def _get_progress_logger(self) -> Logger:
-        """
-        Get the logger for the console progress dots, set up on first use.
-
-        The dots go through logging, not print(). An empty terminator keeps the dots on one line, and
-        propagate=False stops the root logger from prefixing each dot with a timestamp or duplicating it.
-
-        :return: The progress logger
-        """
-        progress_logger: Logger = getLogger(self.__class__.__name__ + ".progress")
-        progress_logger.propagate = False
-        if not progress_logger.handlers:
-            progress_handler: StreamHandler = StreamHandler(stdout)
-            progress_handler.terminator = ""
-            progress_handler.setFormatter(Formatter("%(message)s"))
-            progress_logger.addHandler(progress_handler)
-            progress_logger.setLevel(INFO)
-        return progress_logger

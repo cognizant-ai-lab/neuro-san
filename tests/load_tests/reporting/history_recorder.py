@@ -15,7 +15,6 @@
 # END COPYRIGHT
 
 from json import dumps
-import logging
 from os import makedirs
 from os.path import dirname
 from os.path import isfile
@@ -24,6 +23,7 @@ from os.path import splitext
 from time import strftime
 from argparse import Namespace
 from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -31,10 +31,10 @@ from typing import Optional
 
 from psutil import cpu_count
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
-
-logger: Logger = logging.getLogger(__name__)
 
 
 class HistoryRecorder:
@@ -56,6 +56,7 @@ class HistoryRecorder:
         """
         self._args: Namespace = args
         self._output_base: str = output_base
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def get_history_path(self, successful: bool = True) -> str:
         """
@@ -89,7 +90,7 @@ class HistoryRecorder:
         # Log each history file that exists.
         for history_path in history_paths:
             if isfile(history_path):
-                logger.info("  History:     %s", history_path)
+                self.logger.info("  History:     %s", history_path)
 
     def append_client_record(self, stage_summaries: List[Dict[str, Any]], neuro_san_version: Optional[str]) -> None:
         """
@@ -134,14 +135,7 @@ class HistoryRecorder:
         successful: bool = completed > 0 and record.get("neuro_san_version") != "unknown"
         self._write_record(record, successful)
 
-    # Each record field comes from one argument, so the server-only round passes them all.
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-    def append_server_record(self, neuro_san_version: Optional[str], expected: int, received: int,
-                             elapsed_seconds: float, peak_server: Optional[Dict[str, Any]],
-                             peak_system_cpu_percent: Optional[float],
-                             primary_pairs: Optional[List[Dict[str, Any]]],
-                             server_errors: Optional[List[Dict[str, str]]],
-                             tool_warnings: Optional[List[Dict[str, str]]]) -> None:
+    def append_server_record(self, round_record: Dict[str, Any]) -> None:
         """
         Append one trend record for a server-only round.
 
@@ -149,46 +143,49 @@ class HistoryRecorder:
         server-side processing durations from the primary agent's Start/Finish log pairs. Keyed with
         mode="server-only" so it is distinguishable from client records in the same file.
 
-        :param neuro_san_version: Server neuro-san version, or None when unknown
-        :param expected: Number of requests the round expects
-        :param received: Number of requests the server received
-        :param elapsed_seconds: Round wall time in seconds
-        :param peak_server: Peak server snapshot with "rss_megabytes", or None
-        :param peak_system_cpu_percent: Peak system CPU percent over all cores, or None
-        :param primary_pairs: Primary agent Start/Finish pairs with "duration_seconds", "start_ts" and
-            "finish_ts", or None
-        :param server_errors: Server errors found in the server log, or None
-        :param tool_warnings: Tool warnings found in the server log, or None
+        :param round_record: The server-only round, as ServerOnlyMonitor builds it. Keys read here:
+            "neuro_san_version": server neuro-san version, or None when unknown
+            "expected": number of requests the round expects
+            "count": number of requests the server received
+            "elapsed_seconds": round wall time in seconds
+            "peak_server": peak server snapshot with "rss_megabytes", or None
+            "peak_system_cpu_percent": peak system CPU percent over all cores, or None
+            "primary_pairs": primary agent Start/Finish pairs with "duration_seconds", "start_seconds" and
+                "finish_seconds", or None
+            "server_errors": server errors found in the server log, or None
+            "tool_warnings": tool warnings found in the server log, or None
         """
-        pairs: List[Dict[str, Any]] = primary_pairs or []
-        durations_seconds: List[float] = []
-        pair: Dict[str, Any]
-        # Collect the positive server-side duration of each primary request.
-        for pair in pairs:
-            pair_duration: Any = pair.get("duration_seconds")
-            if not isinstance(pair_duration, (int, float)):
-                continue
-            pair_duration_seconds: float = pair_duration
-            if pair_duration_seconds > 0:
-                durations_seconds.append(float(pair_duration_seconds))
+        pairs: List[Dict[str, Any]] = round_record.get("primary_pairs") or []
+        durations_seconds: List[float] = HistoryRecorder._positive_durations(pairs)
+        record: Dict[str, Any] = self._server_round_record(round_record, pairs, durations_seconds)
+        HistoryRecorder._add_server_log_findings(record, round_record)
+        HistoryRecorder._add_completed_within_counts(record, durations_seconds)
+        received: int = record.get("received_requests")
+        successful: bool = received > 0 and record.get("neuro_san_version") != "unknown"
+        self._write_record(record, successful)
+
+    def _server_round_record(self, round_record: Dict[str, Any], pairs: List[Dict[str, Any]],
+                             durations_seconds: List[float]) -> Dict[str, Any]:
+        """
+        Build the trend record of a server-only round, from its timestamp up to its wall time.
+
+        :param round_record: The server-only round; append_server_record() lists the keys read here
+        :param pairs: The round's primary agent Start/Finish pairs
+        :param durations_seconds: The positive server-side duration of each primary request, in seconds
+        :return: The record with the version, host, agent, request counts, resource peaks and timings
+        """
         avg_duration_seconds: float = HistoryRecorder._average(durations_seconds)
-        cpu_percent: float = peak_system_cpu_percent or 0.0
-        core_count: int = cpu_count() or 1
-        cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percent, core_count)
-        peak_cpu_cores: float = round(cores_in_use, 2)
-        peak_memory_gigabytes: Optional[float] = None
-        if peak_server:
-            peak_rss_megabytes: float = peak_server.get("rss_megabytes", 0.0)
-            peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
-            peak_memory_gigabytes = round(peak_gigabytes, 2)
+        peak_cpu_cores: float = HistoryRecorder._peak_cpu_cores(round_record)
+        peak_memory_gigabytes: Optional[float] = HistoryRecorder._peak_memory_gigabytes(round_record)
         first_completed_seconds: float = HistoryRecorder._time_to_first_completed(pairs)
-        errors: List[Dict[str, str]] = server_errors or []
-        warnings: List[Dict[str, str]] = tool_warnings or []
-        error_count: int = len(errors)
-        warning_count: int = len(warnings)
+        neuro_san_version: str = round_record.get("neuro_san_version") or "unknown"
+        expected: int = round_record.get("expected")
+        received: int = round_record.get("count")
+        elapsed_seconds: float = round_record.get("elapsed_seconds")
+        wall_time_seconds: float = round(elapsed_seconds, 2)
         record: Dict[str, Any] = {
             "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "neuro_san_version": neuro_san_version or "unknown",
+            "neuro_san_version": neuro_san_version,
             "host": self._args.host,
             "agent": self._args.agent,
             "mode": "server-only",
@@ -198,15 +195,78 @@ class HistoryRecorder:
             "peak_memory_gb": peak_memory_gigabytes,
             "time_to_first_completed_s": first_completed_seconds,
             "avg_duration_s": avg_duration_seconds,
-            "wall_time_s": round(elapsed_seconds, 2),
-            "server_error_count": error_count,
-            "tool_warning_count": warning_count,
-            "server_errors": errors,
-            "tool_warnings": warnings,
+            "wall_time_s": wall_time_seconds,
         }
-        HistoryRecorder._add_completed_within_counts(record, durations_seconds)
-        successful: bool = received > 0 and record.get("neuro_san_version") != "unknown"
-        self._write_record(record, successful)
+        return record
+
+    @staticmethod
+    def _add_server_log_findings(record: Dict[str, Any], round_record: Dict[str, Any]) -> None:
+        """
+        Add the round's server errors and tool warnings, each with its count, to the trend record.
+
+        :param record: The trend record to add the 4 keys to
+        :param round_record: The server-only round; its "server_errors" and "tool_warnings" lists, or None
+        """
+        errors: List[Dict[str, str]] = round_record.get("server_errors") or []
+        warnings: List[Dict[str, str]] = round_record.get("tool_warnings") or []
+        error_count: int = len(errors)
+        warning_count: int = len(warnings)
+        record["server_error_count"] = error_count
+        record["tool_warning_count"] = warning_count
+        record["server_errors"] = errors
+        record["tool_warnings"] = warnings
+
+    @staticmethod
+    def _positive_durations(pairs: List[Dict[str, Any]]) -> List[float]:
+        """
+        Collect the positive server-side duration of each primary request.
+
+        :param pairs: Primary agent Start/Finish pairs with "duration_seconds"
+        :return: The durations in seconds that are numbers above 0, in pair order
+        """
+        durations_seconds: List[float] = []
+        pair: Dict[str, Any]
+        # Keep each numeric duration above 0.
+        for pair in pairs:
+            pair_duration: Any = pair.get("duration_seconds")
+            if not isinstance(pair_duration, (int, float)):
+                continue
+            pair_duration_seconds: float = float(pair_duration)
+            if pair_duration_seconds > 0:
+                durations_seconds.append(pair_duration_seconds)
+        return durations_seconds
+
+    @staticmethod
+    def _peak_cpu_cores(round_record: Dict[str, Any]) -> float:
+        """
+        Turn the round's peak system CPU percent into CPU cores in use.
+
+        :param round_record: The server-only round; its "peak_system_cpu_percent" is over all cores, or None
+            (counts as 0)
+        :return: Cores in use, rounded to 2 decimals
+        """
+        peak_system_cpu_percent: Optional[float] = round_record.get("peak_system_cpu_percent")
+        cpu_percent: float = peak_system_cpu_percent or 0.0
+        core_count: int = cpu_count() or 1
+        cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percent, core_count)
+        peak_cpu_cores: float = round(cores_in_use, 2)
+        return peak_cpu_cores
+
+    @staticmethod
+    def _peak_memory_gigabytes(round_record: Dict[str, Any]) -> Optional[float]:
+        """
+        Turn the round's peak server RSS into gigabytes.
+
+        :param round_record: The server-only round; its "peak_server" is a snapshot with "rss_megabytes", or None
+        :return: Peak RSS in GB rounded to 2 decimals, or None when there is no snapshot
+        """
+        peak_server: Optional[Dict[str, Any]] = round_record.get("peak_server")
+        if not peak_server:
+            return None
+        peak_rss_megabytes: float = peak_server.get("rss_megabytes", 0.0)
+        peak_gigabytes: float = peak_rss_megabytes / ResourceMonitor.MEGABYTES_PER_GIGABYTE
+        peak_memory_gigabytes: float = round(peak_gigabytes, 2)
+        return peak_memory_gigabytes
 
     def _write_record(self, record: Dict[str, Any], successful: bool) -> None:
         """
@@ -222,9 +282,15 @@ class HistoryRecorder:
             record_line: str = dumps(record) + "\n"
             with open(path, "a", encoding="utf-8") as handle:
                 handle.write(record_line)
-            logger.info("  Trend history appended: %s", path)
+            self.logger.info("  Trend history appended: %s", path)
         except OSError as exc:
-            logger.warning("  Could not write trend history to %s: %s", path, exc)
+            # Caught-exception text goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is off, the plain
+            # logger still names the file.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.warning("  Could not write trend history to %s: %s", path, exc)
+            else:
+                self.logger.warning("  Could not write trend history to %s", path)
 
     @staticmethod
     def _merge_stage_summaries(stage_summaries: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -232,8 +298,11 @@ class HistoryRecorder:
         Merge the results, server errors, tool warnings and elapsed time of every stage.
 
         :param stage_summaries: Stage summaries of the run
-        :return: A dictionary with "results", "server_errors" and "tool_warnings" lists over all stages,
-            and "wall_time_seconds", the sum of the stage "elapsed" times rounded to 2 decimals
+        :return: A dict with the following keys:
+            "results"            Request results over all stages
+            "server_errors"      Server errors over all stages
+            "tool_warnings"      Tool warnings over all stages
+            "wall_time_seconds"  Sum of the stage "elapsed" times, rounded to 2 decimals
         """
         results: List[Dict[str, Any]] = []
         server_errors: List[Dict[str, str]] = []
@@ -266,8 +335,9 @@ class HistoryRecorder:
         Collect the duration and the time to first response of each successful request.
 
         :param results: Request results of the run
-        :return: A dictionary with "durations_seconds", the "elapsed" time of each successful request, and
-            "first_response_seconds", each positive "time_to_first_response" of a successful request
+        :return: A dict with the following keys:
+            "durations_seconds"       The "elapsed" time of each successful request
+            "first_response_seconds"  Each positive "time_to_first_response" of a successful request
         """
         durations_seconds: List[float] = []
         first_response_seconds: List[float] = []
@@ -327,7 +397,7 @@ class HistoryRecorder:
         This is the server-side time; it is not the client's per-request time to first response, which the
         server log has no way to measure.
 
-        :param primary_pairs: Primary agent Start/Finish pairs with "start_ts" and "finish_ts"
+        :param primary_pairs: Primary agent Start/Finish pairs with "start_seconds" and "finish_seconds"
         :return: The seconds, rounded to 2 decimals, or 0.0 when no primary request has a Start and a Finish
         """
         first_start_seconds: Optional[float] = None
@@ -335,15 +405,15 @@ class HistoryRecorder:
         pair: Dict[str, Any]
         # Keep the earliest Start and the earliest Finish time.
         for pair in primary_pairs:
-            start_ts: Any = pair.get("start_ts")
-            if isinstance(start_ts, (int, float)):
-                start_seconds: float = start_ts
+            pair_start_seconds: Any = pair.get("start_seconds")
+            if isinstance(pair_start_seconds, (int, float)):
+                start_seconds: float = pair_start_seconds
                 if first_start_seconds is None:
                     first_start_seconds = start_seconds
                 first_start_seconds = min(first_start_seconds, start_seconds)
-            finish_ts: Any = pair.get("finish_ts")
-            if isinstance(finish_ts, (int, float)):
-                finish_seconds: float = finish_ts
+            pair_finish_seconds: Any = pair.get("finish_seconds")
+            if isinstance(pair_finish_seconds, (int, float)):
+                finish_seconds: float = pair_finish_seconds
                 if first_finish_seconds is None:
                     first_finish_seconds = finish_seconds
                 first_finish_seconds = min(first_finish_seconds, finish_seconds)

@@ -32,7 +32,7 @@ from typing import Optional
 
 from psutil import Process
 
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
 from tests.load_tests.monitoring.server_duration_reader import ServerDurationReader
@@ -64,9 +64,11 @@ class Heartbeat:
         :param server_process: Server process for thread count and RSS readings, or None
         :param client_process: Client process for RSS readings, or None
         :param output_dir: Directory for progress.log, or None for console only
-        :param server_log_timing: Where to read server-side request timing, or None: a dict with "log_monitor"
-            (the ServerLogMonitor), "log_start_position" (the server log offset where the stage started) and
-            "primary_start_pattern" (regex for the log line of a primary agent request starting); each may be None
+        :param server_log_timing: Where to read server-side request timing, or None. A dict with the following
+            keys, each of which may be None:
+            "log_monitor"            The ServerLogMonitor
+            "log_start_position"     Server log offset where the stage started
+            "primary_start_pattern"  Regex for the log line of a primary agent request starting
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self._progress_log_writer: ProgressLogWriter = ProgressLogWriter(output_dir)
@@ -107,8 +109,10 @@ class Heartbeat:
         """
         Read the stage's highest system memory use from the sampler.
 
-        :return: Dict with "memory_percent" and "available_gigabytes" at the highest system memory use of the stage,
-            or None
+        :return: None before any sample, else a dict read at the highest system memory use of the stage, with
+            the following keys:
+            "memory_percent"       System memory use in percent
+            "available_gigabytes"  Available system memory in GB
         """
         return self._resource_sampler.get_peak_system_memory()
 
@@ -155,9 +159,11 @@ class Heartbeat:
         :param futures: Futures of the requests fired in this stage
         :param total: Number of requests in this stage
         :param start_seconds: perf_counter() value taken when the stage began
-        :param events: The stage's events: "stop_event" (set by the caller to stop the heartbeat),
-            "ready_event" (set once the initial RSS sample is taken), "fires_done_event" (set by the caller
-            once every request is fired) and "server_dead_event" (set when the server process is found dead)
+        :param events: A dict with the following keys:
+            "stop_event"         Set by the caller to stop the heartbeat
+            "ready_event"        Set once the initial RSS sample is taken
+            "fires_done_event"   Set by the caller once every request is fired
+            "server_dead_event"  Set when the server process is found dead
         """
         stop_event: Event = events.get("stop_event")
         ready_event: Event = events.get("ready_event")
@@ -361,8 +367,7 @@ class Heartbeat:
                 result = future.result()
             except (CancelledError, FutureTimeoutError):
                 continue
-            fallback_seconds: Optional[float] = result.get("duration")
-            duration_seconds: Optional[float] = result.get("elapsed", fallback_seconds)
+            duration_seconds: Optional[float] = result.get("elapsed")
             if isinstance(duration_seconds, (int, float)) and duration_seconds > 0:
                 duration_float: float = float(duration_seconds)
                 durations.append(duration_float)

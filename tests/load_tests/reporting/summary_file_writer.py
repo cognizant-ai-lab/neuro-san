@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from os.path import join
 from time import strftime
 from argparse import Namespace
@@ -32,8 +33,6 @@ from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.system_resources import SystemResources
 
-logger: logging.Logger = logging.getLogger(__name__)
-
 
 class SummaryFileWriter:
     """
@@ -41,6 +40,9 @@ class SummaryFileWriter:
 
     Collects data from stage summaries and optional server timing
     to produce a single text file for quick review.
+
+    write() builds one lines list, each _write_* method appends its section to it, and write() saves
+    the file once at the end, so a failed section never leaves a half-written summary.txt.
     """
 
     def __init__(self, stage_summaries: List[Dict[str, Any]], args: Namespace,
@@ -52,6 +54,7 @@ class SummaryFileWriter:
         :param args: Parsed load-test command line
         :param server_chat_timing: Per-agent timing entries from the server log, or None
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._summaries: List[Dict[str, Any]] = stage_summaries
         self._args: Namespace = args
         self._server_timing: List[Dict[str, Any]] = server_chat_timing or []
@@ -72,7 +75,7 @@ class SummaryFileWriter:
         path: str = join(output_dir, "summary.txt")
         with open(path, "w", encoding="utf-8") as file_handle:
             file_handle.write("\n".join(lines) + "\n")
-        logger.info("  Summary:     %s", path)
+        self.logger.info("  Summary:     %s", path)
         return path
 
     def _write_header(self, lines: List[str]) -> None:
@@ -503,24 +506,25 @@ class SummaryFileWriter:
         # One timing block per server request, in id order.
         for server_request_id in sorted(by_server_id.keys()):
             entries: List[Dict[str, Any]] = by_server_id.get(server_request_id)
-            entries.sort(key=self._start_ts_of)
+            entries.sort(key=self._start_seconds_of)
             if not entries:
                 continue
-            top_start_seconds: float = entries[0].get("start_ts", 0)
+            top_start_seconds: float = entries[0].get("start_seconds", 0)
             client: Dict[str, Any] = self._match_client(top_start_seconds, client_results)
             label: str = client.get("id", server_request_id)
             self._format_request_timing(lines, label, entries, client)
         lines.append("")
 
     @staticmethod
-    def _start_ts_of(timing_entry: Dict[str, Any]) -> float:
+    def _start_seconds_of(timing_entry: Dict[str, Any]) -> float:
         """
         Sort key: the start time of a server timing entry.
 
         :param timing_entry: One server timing entry
-        :return: The entry's "start_ts", 0 if missing
+        :return: The entry's "start_seconds", 0 if missing
         """
-        return timing_entry.get("start_ts", 0)
+        start_seconds: float = timing_entry.get("start_seconds", 0)
+        return start_seconds
 
     def _collect_client_times(self) -> List[Dict[str, Any]]:
         """
@@ -578,8 +582,8 @@ class SummaryFileWriter:
         total_duration_seconds: float = 0
         if client_start_seconds and client_end_seconds:
             total_duration_seconds = client_end_seconds - client_start_seconds
-        server_start_seconds: float = top.get("start_ts", 0)
-        server_finish_seconds: float = top.get("finish_ts", 0)
+        server_start_seconds: float = top.get("start_seconds", 0)
+        server_finish_seconds: float = top.get("finish_seconds", 0)
         lines.append("")
         lines.append(f"  {request_id} ({total_duration_seconds:.1f}s total):")
         if (client_start_seconds

@@ -34,11 +34,11 @@ from psutil import Process
 from psutil import cpu_percent
 from psutil import virtual_memory
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.system_resources import SystemResources
 
 
@@ -74,13 +74,24 @@ class ServerLogTailer:
         Phase 1 counts Start patterns until all requests are received. Phase 2 counts Finish patterns until all
         requests are processed.
 
-        :param round_values: A dict with "expected" (number of requests to wait for), "log_position" (server log
-            offset to start reading from), "primary_start_regex" and "primary_finish_regex" (the primary agent's
-            Start and Finish log lines), "before_server" (server snapshot before the round, or None) and
-            "before_system_memory_percent" (system memory use in percent before the round)
-        :return: Dict with "count" (requests received), "completed" (requests processed), "peak_server" (peak server
-            snapshot), "peak_threads", "peak_sys_mem_pct", "elapsed_seconds", "interrupted" (True on Ctrl-C),
-            "peak_sys_cpu_percent", "avg_sys_cpu_percent" and "peak_sys_threads"
+        :param round_values: A dict with the following keys:
+            "expected"                      Number of requests to wait for
+            "log_position"                  Server log offset to start reading from
+            "primary_start_regex"           The primary agent's Start log line
+            "primary_finish_regex"          The primary agent's Finish log line
+            "before_server"                 Server snapshot before the round, or None
+            "before_system_memory_percent"  System memory use in percent before the round
+        :return: A dict with the following keys:
+            "count"                 Requests received
+            "completed"             Requests processed
+            "peak_server"           Peak server snapshot
+            "peak_threads"          Peak server thread count
+            "peak_sys_mem_pct"      Peak system memory use in percent
+            "elapsed_seconds"       Round time in seconds
+            "interrupted"           True on Ctrl-C
+            "peak_sys_cpu_percent"  Peak system CPU percent
+            "avg_sys_cpu_percent"   Average system CPU percent
+            "peak_sys_threads"      Peak system thread count
         """
         tail_state: Dict[str, Any] = ServerLogTailer._new_tail_state(round_values)
         log_position: Optional[int] = round_values.get("log_position")
@@ -116,7 +127,7 @@ class ServerLogTailer:
 
         :param log_position: Server log position at the start of the round
         :param primary_start_regex: Compiled pattern for the primary agent's Start line
-        :return: The pairs of the primary (front-man) agent, each with "agent", "start_ts", "finish_ts",
+        :return: The pairs of the primary (front-man) agent, each with "agent", "start_seconds", "finish_seconds",
                  "duration_seconds" and "request_id"; empty when there is no log monitor, on a read error,
                  or before a primary request completes
         """
@@ -179,10 +190,17 @@ class ServerLogTailer:
         """
         Log a periodic heartbeat during server-only monitoring.
 
-        :param heartbeat_values: A dict with "received", "expected", "completed",
-                                 "elapsed_seconds", "now_seconds" (wall clock), "server_snapshot",
-                                 "virtual_memory_stats" (the psutil.virtual_memory() result), "duration_stats",
-                                 "current_system_cpu_percent" and "peak_system_cpu_percent"
+        :param heartbeat_values: A dict with the following keys:
+                                 "received"                    Requests received
+                                 "expected"                    Requests expected
+                                 "completed"                   Requests processed
+                                 "elapsed_seconds"             Round time so far in seconds
+                                 "now_seconds"                 Wall clock time in seconds
+                                 "server_snapshot"             Server snapshot
+                                 "virtual_memory_stats"        The psutil.virtual_memory() result
+                                 "duration_stats"              Server-side request time stats
+                                 "current_system_cpu_percent"  System CPU percent now
+                                 "peak_system_cpu_percent"     Peak system CPU percent
         """
         elapsed_seconds: float = heartbeat_values.get("elapsed_seconds")
         now_seconds: float = heartbeat_values.get("now_seconds")
@@ -247,8 +265,9 @@ class ServerLogTailer:
         """
         Format the system CPU part of the heartbeat.
 
-        :param heartbeat_values: The heartbeat values, with "current_system_cpu_percent" (None before the first
-            sample) and "peak_system_cpu_percent"
+        :param heartbeat_values: The heartbeat values. Only these keys are read:
+            "current_system_cpu_percent"  System CPU use now in percent, or None before the first sample
+            "peak_system_cpu_percent"     Highest system CPU use of the round in percent, or None
         :return: "  syscpu: N% (peak N%)", or "" before the first sample
         """
         current_system_cpu_percent: Optional[float] = heartbeat_values.get("current_system_cpu_percent")

@@ -14,13 +14,16 @@
 #
 # END COPYRIGHT
 from argparse import Namespace
+from os import environ
 from os.path import exists
 from os.path import join
 from tempfile import TemporaryDirectory
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from unittest import TestCase
+from unittest.mock import patch
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
@@ -31,6 +34,11 @@ class TestRequestRecorder(TestCase):
     """
     Unit tests for RequestRecorder: the files it saves, the progress.log line and the token data it adds.
     """
+
+    STDOUT_FILE_NAME: str = f"request_1{LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX}"
+    STDERR_FILE_NAME: str = f"request_1{LoadTestConstants.REQUEST_STDERR_FILE_SUFFIX}"
+    TRACEBACK_TEXT: str = "Traceback (most recent call last):\n  File \"x.py\", line 1\n" \
+        "ValueError: connection refused\n"
 
     def test_created_request_is_saved_and_written_to_progress_log(self) -> None:
         """
@@ -45,10 +53,12 @@ class TestRequestRecorder(TestCase):
         progress_text: str = ""
         with TemporaryDirectory() as output_dir:
             recorder.record_request(1, output_dir, request_result, result)
-            stdout_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME, "request_1_stdout.txt")
+            stdout_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME,
+                                    TestRequestRecorder.STDOUT_FILE_NAME)
             with open(stdout_path, encoding="utf-8") as stdout_file:
                 stdout_text = stdout_file.read()
-            stderr_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME, "request_1_stderr.txt")
+            stderr_path: str = join(output_dir, LoadTestConstants.REQUESTS_DIR_NAME,
+                                    TestRequestRecorder.STDERR_FILE_NAME)
             stderr_saved: bool = exists(stderr_path)
             self.assertFalse(stderr_saved)
             progress_log_path: str = join(output_dir, LoadTestConstants.PROGRESS_LOG_FILE_NAME)
@@ -66,10 +76,47 @@ class TestRequestRecorder(TestCase):
         request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, {})
         result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)
         result["failure_reason"] = "empty response from agent"
-        with self.assertLogs("RequestRecorder", level="INFO") as captured:
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "true"}), \
+                self.assertLogs("RequestRecorder", level="INFO") as captured:
             recorder.record_request(2, None, request_result, result)
         self.assertIn("Request 2: FAILED (1.00s)", captured.output[0])
         self.assertIn("  reason: empty response from agent", captured.output[1])
+
+    def test_failed_request_reason_is_not_logged_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false a FAILED request logs its status line, but not its reason.
+        """
+        args: Namespace = Namespace(include_tokens=False)
+        recorder: RequestRecorder = RequestRecorder(args)
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, {})
+        result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)
+        result["failure_reason"] = "empty response from agent"
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs("RequestRecorder", level="INFO") as captured:
+            recorder.record_request(2, None, request_result, result)
+        self.assertEqual(captured.output, ["INFO:RequestRecorder:Request 2: FAILED (1.00s)"])
+
+    def test_failed_request_with_a_reason_does_not_log_its_stderr(self) -> None:
+        """
+        A FAILED request with a reason logs only the reason, not the last line of its traceback.
+        """
+        logged_lines: List[str] = self._traceback_request_output(3, "ValueError: connection refused")
+        expected_output: List[str] = [
+            "INFO:RequestRecorder:Request 3: FAILED (1.00s)",
+            "INFO:RequestRecorder:  reason: ValueError: connection refused",
+        ]
+        self.assertEqual(logged_lines, expected_output)
+
+    def test_failed_request_without_a_reason_logs_its_last_stderr_line(self) -> None:
+        """
+        A FAILED request with no reason logs the last line of its traceback instead.
+        """
+        logged_lines: List[str] = self._traceback_request_output(4, None)
+        expected_output: List[str] = [
+            "INFO:RequestRecorder:Request 4: FAILED (1.00s)",
+            "INFO:RequestRecorder:  stderr: ValueError: connection refused",
+        ]
+        self.assertEqual(logged_lines, expected_output)
 
     def test_token_accounting_is_added_to_the_result(self) -> None:
         """
@@ -97,6 +144,25 @@ class TestRequestRecorder(TestCase):
         self.assertEqual(2, llm_calls)
         self.assertEqual("gpt-4o-mini", model)
         self.assertEqual(["gpt-4o-mini"], all_models)
+
+    def _traceback_request_output(self, request_id: int, failure_reason: Optional[str]) -> List[str]:
+        """
+        Record a FAILED request whose response text is TRACEBACK_TEXT and return what it logged.
+
+        :param request_id: Request number to record
+        :param failure_reason: The request's failure reason, or None
+        :return: The logged lines, as assertLogs() gives them
+        """
+        args: Namespace = Namespace(include_tokens=False)
+        recorder: RequestRecorder = RequestRecorder(args)
+        response: Dict[str, Any] = {"response_text": TestRequestRecorder.TRACEBACK_TEXT}
+        request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, response)
+        result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)
+        result["failure_reason"] = failure_reason
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "true"}), \
+                self.assertLogs("RequestRecorder", level="INFO") as captured:
+            recorder.record_request(request_id, None, request_result, result)
+        return captured.output
 
     @staticmethod
     def _result(status: str) -> Dict[str, Any]:

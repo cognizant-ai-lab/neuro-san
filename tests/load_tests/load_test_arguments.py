@@ -24,7 +24,7 @@ from typing import Optional
 from typing import Set
 
 from tests.load_tests.load_test_constants import LoadTestConstants
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class LoadTestArguments:
@@ -258,7 +258,7 @@ class LoadTestArguments:
             metavar="DURATION",
             default=LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS,
             help=f"""
-            Kill a request if no output for this long.
+            Time out a request (TIMEOUT) when no output comes for this long.
             Bare number = seconds, or suffix s/m/h (e.g. 90s, 15m).
             Default: %(default)s ({idle_timeout_text}).
             Detects hanging requests.

@@ -24,6 +24,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 # requests raises urllib3's ReadTimeoutError as the cause of its own error when no data comes within the
 # read timeout, while waiting for the response headers and while streaming the response.
 from urllib3.exceptions import ReadTimeoutError
@@ -130,7 +131,12 @@ class AgentRequestExecutor:
         # the generic help text raised by the session client.
         error_lines: List[str] = format_exception(error)
         error_text: str = "".join(error_lines)
-        self.logger.debug("HTTP request failed:\n%s", error_text)
+        # The traceback holds the error message, so it goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is
+        # off, only the error type is logged.
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        sensitive_logger.debug("HTTP request failed:\n%s", error_text)
+        if not sensitive_logger.should_log():
+            self.logger.debug("HTTP request failed: %s", type(error).__name__)
         failure_reason: str = AgentRequestExecutor._error_reason(error)
         read_timed_out: bool = AgentRequestExecutor._is_read_timeout(error)
         status: str = policy.status_for(elapsed_seconds, "", error_text, read_timed_out)
@@ -201,8 +207,11 @@ class AgentRequestExecutor:
         :param timed_chat: The stream wrapper that timed the first response
         :param state: The request state after process_once()
         :param answer_text: The agent's answer
-        :return: A dictionary with "processor", "response_text", "time_to_first_response_seconds" and
-            "token_accounting"
+        :return: A dict with the following keys:
+            "processor"                       The message processor that read the whole stream
+            "response_text"                   The agent's answer
+            "time_to_first_response_seconds"  Seconds until the first streamed message
+            "token_accounting"                Token accounting of the request, {} when none
         """
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
         message_processor: BasicMessageProcessor = processor.get_message_processor()

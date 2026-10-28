@@ -15,7 +15,8 @@
 # END COPYRIGHT
 
 import json
-import logging
+from logging import Logger
+from logging import getLogger
 import os
 
 from typing import Any
@@ -24,12 +25,11 @@ from typing import List
 from typing import Optional
 from typing import Set
 
+
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.table_formatter import TableFormatter
-
-logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TrendHistory:
@@ -49,6 +49,7 @@ class TrendHistory:
         :param path: History JSONL file, or a directory holding it
         :param agent_filter: Agent names to include; None or empty includes every agent
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._path: str = path
         self._agent_filter: Set[str] = set()
         if agent_filter:
@@ -60,14 +61,14 @@ class TrendHistory:
         """
         history_path: Optional[str] = self._resolve_path()
         if history_path is None:
-            logger.info(
+            self.logger.info(
                 "No history file found at %s. Runs append one record each, so this file appears after the first run.",
                 self._path,
             )
             return
         records: List[Dict[str, Any]] = self._read_records(history_path)
         if not records:
-            logger.info("No usable records in %s", history_path)
+            self.logger.info("No usable records in %s", history_path)
             return
         record: Dict[str, Any] = {}
         if self._agent_filter:
@@ -80,18 +81,19 @@ class TrendHistory:
             records = matching_records
             if not records:
                 agent_names: str = ", ".join(sorted(self._agent_filter))
-                logger.info("No records for agent(s) %s in %s", agent_names, history_path)
+                self.logger.info("No records for agent(s) %s in %s", agent_names, history_path)
                 return
         records.sort(key=self._timestamp_of)
-        logger.info("")
-        logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
+        self.logger.info("")
+        self.logger.info("TREND HISTORY (%s, %s run(s))", history_path, len(records))
         # One table row per record, in file order.
         rows: List[List[str]] = []
         # One table row per record.
         for record in records:
             rows.append(self._row(record))
-        TableFormatter.log_table(self._header(), rows)
-        logger.info("")
+        table_formatter: TableFormatter = TableFormatter()
+        table_formatter.log_table(self._header(), rows)
+        self.logger.info("")
 
     @staticmethod
     def _timestamp_of(record: Dict[str, Any]) -> str:
@@ -120,8 +122,7 @@ class TrendHistory:
             return candidate
         return None
 
-    @staticmethod
-    def _read_records(history_path: str) -> List[Dict[str, Any]]:
+    def _read_records(self, history_path: str) -> List[Dict[str, Any]]:
         """
         Parse the JSONL file, skipping unreadable lines.
 
@@ -156,14 +157,14 @@ class TrendHistory:
         except OSError as exc:
             # Caught-exception text goes through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE setting;
             # when that is off, the plain logger still names the file.
-            sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             if sensitive_logger.should_log():
                 sensitive_logger.warning("Could not read history file %s: %s", history_path, exc)
             else:
-                logger.warning("Could not read history file %s", history_path)
+                self.logger.warning("Could not read history file %s", history_path)
             return []
         if skipped:
-            logger.warning("  Skipped %s unreadable line(s) in %s", skipped, history_path)
+            self.logger.warning("  Skipped %s unreadable line(s) in %s", skipped, history_path)
         return records
 
     @staticmethod
