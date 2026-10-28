@@ -249,7 +249,6 @@ class TestToolPathOnlyResolution(TestCase):
         Test that the flag-off notice is logged exactly once per process.
         """
         # pylint: disable=protected-access
-        AbstractClassActivation._unrestricted_notice_logged = False
         with patch.dict(os.environ):
             os.environ.pop("AGENT_TOOL_PATH_ONLY", None)
             with self.assertLogs(level=INFO) as captured_logs:

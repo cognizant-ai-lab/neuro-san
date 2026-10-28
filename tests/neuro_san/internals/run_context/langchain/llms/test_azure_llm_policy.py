@@ -137,10 +137,6 @@ class TestAzureLlmPolicy(TestCase):
         for key in self.ENV_KEYS:
             os.environ.pop(key, None)
 
-        # The warning about legacy keys fires once per process; each test starts from a clean slate.
-        AzureLlmPolicy.legacy_keys_warned = False
-        self.addCleanup(setattr, AzureLlmPolicy, "legacy_keys_warned", False)
-
         self.policies: List[AzureLlmPolicy] = []
         self.requests: List[Request] = []
 
