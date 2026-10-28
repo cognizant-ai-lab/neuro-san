@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from json import load
 from os import environ
 from os.path import join
@@ -67,9 +66,9 @@ class TestRunOutputWriter(TestCase):
         :param output_dir: --output-dir value; None for the default
         :return: RunOutputWriter with only args set
         """
-        args: Namespace = Namespace(output_dir=output_dir)
+        run_settings: Dict[str, Any] = {"output_dir": output_dir}
         output_parts: Dict[str, Any] = {}
-        return RunOutputWriter(args, output_parts)
+        return RunOutputWriter(run_settings, output_parts)
 
     def _export_writer(self) -> RunOutputWriter:
         """
@@ -77,16 +76,29 @@ class TestRunOutputWriter(TestCase):
 
         :return: RunOutputWriter that writes to the scratch directory
         """
-        args: Namespace = Namespace(
-            agent="music_nerd", profile_path=None, level="norm",
-            ramp=False, host="localhost", port=30011,
-            request_timeout=120, idle_timeout=60, stage_timeout=300,
-            total_timeout=600, settle_time=5, max_workers=10,
-            num_rounds=1, num_requests=3, same_prompt=False,
-            allow_caching=False, chat_filter=None,
-            fixtures_hocon_dir=None, server_log=None, output_dir=self._dir,
-        )
-        server_checker: ServerChecker = ServerChecker(args)
+        run_settings: Dict[str, Any] = {
+            "agent": "music_nerd",
+            "profile_path": None,
+            "level": "norm",
+            "ramp": False,
+            "host": "localhost",
+            "port": 30011,
+            "request_timeout_seconds": 120,
+            "idle_timeout_seconds": 60,
+            "stage_timeout_seconds": 300,
+            "total_timeout_seconds": 600,
+            "settle_time_seconds": 5,
+            "max_workers": 10,
+            "num_rounds": 1,
+            "num_requests": 3,
+            "same_prompt": False,
+            "allow_caching": False,
+            "chat_filter": None,
+            "fixtures_hocon_dir": None,
+            "server_log": None,
+            "output_dir": self._dir,
+        }
+        server_checker: ServerChecker = ServerChecker("localhost", 30011, False)
         # The server version comes from /healthz; patch the fetch so the cached version is "0.6.92".
         with patch.object(ServerChecker, "fetch_server_version", return_value="0.6.92"):
             server_checker.resolve_ns_version()
@@ -95,7 +107,7 @@ class TestRunOutputWriter(TestCase):
             "hocon_files": [],
             "resource_reporter": ResourceReporter(),
         }
-        writer: RunOutputWriter = RunOutputWriter(args, output_parts)
+        writer: RunOutputWriter = RunOutputWriter(run_settings, output_parts)
         # Create the run directory under the scratch directory, without adding the run log handler.
         with patch.object(RunLog, "open"):
             writer.setup_test_log()
@@ -208,12 +220,17 @@ class TestRunOutputWriter(TestCase):
         When the output dir cannot be renamed, the warning names both paths; with LEAF_LOG_SENSITIVE=false it
         holds no error text.
         """
-        args: Namespace = Namespace(output_dir=self._dir, level="norm", host="localhost", num_requests=3)
+        run_settings: Dict[str, Any] = {
+            "output_dir": self._dir,
+            "level": "norm",
+            "host": "localhost",
+            "num_requests": 3,
+        }
         server_checker: MagicMock = MagicMock()
         server_checker.resolve_ns_version.return_value = "1.0.0"
         output_parts: Dict[str, Any] = {"server_checker": server_checker}
         with patch("tests.load_tests.reporting.run_output_writer.RunLog"):
-            writer: RunOutputWriter = RunOutputWriter(args, output_parts)
+            writer: RunOutputWriter = RunOutputWriter(run_settings, output_parts)
             writer.setup_test_log()
         output_dir: str = writer.get_output_dir()
         new_path: str = output_dir + "_interrupted"

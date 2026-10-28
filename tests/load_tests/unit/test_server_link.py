@@ -15,14 +15,12 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from typing import Optional
 from unittest import TestCase
 
-from psutil import Process
-
 from tests.load_tests.monitoring.server_link import ServerLink
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.validation.server_checker import ServerChecker
 
 
@@ -35,11 +33,10 @@ class TestServerLink(TestCase):
         """
         Without --server-log there is no log monitor and no server process, and there is a ServerChecker.
         """
-        args: Namespace = Namespace(server_log=None)
-        server_link: ServerLink = ServerLink(args)
+        server_link: ServerLink = ServerLink(None, ServerChecker("localhost", 8080, False))
         server_log: Optional[str] = server_link.get_server_log()
         log_monitor: Optional[ServerLogMonitor] = server_link.get_log_monitor()
-        server_process: Optional[Process] = server_link.get_server_process()
+        server_process: Optional[TrackedProcess] = server_link.get_server_process()
         self.assertIsNone(server_log)
         self.assertIsNone(log_monitor)
         self.assertIsNone(server_process)
@@ -50,8 +47,7 @@ class TestServerLink(TestCase):
         """
         set_server() keeps the resolved --server-log path and makes a log monitor for it.
         """
-        args: Namespace = Namespace(server_log="auto")
-        server_link: ServerLink = ServerLink(args)
+        server_link: ServerLink = ServerLink("auto", ServerChecker("localhost", 8080, False))
         server_link.set_server(None, "/tmp/neuro_san_server.log")
         server_log: Optional[str] = server_link.get_server_log()
         log_monitor: Optional[ServerLogMonitor] = server_link.get_log_monitor()

@@ -14,12 +14,14 @@
 #
 # END COPYRIGHT
 
-# Plain "import re": "from re import compile" would hide the builtin compile().
-import re
 from json import JSONDecodeError
 from json import loads
 from logging import Logger
 from logging import getLogger
+from re import Match
+from re import Pattern
+# Renamed so it does not hide the builtin compile().
+from re import compile as compile_regex
 from threading import Event
 from threading import Thread
 from typing import Any
@@ -28,11 +30,11 @@ from typing import List
 from typing import Optional
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-from psutil import Process
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.arrival_watcher import ArrivalWatcher
 from tests.load_tests.monitoring.server_log_parser import ServerLogParser
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 
 
 class ServerLogMonitor:
@@ -93,7 +95,7 @@ class ServerLogMonitor:
         line: str
         # Count each retry line by its error type.
         for line in lines:
-            match: Optional[re.Match] = LoadTestConstants.RETRY_LOG_PATTERN.search(line)
+            match: Optional[Match] = LoadTestConstants.RETRY_LOG_PATTERN.search(line)
             if match:
                 error_type: str = match.group(1)
                 retry_counts[error_type] = retry_counts.get(error_type, 0) + 1
@@ -121,7 +123,7 @@ class ServerLogMonitor:
             return []
         log_text: str = "".join(lines)
         errors: List[Dict[str, str]] = []
-        match: re.Match
+        match: Match
         # One error entry per server error block in the new text.
         for match in LoadTestConstants.SERVER_ERROR_PATTERN.finditer(log_text):
             message_words: List[str] = match.group(1).split()
@@ -209,8 +211,8 @@ class ServerLogMonitor:
         primary_finished: int = 0
         total_started: int = 0
         total_finished: int = 0
-        primary_start_regex: re.Pattern = re.compile(primary_start_pattern)
-        primary_finish_regex: re.Pattern = re.compile(primary_finish_pattern)
+        primary_start_regex: Pattern = compile_regex(primary_start_pattern)
+        primary_finish_regex: Pattern = compile_regex(primary_finish_pattern)
         line: str
         # Count the request start and finish lines, for all requests and for primary requests.
         for line in lines:
@@ -343,9 +345,9 @@ class ServerLogMonitor:
         if not lines:
             return []
 
-        primary_start_regex: Optional[re.Pattern] = None
+        primary_start_regex: Optional[Pattern] = None
         if primary_start_pattern:
-            primary_start_regex = re.compile(primary_start_pattern)
+            primary_start_regex = compile_regex(primary_start_pattern)
         primary_request_ids: List[str] = []
         disconnections: Dict[str, Dict[str, str]] = {}
         context_request_id: Optional[str] = None
@@ -354,10 +356,10 @@ class ServerLogMonitor:
         line: str
         # Track the current request_id and record primary requests, disconnections and cancels.
         for line in lines:
-            request_match: Optional[re.Match] = LoadTestConstants.REQUEST_ID_PATTERN.search(line)
+            request_match: Optional[Match] = LoadTestConstants.REQUEST_ID_PATTERN.search(line)
             if request_match:
                 context_request_id = request_match.group(1)
-            start_match: Optional[re.Match] = LoadTestConstants.REQUEST_START_PATTERN.search(line)
+            start_match: Optional[Match] = LoadTestConstants.REQUEST_START_PATTERN.search(line)
             if start_match and request_match:
                 agent_by_request_id[request_match.group(1)] = start_match.group(1)
             if (primary_start_regex
@@ -373,7 +375,7 @@ class ServerLogMonitor:
                         "request_id": request_id,
                         "agent": "unknown",
                     }
-            cancel_match: Optional[re.Match] = LoadTestConstants.TASK_CANCELLED_PATTERN.search(line)
+            cancel_match: Optional[Match] = LoadTestConstants.TASK_CANCELLED_PATTERN.search(line)
             if cancel_match:
                 self._parser.set_cancelled_agent(cancel_match, disconnections, agent_by_request_id)
 
@@ -400,7 +402,7 @@ class ServerLogMonitor:
         expected_count: int = monitor_settings.get("expected_count")
         fire_time_seconds: float = monitor_settings.get("fire_time_seconds")
         stop_event: Event = monitor_settings.get("stop_event")
-        client_process: Optional[Process] = monitor_settings.get("client_process")
+        client_process: Optional[TrackedProcess] = monitor_settings.get("client_process")
         primary_start_pattern: str = monitor_settings.get("primary_start_pattern")
         output_dir: Optional[str] = monitor_settings.get("output_dir")
         arrival_settings: Dict[str, Any] = {

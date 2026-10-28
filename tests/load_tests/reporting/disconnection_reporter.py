@@ -57,21 +57,16 @@ class DisconnectionReporter:
         if not all_disconnections:
             return
         disconnection_count: int = len(all_disconnections)
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  CLIENT DISCONNECTIONS (%s detected in server log)", disconnection_count)
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        title: str = f"CLIENT DISCONNECTIONS ({disconnection_count} detected in server log)"
+        self.logger.info("\n%s", Formatters.section_header(title))
         # One log line per disconnection.
         for disconnection in all_disconnections:
-            self.logger.info(
-                "  Batch %s: %s — %s still processing at disconnect",
-                disconnection.get("batch", "?"),
-                disconnection.get("request_id", "unknown"),
-                disconnection.get("agent", "unknown"),
-            )
-        self.logger.info(
-            """
+            batch_number: int = disconnection.get("batch")
+            request_id: str = disconnection.get("request_id", "unknown")
+            agent_name: str = disconnection.get("agent", "unknown")
+            self.logger.info("  Batch %s: %s — %s still processing at disconnect", batch_number, request_id, agent_name)
+        self.logger.info("""
   These requests had their client disconnect
   before the server finished. The server detected the
   disconnection and cancelled in-flight tasks.
-  If unexpected, consider increasing --idle-timeout or --request-timeout.""",
-        )
+  If unexpected, consider increasing --idle-timeout or --request-timeout.""")

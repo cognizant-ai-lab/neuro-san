@@ -27,14 +27,6 @@ except ImportError:
     # Unix-only module.  Thread limits report "n/a" without it.
     resource = None
 
-from psutil import AccessDenied
-from psutil import NoSuchProcess
-from psutil import Process
-from psutil import cpu_count
-from psutil import cpu_percent
-from psutil import process_iter
-from psutil import virtual_memory
-
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.reporting.formatters import Formatters
 
@@ -62,23 +54,6 @@ class SystemResources:
         Constructor.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-
-    @staticmethod
-    def total_threads() -> int:
-        """
-        Sum thread counts across all processes on the machine.
-
-        :return: Total thread count, leaving out processes that exit or deny access
-        """
-        total: int = 0
-        process: Process
-        # Add up the thread count of each process that still exists and allows access.
-        for process in process_iter(["num_threads"]):
-            try:
-                total += process.info.get("num_threads") or 0
-            except (NoSuchProcess, AccessDenied):
-                continue
-        return total
 
     @staticmethod
     def thread_limits() -> List[str]:
@@ -109,8 +84,8 @@ class SystemResources:
         limits: List[str] = [user_limit, system_maximum]
         return limits
 
-    @classmethod
-    def snapshot(cls, cpu_interval_seconds: float = 0.1) -> SystemSnapshot:
+    @staticmethod
+    def snapshot(cpu_interval_seconds: float = 0.1) -> SystemSnapshot:
         """
         Capture a point-in-time whole-system snapshot.
 
@@ -121,11 +96,11 @@ class SystemResources:
             "cpu_percent": system CPU use over all cores, in percent, sampled over cpu_interval_seconds
             "threads": number of threads running on the system
         """
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        memory_stats: Any = virtual_memory()
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = ResourceMonitor.read_virtual_memory()
         available_gigabytes: float = memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        cpu_percentage: float = cpu_percent(interval=cpu_interval_seconds)
-        thread_count: int = cls.total_threads()
+        cpu_percentage: float = ResourceMonitor.read_system_cpu_percent(cpu_interval_seconds)
+        thread_count: int = ResourceMonitor.total_threads()
         system_snapshot: SystemSnapshot = {
             "memory_percent": memory_stats.percent,
             "available_gigabytes": available_gigabytes,
@@ -141,8 +116,8 @@ class SystemResources:
 
         :return: Total system memory in gigabytes
         """
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        memory_stats: Any = virtual_memory()
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = ResourceMonitor.read_virtual_memory()
         total_gigabytes: float = memory_stats.total / ResourceMonitor.ONE_GIGABYTE
         return total_gigabytes
 
@@ -150,33 +125,25 @@ class SystemResources:
         """
         Log the PRE-RUN SUMMARY system lines (RAM / CPU / threads).
         """
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        memory_stats: Any = virtual_memory()
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        memory_stats: Any = ResourceMonitor.read_virtual_memory()
         total_gigabytes: float = memory_stats.total / ResourceMonitor.ONE_GIGABYTE
         available_gigabytes: float = memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        core_count: int = cpu_count() or 1
-        cpu_percentage: float = cpu_percent(interval=0.1)
+        core_count: int = ResourceMonitor.read_cpu_count() or 1
+        cpu_percentage: float = ResourceMonitor.read_system_cpu_percent(0.1)
         user_limit: str = ""
         system_maximum: str = ""
         user_limit, system_maximum = SystemResources.thread_limits()
-        self.logger.info(
-            "  System RAM: %.1f GB (%.1f GB available, %.0f%% used)",
-            total_gigabytes, available_gigabytes, memory_stats.percent,
-        )
+        self.logger.info("  System RAM: %.1f GB (%.1f GB available, %.0f%% used)", total_gigabytes, available_gigabytes,
+                         memory_stats.percent)
         self.logger.info("  System CPU: %d cores (%.0f%% in use)", core_count, cpu_percentage)
-        thread_count: int = SystemResources.total_threads()
+        thread_count: int = ResourceMonitor.total_threads()
         thread_count_text: str = f"{thread_count:,}"
-        self.logger.info(
-            "  System threads: %s in use / limit %s per-user (%s max)",
-            thread_count_text, user_limit, system_maximum,
-        )
+        self.logger.info("  System threads: %s in use / limit %s per-user (%s max)", thread_count_text, user_limit,
+                         system_maximum)
 
-    def log_section(
-            self,
-            before_snapshot: Optional[SystemSnapshot],
-            peak_snapshot: Optional[SystemSnapshot],
-            after_snapshot: Optional[SystemSnapshot],
-    ) -> None:
+    def log_section(self, before_snapshot: Optional[SystemSnapshot], peak_snapshot: Optional[SystemSnapshot],
+                    after_snapshot: Optional[SystemSnapshot]) -> None:
         """
         Log the aligned SYSTEM RESOURCES before/peak/after section.
 
@@ -199,11 +166,9 @@ class SystemResources:
                 break
         if not has_snapshot:
             return
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  SYSTEM RESOURCES")
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header("SYSTEM RESOURCES"))
         total_gigabytes: float = SystemResources.total_gigabytes()
-        core_count: int = cpu_count() or 1
+        core_count: int = ResourceMonitor.read_cpu_count() or 1
         user_limit: str = ""
         system_maximum: str = ""
         user_limit, system_maximum = SystemResources.thread_limits()

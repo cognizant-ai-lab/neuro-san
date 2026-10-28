@@ -61,12 +61,10 @@ class SummaryReporter:
 
         :param is_ramp: True to label each row by stage, False by round
         """
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
         title: str = "ROUND SUMMARY"
         if is_ramp:
             title = "RAMP-UP SUMMARY"
-        self.logger.info("  %s", title)
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header(title))
 
         has_server_counts: bool = False
         summary: Dict[str, Any]
@@ -78,11 +76,8 @@ class SummaryReporter:
         first_col: str = "Round"
         if is_ramp:
             first_col = "Stage"
-        header: List[str] = [
-            first_col, "Concurrent", "Created", "Failed",
-            "Timeout", "Killed", "Retries", "Amplification",
-            "Duration",
-        ]
+        header: List[str] = [first_col, "Concurrent", "Created", "Failed", "Timeout", "Killed", "Retries",
+                             "Amplification", "Duration"]
         if has_server_counts:
             header.extend(["Recv", "Done", "Internal"])
         rows: List[List[str]] = []
@@ -125,9 +120,7 @@ class SummaryReporter:
 
         total_sent: int = total_created + total_failed + total_timeout + total_killed
 
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  OVERALL RESULTS")
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header("OVERALL RESULTS"))
         if self._neuro_san_version:
             self.logger.info("  neuro-san version: %s", self._neuro_san_version)
         self.logger.info("  Total requests: %s", total_sent)
@@ -171,9 +164,7 @@ class SummaryReporter:
         """
         if client is None and server is None:
             return False
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  LLM & TOKEN USAGE")
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header("LLM & TOKEN USAGE"))
         self._log_token_source(f"Client ({client_source})", client)
         self._log_token_source("Server log", server)
         if client is not None and server is not None:

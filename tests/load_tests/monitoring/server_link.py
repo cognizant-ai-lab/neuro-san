@@ -14,12 +14,10 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from typing import Optional
 
-from psutil import Process
-
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.validation.server_checker import ServerChecker
 
 
@@ -30,22 +28,22 @@ class ServerLink:
     and the ServerChecker that checks the server.
     """
 
-    def __init__(self, args: Namespace) -> None:
+    def __init__(self, server_log: Optional[str], server_checker: ServerChecker) -> None:
         """
         Keep the --server-log path, make its log monitor and the ServerChecker. The server process is set later
         by set_server().
 
-        :param args: Parsed command-line arguments
+        :param server_log: The --server-log value before LoadTestCli resolves it, or None
+        :param server_checker: Checks the target server
         """
-        server_log: Optional[str] = args.server_log
-        self._server_checker: ServerChecker = ServerChecker(args)
-        self._server_process: Optional[Process] = None
+        self._server_checker: ServerChecker = server_checker
+        self._server_process: Optional[TrackedProcess] = None
         self._server_log: Optional[str] = server_log
         self._log_monitor: Optional[ServerLogMonitor] = None
         if server_log:
             self._log_monitor = ServerLogMonitor(server_log)
 
-    def set_server(self, server_process: Optional[Process], server_log: Optional[str]) -> None:
+    def set_server(self, server_process: Optional[TrackedProcess], server_log: Optional[str]) -> None:
         """
         Keep the server process and the resolved --server-log path, and make a new log monitor for that path.
 
@@ -57,7 +55,7 @@ class ServerLink:
         if server_log:
             self._log_monitor = ServerLogMonitor(server_log)
 
-    def get_server_process(self) -> Optional[Process]:
+    def get_server_process(self) -> Optional[TrackedProcess]:
         """
         :return: The local server process, or None
         """

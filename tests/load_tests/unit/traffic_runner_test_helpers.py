@@ -14,8 +14,9 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from threading import Event
+from typing import Dict
+from typing import Any
 from typing import Optional
 
 from tests.load_tests.prompts.agent_profile import AgentProfile
@@ -38,9 +39,18 @@ class TrafficRunnerTestHelpers:
         :return: The runner
         """
         profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
-        args: Namespace = Namespace(
-            same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
-            chat_filter=chat_filter, request_timeout=5.0, idle_timeout=5.0, include_tokens=False,
-            stage_timeout=stage_timeout_seconds)
+        runner_settings: Dict[str, Any] = {
+            "same_prompt": False,
+            "allow_caching": False,
+            "host": "localhost",
+            "port": 8080,
+            "https": False,
+            "agent": "x",
+            "chat_filter": chat_filter,
+            "request_timeout_seconds": 5.0,
+            "idle_timeout_seconds": 5.0,
+            "include_tokens": False,
+            "stage_timeout_seconds": stage_timeout_seconds,
+        }
         stop_event: Event = Event()
-        return TrafficRunner(args, profile, stop_event)
+        return TrafficRunner(runner_settings, profile, stop_event)

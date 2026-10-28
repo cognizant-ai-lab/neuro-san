@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from logging import Logger
@@ -28,13 +27,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from psutil import Process
-
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
@@ -56,21 +54,34 @@ class TrafficRunner:
     do not need to thread them through every method.
     """
 
-    def __init__(self, args: Namespace, profile: AgentProfile, cancel_event: Event) -> None:
+    def __init__(self, runner_settings: Dict[str, Any], profile: AgentProfile, cancel_event: Event) -> None:
         """
         Constructor.
 
-        :param args: Parsed load-test command line
+        :param runner_settings: A dict with the settled command-line values the requests use:
+            "agent"                    --agent value
+            "allow_caching"            --allow-caching value
+            "chat_filter"              --chat-filter value
+            "host"                     --host value
+            "https"                    --https value
+            "idle_timeout_seconds"     --idle-timeout: seconds a request may stay silent
+            "include_tokens"           --include-tokens value
+            "port"                     --port value
+            "request_timeout_seconds"  --request-timeout: seconds a request may take
+            "same_prompt"              --same-prompt value
+            "stage_timeout_seconds"    --stage-timeout: seconds a stage may take
         :param profile: Prompts and response checks for the agent under test
         :param cancel_event: Set by the Ctrl-C handler to stop a stage early
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._args: Namespace = args
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._settings: Dict[str, Any] = runner_settings
         self._profile: AgentProfile = profile
         self._executor: AgentRequestExecutor = AgentRequestExecutor()
         self._cancel_event: Event = cancel_event
         self._response_checker: ResponseChecker = ResponseChecker(profile)
-        self._request_recorder: RequestRecorder = RequestRecorder(args)
+        include_tokens: bool = runner_settings.get("include_tokens")
+        self._request_recorder: RequestRecorder = RequestRecorder(include_tokens)
 
     def run_one_http(self, request_id: int, global_request_id: int, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -82,8 +93,7 @@ class TrafficRunner:
         :param output_dir: Directory for per-request output files, or None
         :return: The request result
         """
-        prompt: str = self._profile.get_prompt(global_request_id, same_prompt=self._args.same_prompt,
-                                               allow_caching=self._args.allow_caching)
+        prompt: str = self._prompt_for(global_request_id)
         start_unix_seconds: float = time()
         start_seconds: float = perf_counter()
         request_settings: Dict[str, Any] = self._request_settings()
@@ -111,8 +121,20 @@ class TrafficRunner:
         self._request_recorder.record_request(request_id, output_dir, request_result, result)
         return result
 
-    def run_stage(self, plan: StagePlan, server_process: Optional[Process] = None,
-                  client_process: Optional[Process] = None,
+    def _prompt_for(self, global_request_id: int) -> str:
+        """
+        Pick the prompt of a request, with --same-prompt and --allow-caching applied.
+
+        :param global_request_id: Request number across the whole run
+        :return: The prompt text
+        """
+        same_prompt: bool = self._settings.get("same_prompt")
+        allow_caching: bool = self._settings.get("allow_caching")
+        prompt: str = self._profile.get_prompt(global_request_id, same_prompt=same_prompt, allow_caching=allow_caching)
+        return prompt
+
+    def run_stage(self, plan: StagePlan, server_process: Optional[TrackedProcess] = None,
+                  client_process: Optional[TrackedProcess] = None,
                   log_monitor: Optional[ServerLogMonitor] = None) -> Dict[str, Any]:
         """
         Fire the stage's requests concurrently using a thread pool.
@@ -155,7 +177,7 @@ class TrafficRunner:
             self._submit_requests(pool, plan, futures_ref, heartbeat)
             TrafficRunner._set_event(heartbeat_events, "fires_done_event")
             collector: RequestResultCollector = RequestResultCollector(futures_ref, results_list, start_seconds)
-            interrupted = collector.collect_with_timeout(self._args.stage_timeout, self._cancel_event)
+            interrupted = self._collect_stage_results(collector)
         finally:
             TrafficRunner._set_event(heartbeat_events, "stop_event")
             if heartbeat_thread is not None:
@@ -166,20 +188,38 @@ class TrafficRunner:
         return TrafficRunner._build_stage_result(total_time_seconds, results_list, heartbeat,
                                                  heartbeat_events, interrupted)
 
+    def _collect_stage_results(self, collector: RequestResultCollector) -> bool:
+        """
+        Wait for the stage's requests until --stage-timeout or Ctrl-C.
+
+        :param collector: The RequestResultCollector of the stage
+        :return: True when Ctrl-C stopped the stage
+        """
+        stage_timeout_seconds: float = self._settings.get("stage_timeout_seconds")
+        interrupted: bool = collector.collect_with_timeout(stage_timeout_seconds, self._cancel_event)
+        return interrupted
+
     def _request_settings(self) -> Dict[str, Any]:
         """
         Build the connection settings of one request from the CLI arguments.
 
         :return: The settings AgentRequestExecutor.execute_request() takes
         """
-        chat_filter_type: str = self._args.chat_filter.upper()
+        chat_filter: str = self._settings.get("chat_filter")
+        chat_filter_type: str = chat_filter.upper()
+        host: str = self._settings.get("host")
+        port: int = self._settings.get("port")
+        agent: str = self._settings.get("agent")
+        timeout_seconds: float = self._settings.get("request_timeout_seconds")
+        idle_timeout_seconds: float = self._settings.get("idle_timeout_seconds")
+        use_https: bool = self._settings.get("https")
         request_settings: Dict[str, Any] = {
-            "host": self._args.host,
-            "port": self._args.port,
-            "agent": self._args.agent,
-            "timeout_seconds": self._args.request_timeout,
-            "idle_timeout_seconds": self._args.idle_timeout,
-            "use_https": self._args.https,
+            "host": host,
+            "port": port,
+            "agent": agent,
+            "timeout_seconds": timeout_seconds,
+            "idle_timeout_seconds": idle_timeout_seconds,
+            "use_https": use_https,
             "chat_filter_type": chat_filter_type,
         }
         return request_settings
@@ -235,8 +275,8 @@ class TrafficRunner:
         response_text: str = request_result.get_response_text()
         if status == LoadTestConstants.STATUS_CREATED:
             processor: Optional[BasicMessageProcessor] = request_result.get_processor()
-            response_checks: Dict[str, Any] = self._profile.get_response(global_request_id,
-                                                                         same_prompt=self._args.same_prompt)
+            same_prompt: bool = self._settings.get("same_prompt")
+            response_checks: Dict[str, Any] = self._profile.get_response(global_request_id, same_prompt=same_prompt)
             return self._response_checker.check_response(processor, response_checks)
         failure_reason: Optional[str] = request_result.get_failure_reason()
         if failure_reason:
@@ -290,7 +330,7 @@ class TrafficRunner:
             heartbeat_events[event_name] = Event()
         return heartbeat_events
 
-    def _create_heartbeat(self, server_process: Optional[Process], client_process: Optional[Process],
+    def _create_heartbeat(self, server_process: Optional[TrackedProcess], client_process: Optional[TrackedProcess],
                           plan: StagePlan, log_monitor: Optional[ServerLogMonitor]) -> Heartbeat:
         """
         Create the stage's Heartbeat, reading the server log from its current end.

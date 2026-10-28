@@ -18,7 +18,6 @@ from logging import Logger
 from logging import getLogger
 from os.path import join
 from time import strftime
-from argparse import Namespace
 from typing import Any
 from typing import Dict
 from typing import List
@@ -45,18 +44,23 @@ class SummaryFileWriter:
     the file once at the end, so a failed section never leaves a half-written summary.txt.
     """
 
-    def __init__(self, stage_summaries: List[Dict[str, Any]], args: Namespace,
+    def __init__(self, stage_summaries: List[Dict[str, Any]], run_settings: Dict[str, Any],
                  server_chat_timing: Optional[List[Dict[str, Any]]] = None) -> None:
         """
         Constructor.
 
         :param stage_summaries: Per-stage summaries collected during the run
-        :param args: Parsed load-test command line
+        :param run_settings: A dict with the following keys, shown in the summary header:
+            "agent"         Agent name
+            "num_requests"  Requests per round
+            "num_rounds"    Number of rounds
+            "max_workers"   Most concurrent requests
         :param server_chat_timing: Per-agent timing entries from the server log, or None
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self._summaries: List[Dict[str, Any]] = stage_summaries
-        self._args: Namespace = args
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._run_settings: Dict[str, Any] = run_settings
         self._server_timing: List[Dict[str, Any]] = server_chat_timing or []
 
     def write(self, output_dir: str) -> str:
@@ -93,14 +97,12 @@ class SummaryFileWriter:
             total_requests += len(stage_summary.get("results", []))
             stage_durations_seconds.append(stage_summary.get("elapsed", 0))
         total_elapsed_seconds: float = sum(stage_durations_seconds)
-        agent: str = self._args.agent
+        agent: str = self._run_settings.get("agent")
         date_text: str = strftime("%Y-%m-%d %H:%M")
-        request_count: int = self._args.num_requests
-        round_count: int = self._args.num_rounds
-        workers: int = self._args.max_workers
-        lines.append(Formatters.SEPARATOR_LINE)
-        lines.append("  LOAD TEST SUMMARY")
-        lines.append(Formatters.SEPARATOR_LINE)
+        request_count: int = self._run_settings.get("num_requests")
+        round_count: int = self._run_settings.get("num_rounds")
+        workers: int = self._run_settings.get("max_workers")
+        lines.append(Formatters.section_header("LOAD TEST SUMMARY"))
         lines.append(f"  Agent:       {agent}")
         lines.append(f"  Date:        {date_text} UTC")
         lines.append(f"  Requests:    {request_count} x {round_count} round(s) = {total_requests} total")
@@ -363,9 +365,7 @@ class SummaryFileWriter:
         if not all_results:
             return
 
-        lines.append(Formatters.SEPARATOR_LINE)
-        lines.append("  REQUEST RESULTS")
-        lines.append(Formatters.SEPARATOR_LINE)
+        lines.append(Formatters.section_header("REQUEST RESULTS"))
 
         result: Dict[str, Any]
         # One line per request result.
@@ -438,9 +438,7 @@ class SummaryFileWriter:
         all_latencies_seconds.sort()
         total: int = len(all_latencies_seconds)
         milestones: List[int] = [50, 60, 70, 80, 90, 95, 100]
-        lines.append(Formatters.SEPARATOR_LINE)
-        lines.append("  COMPLETION TIMELINE")
-        lines.append(Formatters.SEPARATOR_LINE)
+        lines.append(Formatters.section_header("COMPLETION TIMELINE"))
 
         previous_count: int = -1
         percentage: int
@@ -498,9 +496,7 @@ class SummaryFileWriter:
             request_entries: List[Dict[str, Any]] = by_server_id.setdefault(entry_request_id, [])
             request_entries.append(entry)
 
-        lines.append(Formatters.SEPARATOR_LINE)
-        lines.append("  SERVER TIMING BREAKDOWN")
-        lines.append(Formatters.SEPARATOR_LINE)
+        lines.append(Formatters.section_header("SERVER TIMING BREAKDOWN"))
 
         server_request_id: str
         # One timing block per server request, in id order.

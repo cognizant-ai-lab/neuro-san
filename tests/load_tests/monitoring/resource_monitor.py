@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -23,16 +24,20 @@ from typing import Optional
 from psutil import AccessDenied
 from psutil import NoSuchProcess
 from psutil import Process
+from psutil import cpu_count
+from psutil import cpu_percent
 from psutil import process_iter
+from psutil import swap_memory
 from psutil import virtual_memory
 
-
-logger: logging.Logger = logging.getLogger(__name__)
+from tests.load_tests.monitoring.process_read_error import ProcessReadError
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 
 
 class ResourceMonitor:
     """
-    Captures and logs psutil-based process resource snapshots.
+    Captures and logs psutil-based process resource snapshots, and reads the whole-system memory, CPU and
+    thread values. With TrackedProcess (one process), it is the only load test class that uses psutil.
 
     Interim implementation. May be replaced by neuro-san built-in
     monitoring and telemetry when those features become available.
@@ -45,6 +50,12 @@ class ResourceMonitor:
     MEGABYTES_PER_GIGABYTE: int = 1024
     # A percentage that stands for one whole (one core, all memory)
     ONE_HUNDRED_PERCENT: float = 100.0
+
+    def __init__(self) -> None:
+        """
+        Set up the logger.
+        """
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     @staticmethod
     def cores_in_use(cpu_percentage: float, core_count: int) -> float:
@@ -60,7 +71,7 @@ class ResourceMonitor:
         return cores
 
     @staticmethod
-    def find_process(keyword: str) -> Optional[Process]:
+    def find_process(keyword: str) -> Optional[TrackedProcess]:
         """
         Find a running process whose command line contains the given keyword.
 
@@ -73,13 +84,13 @@ class ResourceMonitor:
             try:
                 command_line: str = " ".join(process.info.get("cmdline") or [])
                 if keyword in command_line:
-                    return Process(process.info.get("pid"))
-            except (NoSuchProcess, AccessDenied):
+                    return TrackedProcess(process.info.get("pid"))
+            except (NoSuchProcess, AccessDenied, ProcessReadError):
                 continue
         return None
 
     @staticmethod
-    def find_process_by_port(port: int) -> Optional[Process]:
+    def find_process_by_port(port: int) -> Optional[TrackedProcess]:
         """
         Find a process listening on the given port.
 
@@ -94,13 +105,13 @@ class ResourceMonitor:
                 # Check each connection of the process for a listen on the port.
                 for connection in process.net_connections():
                     if connection.status == "LISTEN" and connection.laddr.port == port:
-                        return Process(process.info.get("pid"))
-            except (NoSuchProcess, AccessDenied):
+                        return TrackedProcess(process.info.get("pid"))
+            except (NoSuchProcess, AccessDenied, ProcessReadError):
                 continue
         return None
 
     @staticmethod
-    def snapshot(process: Optional[Process]) -> Optional[Dict[str, Any]]:
+    def snapshot(process: Optional[TrackedProcess]) -> Optional[Dict[str, Any]]:
         """
         Capture a point-in-time resource snapshot of a process.
 
@@ -118,20 +129,15 @@ class ResourceMonitor:
             return None
         try:
             memory_info: Any = process.memory_info()
-            file_descriptor_count: int = 0
-            try:
-                file_descriptor_count = process.num_fds()
-            except AttributeError:
-                file_descriptor_count = process.num_handles()
+            file_descriptor_count: int = process.file_descriptor_count()
             cpu_times: Any = process.cpu_times()
             rss_megabytes: float = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
             thread_count: int = process.num_threads()
             # net_connections() returns psutil's private pconn named tuples, which have no public type to name.
             connections: List[Any] = process.net_connections()
             connection_count: int = len(connections)
-            children: List[Process] = process.children()
-            child_count: int = len(children)
-            cpu_percentage: float = process.cpu_percent(interval=0.1)
+            child_count: int = process.child_count()
+            cpu_percentage: float = process.cpu_percent(0.1)
             cpu_seconds: float = cpu_times.user + cpu_times.system
             process_snapshot: Dict[str, Any] = {
                 "rss_megabytes": rss_megabytes,
@@ -143,11 +149,10 @@ class ResourceMonitor:
                 "cpu_seconds": cpu_seconds,
             }
             return process_snapshot
-        except (NoSuchProcess, AccessDenied):
+        except ProcessReadError:
             return None
 
-    @staticmethod
-    def log_snapshot(label: str, resource_snapshot: Optional[Dict[str, Any]]) -> None:
+    def log_snapshot(self, label: str, resource_snapshot: Optional[Dict[str, Any]]) -> None:
         """
         Log a single resource snapshot.
 
@@ -155,16 +160,17 @@ class ResourceMonitor:
         :param resource_snapshot: Snapshot from snapshot(), or None
         """
         if resource_snapshot is None:
-            logger.info("  %s: process not found", label)
+            self.logger.info("  %s: process not found", label)
             return
         rss_megabytes: float = resource_snapshot.get("rss_megabytes")
         file_descriptor_count: int = resource_snapshot.get("fds")
         thread_count: int = resource_snapshot.get("threads")
         connection_count: int = resource_snapshot.get("connections")
-        cpu_percent: float = resource_snapshot.get("cpu_percent")
+        cpu_percentage: float = resource_snapshot.get("cpu_percent")
         child_count: int = resource_snapshot.get("children")
-        logger.info("  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s", label,
-                    rss_megabytes, file_descriptor_count, thread_count, connection_count, cpu_percent, child_count)
+        self.logger.info("  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s", label,
+                         rss_megabytes, file_descriptor_count, thread_count, connection_count, cpu_percentage,
+                         child_count)
 
     @staticmethod
     def system_memory_text(virtual_memory_stats: Any) -> str:
@@ -183,17 +189,15 @@ class ResourceMonitor:
         )
         return system_memory_text
 
-    @staticmethod
-    def log_system_memory(label: str) -> None:
+    def log_system_memory(self, label: str) -> None:
         """
         Log the system memory: percent used, then used, free and total.
 
         :param label: Label after "System", e.g. "BEFORE"
         """
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        virtual_memory_stats: Any = virtual_memory()
+        virtual_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         memory_line: str = ResourceMonitor.system_memory_line(label, virtual_memory_stats)
-        logger.info("%s", memory_line)
+        self.logger.info("%s", memory_line)
 
     @staticmethod
     def system_memory_line(label: str, virtual_memory_stats: Any) -> str:
@@ -213,3 +217,59 @@ class ResourceMonitor:
             f" / {available_gigabytes:.1f} GB free / {total_gigabytes:.1f} GB total)"
         )
         return memory_line
+
+    @staticmethod
+    def read_virtual_memory() -> Any:
+        """
+        Read the system memory.
+
+        :return: psutil.virtual_memory(): psutil's private svmem named tuple, which has no public type to name;
+                 total and available are in bytes, percent is the share in use
+        """
+        return virtual_memory()
+
+    @staticmethod
+    def read_swap_memory() -> Any:
+        """
+        Read the system swap.
+
+        :return: psutil.swap_memory(): psutil's private sswap named tuple, which has no public type to name;
+                 total and used are in bytes
+        """
+        return swap_memory()
+
+    @staticmethod
+    def read_system_cpu_percent(interval_seconds: Optional[float]) -> float:
+        """
+        Read the whole-system CPU use.
+
+        :param interval_seconds: Seconds to sample over, or None for the use since the previous call
+        :return: CPU use over all cores, in percent
+        """
+        return cpu_percent(interval=interval_seconds)
+
+    @staticmethod
+    def read_cpu_count() -> Optional[int]:
+        """
+        Read the number of logical CPU cores.
+
+        :return: The core count, or None when it cannot be read
+        """
+        return cpu_count()
+
+    @staticmethod
+    def total_threads() -> int:
+        """
+        Sum thread counts across all processes on the machine.
+
+        :return: Total thread count, leaving out processes that exit or deny access
+        """
+        total: int = 0
+        process: Process
+        # Add up the thread count of each process that still exists and allows access.
+        for process in process_iter(["num_threads"]):
+            try:
+                total += process.info.get("num_threads") or 0
+            except (NoSuchProcess, AccessDenied):
+                continue
+        return total

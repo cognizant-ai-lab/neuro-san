@@ -30,8 +30,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from psutil import Process
-
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
@@ -56,7 +55,7 @@ class Heartbeat:
     monitoring and telemetry when those features become available.
     """
 
-    def __init__(self, server_process: Optional[Process], client_process: Optional[Process] = None,
+    def __init__(self, server_process: Optional[TrackedProcess], client_process: Optional[TrackedProcess] = None,
                  output_dir: Optional[str] = None, server_log_timing: Optional[Dict[str, Any]] = None) -> None:
         """
         Constructor.

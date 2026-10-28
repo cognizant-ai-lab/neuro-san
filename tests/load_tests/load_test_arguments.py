@@ -18,6 +18,7 @@ from argparse import ArgumentParser
 from argparse import Namespace
 from argparse import RawDescriptionHelpFormatter
 from os import environ
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -102,6 +103,74 @@ class LoadTestArguments:
         args.stage_timeout *= factor
         if args.total_timeout > 0:
             args.total_timeout *= factor
+
+    @staticmethod
+    def settled_values(args: Namespace) -> Dict[str, Any]:
+        """
+        Collect the command-line values once LoadTestCli has settled them, for the helpers of the run.
+
+        :param args: The parsed arguments, after apply_level_defaults() and apply_scale()
+        :return: A dict with the following keys:
+            "agent"                    --agent: the agent network under test
+            "allow_caching"            True with --allow-caching
+            "chat_filter"              --chat-filter value
+            "client_only"              True with --client-only
+            "fixtures_hocon_dir"       --fixtures-hocon-dir path, or None
+            "host"                     --host: the server host
+            "https"                    True with --https
+            "idle_timeout_seconds"     --idle-timeout: seconds a request may stay silent
+            "include_tokens"           True to put token counts in the results
+            "level"                    --level, after the level defaults
+            "max_requests"             --max-requests value
+            "max_workers"              --max-workers: most concurrent requests
+            "no_dry_run"               True with --no-dry-run
+            "no_server_log"            True with --no-server-log
+            "num_requests"             --num-requests: requests of a flat stage
+            "num_rounds"               --num-rounds: rounds of each stage
+            "output_dir"               --output-dir path, or None
+            "port"                     --port: the server port
+            "profile_path"             --profile-path, or None
+            "project_root"             --project-root path
+            "ramp"                     True with --ramp
+            "request_timeout_seconds"  --request-timeout: seconds a request may take
+            "same_prompt"              True with --same-prompt
+            "server_log"               --server-log path ("auto" until LoadTestCli resolves it), or None
+            "settle_time_seconds"      --settle-time: seconds to wait after each stage
+            "stage_timeout_seconds"    --stage-timeout: seconds a stage may take
+            "stages"                   --stages value
+            "total_timeout_seconds"    --total-timeout: seconds the whole test may take, 0 for none
+        """
+        run_values: Dict[str, Any] = {
+            "agent": args.agent,
+            "allow_caching": args.allow_caching,
+            "chat_filter": args.chat_filter,
+            "client_only": args.client_only,
+            "fixtures_hocon_dir": args.fixtures_hocon_dir,
+            "host": args.host,
+            "https": args.https,
+            "idle_timeout_seconds": args.idle_timeout,
+            "include_tokens": args.include_tokens,
+            "level": args.level,
+            "max_requests": args.max_requests,
+            "max_workers": args.max_workers,
+            "no_dry_run": args.no_dry_run,
+            "no_server_log": args.no_server_log,
+            "num_requests": args.num_requests,
+            "num_rounds": args.num_rounds,
+            "output_dir": args.output_dir,
+            "port": args.port,
+            "profile_path": args.profile_path,
+            "project_root": args.project_root,
+            "ramp": args.ramp,
+            "request_timeout_seconds": args.request_timeout,
+            "same_prompt": args.same_prompt,
+            "server_log": args.server_log,
+            "settle_time_seconds": args.settle_time,
+            "stage_timeout_seconds": args.stage_timeout,
+            "stages": args.stages,
+            "total_timeout_seconds": args.total_timeout,
+        }
+        return run_values
 
     @staticmethod
     def _create_parser(epilog: str) -> ArgumentParser:

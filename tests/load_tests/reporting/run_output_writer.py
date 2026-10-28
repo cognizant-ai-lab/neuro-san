@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from getpass import getuser
 from json import dump
 from logging import Logger
@@ -56,23 +55,88 @@ class RunOutputWriter:
     summary.txt, and the OUTPUT FILES list at the end of the run.
     """
 
-    def __init__(self, args: Namespace, output_parts: Dict[str, Any]) -> None:
+    # Keys of the "config" section of raw_results.json, in file order.
+    CONFIG_KEYS: List[str] = [
+        "agent",
+        "profile_path",
+        "level",
+        "mode",
+        "host",
+        "port",
+        "request_timeout",
+        "idle_timeout",
+        "stage_timeout",
+        "total_timeout",
+        "settle_time",
+        "max_workers",
+        "num_rounds",
+        "num_requests",
+        "same_prompt",
+        "allow_caching",
+        "profile_source",
+        "fixtures_hocon_dir",
+        "hocon_files",
+        "chat_filter",
+        "server_log",
+        "estimated_tokens_per_request",
+    ]
+    # raw_results.json keeps main's names for these keys (json_metadata.py gives their unit); run_settings names them
+    # with the unit.
+    CONFIG_SETTINGS_KEYS: Dict[str, str] = {
+        "request_timeout": "request_timeout_seconds",
+        "idle_timeout": "idle_timeout_seconds",
+        "stage_timeout": "stage_timeout_seconds",
+        "total_timeout": "total_timeout_seconds",
+        "settle_time": "settle_time_seconds",
+    }
+
+    def __init__(self, run_settings: Dict[str, Any], output_parts: Dict[str, Any]) -> None:
         """
         Keep the run's arguments and the parts the output files are built from.
 
-        :param args: Parsed command-line arguments
+        :param run_settings: A dict with the settled command-line values of the run; a missing key reads as None:
+            "agent"                    --agent: the agent network under test
+            "allow_caching"            True with --allow-caching
+            "chat_filter"              --chat-filter value
+            "fixtures_hocon_dir"       --fixtures-hocon-dir path, or None
+            "host"                     --host: the server host
+            "idle_timeout_seconds"     --idle-timeout: seconds a request may stay silent
+            "level"                    --level, after the level defaults
+            "max_workers"              --max-workers: most concurrent requests
+            "no_dry_run"               True with --no-dry-run
+            "num_requests"             --num-requests: requests of a flat stage
+            "num_rounds"               --num-rounds: rounds of each stage
+            "output_dir"               --output-dir path, or None
+            "port"                     --port: the server port
+            "profile_path"             --profile-path, or None
+            "ramp"                     True with --ramp
+            "request_timeout_seconds"  --request-timeout: seconds a request may take
+            "same_prompt"              True with --same-prompt
+            "server_log"               --server-log path ("auto" until LoadTestCli resolves it), or None
+            "settle_time_seconds"      --settle-time: seconds to wait after each stage
+            "stage_timeout_seconds"    --stage-timeout: seconds a stage may take
+            "total_timeout_seconds"    --total-timeout: seconds the whole test may take, 0 for none
         :param output_parts: A dict with the following keys:
             "server_checker"     The ServerChecker
             "hocon_files"        Fixture HOCON file paths
             "resource_reporter"  The ResourceReporter
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self.args: Namespace = args
-        self.server_checker: ServerChecker = output_parts.get("server_checker")
-        self.hocon_files: List[str] = output_parts.get("hocon_files")
-        self.resource_reporter: ResourceReporter = output_parts.get("resource_reporter")
+        self.confirm: Confirm = Confirm()
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._run_settings: Dict[str, Any] = run_settings
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._output_parts: Dict[str, Any] = output_parts
         self._run_log: RunLog = RunLog()
         self._output_dir: Optional[str] = None
+
+    def set_server_log(self, server_log: Optional[str]) -> None:
+        """
+        Keep the --server-log path once LoadTestCli has resolved "auto".
+
+        :param server_log: The resolved --server-log path, or None
+        """
+        self._run_settings["server_log"] = server_log
 
     def get_output_dir(self) -> Optional[str]:
         """
@@ -86,7 +150,8 @@ class RunOutputWriter:
         """
         :return: The ResourceReporter of the run
         """
-        return self.resource_reporter
+        resource_reporter: ResourceReporter = self._output_parts.get("resource_reporter")
+        return resource_reporter
 
     def profile_source(self) -> str:
         """
@@ -94,8 +159,9 @@ class RunOutputWriter:
 
         :return: "hocon (<N> files)" or "json profile"
         """
-        if self.hocon_files:
-            return f"hocon ({len(self.hocon_files)} files)"
+        hocon_files: List[str] = self._output_parts.get("hocon_files")
+        if hocon_files:
+            return f"hocon ({len(hocon_files)} files)"
         return "json profile"
 
     def output_base(self) -> str:
@@ -108,8 +174,9 @@ class RunOutputWriter:
 
         :return: Path of the base output directory
         """
-        if self.args.output_dir:
-            return self.args.output_dir
+        output_dir: Optional[str] = self._run_settings.get("output_dir")
+        if output_dir:
+            return output_dir
         try:
             user: str = getuser()
         except (KeyError, OSError):
@@ -127,12 +194,15 @@ class RunOutputWriter:
         """
         Create output directory and add a file handler for logging.
         """
+        server_checker: ServerChecker = self._output_parts.get("server_checker")
         timestamp: str = strftime("%Y%m%d_%H%M%S")
         base: str = self.output_base()
-        neuro_san_version: Optional[str] = self.server_checker.resolve_ns_version()
-        request_count: int = self.args.num_requests
-        folder_name: str = RunNamer.run_folder_name(timestamp, self.args.host, neuro_san_version, request_count)
-        self._output_dir = join(base, self.args.level, folder_name)
+        neuro_san_version: Optional[str] = server_checker.resolve_ns_version()
+        request_count: int = self._run_settings.get("num_requests")
+        host: str = self._run_settings.get("host")
+        folder_name: str = RunNamer.run_folder_name(timestamp, host, neuro_san_version, request_count)
+        level: str = self._run_settings.get("level")
+        self._output_dir = join(base, level, folder_name)
         makedirs(self._output_dir, exist_ok=True)
         self._run_log.open(self._output_dir)
 
@@ -145,58 +215,65 @@ class RunOutputWriter:
         :param exit_code: Exit code of the test
         :param estimated_tokens_per_request: The agent profile's token estimate per request, or None if unknown
         """
+        server_checker: ServerChecker = self._output_parts.get("server_checker")
+        resource_reporter: ResourceReporter = self._output_parts.get("resource_reporter")
         aggregates: Dict[str, Any] = RunOutputWriter._build_aggregates(stage_summaries)
         verdict: str = "FAILED"
         if exit_code == 0:
             verdict = "PASSED"
         mode: str = "flat"
-        if self.args.ramp:
+        if self._run_settings.get("ramp"):
             mode = "ramp"
+        config: Dict[str, Any] = self._config_section(mode, estimated_tokens_per_request)
         raw_data: Dict[str, Any] = {
             "test_metadata": {
                 "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "hostname": gethostname(),
                 "python_version": python_version(),
                 "platform": platform(),
-                "neuro_san_version": self.server_checker.resolve_ns_version(),
+                "neuro_san_version": server_checker.resolve_ns_version(),
                 "neuro_san_studio_version": ServerChecker.get_package_version("neuro_san_studio"),
                 "verdict": verdict,
                 "exit_code": exit_code,
             },
-            "config": {
-                "agent": self.args.agent,
-                "profile_path": self.args.profile_path,
-                "level": self.args.level,
-                "mode": mode,
-                "host": self.args.host,
-                "port": self.args.port,
-                "request_timeout": self.args.request_timeout,
-                "idle_timeout": self.args.idle_timeout,
-                "stage_timeout": self.args.stage_timeout,
-                "total_timeout": self.args.total_timeout,
-                "settle_time": self.args.settle_time,
-                "max_workers": self.args.max_workers,
-                "num_rounds": self.args.num_rounds,
-                "num_requests": self.args.num_requests,
-                "same_prompt": self.args.same_prompt,
-                "allow_caching": self.args.allow_caching,
-                "profile_source": self.profile_source(),
-                "fixtures_hocon_dir": self.args.fixtures_hocon_dir,
-                "hocon_files": self.hocon_files,
-                "chat_filter": self.args.chat_filter,
-                "server_log": self.args.server_log,
-                "estimated_tokens_per_request": estimated_tokens_per_request,
-            },
+            "config": config,
             "aggregates": aggregates,
             "stage_summaries": stage_summaries,
-            "resource_rows": self.resource_reporter.get_resource_snapshots(),
-            "client_resource_rows": self.resource_reporter.get_client_snapshots(),
+            "resource_rows": resource_reporter.get_resource_snapshots(),
+            "client_resource_rows": resource_reporter.get_client_snapshots(),
         }
         json_metadata: Dict[str, Any] = JsonMetadata.build()
         raw_data.update(json_metadata)
         json_path: str = join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         with open(json_path, "w", encoding="utf-8") as json_file:
             dump(raw_data, json_file, indent=2, default=str)
+
+    def _config_section(self, mode: str, estimated_tokens_per_request: Optional[int]) -> Dict[str, Any]:
+        """
+        Build the "config" section of raw_results.json: the run settings, in CONFIG_KEYS order.
+
+        :param mode: "flat", or "ramp" with --ramp
+        :param estimated_tokens_per_request: The agent profile's token estimate per request, or None if unknown
+        :return: The config section
+        """
+        hocon_files: List[str] = self._output_parts.get("hocon_files")
+        profile_source: str = self.profile_source()
+        other_values: Dict[str, Any] = {
+            "mode": mode,
+            "profile_source": profile_source,
+            "hocon_files": hocon_files,
+            "estimated_tokens_per_request": estimated_tokens_per_request,
+        }
+        config: Dict[str, Any] = {}
+        key: str
+        # Take each key from the values above when it is one of them, else from the run settings.
+        for key in RunOutputWriter.CONFIG_KEYS:
+            if key in other_values:
+                config[key] = other_values.get(key)
+            else:
+                settings_key: str = RunOutputWriter.CONFIG_SETTINGS_KEYS.get(key, key)
+                config[key] = self._run_settings.get(settings_key)
+        return config
 
     def maybe_write_summary(self, stage_summaries: List[Dict[str, Any]],
                             server_chat_timing: List[Dict[str, object]]) -> None:
@@ -208,12 +285,13 @@ class RunOutputWriter:
         :param stage_summaries: One summary dict per stage
         :param server_chat_timing: Server streaming_chat Start/Finish pairs for the test
         """
-        if self.args.level != LoadTestConstants.LEVEL_ADV:
+        if self._run_settings.get("level") != LoadTestConstants.LEVEL_ADV:
             return
-        if not self.args.no_dry_run:
-            if not Confirm.ask("\nSave summary.txt?"):
+        if not self._run_settings.get("no_dry_run"):
+            if not self.confirm.ask("\nSave summary.txt?"):
                 return
-        writer: SummaryFileWriter = SummaryFileWriter(stage_summaries, self.args, server_chat_timing=server_chat_timing)
+        writer: SummaryFileWriter = SummaryFileWriter(stage_summaries, self._run_settings,
+                                                      server_chat_timing=server_chat_timing)
         writer.write(self._output_dir)
 
     def rename_interrupted(self) -> None:
@@ -259,9 +337,7 @@ class RunOutputWriter:
         label: str = "OUTPUT FILES"
         if has_failures:
             label = "OUTPUT FILES (with failures)"
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  %s", label)
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header(label))
         self.logger.info("  Directory:   %s", self._output_dir)
         json_path: str = join(self._output_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         if isfile(json_path):

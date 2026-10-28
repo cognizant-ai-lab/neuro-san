@@ -27,12 +27,12 @@ from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
 GATEWAY_URL: str = "https://litellm.example.com/v1"
 MOCK_PID: int = 4321
-VALIDATOR_LOGGER_NAME: str = "tests.load_tests.validation.environment_validator"
+VALIDATOR_LOGGER_NAME: str = "EnvironmentValidator"
 
 
 class TestEnvironmentValidator(TestCase):
     """
-    Unit tests for EnvironmentValidator.validate_environment().
+    Unit tests for EnvironmentValidator().validate_environment().
 
     Only a running mock_llm_server stops the load test. OPENAI_API_BASE is
     also set for LiteLLM or other gateways, so on its own it is only logged.
@@ -45,7 +45,7 @@ class TestEnvironmentValidator(TestCase):
         with patch.dict(environ, {"OPENAI_API_BASE": GATEWAY_URL}), \
                 patch.object(ResourceMonitor, "find_process", return_value=None), \
                 self.assertLogs(VALIDATOR_LOGGER_NAME, level="INFO") as logs:
-            EnvironmentValidator.validate_environment()
+            EnvironmentValidator().validate_environment()
         expected_line: str = f"INFO:{VALIDATOR_LOGGER_NAME}:OPENAI_API_BASE is set: {GATEWAY_URL}"
         self.assertIn(expected_line, logs.output)
 
@@ -53,12 +53,13 @@ class TestEnvironmentValidator(TestCase):
         """
         A running mock_llm_server stops the run, with or without OPENAI_API_BASE.
         """
-        mock_server_process = MagicMock(pid=MOCK_PID)
+        mock_server_process: MagicMock = MagicMock()
+        mock_server_process.get_pid.return_value = MOCK_PID
         with patch.dict(environ, {"OPENAI_API_BASE": GATEWAY_URL}), \
                 patch.object(ResourceMonitor, "find_process", return_value=mock_server_process), \
                 self.assertLogs(VALIDATOR_LOGGER_NAME, level="ERROR") as logs, \
                 self.assertRaises(LoadTestAbortError) as raised:
-            EnvironmentValidator.validate_environment()
+            EnvironmentValidator().validate_environment()
         exit_code: int = raised.exception.get_exit_code()
         self.assertEqual(exit_code, 1)
         expected_pid_text: str = f"PID {MOCK_PID}"
@@ -73,6 +74,6 @@ class TestEnvironmentValidator(TestCase):
         with patch.dict(environ, environment_without_api_base, clear=True), \
                 patch.object(ResourceMonitor, "find_process", return_value=None), \
                 self.assertLogs(VALIDATOR_LOGGER_NAME, level="INFO") as logs:
-            EnvironmentValidator.validate_environment()
+            EnvironmentValidator().validate_environment()
         expected_lines: List[str] = [f"INFO:{VALIDATOR_LOGGER_NAME}:No mock LLM environment detected."]
         self.assertEqual(logs.output, expected_lines)
