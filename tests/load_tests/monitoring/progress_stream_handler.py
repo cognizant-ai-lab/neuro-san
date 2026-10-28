@@ -19,10 +19,16 @@ from logging import StreamHandler
 
 class ProgressStreamHandler(StreamHandler):
     """
-    Stream handler that ends a record with no newline, so the arrival progress dots stay on one line.
+    Writes ArrivalWatcher's arrival dots on one line of stdout.
 
-    tests/load_tests/logging.hocon names this class for the "ArrivalWatcherProgress" logger. dictConfig cannot set
-    the terminator from a hocon file, so the class holds it.
+    ArrivalWatcher logs one "." for each request the server receives. A plain StreamHandler ends every record with
+    a newline, so each dot would print on its own line. This class only changes that ending (terminator) to "", so
+    the dots print as "....." on one line, and ArrivalWatcher logs a "\n" when all requests have arrived.
+
+    It is a class, not a setting in logging.hocon, because dictConfig has no plain key for the terminator: its "."
+    key for setting handler attributes fails through the hocon loader ("Not a valid Python identifier").
+    tests/load_tests/logging.hocon names this class for the "ArrivalWatcherProgress" logger.
     """
 
+    # Written after each record: nothing, so the next dot follows on the same line.
     terminator: str = ""
