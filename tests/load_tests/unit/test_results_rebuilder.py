@@ -14,18 +14,24 @@
 #
 # END COPYRIGHT
 
-import logging
-import os
-import time
 from argparse import Namespace
 from functools import partial
 from json import dumps
+from logging import INFO
 from logging import Logger
+from logging import getLogger
+from os import listdir
+from os import makedirs
+from os import remove
+from os import rename
+from os.path import join
 from shutil import rmtree
 from tempfile import TemporaryDirectory
 from tempfile import mkdtemp
+from time import sleep
 from typing import Any
 from typing import Dict
+from typing import KeysView
 from typing import List
 from typing import Tuple
 from unittest import TestCase
@@ -35,13 +41,13 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
 from typing_extensions import override
 
-from neuro_san import TOP_LEVEL_DIR
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.load_test_cli import LoadTestCli
 from tests.load_tests.reporting.results_rebuilder import ResultsRebuilder
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
+from tests.load_tests.unit.load_test_unit_paths import LoadTestUnitPaths
 
 
 # These tests call deliberately-internal helpers directly; suppress
@@ -66,8 +72,7 @@ class TestResultsRebuilder(TestCase):
     ANSWER_SECONDS: float = 0.1
     # The run log prints durations with 2 decimals.
     DURATION_TOLERANCE_SECONDS: float = 0.01
-    FIXTURES_HOCON_DIR: str = TOP_LEVEL_DIR.get_file_in_basis(
-        os.path.join("..", LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR))
+    FIXTURES_HOCON_DIR: str = LoadTestUnitPaths.FIXTURES_HOCON_DIR
 
     @override
     def setUp(self) -> None:
@@ -75,12 +80,13 @@ class TestResultsRebuilder(TestCase):
         Let INFO lines reach the run log, as they do when load_test_cli runs from the command line,
         and create a run directory with a requests/ folder, removed again after each test.
         """
-        root_logger: Logger = logging.getLogger()
+        root_logger: Logger = getLogger()
         self.addCleanup(root_logger.setLevel, root_logger.level)
-        root_logger.setLevel(logging.INFO)
+        root_logger.setLevel(INFO)
         self._scratch_run_dir: str = mkdtemp()
         self.addCleanup(rmtree, self._scratch_run_dir)
-        os.makedirs(os.path.join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME))
+        requests_dir: str = join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME)
+        makedirs(requests_dir)
 
     def test_json_profile_run_rebuilds_five_passed(self) -> None:
         """
@@ -128,8 +134,9 @@ class TestResultsRebuilder(TestCase):
         rebuilt_statuses: List[str] = []
         result: Dict[str, Any]
         # Collect every rebuilt status to check that no failure kind is merged into another.
-        for result in self._requests_by_id(rebuilt).values():
-            rebuilt_statuses.append(result.get("status"))
+        for result in TestResultsRebuilder._requests_by_id(rebuilt).values():
+            rebuilt_status: str = result.get("status")
+            rebuilt_statuses.append(rebuilt_status)
         rebuilt_statuses.sort()
         expected_statuses: List[str] = [
             LoadTestConstants.STATUS_CREATED,
@@ -252,7 +259,7 @@ class TestResultsRebuilder(TestCase):
             "--level", LoadTestConstants.LEVEL_MIN, "--no-dry-run", "--settle-time", "0",
         ]
         argv.extend(extra_args)
-        answer: partial = partial(self._answer, statuses)
+        answer: partial = partial(TestResultsRebuilder._answer, statuses)
         original: Dict[str, Any] = {}
         rebuilt: Dict[str, Any] = {}
         with TemporaryDirectory() as output_base:
@@ -260,49 +267,52 @@ class TestResultsRebuilder(TestCase):
             args: Namespace = Namespace()
             with patch("sys.argv", argv):
                 args = LoadTestArguments.parse_args("")
+            # No process lookup, so a neuro-san server or mock_llm_server running on this machine
+            # does not stop the run.
             with patch("tests.load_tests.traffic.agent_request_executor.AgentRequestExecutor.execute_request",
                        side_effect=answer), \
                     patch("tests.load_tests.validation.environment_validator.EnvironmentValidator.is_port_open",
-                          return_value=True):
+                          return_value=True), \
+                    patch("tests.load_tests.monitoring.resource_monitor.ResourceMonitor.find_process",
+                          return_value=None), \
+                    patch("tests.load_tests.monitoring.resource_monitor.ResourceMonitor.find_process_by_port",
+                          return_value=None):
                 LoadTestCli(args).run()
             run_dir: str = self._run_dir(output_base)
-            raw_results_path: str = os.path.join(run_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
+            raw_results_path: str = join(run_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
             raw_results_file = EasyJsonPersistence(full_ref=raw_results_path, must_exist=True)
             original = raw_results_file.restore()
-            os.remove(raw_results_path)
+            remove(raw_results_path)
             if run_log_name != LoadTestConstants.STDOUT_LOG_FILE_NAME:
-                stdout_log_path: str = os.path.join(run_dir, LoadTestConstants.STDOUT_LOG_FILE_NAME)
-                renamed_log_path: str = os.path.join(run_dir, run_log_name)
-                os.rename(stdout_log_path, renamed_log_path)
+                stdout_log_path: str = join(run_dir, LoadTestConstants.STDOUT_LOG_FILE_NAME)
+                renamed_log_path: str = join(run_dir, run_log_name)
+                rename(stdout_log_path, renamed_log_path)
             ResultsRebuilder(run_dir).run()
             rebuilt = raw_results_file.restore()
         return original, rebuilt
 
     # Same parameters as AgentRequestExecutor.execute_request, which this method stands in for.
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,unused-argument
+    # pylint: disable=unused-argument
     @staticmethod
-    def _answer(statuses: Dict[str, str], host: str, port: int, agent: str, prompt: str, timeout_seconds: float,
-                idle_timeout_seconds: float, use_https: bool = False,
-                chat_filter_type: str = "MAXIMAL") -> AgentRequestResult:
+    def _answer(statuses: Dict[str, str], request_settings: Dict[str, Any], prompt: str) -> AgentRequestResult:
         """
         Stand in for AgentRequestExecutor.execute_request: wait a little, then answer.
 
         :param statuses: Prompt to the status its request returns; other prompts return CREATED
-        :param host: Server host name, unused
-        :param port: Server port, unused
-        :param agent: Agent name, unused
+        :param request_settings: Host, port, agent and timeouts of the request, unused
         :param prompt: The request's prompt
-        :param timeout_seconds: Request timeout, unused
-        :param idle_timeout_seconds: Idle timeout, unused
-        :param use_https: True for HTTPS, unused
-        :param chat_filter_type: Chat filter, unused
         :return: The request result
         """
-        time.sleep(TestResultsRebuilder.ANSWER_SECONDS)
+        sleep(TestResultsRebuilder.ANSWER_SECONDS)
         processor: BasicMessageProcessor = BasicMessageProcessor()
         processor.process_message({"type": "AI", "text": "Hello there"})
         status: str = statuses.get(prompt, LoadTestConstants.STATUS_CREATED)
-        return AgentRequestResult(status, processor, "Hello there", TestResultsRebuilder.ANSWER_SECONDS, {})
+        response: Dict[str, Any] = {
+            "processor": processor,
+            "response_text": "Hello there",
+            "time_to_first_response_seconds": TestResultsRebuilder.ANSWER_SECONDS,
+        }
+        return AgentRequestResult(status, response)
 
     def _run_dir(self, output_base: str) -> str:
         """
@@ -311,10 +321,12 @@ class TestResultsRebuilder(TestCase):
         :param output_base: The --output-dir of the run
         :return: Path of the run directory
         """
-        level_dir: str = os.path.join(output_base, LoadTestConstants.LEVEL_MIN)
-        entries: List[str] = os.listdir(level_dir)
-        self.assertEqual(1, len(entries))
-        return os.path.join(level_dir, entries[0])
+        level_dir: str = join(output_base, LoadTestConstants.LEVEL_MIN)
+        entries: List[str] = listdir(level_dir)
+        entry_count: int = len(entries)
+        self.assertEqual(1, entry_count)
+        run_dir: str = join(level_dir, entries[0])
+        return run_dir
 
     @staticmethod
     def _requests_by_id(raw_results: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -343,29 +355,60 @@ class TestResultsRebuilder(TestCase):
         :param passed: Expected passed count, in both files
         :param failed: Expected failed count, in both files
         """
-        original_extractor = DictionaryExtractor(original)
-        rebuilt_extractor = DictionaryExtractor(rebuilt)
-        self.assertEqual(TestResultsRebuilder.AGENT, rebuilt_extractor.get("config.agent"))
-        self.assertEqual(TestResultsRebuilder.REQUEST_COUNT, rebuilt_extractor.get("config.num_requests"))
-        self.assertEqual(passed, original_extractor.get("aggregates.passed"))
-        self.assertEqual(failed, original_extractor.get("aggregates.failed"))
-        self.assertEqual(passed, rebuilt_extractor.get("aggregates.passed"))
-        self.assertEqual(failed, rebuilt_extractor.get("aggregates.failed"))
-        original_requests: Dict[str, Dict[str, Any]] = self._requests_by_id(original)
-        rebuilt_requests: Dict[str, Dict[str, Any]] = self._requests_by_id(rebuilt)
-        original_request_ids: List[str] = sorted(original_requests.keys())
-        rebuilt_request_ids: List[str] = sorted(rebuilt_requests.keys())
+        original_extractor: DictionaryExtractor = DictionaryExtractor(original)
+        rebuilt_extractor: DictionaryExtractor = DictionaryExtractor(rebuilt)
+        rebuilt_agent: str = rebuilt_extractor.get("config.agent")
+        rebuilt_request_count: int = rebuilt_extractor.get("config.num_requests")
+        original_passed: int = original_extractor.get("aggregates.passed")
+        original_failed: int = original_extractor.get("aggregates.failed")
+        rebuilt_passed: int = rebuilt_extractor.get("aggregates.passed")
+        rebuilt_failed: int = rebuilt_extractor.get("aggregates.failed")
+        self.assertEqual(TestResultsRebuilder.AGENT, rebuilt_agent)
+        self.assertEqual(TestResultsRebuilder.REQUEST_COUNT, rebuilt_request_count)
+        self.assertEqual(passed, original_passed)
+        self.assertEqual(failed, original_failed)
+        self.assertEqual(passed, rebuilt_passed)
+        self.assertEqual(failed, rebuilt_failed)
+        self._assert_same_requests(original, rebuilt)
+
+    def _assert_same_requests(self, original: Dict[str, Any], rebuilt: Dict[str, Any]) -> None:
+        """
+        Check the rebuild has the same request ids as the run, and each request's status and duration.
+
+        :param original: raw_results.json the run wrote
+        :param rebuilt: raw_results.json the rebuild wrote
+        """
+        original_requests: Dict[str, Dict[str, Any]] = TestResultsRebuilder._requests_by_id(original)
+        rebuilt_requests: Dict[str, Dict[str, Any]] = TestResultsRebuilder._requests_by_id(rebuilt)
+        original_keys: KeysView[str] = original_requests.keys()
+        rebuilt_keys: KeysView[str] = rebuilt_requests.keys()
+        original_request_ids: List[str] = sorted(original_keys)
+        rebuilt_request_ids: List[str] = sorted(rebuilt_keys)
         self.assertEqual(original_request_ids, rebuilt_request_ids)
-        shortest_seconds: float = TestResultsRebuilder.ANSWER_SECONDS - TestResultsRebuilder.DURATION_TOLERANCE_SECONDS
         request_id: str
         result: Dict[str, Any]
         # Each rebuilt request keeps its status and its duration, to the precision of the run log.
         for request_id, result in original_requests.items():
             rebuilt_result: Dict[str, Any] = rebuilt_requests.get(request_id, {})
-            self.assertEqual(result.get("status"), rebuilt_result.get("status"), request_id)
-            self.assertAlmostEqual(result.get("elapsed"), rebuilt_result.get("elapsed"),
-                                   delta=TestResultsRebuilder.DURATION_TOLERANCE_SECONDS, msg=request_id)
-            self.assertGreaterEqual(rebuilt_result.get("elapsed"), shortest_seconds, request_id)
+            self._assert_same_request(request_id, result, rebuilt_result)
+
+    def _assert_same_request(self, request_id: str, result: Dict[str, Any], rebuilt_result: Dict[str, Any]) -> None:
+        """
+        Check one rebuilt request keeps its status and its duration, to the precision of the run log.
+
+        :param request_id: The request id, shown when a check fails
+        :param result: The request's result in the run's raw_results.json
+        :param rebuilt_result: The same request's result in the rebuild, or {} when the rebuild has no such request
+        """
+        shortest_seconds: float = TestResultsRebuilder.ANSWER_SECONDS - TestResultsRebuilder.DURATION_TOLERANCE_SECONDS
+        original_status: str = result.get("status")
+        rebuilt_status: str = rebuilt_result.get("status")
+        original_elapsed: float = result.get("elapsed")
+        rebuilt_elapsed: float = rebuilt_result.get("elapsed")
+        self.assertEqual(original_status, rebuilt_status, request_id)
+        self.assertAlmostEqual(original_elapsed, rebuilt_elapsed,
+                               delta=TestResultsRebuilder.DURATION_TOLERANCE_SECONDS, msg=request_id)
+        self.assertGreaterEqual(rebuilt_elapsed, shortest_seconds, request_id)
 
     def _build_run(self, elapsed_seconds_by_id: Dict[int, float]) -> Dict[str, Any]:
         """
@@ -386,7 +429,7 @@ class TestResultsRebuilder(TestCase):
 
         ResultsRebuilder(self._scratch_run_dir).run()
 
-        json_path: str = os.path.join(self._scratch_run_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
+        json_path: str = join(self._scratch_run_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         raw_results_file = EasyJsonPersistence(full_ref=json_path, must_exist=True)
         raw_results: Dict[str, Any] = raw_results_file.restore()
         aggregates: Dict[str, Any] = raw_results.get("aggregates", {})
@@ -398,8 +441,8 @@ class TestResultsRebuilder(TestCase):
 
         :param request_id: Request id used in the file name and reservation id
         """
-        path: str = os.path.join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME,
-                                 f"request_{request_id}_stdout.txt")
+        file_name: str = f"request_{request_id}{LoadTestConstants.REQUEST_STDOUT_FILE_SUFFIX}"
+        path: str = join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME, file_name)
         response: Dict[str, str] = {
             "reservation_id": f"abc-{request_id}",
             "agent_network_name": "music_nerd",
@@ -414,7 +457,7 @@ class TestResultsRebuilder(TestCase):
 
         :param text: Log text to write
         """
-        path: str = os.path.join(self._scratch_run_dir, LoadTestConstants.LEGACY_RUN_LOG_FILE_NAME)
+        path: str = join(self._scratch_run_dir, LoadTestConstants.LEGACY_RUN_LOG_FILE_NAME)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
 
@@ -425,7 +468,7 @@ class TestResultsRebuilder(TestCase):
         :return: A dictionary from each result's "request_id" (such as "request-1") to that request's result
         """
         rebuilder: ResultsRebuilder = ResultsRebuilder(self._scratch_run_dir)
-        requests_dir: str = os.path.join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME)
+        requests_dir: str = join(self._scratch_run_dir, LoadTestConstants.REQUESTS_DIR_NAME)
         timing: Dict[int, Dict[str, Any]] = rebuilder._parse_timing()
         results: List[Dict[str, Any]] = rebuilder._scan_requests(requests_dir, timing)
         results_by_request_id: Dict[str, Dict[str, Any]] = {}

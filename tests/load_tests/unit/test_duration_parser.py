@@ -18,12 +18,12 @@ from argparse import ArgumentTypeError
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class TestDurationParser(TestCase):
     """
-    Unit tests for DurationParser.parse() and DurationParser.format_seconds().
+    Unit tests for DurationParser.parse(), format_seconds() and format_minutes_seconds().
 
     Every timeout flag runs through parse(), so a wrong answer silently
     changes what a run measures rather than failing visibly.
@@ -125,3 +125,39 @@ class TestDurationParser(TestCase):
         for seconds in seconds_values:
             duration_text: str = DurationParser.format_seconds(seconds)
             self.assertEqual(DurationParser.parse(duration_text), seconds, duration_text)
+
+    def test_format_minutes_seconds_under_a_minute_is_seconds(self) -> None:
+        """
+        A time under a minute prints as seconds only, and zero is "0s".
+        """
+        under_a_minute_text: str = DurationParser.format_minutes_seconds(45)
+        zero_text: str = DurationParser.format_minutes_seconds(0)
+        self.assertEqual(under_a_minute_text, "45s")
+        self.assertEqual(zero_text, "0s")
+
+    def test_format_minutes_seconds_over_a_minute(self) -> None:
+        """
+        105 seconds prints as "1m 45s", 120 seconds as "2m 0s" and 1205 seconds as "20m 5s".
+        """
+        minutes_and_seconds_text: str = DurationParser.format_minutes_seconds(105)
+        whole_minutes_text: str = DurationParser.format_minutes_seconds(120)
+        twenty_minutes_text: str = DurationParser.format_minutes_seconds(1205)
+        self.assertEqual(minutes_and_seconds_text, "1m 45s")
+        self.assertEqual(whole_minutes_text, "2m 0s")
+        self.assertEqual(twenty_minutes_text, "20m 5s")
+
+    def test_format_minutes_seconds_keeps_one_decimal_under_a_minute(self) -> None:
+        """
+        Under a minute one decimal stays: 0.44 is "0.4s", 12.36 is "12.4s" and 59.94 is "59.9s".
+        From a minute on, seconds are whole: 59.96 is "1m 0s" and 105.4 is "1m 45s".
+        """
+        sub_second_text: str = DurationParser.format_minutes_seconds(0.44)
+        seconds_text: str = DurationParser.format_minutes_seconds(12.36)
+        just_under_text: str = DurationParser.format_minutes_seconds(59.94)
+        rounded_up_text: str = DurationParser.format_minutes_seconds(59.96)
+        over_a_minute_text: str = DurationParser.format_minutes_seconds(105.4)
+        self.assertEqual(sub_second_text, "0.4s")
+        self.assertEqual(seconds_text, "12.4s")
+        self.assertEqual(just_under_text, "59.9s")
+        self.assertEqual(rounded_up_text, "1m 0s")
+        self.assertEqual(over_a_minute_text, "1m 45s")

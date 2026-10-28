@@ -14,8 +14,9 @@
 #
 # END COPYRIGHT
 
-import logging
 import math
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -23,8 +24,6 @@ from typing import Union
 
 
 from tests.load_tests.reporting.formatters import Formatters
-
-logger: logging.Logger = logging.getLogger(__name__)
 
 # Completion latency percentiles (percent)
 COMPLETION_MILESTONES: List[int] = [0, 50, 90, 95, 100]
@@ -51,6 +50,7 @@ class LatencyAnalyzer:
 
         :param stage_summaries: Per-stage summaries collected during the run
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._summaries: List[Dict[str, Any]] = stage_summaries
 
     # ----------------------------------------------------------
@@ -63,9 +63,7 @@ class LatencyAnalyzer:
 
         :param is_ramp: True to label each stage, False to label each round
         """
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        logger.info("  LATENCY ANALYSIS")
-        logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header("LATENCY ANALYSIS"))
 
         self._log_completion_timeline(is_ramp=is_ramp)
 
@@ -95,13 +93,13 @@ class LatencyAnalyzer:
             stage_summary: Dict[str, Any]
             # Average latency of each round that has latency data.
             for stage_summary in summaries:
-                latencies_seconds: List[float] = self._extract_latencies(stage_summary)
+                latencies_seconds: List[float] = LatencyAnalyzer._extract_latencies(stage_summary)
                 if latencies_seconds:
                     average_latencies_seconds.append(sum(latencies_seconds) / len(latencies_seconds))
             if len(average_latencies_seconds) < 2:
                 continue
             if not has_degradation:
-                logger.info("\n  Latency degradation (round-over-round):")
+                self.logger.info("\n  Latency degradation (round-over-round):")
                 has_degradation = True
             latency_texts: List[str] = []
             average_latency_seconds: float
@@ -117,7 +115,7 @@ class LatencyAnalyzer:
             sign: str = ""
             if change_percentage >= 0:
                 sign = "+"
-            logger.info("    %s concurrent: %s (%s%.0f%%)", concurrency, parts, sign, change_percentage)
+            self.logger.info("    %s concurrent: %s (%s%.0f%%)", concurrency, parts, sign, change_percentage)
 
     # ----------------------------------------------------------
     # 3. Concurrent request timeline
@@ -131,15 +129,16 @@ class LatencyAnalyzer:
         # Log the concurrency timeline of each stage that has one.
         for summary in self._summaries:
             results: List[Dict[str, Any]] = summary.get("results", [])
-            timeline: List[Dict[str, Union[int, float]]] = self._build_timeline(results)
+            timeline: List[Dict[str, Union[int, float]]] = LatencyAnalyzer._build_timeline(results)
             if not timeline:
                 continue
             stage: Union[int, str] = summary.get("stage", "?")
             round_number: Union[int, str] = summary.get("round", "?")
             concurrent: Union[int, str] = summary.get("concurrent", "?")
             peak_in_flight_count: int = LatencyAnalyzer._peak_in_flight_count(timeline)
-            logger.info("\n  Concurrency timeline (stage %s, round %s, %s planned):", stage, round_number, concurrent)
-            logger.info("    Peak in-flight: %s", peak_in_flight_count)
+            self.logger.info("\n  Concurrency timeline (stage %s, round %s, %s planned):", stage, round_number,
+                             concurrent)
+            self.logger.info("    Peak in-flight: %s", peak_in_flight_count)
             self._log_timeline_chart(timeline)
 
     @staticmethod
@@ -194,7 +193,7 @@ class LatencyAnalyzer:
         summary: Dict[str, Any]
         # Log the completion percentiles of each stage that has latencies.
         for summary in self._summaries:
-            latencies_seconds: List[float] = self._extract_latencies(summary)
+            latencies_seconds: List[float] = LatencyAnalyzer._extract_latencies(summary)
             if not latencies_seconds:
                 continue
             latencies_seconds.sort()
@@ -212,15 +211,14 @@ class LatencyAnalyzer:
             percentage: int
             # One "p<N> <duration>" part per milestone percentage.
             for percentage in COMPLETION_MILESTONES:
-                percentile_seconds: float = self.percentile(latencies_seconds, percentage)
+                percentile_seconds: float = LatencyAnalyzer.percentile(latencies_seconds, percentage)
                 formatted_duration: str = Formatters.fmt_duration(percentile_seconds, precision=1)
                 parts_list.append(f"p{percentage} {formatted_duration}")
             parts: str = " / ".join(parts_list)
-            logger.info("\n  Completion percentiles (%s, %s requests): %s", label, total, parts)
+            self.logger.info("\n  Completion percentiles (%s, %s requests): %s", label, total, parts)
             self._log_count_milestones(latencies_seconds)
 
-    @staticmethod
-    def _log_count_milestones(sorted_latencies_seconds: List[float]) -> None:
+    def _log_count_milestones(self, sorted_latencies_seconds: List[float]) -> None:
         """
         Log completion times at round-number request counts.
 
@@ -230,13 +228,13 @@ class LatencyAnalyzer:
         milestones: List[int] = LatencyAnalyzer.count_milestones(total)
         if not milestones:
             return
-        logger.info("\n  Completion by count:")
+        self.logger.info("\n  Completion by count:")
         count: int
         # One log line per count milestone.
         for count in milestones:
             duration_seconds: float = sorted_latencies_seconds[count - 1]
             formatted_duration: str = Formatters.fmt_duration(duration_seconds, precision=1)
-            logger.info("    %4d requests completed by %s", count, formatted_duration)
+            self.logger.info("    %4d requests completed by %s", count, formatted_duration)
 
     @staticmethod
     def _extract_latencies(summary: Dict[str, Any]) -> List[float]:
@@ -380,8 +378,7 @@ class LatencyAnalyzer:
             peak_in_flight_count = max(peak_in_flight_count, in_flight_count)
         return peak_in_flight_count
 
-    @staticmethod
-    def _log_timeline_chart(timeline: List[Dict[str, Union[int, float]]]) -> None:
+    def _log_timeline_chart(self, timeline: List[Dict[str, Union[int, float]]]) -> None:
         """
         Log a simple ASCII chart of concurrency over time.
 
@@ -408,7 +405,8 @@ class LatencyAnalyzer:
             chart: str = LatencyAnalyzer._chart_bar(bar_length_characters)
             label: str = Formatters.fmt_duration(bucket_start_seconds)
             # "%-*s" takes its width from the argument before the bar.
-            logger.info("    %8s |%-*s| %d", label, LatencyAnalyzer.CHART_WIDTH_CHARACTERS, chart, peak_in_flight_count)
+            self.logger.info("    %8s |%-*s| %d", label, LatencyAnalyzer.CHART_WIDTH_CHARACTERS, chart,
+                             peak_in_flight_count)
 
     @staticmethod
     def _bucket_peaks(timeline: List[Dict[str, Union[int, float]]], bucket_count: int,

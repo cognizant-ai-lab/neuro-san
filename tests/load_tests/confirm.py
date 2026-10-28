@@ -14,9 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
-
-logger: logging.Logger = logging.getLogger(__name__)
+from logging import Logger
+from logging import getLogger
 
 
 class Confirm:
@@ -27,8 +26,13 @@ class Confirm:
     re-prompts, and Ctrl+C / EOF (closed stdin) are treated as ``n``.
     """
 
-    @staticmethod
-    def ask(question: str) -> bool:
+    def __init__(self) -> None:
+        """
+        Set up the logger.
+        """
+        self.logger: Logger = getLogger(self.__class__.__name__)
+
+    def ask(self, question: str) -> bool:
         """
         Prompt until the user answers ``y`` or ``n``.
 
@@ -54,4 +58,4 @@ class Confirm:
                 return True
             if answer == "n":
                 return False
-            logger.info("  Please answer 'y' or 'n'.")
+            self.logger.info("  Please answer 'y' or 'n'.")

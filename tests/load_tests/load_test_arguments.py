@@ -14,25 +14,29 @@
 #
 # END COPYRIGHT
 
-import argparse
-import os
+from argparse import ArgumentParser
+from argparse import Namespace
+from argparse import RawDescriptionHelpFormatter
+from os import environ
+from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Set
 
 from tests.load_tests.load_test_constants import LoadTestConstants
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class LoadTestArguments:
     """
     Defines and parses the load test's command-line arguments.
     Holds the argparse definition for every load-test flag, plus the detection of which flags the user actually passed,
-    which the orchestrator needs in order to leave explicit values alone when it applies level-based defaults.
+    so apply_level_defaults() leaves explicit values alone. apply_scale() applies the --scale factor.
     """
 
     @staticmethod
-    def parse_args(epilog: str) -> argparse.Namespace:
+    def parse_args(epilog: str) -> Namespace:
         """
         Parse command-line arguments for the load test.
 
@@ -42,8 +46,8 @@ class LoadTestArguments:
         :param epilog: Text shown at the end of --help
         :return: Parsed arguments, with explicit_args set to the dest names the user passed
         """
-        parser: argparse.ArgumentParser = LoadTestArguments._create_parser(epilog)
-        args: argparse.Namespace = parser.parse_args()
+        parser: ArgumentParser = LoadTestArguments._create_parser(epilog)
+        args: Namespace = parser.parse_args()
         # Track which args the user explicitly provided so
         # level-based defaults do not override them.
         explicit: Set[str] = LoadTestArguments._explicit_args(parser, args)
@@ -55,27 +59,136 @@ class LoadTestArguments:
         return args
 
     @staticmethod
-    def _create_parser(epilog: str) -> argparse.ArgumentParser:
+    def apply_level_defaults(args: Namespace, explicit_args: Set[str]) -> None:
+        """
+        Override argparse defaults with level-specific values.
+
+        Only applies when the user did not explicitly set the flag.
+        adv: LoadTestConstants.ADV_NUM_REQUESTS requests, LoadTestConstants.ADV_NUM_ROUNDS rounds (stress test).
+
+        --full-concurrency matches workers to num-requests so every
+        request fires at once.  Otherwise workers stay at the
+        conservative --max-workers default and a warning is shown if
+        max-workers < num-requests.
+
+        :param args: Parsed arguments, updated in place
+        :param explicit_args: Dest names the user passed on the command line
+        """
+        if args.level == LoadTestConstants.LEVEL_ADV:
+            if "num_requests" not in explicit_args:
+                args.num_requests = LoadTestConstants.ADV_NUM_REQUESTS
+            if "num_rounds" not in explicit_args:
+                args.num_rounds = LoadTestConstants.ADV_NUM_ROUNDS
+
+        if "max_workers" not in explicit_args and args.full_concurrency:
+            args.max_workers = args.num_requests
+
+    @staticmethod
+    def apply_scale(args: Namespace) -> None:
+        """
+        Multiply load parameters by --scale factor.
+
+        Applied after level defaults so that both explicit
+        values and level defaults are scaled uniformly.
+
+        :param args: Parsed command-line arguments, scaled in place
+        """
+        factor: int = args.scale
+        if factor <= 1:
+            return
+        args.num_requests *= factor
+        args.max_workers *= factor
+        args.request_timeout *= factor
+        args.idle_timeout *= factor
+        args.stage_timeout *= factor
+        if args.total_timeout > 0:
+            args.total_timeout *= factor
+
+    @staticmethod
+    def settled_values(args: Namespace) -> Dict[str, Any]:
+        """
+        Collect the command-line values once LoadTestCli has settled them, for the helpers of the run.
+
+        :param args: The parsed arguments, after apply_level_defaults() and apply_scale()
+        :return: A dict with the following keys:
+            "agent"                    --agent: the agent network under test
+            "allow_caching"            True with --allow-caching
+            "chat_filter"              --chat-filter value
+            "client_only"              True with --client-only
+            "fixtures_hocon_dir"       --fixtures-hocon-dir path, or None
+            "host"                     --host: the server host
+            "https"                    True with --https
+            "idle_timeout_seconds"     --idle-timeout: seconds a request may stay silent
+            "include_tokens"           True to put token counts in the results
+            "level"                    --level, after the level defaults
+            "max_requests"             --max-requests value
+            "max_workers"              --max-workers: most concurrent requests
+            "no_dry_run"               True with --no-dry-run
+            "no_server_log"            True with --no-server-log
+            "num_requests"             --num-requests: requests of a flat stage
+            "num_rounds"               --num-rounds: rounds of each stage
+            "output_dir"               --output-dir path, or None
+            "port"                     --port: the server port
+            "profile_path"             --profile-path, or None
+            "project_root"             --project-root path
+            "ramp"                     True with --ramp
+            "request_timeout_seconds"  --request-timeout: seconds a request may take
+            "same_prompt"              True with --same-prompt
+            "server_log"               --server-log path ("auto" until LoadTestCli resolves it), or None
+            "settle_time_seconds"      --settle-time: seconds to wait after each stage
+            "stage_timeout_seconds"    --stage-timeout: seconds a stage may take
+            "stages"                   --stages value
+            "total_timeout_seconds"    --total-timeout: seconds the whole test may take, 0 for none
+        """
+        run_values: Dict[str, Any] = {
+            "agent": args.agent,
+            "allow_caching": args.allow_caching,
+            "chat_filter": args.chat_filter,
+            "client_only": args.client_only,
+            "fixtures_hocon_dir": args.fixtures_hocon_dir,
+            "host": args.host,
+            "https": args.https,
+            "idle_timeout_seconds": args.idle_timeout,
+            "include_tokens": args.include_tokens,
+            "level": args.level,
+            "max_requests": args.max_requests,
+            "max_workers": args.max_workers,
+            "no_dry_run": args.no_dry_run,
+            "no_server_log": args.no_server_log,
+            "num_requests": args.num_requests,
+            "num_rounds": args.num_rounds,
+            "output_dir": args.output_dir,
+            "port": args.port,
+            "profile_path": args.profile_path,
+            "project_root": args.project_root,
+            "ramp": args.ramp,
+            "request_timeout_seconds": args.request_timeout,
+            "same_prompt": args.same_prompt,
+            "server_log": args.server_log,
+            "settle_time_seconds": args.settle_time,
+            "stage_timeout_seconds": args.stage_timeout,
+            "stages": args.stages,
+            "total_timeout_seconds": args.total_timeout,
+        }
+        return run_values
+
+    @staticmethod
+    def _create_parser(epilog: str) -> ArgumentParser:
         """
         Build the parser that holds every load-test flag.
 
         :param epilog: Text shown at the end of --help
         :return: The parser, ready to read the command line
         """
-        stage_texts: List[str] = []
-        stage: int
-        # Turn each default stage into text for the --stages help, e.g. "10,30,50,100".
-        for stage in LoadTestConstants.DEFAULT_STAGES:
-            stage_texts.append(str(stage))
-        default_stages_text: str = ",".join(stage_texts)
+        default_stages_text: str = LoadTestArguments._default_stages_text()
         # Durations shown after %(default)s in the timeout help texts, e.g. "20m" for 1200 seconds.
         request_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_TIMEOUT_SECONDS)
         idle_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS)
         stage_timeout_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_STAGE_TIMEOUT_SECONDS)
         settle_time_text: str = DurationParser.format_seconds(LoadTestConstants.DEFAULT_SETTLE_TIME_SECONDS)
-        parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        parser: ArgumentParser = ArgumentParser(
             description="Load-test neuro-san agent networks with real LLM calls.",
-            formatter_class=argparse.RawDescriptionHelpFormatter,
+            formatter_class=RawDescriptionHelpFormatter,
             epilog=epilog,
         )
 
@@ -88,10 +201,11 @@ class LoadTestArguments:
             Must be registered in the server's AGENT_REGISTRY_PATH.
             """,
         )
+        profile_path_default: Optional[str] = environ.get("LOAD_TEST_PROFILE_PATH")
         parser.add_argument(
             "--profile-path",
             type=str,
-            default=os.environ.get("LOAD_TEST_PROFILE_PATH"),
+            default=profile_path_default,
             help="""
             Directory containing agent profile JSON files.
             The filename is derived from --agent (e.g. basic/smart_home → smart_home.json).
@@ -213,7 +327,7 @@ class LoadTestArguments:
             metavar="DURATION",
             default=LoadTestConstants.DEFAULT_IDLE_TIMEOUT_SECONDS,
             help=f"""
-            Kill a request if no output for this long.
+            Time out a request (TIMEOUT) when no output comes for this long.
             Bare number = seconds, or suffix s/m/h (e.g. 90s, 15m).
             Default: %(default)s ({idle_timeout_text}).
             Detects hanging requests.
@@ -470,7 +584,23 @@ class LoadTestArguments:
         return parser
 
     @staticmethod
-    def _explicit_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Set[str]:
+    def _default_stages_text() -> str:
+        """
+        Return the default stages as text for the --stages help.
+
+        :return: The stages joined by commas, e.g. "10,30,50,100"
+        """
+        stage_texts: List[str] = []
+        stage: int
+        # Turn each default stage into text.
+        for stage in LoadTestConstants.DEFAULT_STAGES:
+            stage_text: str = str(stage)
+            stage_texts.append(stage_text)
+        default_stages_text: str = ",".join(stage_texts)
+        return default_stages_text
+
+    @staticmethod
+    def _explicit_args(parser: ArgumentParser, args: Namespace) -> Set[str]:
         """
         Return the dest names the user actually passed.
 
@@ -493,8 +623,10 @@ class LoadTestArguments:
         parser.set_defaults(**sentinel_defaults)
         explicit: Set[str] = set()
         value: object
+        parsed_args: Namespace = parser.parse_args()
+        parsed_values: Dict[str, object] = vars(parsed_args)
         # Keep each dest whose value is not the sentinel.
-        for name, value in vars(parser.parse_args()).items():
+        for name, value in parsed_values.items():
             if value is not sentinel:
                 explicit.add(name)
         return explicit

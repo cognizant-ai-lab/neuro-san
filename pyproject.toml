@@ -50,7 +50,7 @@ where = ["."]
 # namespaces = false
 # Note: package_data is not useful here for packaging up non-python files.
 #       See MANIFEST.in instead.
-exclude = ["tests*"]
+exclude = ["tests*", "record_playback_llm_server*"]
 
 [tool.setuptools_scm]
 fallback_version = "0.0.1"

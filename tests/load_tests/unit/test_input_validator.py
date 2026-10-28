@@ -14,18 +14,19 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from os import listdir
 from os import mkdir
 from os.path import dirname
 from os.path import join
 from tempfile import TemporaryDirectory
+from typing import Dict
+from typing import Any
 from typing import List
 from typing import Optional
 from unittest import TestCase
 
-from neuro_san import TOP_LEVEL_DIR
 from tests.load_tests.load_test_constants import LoadTestConstants
+from tests.load_tests.unit.load_test_unit_paths import LoadTestUnitPaths
 from tests.load_tests.validation.input_validator import InputValidator
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
@@ -42,9 +43,7 @@ class TestInputValidator(TestCase):
     """
 
     # Real fixtures, not mocks: tests/fixtures/load_tests/hello_world/*.hocon
-    PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
-    HELLO_WORLD_FIXTURES: str = TOP_LEVEL_DIR.get_file_in_basis(
-        join("..", LoadTestConstants.DEFAULT_FIXTURES_HOCON_DIR, "hello_world"))
+    HELLO_WORLD_FIXTURES: str = join(LoadTestUnitPaths.FIXTURES_HOCON_DIR, "hello_world")
 
     def test_cap_is_stage_total_times_rounds(self) -> None:
         """
@@ -245,8 +244,8 @@ class TestInputValidator(TestCase):
         :param max_requests: --max-requests value; None when not given
         :return: Validator over those args
         """
-        args: Namespace = Namespace(num_rounds=num_rounds, max_requests=max_requests)
-        return InputValidator(args)
+        validator_settings: Dict[str, Any] = {"num_rounds": num_rounds, "max_requests": max_requests}
+        return InputValidator(validator_settings)
 
     @staticmethod
     def _stages_validator(ramp: bool = False, stages: Optional[str] = None, num_requests: int = 3) -> InputValidator:
@@ -258,13 +257,12 @@ class TestInputValidator(TestCase):
         :param num_requests: --num-requests value
         :return: Validator over those args
         """
-        args: Namespace = Namespace(ramp=ramp, stages=stages, num_requests=num_requests)
-        return InputValidator(args)
+        validator_settings: Dict[str, Any] = {"ramp": ramp, "stages": stages, "num_requests": num_requests}
+        return InputValidator(validator_settings)
 
-    # The default reads the class-body name PROJECT_ROOT: the class name is not bound yet here.
     @staticmethod
     def _fixtures_validator(agent: str = "hello_world", fixtures_hocon_dir: Optional[str] = None,
-                            project_root: Optional[str] = PROJECT_ROOT) -> InputValidator:
+                            project_root: Optional[str] = LoadTestUnitPaths.PROJECT_ROOT) -> InputValidator:
         """
         Build a validator with only the args validate_fixtures_hocon_dir() reads.
 
@@ -273,5 +271,9 @@ class TestInputValidator(TestCase):
         :param project_root: --project-root value
         :return: Validator over those args
         """
-        args: Namespace = Namespace(agent=agent, fixtures_hocon_dir=fixtures_hocon_dir, project_root=project_root)
-        return InputValidator(args)
+        validator_settings: Dict[str, Any] = {
+            "agent": agent,
+            "fixtures_hocon_dir": fixtures_hocon_dir,
+            "project_root": project_root,
+        }
+        return InputValidator(validator_settings)

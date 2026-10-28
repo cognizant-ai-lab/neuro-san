@@ -29,49 +29,54 @@ class TestStageSummaryBuilder(TestCase):
     """
 
     @staticmethod
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _build_summary(monitor_resources: bool, before_server: Optional[Dict[str, Any]],
-                       after_server: Optional[Dict[str, Any]], before_client: Optional[Dict[str, Any]],
-                       peak_system_memory: Optional[Dict[str, float]], after_sys: Optional[Dict[str, float]]
-                       ) -> Dict[str, Any]:
+    def _build_summary(snapshot_values: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build a stage summary with fixed stage fields and the given snapshots.
 
-        :param monitor_resources: True to add the server thread and RSS snapshots
-        :param before_server: Server snapshot before the stage, or None
-        :param after_server: Server snapshot after the stage, or None
-        :param before_client: Client snapshot before the stage, or None
-        :param peak_system_memory: Peak system memory snapshot, or None
-        :param after_sys: System snapshot after the stage, or None
+        :param snapshot_values: A dict with the following keys; a missing snapshot is None:
+            "monitor_resources"   True to add the server thread and RSS snapshots
+            "before_server"       Server snapshot before the stage
+            "after_server"        Server snapshot after the stage
+            "before_client"       Client snapshot before the stage
+            "peak_system_memory"  Peak system memory
+            "after_sys"           System snapshot after the stage
         :return: The stage summary dict from build_stage_summary()
         """
-        summary: Dict[str, Any] = StageSummaryBuilder.build_stage_summary(
-            stage_num=1,
-            round_num=2,
-            actual_requests=3,
-            counts={"ok": 3},
-            elapsed=1.5,
-            retries={},
-            total_retries=0,
-            amplification=1.0,
-            results=[],
-            server_counts={"primary_started": 3, "primary_finished": 3},
-            disconnections=[],
-            server_errors=[],
-            tool_warnings=[],
-            network_tokens=[],
-            validation_events=[],
-            has_server_log=True,
-            has_tokens=False,
-            monitor_resources=monitor_resources,
-            before_server=before_server,
-            after_server=after_server,
-            peak_threads=None,
-            peak_server_rss=None,
-            before_client=before_client,
-            peak_system_memory=peak_system_memory,
-            after_sys=after_sys,
-        )
+        monitor_resources: bool = snapshot_values.get("monitor_resources")
+        before_server: Optional[Dict[str, Any]] = snapshot_values.get("before_server")
+        after_server: Optional[Dict[str, Any]] = snapshot_values.get("after_server")
+        before_client: Optional[Dict[str, Any]] = snapshot_values.get("before_client")
+        peak_system_memory: Optional[Dict[str, float]] = snapshot_values.get("peak_system_memory")
+        after_sys: Optional[Dict[str, float]] = snapshot_values.get("after_sys")
+        summary_inputs: Dict[str, Any] = {
+            "stage_num": 1,
+            "round_num": 2,
+            "actual_requests": 3,
+            "counts": {"ok": 3},
+            "total_time_seconds": 1.5,
+            "retries": {},
+            "total_retries": 0,
+            "amplification": 1.0,
+            "results": [],
+            "server_counts": {"primary_started": 3, "primary_finished": 3},
+            "disconnections": [],
+            "server_errors": [],
+            "tool_warnings": [],
+            "network_tokens": [],
+            "validation_events": [],
+            "has_server_log": True,
+            "has_tokens": False,
+            "monitor_resources": monitor_resources,
+            "before_server": before_server,
+            "after_server": after_server,
+            "peak_server_threads": None,
+            "peak_server_rss_megabytes": None,
+            "before_client": before_client,
+            "peak_system_memory": peak_system_memory,
+            "after_system": after_sys,
+        }
+        summary_builder: StageSummaryBuilder = StageSummaryBuilder(summary_inputs)
+        summary: Dict[str, Any] = summary_builder.build_stage_summary()
         return summary
 
     def test_attach_token_data_matches_by_request_number(self) -> None:
@@ -121,7 +126,7 @@ class TestStageSummaryBuilder(TestCase):
         """
         Without snapshots the summary has only the stage fields and no resource keys.
         """
-        summary: Dict[str, Any] = self._build_summary(False, None, None, None, None, None)
+        summary: Dict[str, Any] = TestStageSummaryBuilder._build_summary({"monitor_resources": False})
         self.assertEqual(summary.get("stage"), 1)
         self.assertEqual(summary.get("round"), 2)
         self.assertEqual(summary.get("concurrent"), 3)
@@ -134,14 +139,14 @@ class TestStageSummaryBuilder(TestCase):
         """
         Server snapshots count only with monitor_resources; client and system snapshots always count.
         """
-        summary: Dict[str, Any] = self._build_summary(
-            True,
-            {"threads": 10, "rss_megabytes": 100.0},
-            {"threads": 12, "rss_megabytes": 120.0},
-            {"rss_megabytes": 50.0},
-            {"memory_percent": 40.0, "available_gigabytes": 8.0},
-            {"mem_avail_gb": 7.5, "cpu_pct": 20.0, "threads": 300},
-        )
+        summary: Dict[str, Any] = TestStageSummaryBuilder._build_summary({
+            "monitor_resources": True,
+            "before_server": {"threads": 10, "rss_megabytes": 100.0},
+            "after_server": {"threads": 12, "rss_megabytes": 120.0},
+            "before_client": {"rss_megabytes": 50.0},
+            "peak_system_memory": {"memory_percent": 40.0, "available_gigabytes": 8.0},
+            "after_sys": {"available_gigabytes": 7.5, "cpu_percent": 20.0, "threads": 300},
+        })
         self.assertEqual(summary.get("before_threads"), 10)
         self.assertEqual(summary.get("after_server_rss"), 120.0)
         self.assertEqual(summary.get("before_client_rss"), 50.0)
@@ -154,6 +159,9 @@ class TestStageSummaryBuilder(TestCase):
         Server snapshots are left out when monitor_resources is False.
         """
         before_server: Dict[str, Any] = {"threads": 10, "rss_megabytes": 100.0}
-        summary: Dict[str, Any] = self._build_summary(False, before_server, None, None, None, None)
+        summary: Dict[str, Any] = TestStageSummaryBuilder._build_summary({
+            "monitor_resources": False,
+            "before_server": before_server,
+        })
         self.assertNotIn("before_threads", summary)
         self.assertNotIn("before_server_rss", summary)

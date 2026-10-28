@@ -14,10 +14,12 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-# re.compile stays module-qualified: a specific import would hide the builtin compile.
-import re
-from argparse import Namespace
+from itertools import chain
+from itertools import repeat
 from os.path import join
+from re import Pattern
+# Renamed so it does not hide the builtin compile().
+from re import compile as compile_regex
 from shutil import rmtree
 from tempfile import mkdtemp
 from typing import Any
@@ -25,6 +27,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from unittest import TestCase
+from unittest.mock import patch
 
 from typing_extensions import override
 
@@ -79,7 +82,7 @@ class TestServerLogTailer(TestCase):
         With fewer Start lines than expected, the round stops at the stage timeout and logs a warning.
         """
         self._write_log([TestServerLogTailer.START_LINE])
-        with self.assertLogs("tests.load_tests.monitoring.server_log_tailer", level="WARNING") as captured:
+        with self.assertLogs("ServerLogTailer", level="WARNING") as captured:
             tail_result: Dict[str, Any] = self._tail(expected_count=3, stage_timeout_seconds=0)
         warning_text: str = captured.output[0]
         received_count: int = tail_result.get("count")
@@ -112,6 +115,28 @@ class TestServerLogTailer(TestCase):
         durations_seconds: List[float] = ServerLogTailer.positive_durations(pairs)
         self.assertEqual(durations_seconds, [1.5, 2])
 
+    def test_heartbeat_prints_minutes_and_seconds(self) -> None:
+        """
+        The server-only heartbeat line prints the time waited as minutes and seconds: 105 seconds is "1m 45s".
+        """
+        self._write_log([])
+        # The fake clock starts the round at 0 and reads 105 seconds on every later call.
+        later_readings: repeat = repeat(105.0)
+        clock_readings: chain = chain([0.0], later_readings)
+        with patch("tests.load_tests.monitoring.server_log_tailer.perf_counter", side_effect=clock_readings):
+            with self.assertLogs(level="INFO") as captured:
+                self._tail(expected_count=1, stage_timeout_seconds=30)
+        heartbeat_lines: List[str] = []
+        line: str
+        # Keep the heartbeat lines.
+        for line in captured.output:
+            if "[heartbeat]" in line:
+                heartbeat_lines.append(line)
+        heartbeat_count: int = len(heartbeat_lines)
+        self.assertEqual(heartbeat_count, 1)
+        first_line: str = heartbeat_lines[0]
+        self.assertIn("[heartbeat] 1m 45s [", first_line)
+
     def _write_log(self, lines: List[str]) -> None:
         """
         Write the scratch server log.
@@ -129,13 +154,14 @@ class TestServerLogTailer(TestCase):
         :param stage_timeout_seconds: The --stage-timeout value
         :return: The tail result
         """
-        args: Namespace = Namespace(server_log=self._log_path, stage_timeout=stage_timeout_seconds)
-        server_log_tailer: ServerLogTailer = ServerLogTailer(args, None, None)
+        server_log_tailer: ServerLogTailer = ServerLogTailer(self._log_path, stage_timeout_seconds, None, None)
+        primary_start_regex: Pattern = compile_regex("primary Start")
+        primary_finish_regex: Pattern = compile_regex("primary Finish")
         round_values: Dict[str, Any] = {
             "expected": expected_count,
             "log_position": 0,
-            "primary_start_regex": re.compile("primary Start"),
-            "primary_finish_regex": re.compile("primary Finish"),
+            "primary_start_regex": primary_start_regex,
+            "primary_finish_regex": primary_finish_regex,
             "before_server": None,
             "before_system_memory_percent": 10.0,
         }

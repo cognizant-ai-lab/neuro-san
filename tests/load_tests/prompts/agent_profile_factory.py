@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 import os
 from typing import Any
 from typing import Dict
@@ -29,8 +30,6 @@ from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.validation.load_test_abort_error import LoadTestAbortError
 
-logger: logging.Logger = logging.getLogger(__name__)
-
 
 class AgentProfileFactory:
     """
@@ -40,8 +39,15 @@ class AgentProfileFactory:
     profile settings, validation); AgentProfile itself only carries data.
     """
 
-    def create(self, agent_name: str, profile_path: Optional[str] = None,
-               project_root: Optional[str] = None,
+    PROFILE_EXTENSION: str = ".json"
+
+    def __init__(self) -> None:
+        """
+        Set up the logger.
+        """
+        self.logger: Logger = getLogger(self.__class__.__name__)
+
+    def create(self, agent_name: str, profile_path: Optional[str] = None, project_root: Optional[str] = None,
                hocon_files: Optional[List[str]] = None) -> AgentProfile:
         """
         Create an AgentProfile.
@@ -62,16 +68,13 @@ class AgentProfileFactory:
         if hocon_files:
             return AgentProfile(agent_name, self._profile_from_hocons(agent_name, hocon_files))
         path: str = self._find_json_profile(agent_name, profile_path, project_root)
-        logger.info("Loaded agent profile: %s", path)
+        self.logger.info("Loaded agent profile: %s", path)
         data: Optional[Dict[str, Any]] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
         if data is None:
             # EasyJsonPersistence returns None when the JSON is a list or a single value.
-            logger.error(
-                """Agent profile must be a JSON object ({...}), not a list or a single value.
+            self.logger.error("""Agent profile must be a JSON object ({...}), not a list or a single value.
   File: %s
-Aborting.""",
-                path,
-            )
+Aborting.""", path)
             raise LoadTestAbortError(1)
         data["responses"] = [self._response_from_success_fields(data.get("success_fields", []))]
         return AgentProfile(agent_name, data)
@@ -125,24 +128,21 @@ Aborting.""",
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
         candidate: str = ""
+        profile_file_name: str = ""
         if profile_path:
             if os.path.isfile(profile_path):
-                logger.error(
-                    """--profile-path should be a directory, not a file.
+                profile_directory: str = os.path.dirname(profile_path)
+                self.logger.error("""--profile-path should be a directory, not a file.
   Got: %s
-  Try: --profile-path %s""",
-                    profile_path, os.path.dirname(profile_path),
-                )
+  Try: --profile-path %s""", profile_path, profile_directory)
                 raise LoadTestAbortError(1)
-            candidate = os.path.join(profile_path, f"{agent_base}.json")
+            profile_file_name = f"{agent_base}{AgentProfileFactory.PROFILE_EXTENSION}"
+            candidate = os.path.join(profile_path, profile_file_name)
             if not os.path.isfile(candidate):
-                logger.error(
-                    """Profile not found: %s
+                self.logger.error("""Profile not found: %s
   --profile-path directory: %s
-  Expected file: %s.json
-  Aborting.""",
-                    candidate, profile_path, agent_base,
-                )
+  Expected file: %s
+  Aborting.""", candidate, profile_path, profile_file_name)
                 raise LoadTestAbortError(1)
             return candidate
 
@@ -154,7 +154,8 @@ Aborting.""",
         name: str
         # Check the full agent name, then its base name
         for name in profile_names:
-            candidate = os.path.join(profiles_dir, f"{name}.json")
+            profile_file_name = f"{name}{AgentProfileFactory.PROFILE_EXTENSION}"
+            candidate = os.path.join(profiles_dir, profile_file_name)
             searched.append(candidate)
             if os.path.isfile(candidate):
                 return candidate
@@ -164,29 +165,35 @@ Aborting.""",
         if resolved_root:
             # Check the full agent name, then its base name, under the project root
             for name in profile_names:
-                candidate = os.path.normpath(os.path.join(
-                    resolved_root, "tests", "load_tests",
-                    "prompts", "profiles", f"{name}.json",
-                ))
+                profile_file_name = f"{name}{AgentProfileFactory.PROFILE_EXTENSION}"
+                profile_file_path: str = os.path.join(resolved_root, "tests", "load_tests", "prompts", "profiles",
+                                                      profile_file_name)
+                candidate = os.path.normpath(profile_file_path)
                 searched.append(candidate)
                 if os.path.isfile(candidate):
                     return candidate
 
+        self._log_profile_not_found(agent_name, searched)
+        raise LoadTestAbortError(1)
+
+    def _log_profile_not_found(self, agent_name: str, searched: List[str]) -> None:
+        """
+        Log that no profile was found, with every path that was searched.
+
+        :param agent_name: --agent value, e.g. basic/hello_world
+        :param searched: The profile paths that were searched, in search order
+        """
         searched_lines: List[str] = []
         searched_path: str
         # One "  - <path>" line per searched path.
         for searched_path in searched:
             searched_lines.append(f"  - {searched_path}\n")
-        logger.error(
-            """No profile found for agent '%s'.
+        searched_text: str = "".join(searched_lines)
+        self.logger.error("""No profile found for agent '%s'.
 Searched:
 %s
 Create a profile JSON or use --profile-path to specify one.
-Aborting.""",
-            agent_name,
-            "".join(searched_lines),
-        )
-        raise LoadTestAbortError(1)
+Aborting.""", agent_name, searched_text)
 
     def _profile_from_hocons(self, agent_name: str, hocon_files: List[str]) -> Dict[str, Any]:
         """
@@ -226,22 +233,11 @@ Aborting.""",
             if tokens is not None:
                 estimated_tokens = max(tokens, estimated_tokens or 0)
 
+        hocon_file_count: int = len(hocon_files)
         if not prompts:
-            logger.error(
-                "No interactions[0].text found in %d hocon file(s) for agent '%s'.\nAborting.",
-                len(hocon_files), agent_name,
-            )
+            self.logger.error("No interactions[0].text found in %d hocon file(s) for agent '%s'.\nAborting.",
+                              hocon_file_count, agent_name)
             raise LoadTestAbortError(1)
-        checked: int = 0
-        # Count the prompts that have response checks
-        for response in responses:
-            if response:
-                checked += 1
-        logger.info(
-            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' (response checks in %d, failure_patterns=%d)",
-            len(prompts), len(hocon_files), agent_name,
-            checked, len(failure_patterns),
-        )
         data: Dict[str, Any] = {
             "prompts": prompts,
             "responses": responses,
@@ -249,7 +245,31 @@ Aborting.""",
         }
         if estimated_tokens is not None:
             data["estimated_tokens_per_request"] = estimated_tokens
+        self._log_loaded_profile(agent_name, hocon_file_count, data)
         return data
+
+    def _log_loaded_profile(self, agent_name: str, hocon_file_count: int, data: Dict[str, Any]) -> None:
+        """
+        Log how many prompts, response checks and failure patterns the hocon files gave.
+
+        :param agent_name: --agent value
+        :param hocon_file_count: Number of test-case hocon files read
+        :param data: The profile data from _profile_from_hocons
+        """
+        prompts: List[str] = data.get("prompts")
+        responses: List[Dict[str, Any]] = data.get("responses")
+        failure_patterns: List[str] = data.get("failure_patterns")
+        checked: int = 0
+        response: Dict[str, Any]
+        # Count the prompts that have response checks
+        for response in responses:
+            if response:
+                checked += 1
+        prompt_count: int = len(prompts)
+        failure_pattern_count: int = len(failure_patterns)
+        self.logger.info(
+            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' (response checks in %d, failure_patterns=%d)",
+            prompt_count, hocon_file_count, agent_name, checked, failure_pattern_count)
 
     def _read_load_test_hocon(self, agent_name: str, path: str) -> Dict[str, Any]:
         """
@@ -271,25 +291,19 @@ Aborting.""",
         hocon_agent: str = test_case.get("agent", "")
         expected_agents: List[str] = [agent_name, ProjectPaths.agent_base_name(agent_name)]
         if hocon_agent not in expected_agents:
-            logger.error(
-                """Hocon agent does not match --agent.
+            self.logger.error("""Hocon agent does not match --agent.
   File: %s
   Hocon agent: %s
   --agent: %s
-Aborting.""",
-                path, hocon_agent, agent_name,
-            )
+Aborting.""", path, hocon_agent, agent_name)
             raise LoadTestAbortError(1)
         interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
         interaction_count: int = len(interactions)
         if interaction_count > 1:
-            logger.error(
-                """Load-test hocon must have exactly one interaction.
+            self.logger.error("""Load-test hocon must have exactly one interaction.
   File: %s
   Interactions: %d
-Aborting.""",
-                path, interaction_count,
-            )
+Aborting.""", path, interaction_count)
             raise LoadTestAbortError(1)
         interaction: Dict[str, Any] = {}
         if interactions:
@@ -302,14 +316,11 @@ Aborting.""",
             sly_checks = response_dict.get("sly_data", {})
             bad_value = sly_checks
         if not isinstance(sly_checks, dict):
-            logger.error(
-                """response and response.sly_data must be maps of field -> check \
+            self.logger.error("""response and response.sly_data must be maps of field -> check \
 (see docs/test_case_hocon_reference.md).
   File: %s
   Got: %r
-Aborting.""",
-                path, bad_value,
-            )
+Aborting.""", path, bad_value)
             raise LoadTestAbortError(1)
         return test_case
 
@@ -329,7 +340,7 @@ Aborting.""",
         # Find the sly_data keys whose check body is empty
         for key, check in response.get("sly_data", {}).items():
             if check == {}:
-                logger.warning(
+                self.logger.warning(
                     "%s: response.sly_data.%s is {} and will not be checked; "
                     "use { \"not_value\": \"\" } to require a non-empty value",
                     path, key,

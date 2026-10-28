@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from logging import Logger
 from logging import getLogger
 from re import Pattern
@@ -30,15 +29,12 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 
-from psutil import Process
-from psutil import cpu_percent
-from psutil import virtual_memory
-
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
-from tests.load_tests.reporting.system_resources import SystemResources
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class ServerLogTailer:
@@ -51,20 +47,21 @@ class ServerLogTailer:
     MONITOR_INTERVAL_SECONDS: float = 1.0
     LOG_LIMIT_REQUESTS: int = 5
 
-    def __init__(self, args: Namespace, server_process: Optional[Process],
-                 log_monitor: Optional[ServerLogMonitor]) -> None:
+    def __init__(self, server_log: Optional[str], stage_timeout_seconds: float,
+                 server_process: Optional[TrackedProcess], log_monitor: Optional[ServerLogMonitor]) -> None:
         """
         Store what the tailer reads.
 
-        :param args: Parsed command-line arguments, with "server_log" and "stage_timeout"
+        :param server_log: Server log path, or None when there is no server log
+        :param stage_timeout_seconds: --stage-timeout: seconds a round may take before the tail stops
         :param server_process: The local server process, or None when it is not found
         :param log_monitor: Monitor of the server log, or None when there is no server log
         """
-        self.args: Namespace = args
-        self.server_log: Optional[str] = args.server_log
-        self.server_process: Optional[Process] = server_process
+        self.server_log: Optional[str] = server_log
+        self.stage_timeout_seconds: float = stage_timeout_seconds
+        self.server_process: Optional[TrackedProcess] = server_process
         self.log_monitor: Optional[ServerLogMonitor] = log_monitor
-        self.logger: Logger = getLogger(__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def tail_server_log(self, round_values: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -73,19 +70,30 @@ class ServerLogTailer:
         Phase 1 counts Start patterns until all requests are received. Phase 2 counts Finish patterns until all
         requests are processed.
 
-        :param round_values: A dict with "expected" (number of requests to wait for), "log_position" (server log
-            offset to start reading from), "primary_start_regex" and "primary_finish_regex" (the primary agent's
-            Start and Finish log lines), "before_server" (server snapshot before the round, or None) and
-            "before_system_memory_percent" (system memory use in percent before the round)
-        :return: Dict with "count" (requests received), "completed" (requests processed), "peak_server" (peak server
-            snapshot), "peak_threads", "peak_sys_mem_pct", "elapsed_seconds", "interrupted" (True on Ctrl-C),
-            "peak_sys_cpu_percent", "avg_sys_cpu_percent" and "peak_sys_threads"
+        :param round_values: A dict with the following keys:
+            "expected"                      Number of requests to wait for
+            "log_position"                  Server log offset to start reading from
+            "primary_start_regex"           The primary agent's Start log line
+            "primary_finish_regex"          The primary agent's Finish log line
+            "before_server"                 Server snapshot before the round, or None
+            "before_system_memory_percent"  System memory use in percent before the round
+        :return: A dict with the following keys:
+            "count"                 Requests received
+            "completed"             Requests processed
+            "peak_server"           Peak server snapshot
+            "peak_threads"          Peak server thread count
+            "peak_sys_mem_pct"      Peak system memory use in percent
+            "elapsed_seconds"       Round time in seconds
+            "interrupted"           True on Ctrl-C
+            "peak_sys_cpu_percent"  Peak system CPU percent
+            "avg_sys_cpu_percent"   Average system CPU percent
+            "peak_sys_threads"      Peak system thread count
         """
-        tail_state: Dict[str, Any] = self._new_tail_state(round_values)
+        tail_state: Dict[str, Any] = ServerLogTailer._new_tail_state(round_values)
         log_position: Optional[int] = round_values.get("log_position")
         finished: bool = False
         # Prime the non-blocking system CPU counter.
-        cpu_percent(interval=None)
+        ResourceMonitor.read_system_cpu_percent(None)
         try:
             with open(self.server_log, "r", encoding="utf-8") as server_log_file:
                 server_log_file.seek(log_position)
@@ -96,7 +104,7 @@ class ServerLogTailer:
             tail_state["interrupted"] = True
             # The em dash "—" matches the other interrupt messages; plain "-" would change the output.
             self.logger.info("\n  Interrupted — reporting partial results...")
-        tail_result: Dict[str, Any] = self._tail_result(tail_state)
+        tail_result: Dict[str, Any] = ServerLogTailer._tail_result(tail_state)
         return tail_result
 
     def snapshot_server(self) -> Optional[Dict[str, Any]]:
@@ -108,14 +116,14 @@ class ServerLogTailer:
         server_snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self.server_process)
         return server_snapshot
 
-    def server_only_primary_pairs(self, log_position: Optional[int],
-                                  primary_start_regex: Pattern) -> List[Dict[str, Any]]:
+    def server_only_front_man_timings(self, log_position: Optional[int],
+                                      primary_start_regex: Pattern) -> List[Dict[str, Any]]:
         """
-        Primary-agent streaming_chat Start/Finish pairs since log_position.
+        Front-man streaming_chat Start/Finish timings since log_position.
 
         :param log_position: Server log position at the start of the round
         :param primary_start_regex: Compiled pattern for the primary agent's Start line
-        :return: The pairs of the primary (front-man) agent, each with "agent", "start_ts", "finish_ts",
+        :return: The timings of the front-man agent, each with "agent", "start_seconds", "finish_seconds",
                  "duration_seconds" and "request_id"; empty when there is no log monitor, on a read error,
                  or before a primary request completes
         """
@@ -126,17 +134,17 @@ class ServerLogTailer:
             pairs = self.log_monitor.parse_streaming_chat_timing_since(log_position)
         except (OSError, ValueError):
             return []
-        primary: List[Dict[str, Any]] = []
+        front_man_timings: List[Dict[str, Any]] = []
         agent: str = ""
         start_line: str = ""
         pair: Dict[str, Any]
-        # Keep the pairs of the primary agent.
+        # Keep the timings of the front-man agent.
         for pair in pairs:
             agent = pair.get("agent", "")
             start_line = f"Start {agent}/streaming_chat"
             if primary_start_regex.search(start_line):
-                primary.append(pair)
-        return primary
+                front_man_timings.append(pair)
+        return front_man_timings
 
     @staticmethod
     def positive_durations(pairs: List[Dict[str, Any]]) -> List[float]:
@@ -162,15 +170,15 @@ class ServerLogTailer:
         """
         Cumulative server-side min/avg/max for the primary agent.
 
-        Parses primary streaming_chat Start/Finish pairs seen since
+        Parses front-man streaming_chat Start/Finish timings seen since
         the round's log position and formats them.
 
         :param log_position: Server log position at the start of the round
         :param primary_start_regex: Compiled pattern for the primary agent's Start line
         :return: The formatted stats, or "n/a" until at least one request has completed
         """
-        primary_pairs: List[Dict[str, Any]] = self.server_only_primary_pairs(log_position, primary_start_regex)
-        durations: List[float] = ServerLogTailer.positive_durations(primary_pairs)
+        front_man_timings: List[Dict[str, Any]] = self.server_only_front_man_timings(log_position, primary_start_regex)
+        durations: List[float] = ServerLogTailer.positive_durations(front_man_timings)
         duration_stats_text: str = Heartbeat.format_duration_stats(durations)
         return duration_stats_text
 
@@ -178,34 +186,34 @@ class ServerLogTailer:
         """
         Log a periodic heartbeat during server-only monitoring.
 
-        :param heartbeat_values: A dict with "received", "expected", "completed",
-                                 "elapsed_seconds", "now_seconds" (wall clock), "server_snapshot",
-                                 "virtual_memory_stats" (the psutil.virtual_memory() result), "duration_stats",
-                                 "current_system_cpu_percent" and "peak_system_cpu_percent"
+        :param heartbeat_values: A dict with the following keys:
+                                 "received"                    Requests received
+                                 "expected"                    Requests expected
+                                 "completed"                   Requests processed
+                                 "elapsed_seconds"             Round time so far in seconds
+                                 "now_seconds"                 Wall clock time in seconds
+                                 "server_snapshot"             Server snapshot
+                                 "virtual_memory_stats"        The psutil.virtual_memory() result
+                                 "duration_stats"              Server-side request time stats
+                                 "current_system_cpu_percent"  System CPU percent now
+                                 "peak_system_cpu_percent"     Peak system CPU percent
         """
         elapsed_seconds: float = heartbeat_values.get("elapsed_seconds")
         now_seconds: float = heartbeat_values.get("now_seconds")
         duration_stats: str = heartbeat_values.get("duration_stats", "n/a")
         server_snapshot: Optional[Dict[str, Any]] = heartbeat_values.get("server_snapshot")
         server_text: str = ServerLogTailer._server_text(server_snapshot)
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         virtual_memory_stats: Any = heartbeat_values.get("virtual_memory_stats")
         system_memory_text: str = ResourceMonitor.system_memory_text(virtual_memory_stats)
         local_time: struct_time = localtime(now_seconds)
         timestamp: str = strftime("%H:%M:%S", local_time)
         elapsed_whole_seconds: int = int(elapsed_seconds)
-        elapsed_text: str = Heartbeat.format_elapsed(elapsed_whole_seconds)
+        elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_whole_seconds)
         progress_text: str = ServerLogTailer._progress_text(heartbeat_values)
         system_cpu_text: str = ServerLogTailer._system_cpu_text(heartbeat_values)
-        self.logger.info(
-            "  [heartbeat] %s [%s]%s  dur/server: %s%s%s%s",
-            elapsed_text, timestamp,
-            progress_text,
-            duration_stats,
-            server_text,
-            system_memory_text,
-            system_cpu_text,
-        )
+        self.logger.info("  [heartbeat] %s [%s]%s  dur/server: %s%s%s%s", elapsed_text, timestamp, progress_text,
+                         duration_stats, server_text, system_memory_text, system_cpu_text)
 
     @staticmethod
     def _server_text(server_snapshot: Optional[Dict[str, Any]]) -> str:
@@ -246,8 +254,9 @@ class ServerLogTailer:
         """
         Format the system CPU part of the heartbeat.
 
-        :param heartbeat_values: The heartbeat values, with "current_system_cpu_percent" (None before the first
-            sample) and "peak_system_cpu_percent"
+        :param heartbeat_values: The heartbeat values. Only these keys are read:
+            "current_system_cpu_percent"  System CPU use now in percent, or None before the first sample
+            "peak_system_cpu_percent"     Highest system CPU use of the round in percent, or None
         :return: "  syscpu: N% (peak N%)", or "" before the first sample
         """
         current_system_cpu_percent: Optional[float] = heartbeat_values.get("current_system_cpu_percent")
@@ -331,10 +340,11 @@ class ServerLogTailer:
         phase: int = tail_state.get("phase")
         elapsed_seconds: float = 0.0
         if phase == 1 and received_count >= expected_count:
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
+            all_received_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
             self.logger.info(
-                "\n  All %d request(s) received (%.1fs). Monitoring until processing completes...",
-                expected_count, elapsed_seconds,
+                "\n  All %d request(s) received (%s). Monitoring until processing completes...",
+                expected_count, all_received_text,
             )
             phase = 2
             tail_state["phase"] = phase
@@ -377,26 +387,28 @@ class ServerLogTailer:
             received_count += 1
             tail_state["received_count"] = received_count
             timestamp = ServerLogTailer._timestamp_now()
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             if received_count <= ServerLogTailer.LOG_LIMIT_REQUESTS or received_count == expected_count:
+                received_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
                 self.logger.info(
-                    "  [server] request %d/%d received [%s] (+%.1fs)",
+                    "  [server] request %d/%d received [%s] (+%s)",
                     received_count, expected_count,
-                    timestamp, elapsed_seconds,
+                    timestamp, received_text,
                 )
         if primary_finish_regex.search(line):
             completed_count += 1
             tail_state["completed_count"] = completed_count
             timestamp = ServerLogTailer._timestamp_now()
-            elapsed_seconds = self._elapsed_seconds(tail_state)
+            elapsed_seconds = ServerLogTailer._elapsed_seconds(tail_state)
             total_requests = expected_count
             if phase == 2:
                 total_requests = received_count
             if completed_count <= ServerLogTailer.LOG_LIMIT_REQUESTS or completed_count == total_requests:
+                completed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
                 self.logger.info(
-                    "  [server] request %d/%d completed [%s] (+%.1fs)",
+                    "  [server] request %d/%d completed [%s] (+%s)",
                     completed_count, total_requests,
-                    timestamp, elapsed_seconds,
+                    timestamp, completed_text,
                 )
 
     def _sample_resources(self, tail_state: Dict[str, Any]) -> None:
@@ -417,18 +429,18 @@ class ServerLogTailer:
                 tail_state["peak_server"] = server_snapshot
             current_threads = server_snapshot.get("threads", 0)
             tail_state["peak_threads"] = max(peak_threads, current_threads)
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        virtual_memory_stats: Any = virtual_memory()
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        virtual_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         peak_system_memory_percent: float = tail_state.get("peak_system_memory_percent")
         tail_state["peak_system_memory_percent"] = max(peak_system_memory_percent, virtual_memory_stats.percent)
-        current_system_cpu_percent: float = cpu_percent(interval=None)
+        current_system_cpu_percent: float = ResourceMonitor.read_system_cpu_percent(None)
         system_cpu_percent_sum: float = tail_state.get("system_cpu_percent_sum")
         system_cpu_samples: int = tail_state.get("system_cpu_samples")
         tail_state["system_cpu_percent_sum"] = system_cpu_percent_sum + current_system_cpu_percent
         tail_state["system_cpu_samples"] = system_cpu_samples + 1
         peak_system_cpu_percent: float = tail_state.get("peak_system_cpu_percent")
         tail_state["peak_system_cpu_percent"] = max(peak_system_cpu_percent, current_system_cpu_percent)
-        total_threads: int = SystemResources.total_threads()
+        total_threads: int = ResourceMonitor.total_threads()
         peak_system_threads: int = tail_state.get("peak_system_threads")
         tail_state["peak_system_threads"] = max(peak_system_threads, total_threads)
         tail_state["last_server_snapshot"] = server_snapshot
@@ -477,23 +489,17 @@ class ServerLogTailer:
         :param elapsed_seconds: Seconds since the tail started
         :return: True when the stage timeout is reached
         """
-        if elapsed_seconds <= self.args.stage_timeout:
+        if elapsed_seconds <= self.stage_timeout_seconds:
             return False
         expected_count: int = round_values.get("expected")
         received_count: int = tail_state.get("received_count")
         completed_count: int = tail_state.get("completed_count")
         if tail_state.get("phase") == 1:
-            self.logger.warning(
-                "  Stage timeout (%.0fs) reached with %d/%d requests received.",
-                self.args.stage_timeout,
-                received_count, expected_count,
-            )
+            self.logger.warning("  Stage timeout (%.0fs) reached with %d/%d requests received.",
+                                self.stage_timeout_seconds, received_count, expected_count)
         else:
-            self.logger.warning(
-                "  Stage timeout (%.0fs) reached with %d/%d requests processed.",
-                self.args.stage_timeout,
-                completed_count, received_count,
-            )
+            self.logger.warning("  Stage timeout (%.0fs) reached with %d/%d requests processed.",
+                                self.stage_timeout_seconds, completed_count, received_count)
         return True
 
     @staticmethod
