@@ -35,7 +35,12 @@ class TestLangChainRunContext(TestCase):
     Tests for LangChainRunContext: restoring a chat history from a chat_context.
     """
 
-    ORIGIN: List[Dict[str, Any]] = [{"tool": "front_man", "instantiation_index": 1}]
+    ORIGIN: List[Dict[str, Any]] = [
+        {
+            "tool": "front_man",
+            "instantiation_index": 1,
+        },
+    ]
 
     @staticmethod
     def make_run_context() -> LangChainRunContext:
