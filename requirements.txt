@@ -7,7 +7,7 @@
 
 # In-house dependencies
 # Temporary pin until some AsyncioExecutorFactory changes can be made at this level.
-leaf-common>=1.4.9
+leaf-common>=1.4.11
 
 # Downgraded secondary dependencies for error-free pip installs
 pyhocon>=0.3.60

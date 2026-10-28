@@ -34,8 +34,8 @@ from leaf_common.persistence.interface.restorer import Restorer
 from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
 from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
 from leaf_common.serialization.interface.serialization_format import SerializationFormat
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.persistence.hocon_parse_lock import HoconParseLock
 
 

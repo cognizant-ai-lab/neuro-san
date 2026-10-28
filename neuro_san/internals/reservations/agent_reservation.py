@@ -18,8 +18,9 @@
 from uuid import uuid4
 from uuid import UUID
 
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
+
 from neuro_san.interfaces.reservation import Reservation
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class AgentReservation(Reservation):
