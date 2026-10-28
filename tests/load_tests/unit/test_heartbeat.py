@@ -27,7 +27,7 @@ from neuro_san.message.processors.basic_message_processor import BasicMessagePro
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
-from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.traffic.traffic_runner import TrafficRunner
 from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestHelpers
 
 

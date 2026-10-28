@@ -102,8 +102,10 @@ class StageResourceSampler:
         """
         Read the stage's highest system memory use.
 
-        :return: Dict with "memory_percent" and "available_gigabytes" at the highest system memory use of the stage,
-            or None
+        :return: None before any sample, else a dict read at the highest system memory use of the stage, with
+            the following keys:
+            "memory_percent"       System memory use in percent
+            "available_gigabytes"  Available system memory in GB
         """
         peak_system_memory: Optional[Dict[str, float]] = self._peaks.get("system_memory")
         return peak_system_memory
@@ -174,7 +176,9 @@ class StageResourceSampler:
         """
         Sample server thread count and RSS, keeping each when it is a new peak.
 
-        :return: Dict with "thread_info" and "server_rss_info", the parts of the progress line
+        :return: A dict with the server parts of the progress line, with the following keys:
+            "thread_info"      Server thread count text, or ""
+            "server_rss_info"  Server RSS and swap text, or ""
         """
         thread_info: str = ""
         server_rss_info: str = ""
@@ -254,7 +258,7 @@ class StageResourceSampler:
 
         :param thread_info: Thread count text, or ""
         :param server_rss_info: RSS and swap text, or ""
-        :return: Dict with "thread_info" and "server_rss_info"
+        :return: The dict sample_server_metrics() returns
         """
         server_metrics: Dict[str, str] = {
             "thread_info": thread_info,
@@ -266,7 +270,9 @@ class StageResourceSampler:
         """
         Sample server RSS and swap in MB.
 
-        :return: Dict with "rss_megabytes" and "swap_megabytes", each None if unavailable
+        :return: A dict with the following keys:
+            "rss_megabytes"   Server RSS in MB, or None if unavailable
+            "swap_megabytes"  Server swap in MB, or None if unavailable
         """
         server_memory: Dict[str, Optional[float]] = {
             "rss_megabytes": None,
@@ -331,7 +337,10 @@ class StageResourceSampler:
         """
         Format total system memory usage for the progress line.
 
-        :return: Dict with "text" (the progress line part), "memory_percent" and "available_gigabytes"
+        :return: A dict with the following keys:
+            "text"                 The progress line part
+            "memory_percent"       System memory use in percent
+            "available_gigabytes"  System memory left, in GB
         """
         # psutil returns its private svmem named tuple, which has no public type to name.
         virtual_memory_stats: Any = virtual_memory()

@@ -43,7 +43,7 @@ from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.stage_data_collector import StageDataCollector
 from tests.load_tests.reporting.stage_summary_builder import StageSummaryBuilder
 from tests.load_tests.reporting.system_resources import SystemResources
-from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.traffic.traffic_runner import TrafficRunner
 from tests.load_tests.traffic.stage_plan import StagePlan
 from tests.load_tests.validation.output_validator import OutputValidator
 
@@ -60,9 +60,12 @@ class StageExecutor:
 
         :param args: Parsed command-line arguments
         :param runner: Traffic runner that sends the requests of a stage
-        :param executor_parts: A dict with "profile" (the AgentProfile), "log_monitor" (the ServerLogMonitor, or
-            None), "resource_reporter" (the ResourceReporter), "server_process" (the local server process, or None)
-            and "output_dir" (the run's output directory)
+        :param executor_parts: A dict with the following keys:
+            "profile"            The AgentProfile
+            "log_monitor"        The ServerLogMonitor, or None
+            "resource_reporter"  The ResourceReporter
+            "server_process"     The local server process, or None
+            "output_dir"         The run's output directory
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
@@ -108,15 +111,22 @@ class StageExecutor:
         """
         Execute one stage of the load test.
 
-        :param stage_inputs: A dictionary with "actual_requests" (number of requests to send in this stage),
-            "num_concurrent" (requested concurrency before the --max-requests cap), "stage_num" and "round_num"
-            (starting at 1), "global_offset" (number of requests sent by earlier stages), "monitor_resources" (True to
-            take resource snapshots around the stage), "has_server_log" (True when the server log can be read),
-            "probe_result" (result of the dry-run probe to count in this stage, or None), "only_stage" (True when
-            this is the only stage) and "primary_start_pattern" (server log pattern of a primary request start)
-        :return: Dict with "summary" (the stage summary dict), "probe_used" (True when probe_result was counted),
-            "should_abort" (True when the test must stop after this stage) and "interrupted" (True when Ctrl-C
-            stops the stage)
+        :param stage_inputs: A dict with the following keys:
+            "actual_requests"        Number of requests to send in this stage
+            "num_concurrent"         Requested concurrency before the --max-requests cap
+            "stage_num"              Stage number, starting at 1
+            "round_num"              Round number, starting at 1
+            "global_offset"          Number of requests sent by earlier stages
+            "monitor_resources"      True to take resource snapshots around the stage
+            "has_server_log"         True when the server log can be read
+            "probe_result"           Result of the dry-run probe to count in this stage, or None
+            "only_stage"             True when this is the only stage
+            "primary_start_pattern"  Server log pattern of a primary request start
+        :return: A dict with the following keys:
+            "summary"       The stage summary dict
+            "probe_used"    True when probe_result was counted
+            "should_abort"  True when the test must stop after this stage
+            "interrupted"   True when Ctrl-C stops the stage
         """
         stage_start: Dict[str, Any] = self._start_stage(stage_inputs)
         stage_run: Dict[str, Any] = self._fire_stage(stage_inputs, stage_start)
@@ -124,40 +134,19 @@ class StageExecutor:
         post_stage_data: Dict[str, Any] = {}
         if not stage_check.get("should_abort"):
             post_stage_data = self._collect_after_stage(stage_inputs, stage_start, stage_run, stage_check)
-        system_before: Dict[str, Optional[float]] = stage_run.get("system_before")
-        system_after: Dict[str, Optional[float]] = SystemResources.snapshot()
-        before_system_memory_percent: Optional[float] = system_before.get("memory_percent")
-        after_system_memory_percent: Optional[float] = system_after.get("memory_percent")
+        after_system: Dict[str, Optional[float]] = SystemResources.snapshot()
         stage_values: Dict[str, Any] = {
-            "stage_num": stage_inputs.get("stage_num"),
-            "round_num": stage_inputs.get("round_num"),
-            "actual_requests": stage_inputs.get("actual_requests"),
-            "counts": stage_check.get("counts"),
-            "elapsed_seconds": stage_run.get("total_time_seconds"),
-            "retries": stage_check.get("retries"),
-            "total_retries": stage_check.get("total_retries"),
-            "amplification": stage_check.get("amplification"),
-            "results": stage_run.get("results"),
-            "has_server_log": stage_inputs.get("has_server_log"),
             "has_tokens": self.args.include_tokens,
-            "monitor_resources": stage_inputs.get("monitor_resources"),
-            "before_server": stage_start.get("before_server"),
-            "peak_threads": stage_run.get("peak_server_threads"),
-            "peak_server_rss_megabytes": stage_run.get("peak_server_rss_megabytes"),
-            "before_client": stage_start.get("before_client"),
-            "peak_client": stage_run.get("peak_client"),
-            "settled_client": stage_run.get("settled_client"),
-            "before_system_memory_percent": before_system_memory_percent,
-            "after_system_memory_percent": after_system_memory_percent,
-            "peak_system_memory": stage_run.get("peak_system_memory"),
-            "peak_system_cpu_percent": stage_run.get("peak_system_cpu_percent"),
-            "before_system": system_before,
-            "after_system": system_after,
-            "peak_system_threads": stage_run.get("peak_system_threads"),
+            "after_system": after_system,
         }
-        server_log_values: Dict[str, Any] = StageExecutor._server_log_values(post_stage_data)
-        stage_values.update(server_log_values)
-        summary_entry: Dict[str, Any] = StageSummaryBuilder.build_stage_summary(stage_values)
+        # Each helper's dict already uses the key names that build_stage_summary() reads.
+        stage_values.update(stage_inputs)
+        stage_values.update(stage_start)
+        stage_values.update(stage_run)
+        stage_values.update(stage_check)
+        stage_values.update(post_stage_data)
+        summary_builder: StageSummaryBuilder = StageSummaryBuilder(stage_values)
+        summary_entry: Dict[str, Any] = summary_builder.build_stage_summary()
         stage_result: Dict[str, Any] = {
             "summary": summary_entry,
             "probe_used": stage_start.get("probe_used"),
@@ -206,10 +195,14 @@ class StageExecutor:
         Log the stage header and take the server log position and the resource snapshots before the stage.
 
         :param stage_inputs: The stage_inputs dict of run_single_stage()
-        :return: Dict with "stage_workers" (most worker threads), "log_position" (server log offset, or None),
-            "client_process" (the client process, or None without resource monitoring), "before_server" and
-            "before_client" (snapshots, or None), "stage_requests" (number of requests to fire, without the probe)
-            and "probe_used" (True when the dry-run probe counts as the first request)
+        :return: A dict with the following keys:
+            "stage_workers"   Most worker threads
+            "log_position"    Server log offset, or None
+            "client_process"  The client process, or None without resource monitoring
+            "before_server"   Server snapshot, or None
+            "before_client"   Client snapshot, or None
+            "stage_requests"  Number of requests to fire, without the probe
+            "probe_used"      True when the dry-run probe counts as the first request
         """
         actual_requests: int = stage_inputs.get("actual_requests")
         monitor_resources: bool = stage_inputs.get("monitor_resources")
@@ -255,8 +248,10 @@ class StageExecutor:
         :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
         :return: The stage run dict of TrafficRunner.run_stage(), with the probe counted in "results" and
-            "total_time_seconds", plus "system_before" (system snapshot before the requests), "peak_client" (peak
-            client RSS snapshot, or None) and "settled_client" (client snapshot after the stage, or None)
+            "total_time_seconds", plus the following keys:
+            "before_system"   System snapshot before the requests
+            "peak_client"     Peak client RSS snapshot, or None
+            "settled_client"  Client snapshot after the stage, or None
         """
         probe_result: Optional[Dict[str, Any]] = stage_inputs.get("probe_result")
         probe_used: bool = stage_start.get("probe_used")
@@ -266,7 +261,7 @@ class StageExecutor:
         if stage_inputs.get("has_server_log"):
             monitor = self._start_log_monitor(stage_inputs, stage_start, stop_event)
 
-        system_before: Dict[str, Optional[float]] = SystemResources.snapshot()
+        before_system: Dict[str, Optional[float]] = SystemResources.snapshot()
 
         first_request_number: int = stage_inputs.get("global_offset")
         # The dry-run probe is the first request of the stage.
@@ -284,7 +279,7 @@ class StageExecutor:
         if monitor:
             monitor.join(timeout=LoadTestConstants.THREAD_JOIN_TIMEOUT_SECONDS)
 
-        stage_run["system_before"] = system_before
+        stage_run["before_system"] = before_system
         stage_run["peak_client"] = None
         stage_run["settled_client"] = None
         if stage_inputs.get("monitor_resources"):
@@ -344,8 +339,12 @@ class StageExecutor:
         :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
         :param stage_run: The dict from _fire_stage()
-        :return: Dict with "counts" (result counts), "retries" (retry count per error type), "total_retries",
-            "amplification" (server calls per request) and "should_abort" (True when the test must stop)
+        :return: A dict with the following keys:
+            "counts"         Result counts
+            "retries"        Retry count per error type
+            "total_retries"  Number of retries of all types
+            "amplification"  Server calls per request
+            "should_abort"   True when the test must stop
         """
         results: List[Dict[str, Any]] = stage_run.get("results")
         counts: Dict[str, Any] = OutputValidator.count_results(results)
@@ -379,8 +378,10 @@ class StageExecutor:
 
         :param stage_inputs: The stage_inputs dict of run_single_stage()
         :param stage_start: The dict from _start_stage()
-        :return: Dict with "retries" (retry count per error type, empty without a server log), "total_retries" and
-            "amplification" (server calls per request, 1.0 without a server log)
+        :return: A dict with the following keys:
+            "retries"        Retry count per error type, empty without a server log
+            "total_retries"  Number of retries of all types
+            "amplification"  Server calls per request, 1.0 without a server log
         """
         retries: Dict[str, int] = {}
         total_retries: int = 0
@@ -433,41 +434,14 @@ class StageExecutor:
         post_stage_data: Dict[str, Any] = self._data_collector.collect_post_stage_data(post_stage_inputs)
         return post_stage_data
 
-    @staticmethod
-    def _server_log_values(post_stage_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Read the server log values of a stage for its summary. An aborted stage skips the server log analysis,
-        so its post_stage_data is empty and its server log values are empty too.
-
-        :param post_stage_data: The dict from _collect_after_stage(), or an empty dict for an aborted stage
-        :return: Dict with "server_counts", "disconnections", "server_errors", "tool_warnings", "network_tokens",
-            "validation_events" and "after_server" (server snapshot after the stage, or None)
-        """
-        server_counts: Dict[str, Any] = post_stage_data.get("server_counts", {})
-        disconnections: List[Dict[str, str]] = post_stage_data.get("disconnections", [])
-        server_errors: List[Dict[str, str]] = post_stage_data.get("server_errors", [])
-        tool_warnings: List[Dict[str, str]] = post_stage_data.get("tool_warnings", [])
-        network_tokens: List[Dict[str, Any]] = post_stage_data.get("network_tokens", [])
-        validation_events: List[Dict[str, Any]] = post_stage_data.get("validation_events", [])
-        after_server: Optional[Dict[str, Any]] = post_stage_data.get("after_server")
-        server_log_values: Dict[str, Any] = {
-            "server_counts": server_counts,
-            "disconnections": disconnections,
-            "server_errors": server_errors,
-            "tool_warnings": tool_warnings,
-            "network_tokens": network_tokens,
-            "validation_events": validation_events,
-            "after_server": after_server,
-        }
-        return server_log_values
-
     def _capture_before_snapshots(self, client_process: Process) -> Dict[str, Optional[Dict[str, Any]]]:
         """
         Capture and log the server, client and system resources before a stage.
 
         :param client_process: The client process
-        :return: Dict with "server" (server snapshot, or None when not available) and "client" (client snapshot,
-            or None)
+        :return: A dict with the following keys:
+            "server"  Server snapshot, or None when not available
+            "client"  Client snapshot, or None
         """
         before_server: Optional[Dict[str, Any]] = self._data_collector.snapshot_server_process()
         if before_server:

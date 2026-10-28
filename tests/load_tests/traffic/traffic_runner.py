@@ -124,10 +124,17 @@ class TrafficRunner:
         :param server_process: Server process for the heartbeat's resource readings, or None
         :param client_process: Client process for the heartbeat's resource readings, or None
         :param log_monitor: Server log reader for server-side request timing, or None
-        :return: Dict with "total_time_seconds", "results" (one dict per request), "peak_server_threads",
-            "peak_client_rss_megabytes", "peak_server_rss_megabytes", "peak_system_memory" (dict with
-            "memory_percent" and "available_gigabytes"), "peak_system_cpu_percent", "peak_system_threads",
-            "server_died" and "interrupted" (bools); each peak is None when not measured
+        :return: A dict with the following keys; each peak is None when not measured:
+            "total_time_seconds"         Stage time in seconds
+            "results"                    One dict per request
+            "peak_server_threads"        Peak server thread count
+            "peak_client_rss_megabytes"  Peak client RSS in MB
+            "peak_server_rss_megabytes"  Peak server RSS in MB
+            "peak_system_memory"         Dict with "memory_percent" and "available_gigabytes"
+            "peak_system_cpu_percent"    Peak system CPU percent
+            "peak_system_threads"        Peak system thread count
+            "server_died"                True when the server process stopped
+            "interrupted"                True on Ctrl-C
         """
         results_list: List[Dict[str, Any]] = []
         heartbeat_events: Dict[str, Event] = TrafficRunner._new_heartbeat_events()

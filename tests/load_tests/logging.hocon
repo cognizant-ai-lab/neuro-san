@@ -1,0 +1,57 @@
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+# Console logging of both load-test CLIs (load_test_cli.py, load_test_mock_llm_service.py),
+# read by leaf_common LoggingSetup in the schema of Python's logging.config.dictConfig().
+# The per-run log files are added in code, because their paths are known only at run time.
+{
+    "version": 1,
+    "disable_existing_loggers": false,
+    "formatters": {
+        # Only the message: the CLIs print reports, not log records.
+        "plain": {
+            "format": "%(message)s"
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "formatter": "plain",
+            "stream": "ext://sys.stderr"
+        },
+        # The arrival progress dots: stdout, with no newline after each dot.
+        "progress": {
+            "class": "tests.load_tests.monitoring.progress_stream_handler.ProgressStreamHandler",
+            "level": "INFO",
+            "formatter": "plain",
+            "stream": "ext://sys.stdout"
+        }
+    },
+    "loggers": {
+        # Its own handler only, so the dots do not also go to the console handler.
+        # The name has no dot: pyhocon keeps the quotes in a quoted key that holds a dot.
+        "ArrivalWatcherProgress": {
+            "level": "INFO",
+            "handlers": ["progress"],
+            "propagate": false
+        }
+    },
+    "root": {
+        "level": "INFO",
+        "handlers": ["console"]
+    }
+}
