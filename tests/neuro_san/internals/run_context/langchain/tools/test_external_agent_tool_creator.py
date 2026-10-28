@@ -55,7 +55,9 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         The synthesis warning is deduplicated per-process via a class-level
         set. Clear it before each test so tests stay order-independent.
         """
-        patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
+        patcher = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def make_creator(self, function_json: Dict[str, Any]) -> ExternalAgentToolCreator:
         """
