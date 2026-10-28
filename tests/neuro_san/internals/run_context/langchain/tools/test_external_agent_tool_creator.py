@@ -52,8 +52,8 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
     @override
     def setUp(self) -> None:
         """
-        The synthesis warning is deduplicated per-process via a class-level
-        set. Clear it before each test so tests stay order-independent.
+        The synthesis warning is deduplicated per-test via a class-level set.
+        Clear the LogOnce records before each test so tests stay order-independent.
         """
         patcher: Any = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
         patcher.start()
@@ -253,7 +253,6 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         bad_parameters_cases: List[Any] = ["none", [], "", False, 0]
         for bad_parameters in bad_parameters_cases:
             with self.subTest(bad_parameters=bad_parameters):
-                # Each case gets a fresh warning set, so no case depends on an earlier one.
                 creator: ExternalAgentToolCreator = self.make_creator({
                     "description": "Answers music questions.",
                     "parameters": bad_parameters

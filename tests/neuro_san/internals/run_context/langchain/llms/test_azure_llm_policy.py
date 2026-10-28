@@ -129,9 +129,10 @@ class TestAzureLlmPolicy(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Clears every environment variable the policy reads, resets the one-time warning flag, and
+        Clears every environment variable the policy reads, resets the LogOnce records, and
         starts the lists that tearDown() releases.
         """
+        # Clear the LogOnce records before each test so tests stay order-independent.
         patcher: Any = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
