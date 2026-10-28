@@ -38,7 +38,7 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         :param max_message_history: The maximum number of messages to preserve
                 in the message history, not including the instructions.
                 The default value of None implies there is no maximum.
-                Non-positive numbers revert to no-maximum behavior.
+                So does a value of 1 or less, or a value that is not a number.
         """
         self.max_message_history: int = max_message_history
         if self.max_message_history is not None:
@@ -60,8 +60,19 @@ class ChatHistoryMessageProcessor(MessageProcessor):
 
     def process_messages(self, chat_message_dicts: List[Dict[str, Any]]):
         """
-        Convenience method for processing lists of messages.
-        :param chat_message_dicts: The messages to process.
+        Builds the chat history from the given messages, then trims it to max_message_history.
+
+        Each message goes through process_message(). It keeps user, system and AI messages
+        and the tool results that answer a call, and replaces the text of the first system
+        message, the front man's instructions, with "<redacted>". The result goes back to
+        the client in the chat_context.
+
+        Trimming happens only when max_message_history is above 1. It keeps the most recent
+        messages, then drops any before the first user message among them, so a tool result
+        is never cut off from its call. Redacted instructions at the start stay in front and
+        do not count toward the maximum.
+
+        :param chat_message_dicts: The ChatMessage dictionaries to process, oldest first
         """
         super().process_messages(chat_message_dicts)
 
