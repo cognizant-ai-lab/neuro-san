@@ -118,22 +118,22 @@ class ChatMockLlm(BaseChatModel):
         tool_calls: List[Dict[str, Any]] = []
         if isinstance(last_message, ToolMessage):
             # The tool answered: report its result and how many tool results the history holds.
-            content = f"tool result: {text}; tool results in history: {self._count_tool_results(messages)}"
-        elif text.startswith(self.TOOL_CALL_MARKER):
+            content = f"tool result: {text}; tool results in history: {ChatMockLlm._count_tool_results(messages)}"
+        elif text.startswith(ChatMockLlm.TOOL_CALL_MARKER):
             content = ""
-            tool_calls = [self._tool_call(messages, text)]
-        elif text.startswith(self.ANTHROPIC_THINKING_MARKER):
+            tool_calls = [ChatMockLlm._tool_call(messages, text)]
+        elif text.startswith(ChatMockLlm.ANTHROPIC_THINKING_MARKER):
             # ChatAnthropic with thinking on: the signed thinking block comes first.
-            answer: str = text[len(self.ANTHROPIC_THINKING_MARKER):].strip()
+            answer: str = text[len(ChatMockLlm.ANTHROPIC_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking.", "signature": "mock-signature"},
                 {"type": "text", "text": answer},
             ]
             response_metadata["model_provider"] = "anthropic"
-        elif text.startswith(self.OPENAI_REASONING_MARKER):
+        elif text.startswith(ChatMockLlm.OPENAI_REASONING_MARKER):
             # ChatOpenAI responses/v1: the reasoning item (id, summary parts, empty content,
             # encrypted_content) comes first. The translator makes one reasoning block per summary part.
-            answer = text[len(self.OPENAI_REASONING_MARKER):].strip()
+            answer = text[len(ChatMockLlm.OPENAI_REASONING_MARKER):].strip()
             content = [
                 {"type": "reasoning", "id": "rs_mock", "content": [],
                  "encrypted_content": "mock-encrypted-reasoning",
@@ -142,10 +142,10 @@ class ChatMockLlm(BaseChatModel):
                 {"type": "text", "text": answer, "id": "msg_mock", "annotations": []},
             ]
             response_metadata["model_provider"] = "openai"
-        elif text.startswith(self.GEMINI_THINKING_MARKER):
+        elif text.startswith(ChatMockLlm.GEMINI_THINKING_MARKER):
             # ChatGoogleGenerativeAI on Gemini 3: an unsigned thinking block comes first; the
             # thought signature rides on the text block, in its extras.
-            answer = text[len(self.GEMINI_THINKING_MARKER):].strip()
+            answer = text[len(ChatMockLlm.GEMINI_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking."},
                 {"type": "text", "text": answer, "extras": {"signature": "mock-thought-signature"}},
@@ -167,7 +167,8 @@ class ChatMockLlm(BaseChatModel):
         generation = ChatGeneration(message=message)
         return ChatResult(generations=[generation])
 
-    def _tool_call(self, messages: List[BaseMessage], text: str) -> Dict[str, Any]:
+    @staticmethod
+    def _tool_call(messages: List[BaseMessage], text: str) -> Dict[str, Any]:
         """
         Builds the Accountant call for an input that starts with TOOL_CALL_MARKER.
 
@@ -175,16 +176,16 @@ class ChatMockLlm(BaseChatModel):
         :param text: The input text; the number after the marker is the running_cost, 0.0 if none
         :return: A langchain tool call dictionary whose id counts the tool results already in the history
         """
-        value_text: str = text[len(self.TOOL_CALL_MARKER):].strip()
+        value_text: str = text[len(ChatMockLlm.TOOL_CALL_MARKER):].strip()
         running_cost: float = 0.0
         if len(value_text) > 0:
             try:
                 running_cost = float(value_text)
             except ValueError:
                 running_cost = 0.0
-        call_index: int = self._count_tool_results(messages) + 1
+        call_index: int = ChatMockLlm._count_tool_results(messages) + 1
         return {
-            "name": self.TOOL_NAME,
+            "name": ChatMockLlm.TOOL_NAME,
             "args": {"running_cost": running_cost},
             "id": f"call_mock_{call_index}",
             "type": "tool_call",

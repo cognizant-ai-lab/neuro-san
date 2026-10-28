@@ -95,7 +95,7 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         :param message_type: The ChatMessageType of the chat_message_dictionary to process.
         """
         if message_type not in (ChatMessageType.HUMAN, ChatMessageType.SYSTEM, ChatMessageType.AI) \
-                and not self.is_tool_result(chat_message_dict, message_type):
+                and not ChatHistoryMessageProcessor.is_tool_result(chat_message_dict, message_type):
             # Don't send any messages over the wire that won't be re-ingestable.
             return
 
@@ -107,7 +107,7 @@ class ChatHistoryMessageProcessor(MessageProcessor):
             transformed_message_dict = self.redact_instructions(chat_message_dict)
             self.saw_first_system = True
         else:
-            transformed_message_dict = self.keep_message(chat_message_dict)
+            transformed_message_dict = ChatHistoryMessageProcessor.keep_message(chat_message_dict)
 
         if transformed_message_dict is not None:
             self.message_history.append(transformed_message_dict)

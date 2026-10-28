@@ -159,7 +159,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         # A tool call and its result are linked by the call's id, so a chat history
         # that carries both can be put back together on the next turn.
         if isinstance(message, AIMessage) and message.tool_calls:
-            chat_message["tool_calls"] = self.wire_tool_calls(message.tool_calls)
+            chat_message["tool_calls"] = BaseMessageDictionaryConverter.wire_tool_calls(message.tool_calls)
         if isinstance(message, ToolMessage):
             chat_message["tool_call_id"] = message.tool_call_id
             if message.status == "error":
@@ -365,15 +365,16 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         # Check each call on its own so one bad call does not drop the others.
         raw_call: Any = None
         for raw_call in raw_calls:
-            tool_call: Optional[Dict[str, Any]] = self.restore_tool_call(raw_call)
+            tool_call: Optional[Dict[str, Any]] = BaseMessageDictionaryConverter.restore_tool_call(raw_call)
             if tool_call is not None:
                 tool_calls.append(tool_call)
             else:
                 # The arguments are not logged: a client's call can carry secrets.
                 logger: Logger = getLogger(self.__class__.__name__)
                 logger.warning("Ignoring a tool call in chat_context (id %r, name %r): a call needs a string id "
-                               "and name and a dictionary of args", self.call_field(raw_call, "id"),
-                               self.call_field(raw_call, "name"))
+                               "and name and a dictionary of args",
+                               BaseMessageDictionaryConverter.call_field(raw_call, "id"),
+                               BaseMessageDictionaryConverter.call_field(raw_call, "name"))
         return tool_calls
 
     @staticmethod

@@ -387,12 +387,12 @@ class RunContextRunnable(NeuroSanRunnable):
         if not isinstance(chain_result, dict):
             return []
         messages: List[BaseMessage] = chain_result.get("messages", [])
-        start: int = self.find_turn_start(inputs, messages)
+        start: int = RunContextRunnable.find_turn_start(inputs, messages)
         if start < 0:
             return []
 
-        turn: List[BaseMessage] = self.before_answer(messages[start + 1:])
-        results: Dict[str, ToolMessage] = self.results_by_call_id(turn)
+        turn: List[BaseMessage] = RunContextRunnable.before_answer(messages[start + 1:])
+        results: Dict[str, ToolMessage] = RunContextRunnable.results_by_call_id(turn)
         recorded_ids: Set[str] = self.recorded_call_ids()
 
         exchange: List[BaseMessage] = []
@@ -401,9 +401,9 @@ class RunContextRunnable(NeuroSanRunnable):
         for message in turn:
             if not isinstance(message, AIMessage) or not message.tool_calls:
                 continue
-            if self.is_recorded(message, recorded_ids):
+            if RunContextRunnable.is_recorded(message, recorded_ids):
                 continue
-            paired: Optional[List[ToolMessage]] = self.paired_results(message, results)
+            paired: Optional[List[ToolMessage]] = RunContextRunnable.paired_results(message, results)
             if paired is None:
                 # A call without its result would be rejected on replay.
                 continue
