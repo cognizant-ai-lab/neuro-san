@@ -18,7 +18,8 @@
 from typing import Any
 from typing import Dict
 
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
+
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
