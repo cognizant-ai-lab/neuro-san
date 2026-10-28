@@ -32,8 +32,6 @@ from unittest.mock import patch
 
 from typing_extensions import override
 
-from neuro_san.internals.graph.activations.abstract_class_activation import AbstractClassActivation
-
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import ConcreteClassActivation
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import CREATE_RUN_CONTEXT_PATH
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import GET_FULL_NAME_FROM_ORIGIN_PATH
