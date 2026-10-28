@@ -21,19 +21,13 @@ from typing import Dict
 from typing import Optional
 from typing import Union
 
-from psutil import AccessDenied
-from psutil import NoSuchProcess
-from psutil import Process
-from psutil import cpu_percent
-from psutil import swap_memory
-from psutil import virtual_memory
-
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
+from tests.load_tests.monitoring.process_read_error import ProcessReadError
 from tests.load_tests.monitoring.progress_log_writer import ProgressLogWriter
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.reporting.formatters import Formatters
-from tests.load_tests.reporting.system_resources import SystemResources
 
 
 class StageResourceSampler:
@@ -48,7 +42,7 @@ class StageResourceSampler:
     # Warn once when system memory use reaches this fraction.
     OUT_OF_MEMORY_WARNING_THRESHOLD: float = 0.80
 
-    def __init__(self, server_process: Optional[Process], client_process: Optional[Process],
+    def __init__(self, server_process: Optional[TrackedProcess], client_process: Optional[TrackedProcess],
                  progress_log_writer: ProgressLogWriter) -> None:
         """
         Constructor.
@@ -58,8 +52,8 @@ class StageResourceSampler:
         :param progress_log_writer: Writes the resource warnings to progress.log
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._server_process: Optional[Process] = server_process
-        self._client_process: Optional[Process] = client_process
+        self._server_process: Optional[TrackedProcess] = server_process
+        self._client_process: Optional[TrackedProcess] = client_process
         self._progress_log_writer: ProgressLogWriter = progress_log_writer
         self._out_of_memory_warned: bool = False
         self._swap_warned: bool = False
@@ -69,7 +63,7 @@ class StageResourceSampler:
         # Prime the non-blocking system CPU counter so the first real
         # sample reflects usage since the heartbeat started rather
         # than returning 0.0.
-        cpu_percent(interval=None)
+        ResourceMonitor.read_system_cpu_percent(None)
 
     def get_peak_server_threads(self) -> Optional[int]:
         """
@@ -155,7 +149,7 @@ class StageResourceSampler:
             peak_client_rss_megabytes: Optional[float] = self._peaks.get("client_rss_megabytes")
             if StageResourceSampler.is_new_peak(rss_megabytes, peak_client_rss_megabytes):
                 self._peaks["client_rss_megabytes"] = rss_megabytes
-        except (NoSuchProcess, AccessDenied) as error:
+        except ProcessReadError as error:
             sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.debug("Heartbeat client RSS unavailable: %s", error)
 
@@ -169,7 +163,7 @@ class StageResourceSampler:
             return True
         try:
             return self._server_process.is_running()
-        except (NoSuchProcess, AccessDenied):
+        except ProcessReadError:
             return False
 
     def sample_server_metrics(self) -> Dict[str, str]:
@@ -192,7 +186,7 @@ class StageResourceSampler:
                 thread_info = f"  threads: {server_thread_count} (peak)"
             else:
                 thread_info = f"  threads: {server_thread_count}"
-        except (NoSuchProcess, AccessDenied) as error:
+        except ProcessReadError as error:
             sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.debug("Heartbeat thread count unavailable: %s", error)
         server_memory: Dict[str, Optional[float]] = self._sample_server_memory()
@@ -234,7 +228,7 @@ class StageResourceSampler:
 
         :return: The CPU part of the progress line
         """
-        current_cpu_percent: float = cpu_percent(interval=None)
+        current_cpu_percent: float = ResourceMonitor.read_system_cpu_percent(None)
         # Unlike the other peaks, a 0% first reading is kept, so every tick reports a CPU peak.
         peak_cpu_percent: float = self._peaks.get("system_cpu_percent", current_cpu_percent)
         peak_cpu_percent = max(peak_cpu_percent, current_cpu_percent)
@@ -246,7 +240,7 @@ class StageResourceSampler:
         """
         Keep the system thread count when it is a new peak.
         """
-        current_system_threads: int = SystemResources.total_threads()
+        current_system_threads: int = ResourceMonitor.total_threads()
         peak_system_threads: Optional[int] = self._peaks.get("system_threads")
         if StageResourceSampler.is_new_peak(current_system_threads, peak_system_threads):
             self._peaks["system_threads"] = current_system_threads
@@ -285,7 +279,7 @@ class StageResourceSampler:
             memory_info: Any = self._server_process.memory_full_info()
             server_memory["rss_megabytes"] = memory_info.rss / ResourceMonitor.ONE_MEGABYTE
             server_memory["swap_megabytes"] = memory_info.swap / ResourceMonitor.ONE_MEGABYTE
-        except (NoSuchProcess, AccessDenied) as error:
+        except ProcessReadError as error:
             sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
             sensitive_logger.debug("Heartbeat server memory unavailable: %s", error)
             server_memory["rss_megabytes"] = None
@@ -313,7 +307,7 @@ class StageResourceSampler:
         if self._out_of_memory_warned:
             return
         # psutil returns its private svmem named tuple, which has no public type to name.
-        virtual_memory_stats: Any = virtual_memory()
+        virtual_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         used_fraction: float = virtual_memory_stats.percent / 100.0
         if used_fraction >= StageResourceSampler.OUT_OF_MEMORY_WARNING_THRESHOLD:
             self._out_of_memory_warned = True
@@ -324,7 +318,7 @@ class StageResourceSampler:
             self.logger.warning("%s", warning)
             self._progress_log_writer.write_to_file(warning)
             # psutil returns its private sswap named tuple, which has no public type to name.
-            swap_memory_stats: Any = swap_memory()
+            swap_memory_stats: Any = ResourceMonitor.read_swap_memory()
             if swap_memory_stats.total > 0 and swap_memory_stats.used > 0:
                 swap_used_gigabytes: float = swap_memory_stats.used / ResourceMonitor.ONE_GIGABYTE
                 swap_warning: str = (f"  WARNING: System swap in use: {swap_used_gigabytes:.1f} GB"
@@ -343,7 +337,7 @@ class StageResourceSampler:
             "available_gigabytes"  System memory left, in GB
         """
         # psutil returns its private svmem named tuple, which has no public type to name.
-        virtual_memory_stats: Any = virtual_memory()
+        virtual_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         line: str = ResourceMonitor.system_memory_text(virtual_memory_stats)
         system_memory: Dict[str, Any] = {

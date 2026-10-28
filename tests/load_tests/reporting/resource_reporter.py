@@ -173,21 +173,13 @@ class ResourceReporter:
         """
         if not self._resource_rows and not self._client_rows:
             return
-        header: List[str] = [
-            "Component", "Concurrent", "Before RSS", "Peak RSS",
-            "Settled RSS", "RSS Delta", "CPU%", "FDs",
-            "Threads", "Thread Delta", "Conns", "Children",
-        ]
+        header: List[str] = ["Component", "Concurrent", "Before RSS", "Peak RSS", "Settled RSS", "RSS Delta", "CPU%",
+                             "FDs", "Threads", "Thread Delta", "Conns", "Children"]
         rows: List[List[str]] = self._combined_server_rows() + self._combined_client_rows()
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
+        title: str = f"RESOURCE ANALYSIS ({total_client_requests} total requests)"
         if total_server_calls > 0:
-            self.logger.info(
-                "  RESOURCE ANALYSIS (%s client requests, %s server calls)",
-                total_client_requests, total_server_calls,
-            )
-        else:
-            self.logger.info("  RESOURCE ANALYSIS (%s total requests)", total_client_requests)
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+            title = f"RESOURCE ANALYSIS ({total_client_requests} client requests, {total_server_calls} server calls)"
+        self.logger.info("\n%s", Formatters.section_header(title))
         table_formatter: TableFormatter = TableFormatter()
         table_formatter.log_table(header, rows)
         self._log_resource_deltas()

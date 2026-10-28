@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from argparse import Namespace
 from os import environ
 from os.path import exists
 from os.path import join
@@ -44,8 +43,7 @@ class TestRequestRecorder(TestCase):
         """
         A CREATED request saves its answer under requests/ and writes its line to progress.log.
         """
-        args: Namespace = Namespace(include_tokens=False)
-        recorder: RequestRecorder = RequestRecorder(args)
+        recorder: RequestRecorder = RequestRecorder(False)
         response: Dict[str, Any] = {"response_text": "hi"}
         request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_CREATED, response)
         result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_CREATED)
@@ -71,8 +69,7 @@ class TestRequestRecorder(TestCase):
         """
         A FAILED request is logged to the console with its reason.
         """
-        args: Namespace = Namespace(include_tokens=False)
-        recorder: RequestRecorder = RequestRecorder(args)
+        recorder: RequestRecorder = RequestRecorder(False)
         request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, {})
         result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)
         result["failure_reason"] = "empty response from agent"
@@ -86,8 +83,7 @@ class TestRequestRecorder(TestCase):
         """
         With LEAF_LOG_SENSITIVE=false a FAILED request logs its status line, but not its reason.
         """
-        args: Namespace = Namespace(include_tokens=False)
-        recorder: RequestRecorder = RequestRecorder(args)
+        recorder: RequestRecorder = RequestRecorder(False)
         request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, {})
         result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)
         result["failure_reason"] = "empty response from agent"
@@ -122,8 +118,7 @@ class TestRequestRecorder(TestCase):
         """
         The token counts and the first model of the token accounting are added to the result.
         """
-        args: Namespace = Namespace(include_tokens=True)
-        recorder: RequestRecorder = RequestRecorder(args)
+        recorder: RequestRecorder = RequestRecorder(True)
         token_accounting: Dict[str, Any] = {
             "total_tokens": 30,
             "prompt_tokens": 10,
@@ -153,8 +148,7 @@ class TestRequestRecorder(TestCase):
         :param failure_reason: The request's failure reason, or None
         :return: The logged lines, as assertLogs() gives them
         """
-        args: Namespace = Namespace(include_tokens=False)
-        recorder: RequestRecorder = RequestRecorder(args)
+        recorder: RequestRecorder = RequestRecorder(False)
         response: Dict[str, Any] = {"response_text": TestRequestRecorder.TRACEBACK_TEXT}
         request_result: AgentRequestResult = AgentRequestResult(LoadTestConstants.STATUS_FAILED, response)
         result: Dict[str, Any] = TestRequestRecorder._result(LoadTestConstants.STATUS_FAILED)

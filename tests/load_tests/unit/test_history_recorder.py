@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from argparse import Namespace
 from json import loads
 from os import environ
 from os import listdir
@@ -40,8 +39,7 @@ class TestHistoryRecorder(TestCase):
         """
         Without --history-file the files are history.jsonl and history_unknown.jsonl in the output base.
         """
-        args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-        recorder: HistoryRecorder = HistoryRecorder(args, "/tmp/base")
+        recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", "/tmp/base")
         self.assertEqual(recorder.get_history_path(), "/tmp/base/history.jsonl")
         self.assertEqual(recorder.get_history_path(successful=False), "/tmp/base/history_unknown.jsonl")
 
@@ -49,8 +47,7 @@ class TestHistoryRecorder(TestCase):
         """
         With --history-file the unknown records go to a sibling "_unknown" file.
         """
-        args: Namespace = Namespace(history_file="/tmp/h/trend.jsonl", host="h", agent="a")
-        recorder: HistoryRecorder = HistoryRecorder(args, "/tmp/base")
+        recorder: HistoryRecorder = HistoryRecorder("/tmp/h/trend.jsonl", "h", "a", "/tmp/base")
         self.assertEqual(recorder.get_history_path(), "/tmp/h/trend.jsonl")
         self.assertEqual(recorder.get_history_path(successful=False), "/tmp/h/trend_unknown.jsonl")
 
@@ -60,8 +57,7 @@ class TestHistoryRecorder(TestCase):
         """
         records: List[Dict[str, Any]] = []
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
             stage_summaries: List[Dict[str, Any]] = [
                 {
                     "elapsed": 4.0,
@@ -98,8 +94,7 @@ class TestHistoryRecorder(TestCase):
         A client run with no results writes no file.
         """
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
             recorder.append_client_record([{"results": []}], "0.6.92")
             entries: List[str] = listdir(base)
             self.assertEqual(entries, [])
@@ -110,12 +105,9 @@ class TestHistoryRecorder(TestCase):
         """
         records: List[Dict[str, Any]] = []
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
-            primary_pairs: List[Dict[str, Any]] = [
-                TestHistoryRecorder._primary_pair(10.0, 12.0),
-                TestHistoryRecorder._primary_pair(11.0, 15.0),
-            ]
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
+            primary_pairs: List[Dict[str, Any]] = [TestHistoryRecorder._primary_pair(10.0, 12.0),
+                                                   TestHistoryRecorder._primary_pair(11.0, 15.0)]
             round_record: Dict[str, Any] = TestHistoryRecorder._server_round(None, primary_pairs)
             recorder.append_server_record(round_record)
             history_path: str = join(base, LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME)
@@ -160,8 +152,7 @@ class TestHistoryRecorder(TestCase):
         """
         history_path: str = ""
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
             history_path = join(base, LoadTestConstants.HISTORY_FILE_NAME)
             with open(history_path, "w", encoding="utf-8") as history_file:
                 history_file.write("{}\n")
@@ -182,13 +173,12 @@ class TestHistoryRecorder(TestCase):
         with open(blocker_path, "w", encoding="utf-8") as blocker_file:
             blocker_file.write("not a folder\n")
         history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
-        args: Namespace = Namespace(history_file=history_path, host="localhost", agent="hello_world")
         output_base: str = dirname(blocker_path)
         round_record: Dict[str, Any] = TestHistoryRecorder._server_round("1.0.0", [])
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": log_sensitive}), \
                 self.assertLogs("HistoryRecorder", level="WARNING") as captured:
             # The SensitiveLogger reads LEAF_LOG_SENSITIVE when it is built, inside append_server_record().
-            recorder: HistoryRecorder = HistoryRecorder(args, output_base)
+            recorder: HistoryRecorder = HistoryRecorder(history_path, "localhost", "hello_world", output_base)
             recorder.append_server_record(round_record)
         output: List[str] = captured.output
         return output

@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from logging import Logger
 from logging import getLogger
 from re import Pattern
@@ -30,16 +29,12 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 
-from psutil import Process
-from psutil import cpu_percent
-from psutil import virtual_memory
-
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.reporting.duration_parser import DurationParser
-from tests.load_tests.reporting.system_resources import SystemResources
 
 
 class ServerLogTailer:
@@ -52,18 +47,19 @@ class ServerLogTailer:
     MONITOR_INTERVAL_SECONDS: float = 1.0
     LOG_LIMIT_REQUESTS: int = 5
 
-    def __init__(self, args: Namespace, server_process: Optional[Process],
-                 log_monitor: Optional[ServerLogMonitor]) -> None:
+    def __init__(self, server_log: Optional[str], stage_timeout_seconds: float,
+                 server_process: Optional[TrackedProcess], log_monitor: Optional[ServerLogMonitor]) -> None:
         """
         Store what the tailer reads.
 
-        :param args: Parsed command-line arguments, with "server_log" and "stage_timeout"
+        :param server_log: Server log path, or None when there is no server log
+        :param stage_timeout_seconds: --stage-timeout: seconds a round may take before the tail stops
         :param server_process: The local server process, or None when it is not found
         :param log_monitor: Monitor of the server log, or None when there is no server log
         """
-        self.args: Namespace = args
-        self.server_log: Optional[str] = args.server_log
-        self.server_process: Optional[Process] = server_process
+        self.server_log: Optional[str] = server_log
+        self.stage_timeout_seconds: float = stage_timeout_seconds
+        self.server_process: Optional[TrackedProcess] = server_process
         self.log_monitor: Optional[ServerLogMonitor] = log_monitor
         self.logger: Logger = getLogger(self.__class__.__name__)
 
@@ -97,7 +93,7 @@ class ServerLogTailer:
         log_position: Optional[int] = round_values.get("log_position")
         finished: bool = False
         # Prime the non-blocking system CPU counter.
-        cpu_percent(interval=None)
+        ResourceMonitor.read_system_cpu_percent(None)
         try:
             with open(self.server_log, "r", encoding="utf-8") as server_log_file:
                 server_log_file.seek(log_position)
@@ -207,7 +203,7 @@ class ServerLogTailer:
         duration_stats: str = heartbeat_values.get("duration_stats", "n/a")
         server_snapshot: Optional[Dict[str, Any]] = heartbeat_values.get("server_snapshot")
         server_text: str = ServerLogTailer._server_text(server_snapshot)
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
         virtual_memory_stats: Any = heartbeat_values.get("virtual_memory_stats")
         system_memory_text: str = ResourceMonitor.system_memory_text(virtual_memory_stats)
         local_time: struct_time = localtime(now_seconds)
@@ -216,15 +212,8 @@ class ServerLogTailer:
         elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_whole_seconds)
         progress_text: str = ServerLogTailer._progress_text(heartbeat_values)
         system_cpu_text: str = ServerLogTailer._system_cpu_text(heartbeat_values)
-        self.logger.info(
-            "  [heartbeat] %s [%s]%s  dur/server: %s%s%s%s",
-            elapsed_text, timestamp,
-            progress_text,
-            duration_stats,
-            server_text,
-            system_memory_text,
-            system_cpu_text,
-        )
+        self.logger.info("  [heartbeat] %s [%s]%s  dur/server: %s%s%s%s", elapsed_text, timestamp, progress_text,
+                         duration_stats, server_text, system_memory_text, system_cpu_text)
 
     @staticmethod
     def _server_text(server_snapshot: Optional[Dict[str, Any]]) -> str:
@@ -440,18 +429,18 @@ class ServerLogTailer:
                 tail_state["peak_server"] = server_snapshot
             current_threads = server_snapshot.get("threads", 0)
             tail_state["peak_threads"] = max(peak_threads, current_threads)
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        virtual_memory_stats: Any = virtual_memory()
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        virtual_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         peak_system_memory_percent: float = tail_state.get("peak_system_memory_percent")
         tail_state["peak_system_memory_percent"] = max(peak_system_memory_percent, virtual_memory_stats.percent)
-        current_system_cpu_percent: float = cpu_percent(interval=None)
+        current_system_cpu_percent: float = ResourceMonitor.read_system_cpu_percent(None)
         system_cpu_percent_sum: float = tail_state.get("system_cpu_percent_sum")
         system_cpu_samples: int = tail_state.get("system_cpu_samples")
         tail_state["system_cpu_percent_sum"] = system_cpu_percent_sum + current_system_cpu_percent
         tail_state["system_cpu_samples"] = system_cpu_samples + 1
         peak_system_cpu_percent: float = tail_state.get("peak_system_cpu_percent")
         tail_state["peak_system_cpu_percent"] = max(peak_system_cpu_percent, current_system_cpu_percent)
-        total_threads: int = SystemResources.total_threads()
+        total_threads: int = ResourceMonitor.total_threads()
         peak_system_threads: int = tail_state.get("peak_system_threads")
         tail_state["peak_system_threads"] = max(peak_system_threads, total_threads)
         tail_state["last_server_snapshot"] = server_snapshot
@@ -500,23 +489,17 @@ class ServerLogTailer:
         :param elapsed_seconds: Seconds since the tail started
         :return: True when the stage timeout is reached
         """
-        if elapsed_seconds <= self.args.stage_timeout:
+        if elapsed_seconds <= self.stage_timeout_seconds:
             return False
         expected_count: int = round_values.get("expected")
         received_count: int = tail_state.get("received_count")
         completed_count: int = tail_state.get("completed_count")
         if tail_state.get("phase") == 1:
-            self.logger.warning(
-                "  Stage timeout (%.0fs) reached with %d/%d requests received.",
-                self.args.stage_timeout,
-                received_count, expected_count,
-            )
+            self.logger.warning("  Stage timeout (%.0fs) reached with %d/%d requests received.",
+                                self.stage_timeout_seconds, received_count, expected_count)
         else:
-            self.logger.warning(
-                "  Stage timeout (%.0fs) reached with %d/%d requests processed.",
-                self.args.stage_timeout,
-                completed_count, received_count,
-            )
+            self.logger.warning("  Stage timeout (%.0fs) reached with %d/%d requests processed.",
+                                self.stage_timeout_seconds, completed_count, received_count)
         return True
 
     @staticmethod

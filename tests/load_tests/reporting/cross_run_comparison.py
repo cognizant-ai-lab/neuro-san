@@ -20,8 +20,11 @@ from logging import getLogger
 from os import listdir
 from os.path import isfile
 from os.path import join
+from re import Match
+from re import Pattern
+# Renamed so it does not hide the builtin compile().
+from re import compile as compile_regex
 # Whole module: "from re import compile" would hide the built-in compile().
-import re
 from typing import Any
 from typing import Dict
 from typing import List
@@ -50,7 +53,7 @@ class CrossRunComparison:
     # [1.2s CREATED]".
     # Groups: 1 request id, 2 total tokens, 3 prompt tokens, 4 completion tokens, 5 LLM calls, 6 model (up to the
     # comma before "agent=").
-    SERVER_TOKEN_RE: re.Pattern = re.compile(
+    SERVER_TOKEN_RE: Pattern = compile_regex(
         r"(request-\d+):\s*([\d,]+)\s*tokens"
         r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
         r"\s*(\d+)\s*LLM call\(s\),"
@@ -308,24 +311,14 @@ class CrossRunComparison:
         :param runs: One agent's runs sorted by num_requests; the first is the baseline
         :param agent_name: Agent name shown in the table title
         """
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        title: str = f"CROSS-RUN COMPARISON: {agent_name}"
+        self.logger.info("\n%s", Formatters.section_header(title))
 
-        header: List[str] = [
-            "Folder", "Requests", "Succeeded",
-            "Wall Time",
-            "Avg success (duration)",
-            "First resp avg", "Peak RSS",
-            "Failed requests",
-        ]
+        header: List[str] = ["Folder", "Requests", "Succeeded", "Wall Time", "Avg success (duration)", "First resp avg",
+                             "Peak RSS", "Failed requests"]
         rows: List[List[str]] = []
-        metric_keys: List[str] = [
-            "num_requests", "wall_time_seconds",
-            "average_success_seconds",
-            "average_first_response_seconds", "peak_rss_megabytes",
-            "failed",
-        ]
+        metric_keys: List[str] = ["num_requests", "wall_time_seconds", "average_success_seconds",
+                                  "average_first_response_seconds", "peak_rss_megabytes", "failed"]
         baseline: Optional[Dict[str, Any]] = None
         if runs:
             baseline = runs[0]
@@ -427,7 +420,7 @@ class CrossRunComparison:
             line: str
             # Keep each request whose LLM call count reaches LOOP_THRESHOLD.
             for line in file_handle:
-                match: Optional[re.Match] = CrossRunComparison.SERVER_TOKEN_RE.search(line)
+                match: Optional[Match] = CrossRunComparison.SERVER_TOKEN_RE.search(line)
                 if not match:
                     continue
                 llm_calls: int = int(match.group(5))

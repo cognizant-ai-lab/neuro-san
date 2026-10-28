@@ -60,15 +60,10 @@ class PoolAnalyzer:
 
         base_threads: int = stages_with_data[0].get("before_threads")
 
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  EXECUTOR POOL REUSE ANALYSIS")
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header("EXECUTOR POOL REUSE ANALYSIS"))
 
-        header: List[str] = [
-            "Batch", "Server Calls", "New Threads",
-            "Peak Threads", "Reused", "Reuse%",
-            "Pool Avail", "Exec/Req",
-        ]
+        header: List[str] = ["Batch", "Server Calls", "New Threads", "Peak Threads", "Reused", "Reuse%", "Pool Avail",
+                             "Exec/Req"]
         rows: List[List[str]] = []
         total_new_threads: int = 0
         reuse_percentages: List[float] = []
@@ -100,16 +95,8 @@ class PoolAnalyzer:
             if peak_threads is not None:
                 peak_threads_text = str(peak_threads)
 
-            row: List[str] = [
-                str(batch_number),
-                str(server_calls),
-                f"+{new_threads}",
-                peak_threads_text,
-                str(reused),
-                f"{reuse_percentage:.1f}%",
-                str(pool_available_threads),
-                f"{executors_per_request:.1f}",
-            ]
+            row: List[str] = [str(batch_number), str(server_calls), f"+{new_threads}", peak_threads_text, str(reused),
+                              f"{reuse_percentage:.1f}%", str(pool_available_threads), f"{executors_per_request:.1f}"]
             rows.append(row)
 
         table_formatter: TableFormatter = TableFormatter()

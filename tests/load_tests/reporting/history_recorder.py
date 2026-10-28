@@ -21,15 +21,12 @@ from os.path import isfile
 from os.path import join
 from os.path import splitext
 from time import strftime
-from argparse import Namespace
 from logging import Logger
 from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-
-from psutil import cpu_count
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
@@ -47,14 +44,18 @@ class HistoryRecorder:
     never fails the run.
     """
 
-    def __init__(self, args: Namespace, output_base: str) -> None:
+    def __init__(self, history_file: Optional[str], host: str, agent: str, output_base: str) -> None:
         """
         Create a history recorder for one load-test run.
 
-        :param args: Parsed load-test arguments; uses history_file, host and agent
+        :param history_file: --history-file path, or None for the files under output_base
+        :param host: Server host, stored in each history record
+        :param agent: Agent name, stored in each history record
         :param output_base: Base output directory, holding the history files when --history-file is not given
         """
-        self._args: Namespace = args
+        self._history_file: Optional[str] = history_file
+        self._host: str = host
+        self._agent: str = agent
         self._output_base: str = output_base
         self.logger: Logger = getLogger(self.__class__.__name__)
 
@@ -69,10 +70,10 @@ class HistoryRecorder:
         :param successful: True for the trend file of good runs, False for the unknown file
         :return: The history file path
         """
-        if self._args.history_file:
+        if self._history_file:
             if successful:
-                return self._args.history_file
-            root, ext = splitext(self._args.history_file)
+                return self._history_file
+            root, ext = splitext(self._history_file)
             unknown_ext: str = ext or ".jsonl"
             return f"{root}_unknown{unknown_ext}"
         name: str = LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME
@@ -118,8 +119,8 @@ class HistoryRecorder:
         record: Dict[str, Any] = {
             "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": neuro_san_version or "unknown",
-            "host": self._args.host,
-            "agent": self._args.agent,
+            "host": self._host,
+            "agent": self._agent,
             "transport": "http",
             "total_requests": len(results),
             "completed": completed,
@@ -186,8 +187,8 @@ class HistoryRecorder:
         record: Dict[str, Any] = {
             "timestamp": strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": neuro_san_version,
-            "host": self._args.host,
-            "agent": self._args.agent,
+            "host": self._host,
+            "agent": self._agent,
             "mode": "server-only",
             "expected_requests": expected,
             "received_requests": received,
@@ -247,7 +248,7 @@ class HistoryRecorder:
         """
         peak_system_cpu_percent: Optional[float] = round_record.get("peak_system_cpu_percent")
         cpu_percent: float = peak_system_cpu_percent or 0.0
-        core_count: int = cpu_count() or 1
+        core_count: int = ResourceMonitor.read_cpu_count() or 1
         cores_in_use: float = ResourceMonitor.cores_in_use(cpu_percent, core_count)
         peak_cpu_cores: float = round(cores_in_use, 2)
         return peak_cpu_cores

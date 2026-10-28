@@ -22,14 +22,11 @@ from os.path import isabs
 from os.path import isdir
 from os.path import isfile
 from os.path import join
-from argparse import Namespace
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
-
-from psutil import virtual_memory
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.confirm import Confirm
@@ -53,14 +50,36 @@ class InputValidator:
     them to every method.
     """
 
-    def __init__(self, args: Namespace) -> None:
+    def __init__(self, validator_settings: Dict[str, Any]) -> None:
         """
         Constructor.
 
-        :param args: Parsed command-line arguments
+        :param validator_settings: A dict with the settled command-line values it checks; a check reads only its
+            own keys, and a missing key reads as None:
+            "agent"                    --agent value
+            "chat_filter"              --chat-filter value
+            "client_only"              --client-only value
+            "fixtures_hocon_dir"       --fixtures-hocon-dir value
+            "idle_timeout_seconds"     --idle-timeout: seconds a request may stay silent
+            "include_tokens"           --include-tokens value
+            "level"                    --level value
+            "max_requests"             --max-requests value
+            "max_workers"              --max-workers value
+            "no_dry_run"               --no-dry-run value
+            "no_server_log"            --no-server-log value
+            "num_requests"             --num-requests value
+            "num_rounds"               --num-rounds value
+            "project_root"             --project-root value
+            "ramp"                     --ramp value
+            "request_timeout_seconds"  --request-timeout: seconds a request may take
+            "stage_timeout_seconds"    --stage-timeout: seconds a stage may take
+            "stages"                   --stages value
+            "total_timeout_seconds"    --total-timeout: seconds the whole test may take, 0 for none
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._args: Namespace = args
+        self.confirm: Confirm = Confirm()
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._settings: Dict[str, Any] = validator_settings
 
     def validate_agent_name(self) -> None:
         """
@@ -69,19 +88,16 @@ class InputValidator:
         The server resolves agents by registry-relative name
         (e.g. 'basic/hello_world'), not by absolute path.
         """
-        agent: str = self._args.agent
+        agent: str = self._settings.get("agent")
         if isabs(agent):
-            self.logger.error(
-                """ERROR: --agent appears to be a filesystem path:
+            self.logger.error("""ERROR: --agent appears to be a filesystem path:
   %s
 
 Use the registry-relative name instead.
 For example, if the agent HOCON is at:
   registries/basic/hello_world.hocon
 Then use:
-  --agent basic/hello_world""",
-                agent,
-            )
+  --agent basic/hello_world""", agent)
             raise LoadTestAbortError(1)
 
     def validate_fixtures_hocon_dir(self) -> List[str]:
@@ -100,24 +116,23 @@ Then use:
 
         :return: Sorted *.hocon paths in the agent's fixtures folder; empty when --fixtures-hocon-dir is not given
         """
-        parent_dir: Optional[str] = self._args.fixtures_hocon_dir
+        parent_dir: Optional[str] = self._settings.get("fixtures_hocon_dir")
+        agent: str = self._settings.get("agent")
         if not parent_dir:
             return []
 
         if not isabs(parent_dir):
-            project_root: Optional[str] = ProjectPaths.resolve_project_root(self._args.project_root)
+            project_root_setting: Optional[str] = self._settings.get("project_root")
+            project_root: Optional[str] = ProjectPaths.resolve_project_root(project_root_setting)
             parent_dir = join(project_root or getcwd(), parent_dir)
 
-        agent_base_name: str = ProjectPaths.agent_base_name(self._args.agent)
+        agent_base_name: str = ProjectPaths.agent_base_name(agent)
         hocon_dir: str = join(parent_dir, agent_base_name)
 
         if not isdir(hocon_dir):
-            self.logger.error(
-                """ERROR: no hocon fixtures directory for agent '%s':
+            self.logger.error("""ERROR: no hocon fixtures directory for agent '%s':
   Expected: %s
-  Check --fixtures-hocon-dir / --project-root.""",
-                self._args.agent, hocon_dir,
-            )
+  Check --fixtures-hocon-dir / --project-root.""", agent, hocon_dir)
             raise LoadTestAbortError(1)
 
         hocon_files: List[str] = []
@@ -144,20 +159,21 @@ Then use:
 
         :return: Requests per stage
         """
-        if self._args.ramp:
-            if self._args.stages is not None:
+        ramp: bool = self._settings.get("ramp")
+        stages_text: Optional[str] = self._settings.get("stages")
+        num_requests: int = self._settings.get("num_requests")
+        if ramp:
+            if stages_text is not None:
                 stages: List[int] = []
                 stage_text: str = ""
                 try:
                     # Parse each non-empty comma-separated value.
-                    for stage_text in self._args.stages.split(","):
+                    for stage_text in stages_text.split(","):
                         if stage_text.strip():
                             stages.append(int(stage_text.strip()))
                 except ValueError as value_error:
-                    self.logger.error(
-                        "--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
-                        self._args.stages,
-                    )
+                    self.logger.error("--stages must be comma-separated integers (e.g. 3,10,30). Got: '%s'",
+                                      stages_text)
                     raise LoadTestAbortError(1) from value_error
                 has_non_positive: bool = False
                 stage: int
@@ -167,14 +183,14 @@ Then use:
                         has_non_positive = True
                         break
                 if not stages or has_non_positive:
-                    self.logger.error("--stages values must be positive integers. Got: '%s'", self._args.stages)
+                    self.logger.error("--stages values must be positive integers. Got: '%s'", stages_text)
                     raise LoadTestAbortError(1)
                 return stages
             return list(LoadTestConstants.DEFAULT_STAGES)
-        if self._args.num_requests <= 0:
-            self.logger.error("--num-requests must be a positive integer. Got: %s", self._args.num_requests)
+        if num_requests <= 0:
+            self.logger.error("--num-requests must be a positive integer. Got: %s", num_requests)
             raise LoadTestAbortError(1)
-        return [self._args.num_requests]
+        return [num_requests]
 
     def resolve_max_requests(self, stages: List[int]) -> int:
         """
@@ -183,15 +199,17 @@ Then use:
         :param stages: Requests per stage
         :return: --max-requests when given, else sum(stages) * --num-rounds
         """
-        if self._args.num_rounds <= 0:
-            self.logger.error("--num-rounds must be a positive integer. Got: %s", self._args.num_rounds)
+        num_rounds: int = self._settings.get("num_rounds")
+        max_requests: Optional[int] = self._settings.get("max_requests")
+        if num_rounds <= 0:
+            self.logger.error("--num-rounds must be a positive integer. Got: %s", num_rounds)
             raise LoadTestAbortError(1)
-        if self._args.max_requests is not None:
-            if self._args.max_requests <= 0:
-                self.logger.error("--max-requests must be a positive integer. Got: %s", self._args.max_requests)
+        if max_requests is not None:
+            if max_requests <= 0:
+                self.logger.error("--max-requests must be a positive integer. Got: %s", max_requests)
                 raise LoadTestAbortError(1)
-            return self._args.max_requests
-        return sum(stages) * self._args.num_rounds
+            return max_requests
+        return sum(stages) * num_rounds
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def confirm_cost(self, stages: List[int], total_cap_requests: int, runner: TrafficRunner,
@@ -216,13 +234,14 @@ Then use:
         :param stale_log_age_minutes: Minutes since the server log was last modified when it looks stale, or None
         :return: The probe result, or None when no probe was run
         """
-        total_planned_requests: int = sum(stages) * self._args.num_rounds
+        num_rounds: int = self._settings.get("num_rounds")
+        total_planned_requests: int = sum(stages) * num_rounds
         capped_requests: int = min(total_planned_requests, total_cap_requests)
 
         self._print_summary_header(stages, total_planned_requests, capped_requests)
 
         warnings: List[str] = []
-        if self._args.no_dry_run or self._args.level == LoadTestConstants.LEVEL_ADV:
+        if self._skips_probe():
             warnings = self._collect_warnings(capped_requests=capped_requests,
                                               total_planned_requests=total_planned_requests,
                                               stale_log_age_minutes=stale_log_age_minutes)
@@ -238,37 +257,35 @@ Then use:
         probe_elapsed_seconds: float = probe_measurements.get("elapsed_seconds", 0)
         estimated_stage_duration_seconds: float = self._estimate_stage_duration(probe_elapsed_seconds,
                                                                                 remaining_requests)
-        self.logger.info(
-            "  Estimated stage duration: ~%ss (%.1fs x %s requests)",
-            int(estimated_stage_duration_seconds),
-            probe_elapsed_seconds,
-            remaining_requests,
-        )
+        self._log_stage_estimate(estimated_stage_duration_seconds, probe_elapsed_seconds, remaining_requests)
 
-        warnings = self._collect_warnings(
-            capped_requests=capped_requests,
-            total_planned_requests=total_planned_requests,
-            stale_log_age_minutes=stale_log_age_minutes,
-            estimated_stage_duration_seconds=estimated_stage_duration_seconds,
-            probe_tokens=probe_measurements.get("tokens", 0),
-            probe_cost_dollars=probe_measurements.get("cost_dollars", 0.0),
-            probe_model=probe_measurements.get("model", "unknown"),
-        )
+        warnings = self._collect_warnings(capped_requests=capped_requests,
+                                          total_planned_requests=total_planned_requests,
+                                          stale_log_age_minutes=stale_log_age_minutes,
+                                          estimated_stage_duration_seconds=estimated_stage_duration_seconds,
+                                          probe_measurements=probe_measurements)
         self._print_warnings(warnings)
 
-        self.logger.info(
-            """
+        self.logger.info("""
   Tip: use --no-dry-run to skip this confirmation.
-       --no-dry-run does not auto-adjust timeouts.""",
-        )
+       --no-dry-run does not auto-adjust timeouts.""")
 
         self.logger.info("%s", Formatters.SEPARATOR_LINE)
 
-        if not Confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
+        if not self.confirm.ask(f"\nProceed with remaining {capped_requests - 1} requests?"):
             self.logger.info("Aborted by user.")
             raise LoadTestAbortError(0)
 
         return probe_result
+
+    def _skips_probe(self) -> bool:
+        """
+        :return: True when the run skips the dry-run probe: with --no-dry-run, or at adv level
+        """
+        no_dry_run: bool = self._settings.get("no_dry_run")
+        level: str = self._settings.get("level")
+        skips_probe: bool = no_dry_run or level == LoadTestConstants.LEVEL_ADV
+        return skips_probe
 
     def _print_summary_header(self, stages: List[int], total_planned_requests: int, capped_requests: int) -> None:
         """
@@ -278,45 +295,51 @@ Then use:
         :param total_planned_requests: Planned requests: sum(stages) * --num-rounds
         :param capped_requests: Requests after the --max-requests cap
         """
-        args: Namespace = self._args
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  PRE-RUN SUMMARY")
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  Agent:    %s", args.agent)
-        self.logger.info("  Level:    %s", args.level)
-        if args.ramp:
+        agent: str = self._settings.get("agent")
+        level: str = self._settings.get("level")
+        ramp: bool = self._settings.get("ramp")
+        num_requests: int = self._settings.get("num_requests")
+        num_rounds: int = self._settings.get("num_rounds")
+        max_workers: int = self._settings.get("max_workers")
+        self.logger.info("\n%s", Formatters.section_header("PRE-RUN SUMMARY"))
+        self.logger.info("  Agent:    %s", agent)
+        self.logger.info("  Level:    %s", level)
+        if ramp:
             self.logger.info("  Stages:   %s", stages)
         round_suffix: str = ""
-        if args.num_rounds > 1:
+        if num_rounds > 1:
             round_suffix = "s"
-        self.logger.info(
-            "  Requests: %s x %s round%s = %s total",
-            args.num_requests,
-            args.num_rounds,
-            round_suffix,
-            total_planned_requests,
-        )
+        self.logger.info("  Requests: %s x %s round%s = %s total", num_requests, num_rounds, round_suffix,
+                         total_planned_requests)
         if capped_requests < total_planned_requests:
             self.logger.info("  Capped:   %s (--max-requests)", capped_requests)
-        self.logger.info("  Workers:  %s (concurrent)", args.max_workers)
-        # Whole minutes, rounded down, e.g. 150s -> 2m.
-        request_timeout_minutes: int = int(args.request_timeout / 60)
-        idle_timeout_minutes: int = int(args.idle_timeout / 60)
-        stage_timeout_minutes: int = int(args.stage_timeout / 60)
-        self.logger.info(
-            "  Timeouts: --request-timeout %ss (%sm) / --idle-timeout %ss (%sm) / --stage-timeout %ss (%sm)",
-            args.request_timeout, request_timeout_minutes,
-            args.idle_timeout, idle_timeout_minutes,
-            args.stage_timeout, stage_timeout_minutes,
-        )
-        if args.total_timeout > 0:
-            # Whole minutes, rounded down, e.g. 150s -> 2m.
-            total_timeout_minutes: int = int(args.total_timeout / 60)
-            self.logger.info("            --total-timeout %ss (%sm)", args.total_timeout, total_timeout_minutes)
-        else:
-            self.logger.info("            --total-timeout disabled")
+        self.logger.info("  Workers:  %s (concurrent)", max_workers)
+        self._log_timeouts()
         system_resources: SystemResources = SystemResources()
         system_resources.log_prerun()
+
+    def _log_timeouts(self) -> None:
+        """
+        Log the timeout lines of the PRE-RUN SUMMARY, in seconds and in whole minutes.
+        """
+        request_timeout_seconds: float = self._settings.get("request_timeout_seconds")
+        idle_timeout_seconds: float = self._settings.get("idle_timeout_seconds")
+        stage_timeout_seconds: float = self._settings.get("stage_timeout_seconds")
+        total_timeout_seconds: float = self._settings.get("total_timeout_seconds")
+        # Whole minutes, rounded down, e.g. 150s -> 2m.
+        request_timeout_minutes: int = int(request_timeout_seconds / 60)
+        idle_timeout_minutes: int = int(idle_timeout_seconds / 60)
+        stage_timeout_minutes: int = int(stage_timeout_seconds / 60)
+        self.logger.info(
+            "  Timeouts: --request-timeout %ss (%sm) / --idle-timeout %ss (%sm) / --stage-timeout %ss (%sm)",
+            request_timeout_seconds, request_timeout_minutes, idle_timeout_seconds, idle_timeout_minutes,
+            stage_timeout_seconds, stage_timeout_minutes)
+        if total_timeout_seconds > 0:
+            # Whole minutes, rounded down, e.g. 150s -> 2m.
+            total_timeout_minutes: int = int(total_timeout_seconds / 60)
+            self.logger.info("            --total-timeout %ss (%sm)", total_timeout_seconds, total_timeout_minutes)
+        else:
+            self.logger.info("            --total-timeout disabled")
 
     @staticmethod
     def _estimate_stage_duration(probe_elapsed_seconds: float, remaining_requests: int) -> float:
@@ -333,10 +356,23 @@ Then use:
         """
         return probe_elapsed_seconds * remaining_requests
 
+    def _log_stage_estimate(self, estimated_stage_duration_seconds: float, probe_elapsed_seconds: float,
+                            remaining_requests: int) -> None:
+        """
+        Log the estimated stage duration from the probe time.
+
+        :param estimated_stage_duration_seconds: Estimated stage seconds, from _estimate_stage_duration
+        :param probe_elapsed_seconds: Seconds the probe request took
+        :param remaining_requests: Requests still to send after the probe
+        """
+        whole_stage_duration_seconds: int = int(estimated_stage_duration_seconds)
+        self.logger.info("  Estimated stage duration: ~%ss (%.1fs x %s requests)", whole_stage_duration_seconds,
+                         probe_elapsed_seconds, remaining_requests)
+
     def _collect_warnings(self, capped_requests: int, total_planned_requests: int,
                           stale_log_age_minutes: Optional[int] = None,
-                          estimated_stage_duration_seconds: Optional[float] = None, probe_tokens: Optional[int] = None,
-                          probe_cost_dollars: Optional[float] = None, probe_model: Optional[str] = None) -> List[str]:
+                          estimated_stage_duration_seconds: Optional[float] = None,
+                          probe_measurements: Optional[Dict[str, Any]] = None) -> List[str]:
         """
         Collect all pre-run warnings as a list of strings.
 
@@ -344,36 +380,35 @@ Then use:
         :param total_planned_requests: Planned requests before the cap
         :param stale_log_age_minutes: Minutes since the server log was last modified when it looks stale, or None
         :param estimated_stage_duration_seconds: Estimated stage seconds, or None when no probe ran
-        :param probe_tokens: Tokens the probe used, or None
-        :param probe_cost_dollars: Probe cost in USD, or None
-        :param probe_model: Model the probe used, or None
+        :param probe_measurements: The probe's measurements from _run_cost_probe, or None when no probe ran
         :return: Warning texts; empty when there is nothing to warn about
         """
         warnings: List[str] = []
 
+        probe_tokens: Optional[int] = None
+        probe_cost_dollars: Optional[float] = None
+        probe_model: Optional[str] = None
+        if probe_measurements is not None:
+            probe_tokens = probe_measurements.get("tokens", 0)
+            probe_cost_dollars = probe_measurements.get("cost_dollars", 0.0)
+            probe_model = probe_measurements.get("model", "unknown")
         if probe_cost_dollars is not None and probe_tokens:
             estimated_total_cost_dollars: float = probe_cost_dollars * capped_requests
             estimated_total_tokens: int = probe_tokens * capped_requests
             if estimated_total_cost_dollars > 1.0:
-                warnings.append(
-                    f"""Estimated cost exceeds $1:
+                warnings.append(f"""Estimated cost exceeds $1:
      Probe used ~{probe_tokens:,} tokens (${probe_cost_dollars:.2f}) x {capped_requests} requests = \
 ~{estimated_total_tokens:,} tokens (~${estimated_total_cost_dollars:.2f})
-     Model: {probe_model}"""
-                )
+     Model: {probe_model}""")
 
-        max_workers: int = self._args.max_workers
-        num_requests: int = self._args.num_requests
-        if not self._args.ramp and max_workers < num_requests:
-            warnings.append(f"--max-workers ({max_workers}) < --num-requests ({num_requests}): requests run in batches")
+        warnings.extend(self._batch_warnings())
 
-        if estimated_stage_duration_seconds is not None and estimated_stage_duration_seconds > self._args.stage_timeout:
-            stage_timeout_seconds: int = self._args.stage_timeout
+        stage_timeout_seconds: int = self._settings.get("stage_timeout_seconds")
+        if estimated_stage_duration_seconds is not None and estimated_stage_duration_seconds > stage_timeout_seconds:
             warnings.append(
                 f"""Estimated stage duration ~{int(estimated_stage_duration_seconds)}s exceeds --stage-timeout \
 ({stage_timeout_seconds}s).
-     Requests may be killed before completing."""
-            )
+     Requests may be killed before completing.""")
 
         if capped_requests < total_planned_requests:
             warnings.append(f"--max-requests ({capped_requests}) caps planned total ({total_planned_requests})")
@@ -389,6 +424,21 @@ Then use:
 
         return warnings
 
+    def _batch_warnings(self) -> List[str]:
+        """
+        Warn when the requests of a flat stage run in batches because --max-workers is below --num-requests.
+
+        :return: One warning when the requests run in batches, else empty
+        """
+        max_workers: int = self._settings.get("max_workers")
+        num_requests: int = self._settings.get("num_requests")
+        ramp: bool = self._settings.get("ramp")
+        if not ramp and max_workers < num_requests:
+            batch_warning: str = (f"--max-workers ({max_workers}) < --num-requests ({num_requests}): "
+                                  "requests run in batches")
+            return [batch_warning]
+        return []
+
     def _token_reporting_warnings(self) -> List[str]:
         """
         Warn when the chat filter will suppress token reporting.
@@ -400,12 +450,12 @@ Then use:
 
         :return: One warning when --minimal is used with token accounting, else empty
         """
-        args: Namespace = self._args
-        if args.chat_filter != "minimal":
+        settings: Dict[str, Any] = self._settings
+        if settings.get("chat_filter") != "minimal":
             return []
-        if not args.include_tokens:
+        if not settings.get("include_tokens"):
             return []
-        if args.client_only or args.no_server_log:
+        if settings.get("client_only") or settings.get("no_server_log"):
             no_token_usage_warning: str = """--minimal drops the token-accounting message, and this run has no \
 server log to fall back on:
      no LLM or token usage will be reported.
@@ -427,7 +477,7 @@ server log to fall back on:
         :param num_requests: Requests that may run at once
         :return: Warning text, or None when available memory looks sufficient
         """
-        virtual_memory_stats: Any = virtual_memory()
+        virtual_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         available_gigabytes: float = virtual_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         per_request_megabytes: int = 2
         needed_megabytes: int = num_requests * per_request_megabytes
