@@ -325,6 +325,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             return
 
         evicted: List[str] = []
+
+        # Hold the lock of the network_storage for self-consistency
         with self.network_storage:
             agent_names: List[str] = self.network_storage.get_agent_names()
             overflow: int = len(agent_names) - self.max_items
