@@ -168,6 +168,11 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
 
     def get_without_lock(self, agent_name: str) -> AgentNetwork:
         """
+        Get AgentNetwork for a specific name key in the table without taking the lock.
+        Normally this method is used within the scope of the lock, or within
+        a with-block which opens the context manager using this object
+        (via __enter__() method above).
+
         :param agent_name: name of an agent
         :return: Current AgentNetwork instance for specific agent name.
                 None if this does not exist for the instance's agent_name.
@@ -176,6 +181,11 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
 
     def put_without_lock(self, agent_name: str, agent_network: AgentNetwork):
         """
+        Store an AgentNetwork for a specific name in the table without taking the lock.
+        Normally this method is used within the scope of the lock, or within
+        a with-block which opens the context manager using this object
+        (via __enter__() method above).
+
         :param agent_name: name of an agent
         :param agent_network: AgentNetwork corresponding to the name
         """
@@ -183,6 +193,11 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
 
     def remove_without_lock(self, agent_name: str):
         """
+        Remove an AgentNetwork for a specific name key from the table without taking the lock.
+        Normally this method is used within the scope of the lock, or within
+        a with-block which opens the context manager using this object
+        (via __enter__() method above).
+
         :param agent_name: name of an agent to remove
         """
         self.agents_table.pop(agent_name, None)
