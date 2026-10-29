@@ -15,8 +15,6 @@
 #
 # END COPYRIGHT
 
-from typing import List
-
 from abc import abstractmethod
 
 from leaf_common.utils.interface import interface
