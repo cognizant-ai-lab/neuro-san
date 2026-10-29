@@ -25,8 +25,8 @@ from logging import Logger
 
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.storage_class import StorageClass
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.watcher.interfaces.abstract_storage_updater import AbstractStorageUpdater
 from neuro_san.service.watcher.registries.event_registry_observer import EventRegistryObserver
 from neuro_san.service.watcher.registries.polling_registry_observer import PollingRegistryObserver
@@ -41,20 +41,20 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
 
     use_polling: bool = True
 
-    def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
+    def __init__(self, network_storage_dict: Dict[str, AgentStorageSource],
                  watcher_config: Dict[str, Any]):
         """
         Constructor
 
         :param network_storage_dict: A dictionary of string (descripting scope) to
-                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    AgentStorageSource instance which keeps all the AgentNetwork instances
                     of a particular grouping.
         :param watcher_config: A config dict for StorageUpdaters
         """
         super().__init__(watcher_config.get("manifest_update_period_seconds"))
 
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
+        self.network_storage_dict: Dict[str, AgentStorageSource] = network_storage_dict
         self.manifest_path: str = watcher_config.get("manifest_path")
 
         self.observer: RegistryObserver = None
@@ -102,7 +102,7 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
         """
         Perform an update.
         Take a look at the file system observer and perform any updates
-        to relevant AgentNetworkStorage from changes there.
+        to relevant AgentStorageSource from changes there.
         """
         # Check events that may have been triggered in target registry:
         modified, added, deleted = self.observer.reset_event_counters()
@@ -120,7 +120,7 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = RegistryManifestRestorer(self.manifest_path).restore()
 
         for storage_class in StorageClass.ALL_PERMANENT:
-            storage: AgentNetworkStorage = self.network_storage_dict.get(storage_class)
+            storage: AgentStorageSource = self.network_storage_dict.get(storage_class)
             storage.setup_agent_networks(agent_networks.get(storage_class))
 
         self.log_next_update_time()
