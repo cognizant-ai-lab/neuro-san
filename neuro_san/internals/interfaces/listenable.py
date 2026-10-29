@@ -25,7 +25,7 @@ from leaf_common.utils.interface import interface
 @interface
 class Listenable[Listener]:
     """
-    Abstract interface for providing an AgentNetwork instance at run-time.
+    Interface for objects that will notify Listeners when status changes on the implementation.
     Note that "Listener" here is typing for the generic and is undefined at this level.
     """
 
