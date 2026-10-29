@@ -272,6 +272,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         Get a snapshot of all reservations
         """
         reservations_snapshot: Dict[str, Reservation] = None
+
+        # Take the lock of the network_storage for self-consistency
         with self.network_storage:
             reservations_snapshot = self.reservations_table.copy()
         return reservations_snapshot
