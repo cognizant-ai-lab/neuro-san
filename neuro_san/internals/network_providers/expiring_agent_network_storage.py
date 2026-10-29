@@ -288,7 +288,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkManag
         self.reservations_table.pop(agent_name, None)
         self.access_times.pop(agent_name, None)
         self.sizes.pop(agent_name, None)
-        super().remove_agent_network(agent_name)
+        self.network_storage.remove_agent_network(agent_name)
 
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """
