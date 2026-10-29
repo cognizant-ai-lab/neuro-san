@@ -33,7 +33,7 @@ from leaf_common.utils.startable import Startable
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.filters.resolved_network_config_filter import ResolvedNetworkConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.agent_network_manager import AgentNetworkManager
+from neuro_san.internals.interfaces.agent_network_storage_manager import AgentNetworkStorageManager
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
@@ -46,7 +46,7 @@ from neuro_san.internals.network_providers.fixed_agent_network_provider import F
 
 
 # pylint: disable=too-many-instance-attributes
-class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkManager, AgentStorageSource,
+class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStorageManager, AgentStorageSource,
                                   Listenable[AgentStateListener]):
     """
     An AgentNetworkStorage instance where AgentNetworks are allowed to expire.

@@ -21,9 +21,9 @@ from typing import List
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 
 
-class AgentNetworkManager:
+class AgentNetworkStorageManager:
     """
-    Interface for an entity managing multiple agent networks.
+    Interface for an entity managing the storage of multiple agent networks.
     """
 
     def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
