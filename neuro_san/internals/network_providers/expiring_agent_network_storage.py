@@ -23,7 +23,9 @@ from typing import Tuple
 
 from logging import getLogger
 from logging import Logger
-import time
+from time import time
+
+from typing_extensions import override
 
 from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.logging.sensitive_logger import SensitiveLogger
@@ -106,6 +108,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         # Evict least recently used items if we exceeded the new limit
         self.evict_lru_agent_networks()
 
+    @override
     def start(self):
         """
         Start this storage, which includes starting the expiration checking loop.
@@ -120,6 +123,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             super().stop()
             raise
 
+    @override
     def stop(self, timeout: Optional[float] = None):
         """
         Stop this storage, which includes stopping the expiration checking loop.
@@ -138,7 +142,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         :return: Whether this reservation is expired or not.
         """
-        return time.time() > reservation.get_expiration_time_in_seconds()
+        return time() > reservation.get_expiration_time_in_seconds()
 
     # pylint: disable=too-many-locals
     async def add_reservations(self, reservations_dict: Map[Reservation, Dict[str, Any]],
@@ -178,7 +182,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         # Need to do this while holding the lock
         added: List[str] = []
         replaced: List[str] = []
-        now: float = time.time()
+        now: float = time()
         with self.network_storage as locked_storage:
             for reservation, agent_spec in use_reservations.items():
 
@@ -249,6 +253,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             return
 
         # Do the dirty deeds.
+        # Note that we use the lock of the network_storage for self-consistency
+        # amongst all remove_agent_network() calls.
         with self.network_storage:
             for agent_name in expired:
                 self.remove_agent_network(agent_name)
@@ -270,6 +276,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             reservations_snapshot = self.reservations_table.copy()
         return reservations_snapshot
 
+    @override
     def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
         """
         This method is a single point of entry in the service
@@ -280,6 +287,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         self.network_storage.add_agent_network(agent_name, agent_network)
 
+    @override
     def remove_agent_network(self, agent_name: str):
         """
         Remove agent name and its AgentNetwork from service internal tables.
@@ -290,6 +298,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         self.sizes.pop(agent_name, None)
         self.network_storage.remove_agent_network(agent_name)
 
+    @override
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """
         Replace agents networks with a new collection.
@@ -299,6 +308,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         self.network_storage.setup_agent_networks(agent_networks)
 
+    @override
     def get_agent_names(self) -> List[str]:
         """
         :return: The list of agent names being managed by the implementation.
@@ -333,6 +343,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 listener.agent_removed(agent_name, self)
                 self.logger.info("%s: EVICTED (LRU) network for agent %s", self._name, agent_name)
 
+    @override
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
         Get AgentNetworkProvider for a specific agent
@@ -366,7 +377,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             agent_network = self.network_storage.get_without_lock(agent_name)
             if agent_network is not None:
                 with self.network_storage:
-                    self.access_times[agent_name] = time.time()
+                    self.access_times[agent_name] = time()
                 return FixedAgentNetworkProvider(agent_network)
             return None
 
@@ -379,7 +390,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 # We have a valid reservation for this agent in the source storage,
                 # so return the AgentNetworkProvider for this agent.
                 # Also cache this reservation and agent network locally:
-                now: float = time.time()
+                now: float = time()
                 with self.network_storage as locked_storage:
                     self.reservations_table[agent_name] = reservation
                     locked_storage.put_without_lock(agent_name, agent_network)
@@ -400,18 +411,21 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 return FixedAgentNetworkProvider(agent_network)
         return None
 
+    @override
     def add_listener(self, listener: AgentStateListener):
         """
         Add a listener to be notified when status of underlying object changes.
         """
         self.network_storage.add_listener(listener)
 
+    @override
     def remove_listener(self, listener: AgentStateListener):
         """
         Remove a listener from registered set.
         """
         self.network_storage.remove_listener(listener)
 
+    @override
     def get_listeners(self) -> List[AgentStateListener]:
         """
         Return a list of listeners.

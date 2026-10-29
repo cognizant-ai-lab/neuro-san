@@ -20,12 +20,13 @@ from typing import Dict
 from typing import List
 from typing import Set
 from typing import Type
-
 from types import TracebackType
 
 from logging import getLogger
 from logging import Logger
 from threading import RLock
+
+from typing_extensions import override
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
@@ -50,12 +51,14 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         self.lock: RLock = RLock()
         self.listeners: List[AgentStateListener] = []
 
+    @override
     def add_listener(self, listener: AgentStateListener):
         """
         Add a state listener to be notified when status of service agents changes.
         """
         self.listeners.append(listener)
 
+    @override
     def remove_listener(self, listener: AgentStateListener):
         """
         Remove a state listener from registered set.
@@ -63,12 +66,14 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         if listener in self.listeners:
             self.listeners.remove(listener)
 
+    @override
     def get_listeners(self) -> List[AgentStateListener]:
         """
         :return: a list of listeners.
         """
         return list(self.listeners)
 
+    @override
     def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
         """
         This method is a single point of entry in the service
@@ -96,6 +101,7 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
                 self.logger.info("REPLACED network for agent %s (%d bytes): %d",
                                  agent_name, agent_size_in_bytes, id(agent_network))
 
+    @override
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """
         Replace agents networks with a new collection.
@@ -112,6 +118,7 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         for agent_name in new_agents:
             self.add_agent_network(agent_name, agent_networks[agent_name])
 
+    @override
     def remove_agent_network(self, agent_name: str):
         """
         Remove agent name and its AgentNetwork from service scope,
@@ -130,6 +137,7 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         # We can log id(None) if necessary - that's a legal value
         self.logger.info("REMOVED network for agent %s : %d", agent_name, id(agent_network))
 
+    @override
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
         Get AgentNetworkProvider for a specific agent
@@ -137,6 +145,7 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         """
         return SingleAgentNetworkProvider(agent_name, self.agents_table)
 
+    @override
     def get_agent_names(self) -> List[str]:
         """
         Return static list of agent names.

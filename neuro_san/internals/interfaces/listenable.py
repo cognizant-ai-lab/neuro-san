@@ -17,24 +17,32 @@
 
 from typing import List
 
+from abc import abstractmethod
 
+from leaf_common.utils.interface import interface
+
+
+@interface
 class Listenable[T]:
     """
     Abstract interface for providing an AgentNetwork instance at run-time.
     """
 
+    @abstractmethod
     def add_listener(self, listener: T):
         """
         Add a listener to be notified when status of underlying object changes.
         """
         raise NotImplementedError
 
+    @abstractmethod
     def remove_listener(self, listener: T):
         """
         Remove a listener from registered set.
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_listeners(self) -> List[T]:
         """
         Return a list of listeners.

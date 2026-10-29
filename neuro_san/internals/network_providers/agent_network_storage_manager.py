@@ -18,14 +18,20 @@
 from typing import Dict
 from typing import List
 
+from abc import abstractmethod
+
+from leaf_common.utils.interface import interface
+
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 
 
+@interface
 class AgentNetworkStorageManager:
     """
     Interface for an entity managing the storage of multiple agent networks.
     """
 
+    @abstractmethod
     def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
         """
         This method is a single point of entry in the service
@@ -36,6 +42,7 @@ class AgentNetworkStorageManager:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def remove_agent_network(self, agent_name: str):
         """
         Remove agent name and its AgentNetwork from service scope.
@@ -44,6 +51,7 @@ class AgentNetworkStorageManager:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """
         Replace agents networks with a new collection.
@@ -53,6 +61,7 @@ class AgentNetworkStorageManager:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_agent_names(self) -> List[str]:
         """
         :return: The list of agent names being managed by the implementation.
