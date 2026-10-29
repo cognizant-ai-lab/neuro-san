@@ -242,6 +242,9 @@ class RunContextRunnable(NeuroSanRunnable):
             # ended it (not every branch below captures a backtrace).
             backtrace = None
             try:
+                # run_chain() follows the agent loop step by step so that each tool round is
+                # recorded as it completes. A step that fails still raises here, as it would
+                # from ainvoke().
                 chain_result: Dict[str, Any] = await self.run_chain(inputs, runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
@@ -321,20 +324,62 @@ class RunContextRunnable(NeuroSanRunnable):
 
     async def run_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Runs the agent chain and returns its final state.
+        Runs the agent chain, the agent's loop of model calls and tool calls, and
+        returns its final state.
 
-        The chain is read as a stream of states, one per step, and the turn's
-        completed tool exchanges are recorded as each state arrives. A tool round
-        that completed before a later step failed, or before a summarization
-        compacted it out of the state, is in the history all the same.
+        The loop works like this: the model is called; if its reply asks for tools,
+        the tools run and their results go back to the model; this repeats until the
+        model replies without asking for a tool. LangChain's create_agent() builds this
+        loop as a LangGraph graph, and three terms below come from there:
+          * A step is one stage of the loop: one model call, one round of tool calls
+            (every call of one model reply, run together), or one middleware hook.
+          * The state is a dictionary that carries the loop's data from step to step.
+            Its "messages" key holds the conversation so far: the chat history, the
+            user's message, and every message the loop has added, tool calls and tool
+            results included. It is the only key of the state that neuro-san uses.
+          * The stream mode says what astream() yields. With stream_mode="values" it
+            yields the input state, then the full state after each step that changes it.
+
+        The chain runs through astream() instead of ainvoke() because the tool calls
+        the model makes are recorded only in the state's messages. ainvoke() returns
+        only the final state, and no state at all when a step raises. With astream(),
+        each state goes to record_tool_exchange(), so a tool round enters the chat
+        history as soon as it is complete.
+
+        This keeps two kinds of tool rounds that the final state can miss: a round that
+        completed before a later step failed, and a round that a middleware which
+        summarizes older messages (such as NeuroSanSummarizationMiddleware) replaced
+        with a summary later in the turn. An error raised by a step leaves this loop
+        just as it leaves ainvoke(), and invoke_agent_chain() catches and retries it.
+        A retry runs the chain again from the same inputs, so the rounds of a failed
+        attempt stay in the history next to the rounds of the retry.
+
+        The final state is the value ainvoke() returns: in LangGraph, ainvoke() is
+        itself a loop over astream() that keeps the last state. ainvoke() also adds an
+        "__interrupt__" key, used when a graph pauses to wait for a person, which
+        neuro-san does not use. A streamed state can also hold LangChain's own
+        bookkeeping keys, such as "jump_to", which neuro-san ignores.
+
+        The states are snapshots of the loop, not tokens. Whether one model call
+        streams its reply token by token from the provider is set by "streaming" in
+        the llm_config, false by default in the class args of default_llm_info.hocon.
+        stream_mode="values" does not change that: LangGraph asks a model to stream
+        tokens only for stream_mode="messages", and "streaming": false keeps token
+        streaming off even then (see BaseChatModel._should_stream() in langchain_core).
+
+        See https://docs.langchain.com/oss/python/langgraph/streaming for the stream
+        modes, and Pregel.ainvoke() in
+        https://github.com/langchain-ai/langgraph/blob/1.2.9/libs/langgraph/langgraph/pregel/main.py#L4013
+        for how ainvoke() reads the same stream.
 
         :param inputs: The inputs to the agent chain
         :param runnable_config: The runnable_config to send to the agent chain
-        :return: The chain's final state, the same value ainvoke() returns.
+        :return: The loop's final state, the same value ainvoke() returns.
                  None when the chain produced no state at all.
         """
         final_state: Dict[str, Any] = None
-        # Every state is the full message list after one step of the graph.
+        # Each state is a snapshot of the agent loop after one step (a model call, a round
+        # of tool calls or a middleware hook), not a stream of tokens; see the docstring.
         state: Dict[str, Any] = None
         async for state in self.agent_chain.astream(input=inputs, config=runnable_config, stream_mode="values"):
             final_state = state
