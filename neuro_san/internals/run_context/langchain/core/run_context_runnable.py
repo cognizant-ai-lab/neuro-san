@@ -104,11 +104,19 @@ class RunContextRunnable(NeuroSanRunnable):
     error_detector: ErrorDetector
 
     session_id: str
-    # The chat history of the RunContext this runnable works for. Each turn's tool
-    # calls and their results are appended here ahead of the answer. None when
-    # no history is kept, as in unit tests that only exercise the chain result.
-    # SkipValidation keeps the RunContext's own list: pydantic's validation of a
-    # list field builds a new list, and appends to a copy would be lost.
+
+    # The chat history of the RunContext this runnable works for.
+    # record_tool_exchange() appends each turn's tool calls and their results to it,
+    # and the chat_context sent back to the client is built from it. So this must be
+    # the RunContext's own list, not a copy.
+    #
+    # This class is a pydantic model, because it extends RunnablePassthrough, which is
+    # one. For a field typed as a list, pydantic stores a copy of the list it is given,
+    # so the appends would go to the copy and never reach the client. SkipValidation
+    # tells pydantic to store the list exactly as given, without checking it. See
+    # https://docs.pydantic.dev/latest/api/functional_validators/#pydantic.functional_validators.SkipValidation
+    #
+    # None when no history is kept, as in unit tests that only check the chain result.
     chat_history: SkipValidation[List[BaseMessage]] = None
 
     # This guy needs to be a pydantic class and in order to have
