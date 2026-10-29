@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Dict
 from typing import List
 
 from abc import abstractmethod

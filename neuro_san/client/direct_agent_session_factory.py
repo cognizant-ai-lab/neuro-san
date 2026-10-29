@@ -64,7 +64,7 @@ class DirectAgentSessionFactory:
         storage_class: str = None
         for storage_class in StorageClass.ALL_PERMANENT:
             storage: AgentStorageSource = DirectAgentStorageUtil.create_network_storage(manifest_networks,
-                                                                                         storage_type=storage_class)
+                                                                                        storage_type=storage_class)
             self.network_storage_dict[storage_class] = storage
 
     def create_session(self, agent_name: str, use_direct: bool = False,
