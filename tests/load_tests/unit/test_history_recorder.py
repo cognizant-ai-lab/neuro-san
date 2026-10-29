@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from argparse import Namespace
 from json import loads
 from os import environ
 from os import listdir
@@ -40,8 +39,7 @@ class TestHistoryRecorder(TestCase):
         """
         Without --history-file the files are history.jsonl and history_unknown.jsonl in the output base.
         """
-        args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-        recorder: HistoryRecorder = HistoryRecorder(args, "/tmp/base")
+        recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", "/tmp/base")
         self.assertEqual(recorder.get_history_path(), "/tmp/base/history.jsonl")
         self.assertEqual(recorder.get_history_path(successful=False), "/tmp/base/history_unknown.jsonl")
 
@@ -49,8 +47,7 @@ class TestHistoryRecorder(TestCase):
         """
         With --history-file the unknown records go to a sibling "_unknown" file.
         """
-        args: Namespace = Namespace(history_file="/tmp/h/trend.jsonl", host="h", agent="a")
-        recorder: HistoryRecorder = HistoryRecorder(args, "/tmp/base")
+        recorder: HistoryRecorder = HistoryRecorder("/tmp/h/trend.jsonl", "h", "a", "/tmp/base")
         self.assertEqual(recorder.get_history_path(), "/tmp/h/trend.jsonl")
         self.assertEqual(recorder.get_history_path(successful=False), "/tmp/h/trend_unknown.jsonl")
 
@@ -60,8 +57,7 @@ class TestHistoryRecorder(TestCase):
         """
         records: List[Dict[str, Any]] = []
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
             stage_summaries: List[Dict[str, Any]] = [
                 {
                     "elapsed": 4.0,
@@ -98,8 +94,7 @@ class TestHistoryRecorder(TestCase):
         A client run with no results writes no file.
         """
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
             recorder.append_client_record([{"results": []}], "0.6.92")
             entries: List[str] = listdir(base)
             self.assertEqual(entries, [])
@@ -110,13 +105,10 @@ class TestHistoryRecorder(TestCase):
         """
         records: List[Dict[str, Any]] = []
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
-            primary_pairs: List[Dict[str, Any]] = [
-                TestHistoryRecorder._primary_pair(10.0, 12.0),
-                TestHistoryRecorder._primary_pair(11.0, 15.0),
-            ]
-            round_record: Dict[str, Any] = TestHistoryRecorder._server_round(None, primary_pairs)
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
+            front_man_timings: List[Dict[str, Any]] = [TestHistoryRecorder._front_man_timing(10.0, 12.0),
+                                                       TestHistoryRecorder._front_man_timing(11.0, 15.0)]
+            round_record: Dict[str, Any] = TestHistoryRecorder._server_round(None, front_man_timings)
             recorder.append_server_record(round_record)
             history_path: str = join(base, LoadTestConstants.HISTORY_UNKNOWN_FILE_NAME)
             records = TestHistoryRecorder._read_records(history_path)
@@ -160,8 +152,7 @@ class TestHistoryRecorder(TestCase):
         """
         history_path: str = ""
         with TemporaryDirectory() as base:
-            args: Namespace = Namespace(history_file=None, host="localhost", agent="hello_world")
-            recorder: HistoryRecorder = HistoryRecorder(args, base)
+            recorder: HistoryRecorder = HistoryRecorder(None, "localhost", "hello_world", base)
             history_path = join(base, LoadTestConstants.HISTORY_FILE_NAME)
             with open(history_path, "w", encoding="utf-8") as history_file:
                 history_file.write("{}\n")
@@ -182,21 +173,20 @@ class TestHistoryRecorder(TestCase):
         with open(blocker_path, "w", encoding="utf-8") as blocker_file:
             blocker_file.write("not a folder\n")
         history_path: str = join(blocker_path, LoadTestConstants.HISTORY_FILE_NAME)
-        args: Namespace = Namespace(history_file=history_path, host="localhost", agent="hello_world")
         output_base: str = dirname(blocker_path)
         round_record: Dict[str, Any] = TestHistoryRecorder._server_round("1.0.0", [])
         with patch.dict(environ, {"LEAF_LOG_SENSITIVE": log_sensitive}), \
                 self.assertLogs("HistoryRecorder", level="WARNING") as captured:
             # The SensitiveLogger reads LEAF_LOG_SENSITIVE when it is built, inside append_server_record().
-            recorder: HistoryRecorder = HistoryRecorder(args, output_base)
+            recorder: HistoryRecorder = HistoryRecorder(history_path, "localhost", "hello_world", output_base)
             recorder.append_server_record(round_record)
         output: List[str] = captured.output
         return output
 
     @staticmethod
-    def _primary_pair(start_seconds: float, finish_seconds: float) -> Dict[str, Any]:
+    def _front_man_timing(start_seconds: float, finish_seconds: float) -> Dict[str, Any]:
         """
-        Build one primary agent Start/Finish pair as ServerLogTailer saves it.
+        Build one front-man Start/Finish timing as ServerLogTailer saves it.
 
         :param start_seconds: Server log time of the Start line in seconds
         :param finish_seconds: Server log time of the Finish line in seconds
@@ -205,20 +195,20 @@ class TestHistoryRecorder(TestCase):
             "start_seconds"     The start_seconds argument
             "finish_seconds"    The finish_seconds argument
         """
-        primary_pair: Dict[str, Any] = {
+        front_man_timing: Dict[str, Any] = {
             "duration_seconds": finish_seconds - start_seconds,
             "start_seconds": start_seconds,
             "finish_seconds": finish_seconds,
         }
-        return primary_pair
+        return front_man_timing
 
     @staticmethod
-    def _server_round(neuro_san_version: Optional[str], primary_pairs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _server_round(neuro_san_version: Optional[str], front_man_timings: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Build the server-only round dict that append_server_record() takes: 2 of 2 requests in 6 seconds.
 
         :param neuro_san_version: Server neuro-san version, or None when unknown
-        :param primary_pairs: Primary agent Start/Finish pairs
+        :param front_man_timings: Front-man Start/Finish timings
         :return: The round dict
         """
         round_record: Dict[str, Any] = {
@@ -228,7 +218,7 @@ class TestHistoryRecorder(TestCase):
             "elapsed_seconds": 6.0,
             "peak_server": {"rss_megabytes": 2048.0},
             "peak_system_cpu_percent": None,
-            "primary_pairs": primary_pairs,
+            "front_man_timings": front_man_timings,
             "server_errors": None,
             "tool_warnings": None,
         }

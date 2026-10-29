@@ -14,12 +14,13 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from os import listdir
 from os import mkdir
 from os.path import dirname
 from os.path import join
 from tempfile import TemporaryDirectory
+from typing import Dict
+from typing import Any
 from typing import List
 from typing import Optional
 from unittest import TestCase
@@ -243,8 +244,8 @@ class TestInputValidator(TestCase):
         :param max_requests: --max-requests value; None when not given
         :return: Validator over those args
         """
-        args: Namespace = Namespace(num_rounds=num_rounds, max_requests=max_requests)
-        return InputValidator(args)
+        validator_settings: Dict[str, Any] = {"num_rounds": num_rounds, "max_requests": max_requests}
+        return InputValidator(validator_settings)
 
     @staticmethod
     def _stages_validator(ramp: bool = False, stages: Optional[str] = None, num_requests: int = 3) -> InputValidator:
@@ -256,8 +257,8 @@ class TestInputValidator(TestCase):
         :param num_requests: --num-requests value
         :return: Validator over those args
         """
-        args: Namespace = Namespace(ramp=ramp, stages=stages, num_requests=num_requests)
-        return InputValidator(args)
+        validator_settings: Dict[str, Any] = {"ramp": ramp, "stages": stages, "num_requests": num_requests}
+        return InputValidator(validator_settings)
 
     @staticmethod
     def _fixtures_validator(agent: str = "hello_world", fixtures_hocon_dir: Optional[str] = None,
@@ -270,5 +271,9 @@ class TestInputValidator(TestCase):
         :param project_root: --project-root value
         :return: Validator over those args
         """
-        args: Namespace = Namespace(agent=agent, fixtures_hocon_dir=fixtures_hocon_dir, project_root=project_root)
-        return InputValidator(args)
+        validator_settings: Dict[str, Any] = {
+            "agent": agent,
+            "fixtures_hocon_dir": fixtures_hocon_dir,
+            "project_root": project_root,
+        }
+        return InputValidator(validator_settings)

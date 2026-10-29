@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from logging import Logger
 from logging import getLogger
 from time import perf_counter
@@ -35,11 +34,11 @@ class StageRun:
     # 60 "#" characters: the line around the round header.
     ROUND_HEADER_LINE: str = "############################################################"
 
-    def __init__(self, args: Namespace, stage_executor: StageExecutor, run_inputs: Dict[str, Any]) -> None:
+    def __init__(self, num_rounds: int, stage_executor: StageExecutor, run_inputs: Dict[str, Any]) -> None:
         """
         Keep the settings of the run and start its clock.
 
-        :param args: Parsed command-line arguments
+        :param num_rounds: --num-rounds: rounds of each stage
         :param stage_executor: Runs each stage and checks --total-timeout
         :param run_inputs: A dict with the following keys:
             "stages"                 Request count of each stage, in order
@@ -52,7 +51,7 @@ class StageRun:
         self.logger: Logger = getLogger(self.__class__.__name__)
         self._stage_executor: StageExecutor = stage_executor
         stages: List[int] = run_inputs.get("stages")
-        only_stage: bool = len(stages) == 1 and args.num_rounds == 1
+        only_stage: bool = len(stages) == 1 and num_rounds == 1
         test_start_seconds: float = perf_counter()
         self._run_settings: Dict[str, Any] = {
             "stages": stages,
@@ -61,7 +60,7 @@ class StageRun:
             "has_server_log": run_inputs.get("has_server_log"),
             "primary_start_pattern": run_inputs.get("primary_start_pattern"),
             "only_stage": only_stage,
-            "num_rounds": args.num_rounds,
+            "num_rounds": num_rounds,
             "test_start_seconds": test_start_seconds,
         }
         self._total_sent: int = 0

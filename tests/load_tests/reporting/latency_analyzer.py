@@ -63,9 +63,7 @@ class LatencyAnalyzer:
 
         :param is_ramp: True to label each stage, False to label each round
         """
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  LATENCY ANALYSIS")
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header("LATENCY ANALYSIS"))
 
         self._log_completion_timeline(is_ramp=is_ramp)
 

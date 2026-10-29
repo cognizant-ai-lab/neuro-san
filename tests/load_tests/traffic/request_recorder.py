@@ -16,7 +16,6 @@
 
 # Whole sys module: sys.stdout is looked up on each write, so a swapped stdout is used.
 import sys
-from argparse import Namespace
 from json import dumps
 from logging import Logger
 from logging import getLogger
@@ -51,15 +50,14 @@ class RequestRecorder:
     failures is guarded by a lock.
     """
 
-    def __init__(self, args: Namespace) -> None:
+    def __init__(self, include_tokens: bool) -> None:
         """
         Constructor.
 
-        :param args: Parsed load-test command line; include_tokens is read at each request,
-            since LoadTestCli sets it after the runner is created
+        :param include_tokens: True to put the token counts in each request result
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._args: Namespace = args
+        self._include_tokens: bool = include_tokens
         self._failure_log_lock: Lock = Lock()
         self._failures_logged: int = 0
 
@@ -112,7 +110,7 @@ class RequestRecorder:
         :return: Text to save as the request's stdout
         """
         saved: str = response_text or ""
-        if self._args.include_tokens and token_data:
+        if self._include_tokens and token_data:
             token_json: str = dumps(token_data, indent=2)
             saved += "\n\nToken Accounting:\n" + token_json + "\n"
         return saved

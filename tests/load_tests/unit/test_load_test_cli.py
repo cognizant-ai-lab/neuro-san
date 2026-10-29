@@ -40,7 +40,8 @@ class TestLoadTestCli(TestCase):
         """
         A validator check that fails while the LoadTestCli is built exits with code 1.
         """
-        args: Namespace = Namespace(rebuild=None, trend=None, compare=None)
+        args: Namespace = Namespace(rebuild=None, trend=None, compare=None, agent="hello_world",
+                                    fixtures_hocon_dir=None, project_root=None)
         abort_error = LoadTestAbortError(FAILED_CHECK_EXIT_CODE)
         with patch.object(LoadTestArguments, "parse_args", return_value=args), \
                 patch.object(InputValidator, "validate_fixtures_hocon_dir", side_effect=abort_error), \
@@ -52,7 +53,8 @@ class TestLoadTestCli(TestCase):
         """
         An abort with exit code 0 (the user declined the run) exits with code 0.
         """
-        args: Namespace = Namespace(rebuild=None, trend=None, compare=None)
+        args: Namespace = Namespace(rebuild=None, trend=None, compare=None, agent="hello_world",
+                                    fixtures_hocon_dir=None, project_root=None)
         abort_error = LoadTestAbortError(DECLINED_EXIT_CODE)
         with patch.object(LoadTestArguments, "parse_args", return_value=args), \
                 patch.object(InputValidator, "validate_fixtures_hocon_dir", side_effect=abort_error), \
