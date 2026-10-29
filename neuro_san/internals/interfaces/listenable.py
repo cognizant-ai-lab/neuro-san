@@ -23,27 +23,28 @@ from leaf_common.utils.interface import interface
 
 
 @interface
-class Listenable[T]:
+class Listenable[Listener]:
     """
     Abstract interface for providing an AgentNetwork instance at run-time.
+    Note that "Listener" here is typing for the generic and is undefined at this level.
     """
 
     @abstractmethod
-    def add_listener(self, listener: T):
+    def add_listener(self, listener: Listener):
         """
         Add a listener to be notified when status of underlying object changes.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def remove_listener(self, listener: T):
+    def remove_listener(self, listener: Listener):
         """
         Remove a listener from registered set.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_listeners(self) -> List[T]:
+    def get_listeners(self) -> List[Listener]:
         """
         Return a list of listeners.
         """
