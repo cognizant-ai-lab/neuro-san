@@ -55,6 +55,8 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
     def add_listener(self, listener: AgentStateListener):
         """
         Add a state listener to be notified when status of service agents changes.
+
+        :param listener: listener of type AgentStateListener to be added
         """
         self.listeners.append(listener)
 
@@ -62,6 +64,8 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
     def remove_listener(self, listener: AgentStateListener):
         """
         Remove a state listener from registered set.
+
+        :param listener: listener of type AgentStateListener to be removed
         """
         if listener in self.listeners:
             self.listeners.remove(listener)
@@ -69,7 +73,7 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
     @override
     def get_listeners(self) -> List[AgentStateListener]:
         """
-        :return: a list of listeners.
+        :return: a list of AgentStateListeners that are listening.
         """
         return list(self.listeners)
 

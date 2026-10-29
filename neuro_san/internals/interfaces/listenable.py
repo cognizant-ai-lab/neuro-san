@@ -33,6 +33,8 @@ class Listenable[Listener]:
     def add_listener(self, listener: Listener):
         """
         Add a listener to be notified when status of underlying object changes.
+
+        :param listener: listener of type Listener to be added
         """
         raise NotImplementedError
 
@@ -40,12 +42,14 @@ class Listenable[Listener]:
     def remove_listener(self, listener: Listener):
         """
         Remove a listener from registered set.
+
+        :param listener: listener of type Listener to be removed
         """
         raise NotImplementedError
 
     @abstractmethod
     def get_listeners(self) -> List[Listener]:
         """
-        Return a list of listeners.
+        :return: a list of listeners (of type Listener) that are listening.
         """
         raise NotImplementedError

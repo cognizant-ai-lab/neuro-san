@@ -419,6 +419,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
     def add_listener(self, listener: AgentStateListener):
         """
         Add a listener to be notified when status of underlying object changes.
+
+        :param listener: listener of type Listener to be added
         """
         self.network_storage.add_listener(listener)
 
@@ -426,12 +428,14 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
     def remove_listener(self, listener: AgentStateListener):
         """
         Remove a listener from registered set.
+
+        :param listener: listener of type Listener to be removed
         """
         self.network_storage.remove_listener(listener)
 
     @override
     def get_listeners(self) -> List[AgentStateListener]:
         """
-        Return a list of listeners.
+        :return: a list of AgentStateListeners that are listening.
         """
         return self.network_storage.get_listeners()
