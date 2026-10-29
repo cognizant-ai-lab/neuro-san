@@ -33,13 +33,13 @@ from leaf_common.utils.startable import Startable
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.filters.resolved_network_config_filter import ResolvedNetworkConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.agent_network_storage_manager import AgentNetworkStorageManager
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.listenable import Listenable
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage_manager import AgentNetworkStorageManager
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
