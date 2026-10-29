@@ -20,6 +20,7 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Type
 
 from unittest import IsolatedAsyncioTestCase
@@ -65,9 +66,10 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
             "description": "Test tool"
         }
         self.mock_run_context: MagicMock = TestAbstractClassActivation._create_mock_run_context()
+        activation_instance: Optional[ConcreteClassActivation] = None
         with patch(CREATE_RUN_CONTEXT_PATH, return_value=self.mock_run_context):
             with patch(GET_FULL_NAME_FROM_ORIGIN_PATH, return_value="test_full_name"):
-                self.activation_instance: ConcreteClassActivation = ConcreteClassActivation(
+                activation_instance = ConcreteClassActivation(
                     parent_run_context=self.mock_run_context,
                     factory=self.mock_factory,
                     args={"test_arg": "test_value"},
@@ -75,6 +77,7 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
                     sly_data={"test_sly": "test_data"},
                     class_ref="test_module.TestClass"
                 )
+        self.activation_instance: ConcreteClassActivation = activation_instance
 
     def test_initialization(self) -> None:
         """
@@ -202,7 +205,8 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
 
     def test_instantiate_coded_tool_branch_activation(self) -> None:
         """
-        Test instantiating a BranchActivation + CodedTool combination.
+        Test that a CodedTool class that issubclass() reports as a BranchActivation gets the factory and the
+        activation's arguments in its constructor.
         """
         # Patch issubclass to recognize our mock as a BranchActivation
         original_issubclass: Callable[[type, type], bool] = issubclass
@@ -250,6 +254,7 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         mock_loop.run_in_executor = AsyncMock(return_value="sync_result")
         mock_executor.get_event_loop.return_value = mock_loop
 
+        # setUp() patches create_run_context() to return self.mock_run_context, so this is the activation's context.
         invocation_context: MagicMock = self.mock_run_context.get_invocation_context()
         invocation_context.get_asyncio_executor.return_value = mock_executor
 
@@ -378,7 +383,6 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
 
         invocation_context: MagicMock = MagicMock()
         invocation_context.get_reservationist.return_value = None
-        invocation_context.get_asyncio_executor.return_value = MagicMock()
         context.get_invocation_context.return_value = invocation_context
         return context
 
@@ -415,4 +419,5 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         """
         if checked_class == MockBranchActivationTool and classinfo == BranchActivation:
             return True
-        return original_issubclass(checked_class, classinfo)
+        is_subclass: bool = original_issubclass(checked_class, classinfo)
+        return is_subclass

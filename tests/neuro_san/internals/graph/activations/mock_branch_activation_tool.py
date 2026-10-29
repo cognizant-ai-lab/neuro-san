@@ -58,8 +58,12 @@ class MockBranchActivationTool(CodedTool):
         """
         Gets the constructor parameters.
 
-        :return: A dictionary with "parent_run_context", "factory", "args", "agent_tool_spec" and "sly_data",
-                 each the constructor argument of that name
+        :return: A dictionary of the constructor arguments, one key per argument:
+                 "parent_run_context": the RunContext passed in
+                 "factory": the AgentToolFactory passed in
+                 "args": the dictionary of tool function arguments
+                 "agent_tool_spec": the agent tool spec dictionary
+                 "sly_data": the private data dictionary
         """
         return self._init_params
 
