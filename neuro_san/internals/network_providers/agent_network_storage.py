@@ -177,6 +177,12 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         """
         self.agents_table[agent_name] = agent_network
 
+    def remove_without_lock(self, agent_name: str):
+        """
+        :param agent_name: name of an agent
+        """
+        self.agents_table.pop(agent_name, None)
+
     def __exit__(self, exc_type: Type[BaseException], exc_value: BaseException, traceback: TracebackType) -> bool:
         """
         :param exc_type: The type of the exception that was raised
