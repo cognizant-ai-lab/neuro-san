@@ -177,13 +177,13 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
     def put_without_lock(self, agent_name: str, agent_network: AgentNetwork):
         """
         :param agent_name: name of an agent
-        :param agent_network: AgentNetwork
+        :param agent_network: AgentNetwork corresponding to the name
         """
         self.agents_table[agent_name] = agent_network
 
     def remove_without_lock(self, agent_name: str):
         """
-        :param agent_name: name of an agent
+        :param agent_name: name of an agent to remove
         """
         self.agents_table.pop(agent_name, None)
 
