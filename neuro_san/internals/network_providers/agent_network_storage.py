@@ -14,14 +14,18 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
 
 from typing import Dict
 from typing import List
 from typing import Set
+from typing import Type
+
+from types import TracebackType
 
 from logging import getLogger
 from logging import Logger
-from threading import Lock
+from threading import RLock
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_manager import AgentNetworkManager
@@ -32,7 +36,7 @@ from neuro_san.internals.interfaces.listenable import Listenable
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 
-class AgentNetworkStorage(AgentStorageSource, AgentNetworkManager, Listenable):
+class AgentNetworkStorage(AgentStorageSource, AgentNetworkManager, Listenable[AgentStateListener]):
     """
     Service-wide storage for AgentNetworkProviders containing
     a table of currently active AgentNetworks for each agent registered to the service.
@@ -43,7 +47,7 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkManager, Listenable):
     def __init__(self):
         self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self.lock: Lock = Lock()
+        self.lock: RLock = RLock()
         self.listeners: List[AgentStateListener] = []
 
     def add_listener(self, listener: AgentStateListener):
@@ -59,6 +63,12 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkManager, Listenable):
         if listener in self.listeners:
             self.listeners.remove(listener)
 
+    def get_listeners(self) -> List[AgentStateListener]:
+        """
+        :return: a list of listeners.
+        """
+        return list(self.listeners)
+
     def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
         """
         This method is a single point of entry in the service
@@ -67,9 +77,9 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkManager, Listenable):
         """
         is_new: bool = False
         with self.lock:
-            test_agent_network: AgentNetwork = self.agents_table.get(agent_name)
+            test_agent_network: AgentNetwork = self.get_without_lock(agent_name)
             is_new = test_agent_network is None
-            self.agents_table[agent_name] = agent_network
+            self.put_without_lock(agent_name, agent_network)
 
         agent_size_in_bytes: int = agent_network.get_size_in_bytes()
 
@@ -109,7 +119,7 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkManager, Listenable):
         """
         agent_network: AgentNetwork = None
         with self.lock:
-            agent_network = self.agents_table.get(agent_name, None)
+            agent_network = self.get_without_lock(agent_name)
             self.agents_table.pop(agent_name, None)
 
         # Notify listeners about this state change:
@@ -134,3 +144,36 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkManager, Listenable):
         with self.lock:
             # Create static snapshot of agents names collection
             return list(self.agents_table.keys())
+
+    def __enter__(self) -> AgentNetworkStorage:
+        """
+        Enter use of the instance's agents_table holding the lock
+        :return: The instance
+        """
+        self.lock.acquire()
+        return self
+
+    def get_without_lock(self, agent_name: str) -> AgentNetwork:
+        """
+        :param agent_name: name of an agent
+        :return: Current AgentNetwork instance for specific agent name.
+                None if this does not exist for the instance's agent_name.
+        """
+        return self.agents_table.get(agent_name, None)
+
+    def put_without_lock(self, agent_name: str, agent_network: AgentNetwork):
+        """
+        :param agent_name: name of an agent
+        :param agent_network: AgentNetwork
+        """
+        self.agents_table[agent_name] = agent_network
+
+    def __exit__(self, exc_type: Type[BaseException], exc_value: BaseException, traceback: TracebackType) -> bool:
+        """
+        :param exc_type: The type of the exception that was raised
+        :param exc_value: The exception instance
+        :param traceback: The traceback
+        :return: True to suppress exception. False or None to propagate exception.
+        """
+        self.lock.release()
+        return False

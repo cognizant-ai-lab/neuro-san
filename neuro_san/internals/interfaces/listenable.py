@@ -15,22 +15,28 @@
 #
 # END COPYRIGHT
 
-from typing import Any
+from typing import List
 
 
-class Listenable:
+class Listenable[T]:
     """
     Abstract interface for providing an AgentNetwork instance at run-time.
     """
 
-    def add_listener(self, listener: Any):
+    def add_listener(self, listener: T):
         """
         Add a listener to be notified when status of underlying object changes.
         """
         raise NotImplementedError
 
-    def remove_listener(self, listener: Any):
+    def remove_listener(self, listener: T):
         """
         Remove a listener from registered set.
+        """
+        raise NotImplementedError
+
+    def get_listeners(self) -> List[T]:
+        """
+        Return a list of listeners.
         """
         raise NotImplementedError
