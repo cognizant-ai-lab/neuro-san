@@ -113,8 +113,8 @@ class TestToolExchangeRecorder(TestCase):
         human: HumanMessage = HumanMessage(content="question", id="h1")
         state: Dict[str, Any] = RunContextRunnableTestHelpers.tool_turn_state(human)
         # What the summarization middleware leaves behind: the state's own messages.
-        recorder: ToolExchangeRecorder = ToolExchangeRecorder([human, state["messages"][3],
-                                                               state["messages"][4]])
+        recorder: ToolExchangeRecorder = ToolExchangeRecorder([human, state.get("messages")[3],
+                                                               state.get("messages")[4]])
 
         self.assertEqual(recorder.find_tool_exchange({"messages": [human]}, state), [])
 

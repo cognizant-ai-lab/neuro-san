@@ -759,7 +759,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         human: HumanMessage = HumanMessage(content="question", id="h1")
         state: Dict[str, Any] = RunContextRunnableTestHelpers.tool_turn_state(human)
-        reached: Dict[str, Any] = {"messages": state["messages"][:-1]}  # the round is done, no answer yet
+        reached: Dict[str, Any] = {"messages": state.get("messages")[:-1]}  # the round is done, no answer yet
         chat_history: List[BaseMessage] = []
         lengths: List[int] = []
         journal: MagicMock = MagicMock()
