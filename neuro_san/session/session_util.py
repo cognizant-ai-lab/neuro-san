@@ -22,7 +22,7 @@ from typing import Optional
 from logging import getLogger
 from logging import Logger
 
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 
 class SessionUtil:

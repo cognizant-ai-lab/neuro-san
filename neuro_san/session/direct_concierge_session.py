@@ -24,7 +24,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 
 
 class DirectConciergeSession(ConciergeSession):
@@ -35,13 +35,13 @@ class DirectConciergeSession(ConciergeSession):
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self,
-                 network_storage: AgentNetworkStorage,
+                 network_storage: AgentStorageSource,
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None):
         """
         Constructor
 
-        :param network_storage: A AgentNetworkStorage instance which keeps all
+        :param network_storage: A AgentStorageSource instance which keeps all
                                 the AgentNetwork instances.
         :param metadata: A dictionary of request metadata to be forwarded
                         to subsequent yet-to-be-made requests.
@@ -50,7 +50,7 @@ class DirectConciergeSession(ConciergeSession):
                         connection.  Supplying this implies use of a secure
                         HTTP connection.  If None, uses insecure connection.
         """
-        self.network_storage: AgentNetworkStorage = network_storage
+        self.network_storage: AgentStorageSource = network_storage
         # These aren't used yet
         self._metadata: Dict[str, Any] = metadata
         self._security_cfg: Dict[str, Any] = security_cfg

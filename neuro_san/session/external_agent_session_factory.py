@@ -24,7 +24,7 @@ from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkPr
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.storage_class import StorageClass
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
@@ -37,20 +37,20 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
     """
 
     def __init__(self, use_direct: bool = False,
-                 network_storage_dict: Dict[str, AgentNetworkStorage] = None):
+                 network_storage_dict: Dict[str, AgentStorageSource] = None):
         """
         Constructor
 
         :param use_direct: When True, will use a Direct session for
                     external agents that would reside on the same server.
-        :param network_storage_dict: A dictionary of AgentNetworkStorage instances which keeps all
+        :param network_storage_dict: A dictionary of AgentStorageSource instances which keeps all
                                 the AgentNetwork instances.  Only used with use_direct=True.
         """
         self.use_direct: bool = use_direct
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = None
+        self.storage_source_dict: Dict[str, AgentStorageSource] = None
         if self.use_direct:
             # Only store the reference if we will need it
-            self.network_storage_dict = network_storage_dict
+            self.storage_source_dict = network_storage_dict
 
     def create_session(self, agent_url: str,
                        invocation_context: InvocationContext,
@@ -74,22 +74,22 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                                                                             invocation)
         return session
 
-    def get_networks_order(self, network_storage_dict: Dict[str, AgentNetworkStorage]) -> List[str]:
+    def get_networks_order(self, storage_source_dict: Dict[str, AgentStorageSource]) -> List[str]:
         """
-        :param network_storage_dict: The dictionary of AgentNetworkStorage instances to check for networks.
-        :return: A List of AgentNetworkStorage names in the order they should be checked.
+        :param storage_source_dict: The dictionary of AgentStorageSource instances to check for networks.
+        :return: A List of AgentStorageSource names in the order they should be checked.
         Note: we need our "temp" storage to be checked last,
         because in the general case this might involve querying external storage, which is potentially slow.
         """
         networks_order: List[str] = []
-        if network_storage_dict is None:
+        if storage_source_dict is None:
             return networks_order
 
-        for storage_name in network_storage_dict.keys():
+        for storage_name in storage_source_dict.keys():
             if storage_name != StorageClass.TEMP:
                 networks_order.append(storage_name)
 
-        if StorageClass.TEMP in network_storage_dict:
+        if StorageClass.TEMP in storage_source_dict.keys():
             networks_order.append(StorageClass.TEMP)
 
         return networks_order
@@ -133,11 +133,11 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             # and potentially relieve the direct user of the burden of having to start a server
 
             agent_network_provider: AgentNetworkProvider = None
-            for network_storage_name in self.get_networks_order(self.network_storage_dict):
+            for storage_source_name in self.get_networks_order(self.storage_source_dict):
 
-                network_storage: AgentNetworkStorage = self.network_storage_dict.get(network_storage_name)
+                storage_source: AgentStorageSource = self.storage_source_dict.get(storage_source_name)
                 # Be sure we have something
-                agent_network_provider = network_storage.get_agent_network_provider(agent_name)
+                agent_network_provider = storage_source.get_agent_network_provider(agent_name)
                 if agent_network_provider is None:
                     continue
 

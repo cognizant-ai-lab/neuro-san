@@ -27,13 +27,13 @@ from neuro_san.message.processors.basic_message_processor import BasicMessagePro
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
-from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.traffic.traffic_runner import TrafficRunner
 from tests.load_tests.unit.traffic_runner_test_helpers import TrafficRunnerTestHelpers
 
 
 class TestHeartbeat(TestCase):
     """
-    Unit tests for Heartbeat: its progress.log lines, its failed-request count and its peak readings.
+    Unit tests for Heartbeat: its progress.log lines and its failed-request count.
 
     Heartbeat writes its progress lines to progress.log without removing the request lines TrafficRunner writes there.
     """
@@ -79,14 +79,14 @@ class TestHeartbeat(TestCase):
         heartbeat.count_failed_request()
         self.assertEqual(2, heartbeat.get_failed_request_count())
 
-    def test_peaks_ignore_zero_and_lower_readings(self) -> None:
+    def test_duration_stats_print_minutes_and_seconds(self) -> None:
         """
-        A peak is only kept for a reading above zero and above the peak so far.
+        Request durations of a minute or more print as minutes and seconds, shorter ones as seconds.
         """
-        self.assertFalse(Heartbeat.is_new_peak(0, None))
-        self.assertTrue(Heartbeat.is_new_peak(5, None))
-        self.assertFalse(Heartbeat.is_new_peak(5, 5))
-        self.assertTrue(Heartbeat.is_new_peak(6.5, 5))
+        stats_text: str = Heartbeat.format_duration_stats([45.7, 90.2, 125.9])
+        no_stats_text: str = Heartbeat.format_duration_stats([])
+        self.assertEqual("45s min / 1m 27s avg / 2m 5s max", stats_text)
+        self.assertEqual("n/a", no_stats_text)
 
     @staticmethod
     def _set_event() -> Event:

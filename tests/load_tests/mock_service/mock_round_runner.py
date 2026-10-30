@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from logging import Logger
@@ -28,11 +27,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from psutil import Process
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.mock_service.mock_server_manager import MockServerManager
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 
 
@@ -46,16 +46,27 @@ class MockRoundRunner:
 
     MOCK_REQUEST_TIMEOUT_SECONDS: int = 120
 
-    def __init__(self, args: Namespace, prompt_file: str, server_manager: MockServerManager) -> None:
+    def __init__(self, round_settings: Dict[str, Any], prompt_file: str, server_manager: MockServerManager) -> None:
         """
         Initialize the runner and build its agent_cli command.
 
-        :param args: Parsed command-line arguments from MockLoadTestArguments.parse_args()
+        :param round_settings: A dict with the following keys, from the parsed command line:
+            "num_rounds"           Number of rounds
+            "num_requests"         Requests per round
+            "max_workers"          Most concurrent requests
+            "settle_time_seconds"  Seconds to wait for server cleanup after each round
+            "host"                 Neuro-san server host
+            "port"                 Neuro-san server port
+            "agent"                Agent name
+            "no_sly_data"          True to send no sly_data
+            "sly_data"             sly_data JSON text to send
         :param prompt_file: Path of the file that holds the prompt for --first_prompt_file
         :param server_manager: Holds the server processes to take snapshots of
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._args: Namespace = args
+        self.resource_monitor: ResourceMonitor = ResourceMonitor()
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._settings: Dict[str, Any] = round_settings
         self._prompt_file: str = prompt_file
         self._server_manager: MockServerManager = server_manager
         self._agent_cli_command: List[str] = self._build_cli_command()
@@ -68,6 +79,7 @@ class MockRoundRunner:
         :return: "server_rows" and "mock_rows" (rows from _build_snapshot_row()), and "totals"
                  with "passed", "failed" and "time_seconds"
         """
+        num_rounds: int = self._settings.get("num_rounds")
         server_rows: List[Dict[str, Any]] = []
         mock_rows: List[Dict[str, Any]] = []
         totals: Dict[str, float] = {
@@ -75,43 +87,25 @@ class MockRoundRunner:
             "failed": 0,
             "time_seconds": 0.0,
         }
-        round_result: Dict[str, Any] = {}
 
         round_number: int
         # Run each round, numbered from 1, with resource snapshots before and after it.
-        for round_number in range(1, self._args.num_rounds + 1):
-            self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-            self.logger.info(
-                "  ROUND %s of %s (%s requests, %s workers)",
-                round_number, self._args.num_rounds,
-                self._args.num_requests, self._args.max_workers,
-            )
-            self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        for round_number in range(1, num_rounds + 1):
+            self._log_round_header(round_number)
 
-            server_process: Optional[Process] = self._server_manager.get_server_process()
-            mock_process: Optional[Process] = self._server_manager.get_mock_process()
+            server_process: Optional[TrackedProcess] = self._server_manager.get_server_process()
+            mock_process: Optional[TrackedProcess] = self._server_manager.get_mock_process()
             before_server: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(server_process)
             before_mock: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(mock_process)
             if before_server:
-                ResourceMonitor.log_snapshot("Server BEFORE", before_server)
+                self.resource_monitor.log_snapshot("Server BEFORE", before_server)
 
-            self.logger.info(
-                "\nFiring %s concurrent requests with %s workers...",
-                self._args.num_requests, self._args.max_workers,
-            )
-            round_result = self._run_round()
-            # Plain key assignments: 3 more locals would pass pylint's 15-local limit (R0914).
-            totals["passed"] = totals.get("passed", 0) + round_result.get("passed")
-            totals["failed"] = totals.get("failed", 0) + round_result.get("failed")
-            totals["time_seconds"] = totals.get("time_seconds", 0.0) + round_result.get("round_seconds")
-
-            self.logger.info("\nWaiting %ss for server cleanup...", self._args.settle_time_seconds)
-            sleep(self._args.settle_time_seconds)
+            self._fire_round(totals)
 
             after_server: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(server_process)
             after_mock: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(mock_process)
             if after_server:
-                ResourceMonitor.log_snapshot("Server AFTER", after_server)
+                self.resource_monitor.log_snapshot("Server AFTER", after_server)
 
             if before_server and after_server:
                 server_row: Dict[str, Any] = MockRoundRunner._build_snapshot_row(round_number, before_server,
@@ -128,6 +122,37 @@ class MockRoundRunner:
         }
         return rounds_result
 
+    def _fire_round(self, totals: Dict[str, float]) -> None:
+        """
+        Fire the requests of one round, add its results to the totals, then wait for the server cleanup.
+
+        :param totals: The run_rounds() totals with "passed", "failed" and "time_seconds", updated in place
+        """
+        num_requests: int = self._settings.get("num_requests")
+        max_workers: int = self._settings.get("max_workers")
+        settle_time_seconds: int = self._settings.get("settle_time_seconds")
+        self.logger.info("\nFiring %s concurrent requests with %s workers...", num_requests, max_workers)
+        round_result: Dict[str, Any] = self._run_round()
+        # Plain key assignments: 3 more locals would pass pylint's 15-local limit (R0914).
+        totals["passed"] = totals.get("passed", 0) + round_result.get("passed")
+        totals["failed"] = totals.get("failed", 0) + round_result.get("failed")
+        totals["time_seconds"] = totals.get("time_seconds", 0.0) + round_result.get("round_seconds")
+
+        self.logger.info("\nWaiting %ss for server cleanup...", settle_time_seconds)
+        sleep(settle_time_seconds)
+
+    def _log_round_header(self, round_number: int) -> None:
+        """
+        Log the section header of one round.
+
+        :param round_number: Number of the round, from 1
+        """
+        num_rounds: int = self._settings.get("num_rounds")
+        num_requests: int = self._settings.get("num_requests")
+        max_workers: int = self._settings.get("max_workers")
+        title: str = f"ROUND {round_number} of {num_rounds} ({num_requests} requests, {max_workers} workers)"
+        self.logger.info("\n%s", Formatters.section_header(title))
+
     def _build_cli_command(self) -> List[str]:
         """
         Build the agent_cli subprocess command list from instance arguments.
@@ -135,18 +160,23 @@ class MockRoundRunner:
 
         :return: The agent_cli command and its arguments, one list item each
         """
+        host: str = self._settings.get("host")
+        port: int = self._settings.get("port")
+        agent: str = self._settings.get("agent")
+        no_sly_data: bool = self._settings.get("no_sly_data")
+        sly_data: Optional[str] = self._settings.get("sly_data")
         agent_cli_command: List[str] = [
             "python", "-m", "neuro_san.client.agent_cli",
             "--http",
-            "--host", self._args.host,
-            "--port", str(self._args.port),
-            "--agent", self._args.agent,
+            "--host", host,
+            "--port", str(port),
+            "--agent", agent,
             "--first_prompt_file", self._prompt_file,
             "--one_shot",
             "--no_thinking_file",
         ]
-        if not self._args.no_sly_data:
-            agent_cli_command.extend(["--sly_data", self._args.sly_data])
+        if not no_sly_data:
+            agent_cli_command.extend(["--sly_data", sly_data])
         return agent_cli_command
 
     def _run_one(self, request_id: int) -> Dict[str, Any]:
@@ -173,7 +203,13 @@ class MockRoundRunner:
             stripped_stderr: str = stderr_text.strip()
             stderr_lines: List[str] = stripped_stderr.split("\n")
             stderr_line: str = stderr_lines[-1]
-            self.logger.info("  stderr: %s", stderr_line)
+            # stderr can hold secrets, so it goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is off, the plain
+            # logger says it was hidden and how to show it.
+            sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+            if sensitive_logger.should_log():
+                sensitive_logger.info("  stderr: %s", stderr_line)
+            else:
+                self.logger.info("  stderr: (hidden; set LEAF_LOG_SENSITIVE=true to show it)")
         request_result: Dict[str, Any] = {
             "ok": succeeded,
             "elapsed_seconds": elapsed_seconds,
@@ -186,14 +222,16 @@ class MockRoundRunner:
 
         :return: "passed" and "failed" (request counts) and "round_seconds" (the round time)
         """
+        num_requests: int = self._settings.get("num_requests")
+        max_workers: int = self._settings.get("max_workers")
         passed: int = 0
         failed: int = 0
         start_seconds: float = perf_counter()
-        with ThreadPoolExecutor(max_workers=self._args.max_workers) as pool:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures: List[Future] = []
             request_id: int
             # Submit every request first, numbered from 1, so the requests run at the same time.
-            for request_id in range(1, self._args.num_requests + 1):
+            for request_id in range(1, num_requests + 1):
                 request_future: Future = pool.submit(self._run_one, request_id)
                 futures.append(request_future)
             future: Future

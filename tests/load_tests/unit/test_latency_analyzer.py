@@ -200,7 +200,7 @@ class TestLatencyAnalyzer(TestCase):
         """
         logged_lines: List[str] = []
         analyzer: LatencyAnalyzer = LatencyAnalyzer([summary])
-        with self.assertLogs(LatencyAnalyzer.__module__, level="INFO") as captured:
+        with self.assertLogs(LatencyAnalyzer.__name__, level="INFO") as captured:
             analyzer.log_latency_analysis()
         record: LogRecord
         # Collect each logged message.
@@ -223,7 +223,7 @@ class TestLatencyAnalyzer(TestCase):
             "results": results,
         }
         analyzer: LatencyAnalyzer = LatencyAnalyzer([summary])
-        with self.assertLogs(LatencyAnalyzer.__module__, level="INFO") as captured:
+        with self.assertLogs(LatencyAnalyzer.__name__, level="INFO") as captured:
             analyzer.log_concurrency_timeline()
         record: LogRecord
         # Collect each logged message.

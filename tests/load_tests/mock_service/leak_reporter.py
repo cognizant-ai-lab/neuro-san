@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from logging import Logger
 from logging import getLogger
 from typing import Any
@@ -22,7 +21,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -39,14 +38,16 @@ class LeakReporter:
                          "FDs", "Threads", "Thread Delta",
                          "Conns", "CPU%", "Children"]
 
-    def __init__(self, args: Namespace) -> None:
+    def __init__(self, num_requests: int, num_rounds: int) -> None:
         """
         Initialize the reporter.
 
-        :param args: Parsed command-line arguments from MockLoadTestArguments.parse_args()
+        :param num_requests: Requests per round
+        :param num_rounds: Number of rounds
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._args: Namespace = args
+        self._num_requests: int = num_requests
+        self._num_rounds: int = num_rounds
 
     def log_results(self, rounds_result: Dict[str, Any]) -> None:
         """
@@ -58,14 +59,12 @@ class LeakReporter:
         totals: Dict[str, float] = rounds_result.get("totals")
         server_rows: List[Dict[str, Any]] = rounds_result.get("server_rows")
         mock_rows: List[Dict[str, Any]] = rounds_result.get("mock_rows")
-        total_requests: int = self._args.num_requests * self._args.num_rounds
+        total_requests: int = self._num_requests * self._num_rounds
         passed: int = totals.get("passed")
         failed: int = totals.get("failed")
         time_seconds: float = totals.get("time_seconds")
 
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  OVERALL RESULTS")
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        self.logger.info("\n%s", Formatters.section_header("OVERALL RESULTS"))
         self.logger.info("  Total requests: %s (%s passed, %s failed)", total_requests, passed, failed)
         time_text: str = DurationParser.format_minutes_seconds(time_seconds)
         self.logger.info("  Total time:     %s", time_text)
@@ -74,10 +73,8 @@ class LeakReporter:
             average_request_text: str = DurationParser.format_minutes_seconds(average_request_seconds)
             self.logger.info("  Avg per request: %s", average_request_text)
 
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)",
-                         self._args.num_rounds, total_requests)
-        self.logger.info("%s", Formatters.SEPARATOR_LINE)
+        title: str = f"LEAK ANALYSIS ACROSS {self._num_rounds} ROUNDS ({total_requests} total requests)"
+        self.logger.info("\n%s", Formatters.section_header(title))
 
         if server_rows:
             self.logger.info("\nNEURO-SAN SERVER:")
@@ -139,7 +136,8 @@ class LeakReporter:
         for snapshot_row in snapshot_rows:
             cells: List[str] = LeakReporter._format_snapshot_row(snapshot_row)
             table_rows.append(cells)
-        TableFormatter.log_table(LeakReporter.HEADER, table_rows)
+        table_formatter: TableFormatter = TableFormatter()
+        table_formatter.log_table(LeakReporter.HEADER, table_rows)
 
     def _log_overall_deltas(self, label: str, rows: List[Dict[str, Any]]) -> None:
         """
@@ -155,8 +153,7 @@ class LeakReporter:
         thread_delta: int = last_row.get("settled_threads") - first_row.get("before_threads")
         connections_delta: int = last_row.get("connections") - first_row.get("connections")
         children_delta: int = last_row.get("children") - first_row.get("children")
-        self.logger.info("\n%s overall deltas (round 1 before vs round %s settled):", label,
-                         self._args.num_rounds)
+        self.logger.info("\n%s overall deltas (round 1 before vs round %s settled):", label, self._num_rounds)
         self.logger.info("  RSS:         +%.1f MB", rss_delta_megabytes)
         self.logger.info("  FDs:         +%s", fds_delta)
         self.logger.info("  Threads:     +%s", thread_delta)

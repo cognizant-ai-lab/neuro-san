@@ -21,7 +21,7 @@ from leaf_common.time.timeout import Timeout
 
 from neuro_san.client.direct_agent_storage_util import DirectAgentStorageUtil
 from neuro_san.interfaces.concierge_session import ConciergeSession
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 from neuro_san.session.http_concierge_session import HttpConciergeSession
 
@@ -60,7 +60,7 @@ class ConciergeSessionFactory:
         #           actually checked for positive use.
         if session_type == "direct":
             # This only looks at public networks, which is what we want.
-            network_storage: AgentNetworkStorage = DirectAgentStorageUtil.create_network_storage()
+            network_storage: AgentStorageSource = DirectAgentStorageUtil.create_network_storage()
             session = DirectConciergeSession(network_storage, metadata=metadata)
         elif session_type in ("http", "https"):
 

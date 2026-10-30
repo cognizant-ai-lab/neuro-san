@@ -14,15 +14,12 @@
 #
 # END COPYRIGHT
 
-# Plain "import re": "from re import compile" would hide the builtin compile().
-import re
-from logging import Formatter
-from logging import INFO
 from logging import Logger
-from logging import StreamHandler
 from logging import getLogger
 from os.path import join
-from sys import stdout
+from re import Pattern
+# Renamed so it does not hide the builtin compile().
+from re import compile as compile_regex
 from threading import Event
 from threading import Thread
 from time import localtime
@@ -35,10 +32,10 @@ from typing import Optional
 from typing import TextIO
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-from psutil import Process
 
-from tests.load_tests.duration import DurationParser
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class ArrivalWatcher:
@@ -55,20 +52,23 @@ class ArrivalWatcher:
         """
         Store the stage settings for the monitor thread.
 
-        :param arrival_settings: A dictionary with "expected_count" (number of arrivals to wait for),
-                "fire_time_seconds" (perf_counter() value taken when the stage fired), "stop_event"
-                (Event that tells the monitor thread to stop), "client_process" (client
-                Process for the snapshot once all requests arrive, or None) and "primary_start_pattern"
-                (regex for the log line of a primary agent request arriving)
+        :param arrival_settings: A dict with the following keys:
+            "expected_count"         Number of arrivals to wait for
+            "fire_time_seconds"      perf_counter() value taken when the stage fired
+            "stop_event"             Event that tells the monitor thread to stop
+            "client_process"         Client Process for the snapshot once all requests arrive, or None
+            "primary_start_pattern"  Regex for the log line of a primary agent request arriving
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.resource_monitor: ResourceMonitor = ResourceMonitor()
         primary_start_pattern: str = arrival_settings.get("primary_start_pattern")
         self._expected_count: int = arrival_settings.get("expected_count")
-        self._fire_time_seconds: float = arrival_settings.get("fire_time_seconds")
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._settings: Dict[str, Any] = arrival_settings
         self._stop_event: Event = arrival_settings.get("stop_event")
-        self._client_process: Optional[Process] = arrival_settings.get("client_process")
-        self._primary_start_regex: re.Pattern = re.compile(primary_start_pattern)
-        self._progress_logger: Logger = self._get_progress_logger()
+        self._primary_start_regex: Pattern = compile_regex(primary_start_pattern)
+        # tests/load_tests/logging.hocon sends this logger to ProgressStreamHandler, so the dots stay on one line.
+        self._progress_logger: Logger = getLogger(self.__class__.__name__ + "Progress")
 
     def start(self, server_log: str, position: int, output_dir: Optional[str] = None) -> Thread:
         """
@@ -125,6 +125,7 @@ class ArrivalWatcher:
         :param server_log_file: Open server log, positioned where to start reading
         :param receipt_file: Open server_receipts.log, or None to log each receipt to the console
         """
+        fire_time_seconds: float = self._settings.get("fire_time_seconds")
         # "Start hello_world/streaming_chat" gives the agent label "hello_world".
         pattern_head: str = self._primary_start_regex.pattern.split("/")[0]
         head_words: List[str] = pattern_head.split(" ")
@@ -141,7 +142,7 @@ class ArrivalWatcher:
             count += 1
             now_seconds: float = perf_counter()
             timestamp: str = strftime("%H:%M:%S", localtime())
-            delta_seconds: float = now_seconds - self._fire_time_seconds
+            delta_seconds: float = now_seconds - fire_time_seconds
             delta_text: str = DurationParser.format_minutes_seconds(delta_seconds)
             detail: str = (f"  [server] {agent_label} request {count}/{self._expected_count} received"
                            f" [{timestamp}] (+{delta_text})")
@@ -162,34 +163,14 @@ class ArrivalWatcher:
         :param count: Number of arrivals seen
         :param elapsed_seconds: Seconds from firing to the last arrival
         """
+        client_process: Optional[TrackedProcess] = self._settings.get("client_process")
         if use_dots:
             self._progress_logger.info("\n")
             elapsed_text: str = DurationParser.format_minutes_seconds(elapsed_seconds)
-            self.logger.info("  All %s/%s requests received by server (%s)", count, self._expected_count,
-                             elapsed_text)
-        snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(self._client_process)
+            self.logger.info("  All %s/%s requests received by server (%s)", count, self._expected_count, elapsed_text)
+        snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(client_process)
         if snapshot:
             client_rss_megabytes: float = snapshot.get("rss_megabytes")
             client_cpu_percent: float = snapshot.get("cpu_percent")
-            self.logger.info("  Client AFTER: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes,
-                             client_cpu_percent)
-        ResourceMonitor.log_system_memory("RECEIVED")
-
-    def _get_progress_logger(self) -> Logger:
-        """
-        Get the logger for the console progress dots, set up on first use.
-
-        The dots go through logging, not print(). An empty terminator keeps the dots on one line, and
-        propagate=False stops the root logger from prefixing each dot with a timestamp or duplicating it.
-
-        :return: The progress logger
-        """
-        progress_logger: Logger = getLogger(self.__class__.__name__ + ".progress")
-        progress_logger.propagate = False
-        if not progress_logger.handlers:
-            progress_handler: StreamHandler = StreamHandler(stdout)
-            progress_handler.terminator = ""
-            progress_handler.setFormatter(Formatter("%(message)s"))
-            progress_logger.addHandler(progress_handler)
-            progress_logger.setLevel(INFO)
-        return progress_logger
+            self.logger.info("  Client AFTER: RSS %.1f MB, CPU %.1f%%", client_rss_megabytes, client_cpu_percent)
+        self.resource_monitor.log_system_memory("RECEIVED")

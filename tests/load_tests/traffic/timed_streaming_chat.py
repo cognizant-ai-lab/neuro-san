@@ -32,7 +32,8 @@ class TimedStreamingChat:
 
     The check happens per streamed message, so a request is abandoned within
     one message of the cap rather than exactly at it; the wait for a message
-    is bounded separately by the session's idle timeout.
+    is bounded separately by the session's read timeout, the lower of
+    --idle-timeout and --request-timeout (AgentRequestExecutor).
     """
 
     def __init__(

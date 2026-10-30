@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from argparse import Namespace
 from shutil import rmtree
 from tempfile import mkdtemp
 from typing import Any
@@ -40,16 +39,19 @@ class TestServerOnlyMonitor(TestCase):
         Make a scratch output directory and a monitor with no server process and no server log.
         """
         self._dir: str = mkdtemp()
-        args: Namespace = Namespace(server_log=None, host="localhost", port=30011, https=False, agent="music_nerd",
-                                    stage_timeout=30)
+        server_checker: ServerChecker = ServerChecker("localhost", 30011, False)
         monitor_parts: Dict[str, Any] = {
             "server_process": None,
             "log_monitor": None,
             "history_recorder": None,
-            "server_checker": ServerChecker(args),
+            "server_checker": server_checker,
+            "agent": "music_nerd",
+            "host": "localhost",
+            "server_log": None,
+            "stage_timeout_seconds": 30,
         }
         profile: AgentProfile = AgentProfile("hello_world", {"estimated_tokens_per_request": 1000})
-        self._monitor: ServerOnlyMonitor = ServerOnlyMonitor(args, profile, monitor_parts)
+        self._monitor: ServerOnlyMonitor = ServerOnlyMonitor(profile, monitor_parts)
 
     @override
     def tearDown(self) -> None:

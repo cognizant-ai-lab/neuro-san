@@ -18,7 +18,7 @@ from argparse import ArgumentTypeError
 from typing import List
 from unittest import TestCase
 
-from tests.load_tests.duration import DurationParser
+from tests.load_tests.reporting.duration_parser import DurationParser
 
 
 class TestDurationParser(TestCase):
