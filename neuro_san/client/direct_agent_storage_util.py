@@ -19,19 +19,20 @@ from typing import Dict
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.interfaces.storage_class import StorageClass
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 
 
 class DirectAgentStorageUtil:
     """
-    Sets up AgentNetworkStorage for direct usage.
+    Sets up AgentStorageSource for direct usage.
     """
 
     @staticmethod
     def create_network_storage(manifest_networks: Dict[str, Dict[str, AgentNetwork]] = None,
-                               storage_type: str = StorageClass.PUBLIC) -> AgentNetworkStorage:
+                               storage_type: str = StorageClass.PUBLIC) -> AgentStorageSource:
         """
-        Creates an AgentNetworkStorage instance for a given type.
+        Creates an AgentStorageSource instance for a given type.
 
         :param manifest_networks: Optional structure that is handed back from a RegistryManifestRestorer.restore()
                         call.  This has major keys being different network storage options like
@@ -40,9 +41,9 @@ class DirectAgentStorageUtil:
                         by calling the RegistryManifestRestorer.
         :param storage_type: The type of storage ("public" or "protected")
                         Default value is "public".
-        :return: An AgentNetworkStorage populated from the Registry Manifest
+        :return: An AgentStorageSource populated from the Registry Manifest
         """
-        network_storage: AgentNetworkStorage = AgentNetworkStorage()
+        network_storage: AgentStorageSource = AgentNetworkStorage()
 
         if manifest_networks is None:
             manifest_restorer: RegistryManifestRestorer = RegistryManifestRestorer()
@@ -52,9 +53,5 @@ class DirectAgentStorageUtil:
         if storage_networks is None:
             return None
 
-        agent_name: str = None
-        agent_network: AgentNetwork = None
-        for agent_name, agent_network in storage_networks.items():
-            network_storage.add_agent_network(agent_name, agent_network)
-
+        network_storage.setup_agent_networks(storage_networks)
         return network_storage

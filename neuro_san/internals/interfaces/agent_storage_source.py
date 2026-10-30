@@ -14,18 +14,44 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Dict
+from typing import List
+
+from abc import abstractmethod
+
+from leaf_common.utils.interface import interface
 
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 
 
+@interface
 class AgentStorageSource:
     """
     Interface onto AgentNetworkStorage so that there is not a tangle with the service side.
     """
 
+    @abstractmethod
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
         Get AgentNetworkProvider for a specific agent
         :param agent_name: name of an agent
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_agent_names(self) -> List[str]:
+        """
+        :return: The list of agent names being managed by the implementation.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
+        """
+        Replace agents networks with a new collection.
+        Previous state could be empty.
+
+        :param agent_networks: A dictionary of agent name -> AgentNetwork
         """
         raise NotImplementedError
