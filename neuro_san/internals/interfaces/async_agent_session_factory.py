@@ -24,7 +24,9 @@ class AsyncAgentSessionFactory:
     Creates asynchronous AsyncAgentSessions for external agents.
     """
 
-    def create_session(self, agent_url: str, invocation_context: Any, invocation: str = None) -> AsyncAgentSession:
+    async def create_session(self, agent_url: str,
+                             invocation_context: Any,
+                             invocation: str = None) -> AsyncAgentSession:
         """
         :param agent_url: A url string pointing to an external agent that came from
                     a tools list in an agent spec.

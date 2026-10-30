@@ -52,9 +52,9 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             # Only store the reference if we will need it
             self.storage_source_dict = network_storage_dict
 
-    def create_session(self, agent_url: str,
-                       invocation_context: InvocationContext,
-                       invocation: str = None) -> AsyncAgentSession:
+    async def create_session(self, agent_url: str,
+                             invocation_context: InvocationContext,
+                             invocation: str = None) -> AsyncAgentSession:
         """
         :param agent_url: An url string pointing to an external agent that came from
                     a tools list in an agent spec.
@@ -69,9 +69,9 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
         server_port: int = invocation_context.get_port()
         agent_location: Dict[str, str] = ExternalAgentParsing.parse_external_agent(agent_url, server_port=server_port)
-        session: AsyncAgentSession = self.create_session_from_location_dict(agent_location,
-                                                                            invocation_context,
-                                                                            invocation)
+        session: AsyncAgentSession = await self.create_session_from_location_dict(agent_location,
+                                                                                  invocation_context,
+                                                                                  invocation)
         return session
 
     def get_networks_order(self, storage_source_dict: Dict[str, AgentStorageSource]) -> List[str]:
@@ -94,9 +94,9 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
         return networks_order
 
-    def create_session_from_location_dict(self, agent_location: Dict[str, str],
-                                          invocation_context: InvocationContext,
-                                          invocation: str = None) -> AsyncAgentSession:
+    async def create_session_from_location_dict(self, agent_location: Dict[str, str],
+                                                invocation_context: InvocationContext,
+                                                invocation: str = None) -> AsyncAgentSession:
         """
         Creates the session for an external agent from its parsed location, in-process when possible.
 
@@ -137,7 +137,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
                 storage_source: AgentStorageSource = self.storage_source_dict.get(storage_source_name)
                 # Be sure we have something
-                agent_network_provider = storage_source.get_agent_network_provider(agent_name)
+                agent_network_provider = await storage_source.async_get_agent_network_provider(agent_name)
                 if agent_network_provider is None:
                     continue
 

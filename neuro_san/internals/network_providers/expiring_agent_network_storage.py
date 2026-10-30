@@ -405,6 +405,15 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentStorageSourc
         return None
 
     @override
+    async def async_get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
+        """
+        Get AgentNetworkProvider for a specific agent
+
+        :param agent_name: name of an agent
+        """
+        return self.get_agent_network_provider(agent_name)
+
+    @override
     def add_listener(self, listener: AgentStateListener):
         """
         Add a listener to be notified when status of underlying object changes.

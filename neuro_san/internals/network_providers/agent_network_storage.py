@@ -154,6 +154,14 @@ class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
         return SingleAgentNetworkProvider(agent_name, self.agents_table)
 
     @override
+    async def async_get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
+        """
+        Get AgentNetworkProvider for a specific agent
+        :param agent_name: name of an agent
+        """
+        return self.get_agent_network_provider(agent_name)
+
+    @override
     def get_agent_names(self) -> List[str]:
         """
         Return static list of agent names.
