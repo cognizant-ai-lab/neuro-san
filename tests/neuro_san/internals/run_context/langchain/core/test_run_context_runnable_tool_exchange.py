@@ -194,6 +194,29 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         self.assertEqual(runnable.chat_history[5].tool_calls, [self._tool_call("call_1")])
         self.assertEqual(runnable.chat_history[6].content, "{'running_cost': 6.0}")
 
+    def test_find_tool_exchange_pairs_each_round_with_its_own_result(self) -> None:
+        """
+        Two rounds of one turn that reuse a call id each keep their own result,
+        since a round's results are looked up only within that round.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")], id="ai_1")
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1")
+        second_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")], id="ai_2")
+        second_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1")
+        state: Dict[str, Any] = {"messages": [human, first_call, first_result, second_call, second_result,
+                                              AIMessage(content="the answer", id="ai_3")]}
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
+
+        exchange: List[BaseMessage] = runnable.find_tool_exchange({"messages": [human]}, state)
+
+        self.assertEqual(len(exchange), 4)
+        self.assertEqual(exchange[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(exchange[3].content, "{'running_cost': 6.0}")
+        # The copies keep the message ids, which mark the rounds as recorded.
+        self.assertEqual(exchange[0].id, "ai_1")
+        self.assertEqual(exchange[2].id, "ai_2")
+
     def test_find_tool_exchange_keeps_the_result_status(self) -> None:
         """
         A result that reports a failed tool keeps its error status in the history
@@ -339,3 +362,78 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
         self.assertEqual(chat_history[1].tool_call_id, "toolu_1")
         self.assertEqual(chat_history[2].tool_calls, [self._tool_call("toolu_2")])
         self.assertEqual(chat_history[3].tool_call_id, "toolu_2")
+
+    async def test_invoke_agent_chain_keeps_two_streamed_rounds_that_share_a_call_id(self) -> None:
+        """
+        Two rounds of one turn that reuse a call id are both recorded as the chain
+        streams, each once: rounds are told apart by message id, as LangGraph gives
+        every message in the state an id.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")], id="ai_1")
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1", id="t_1")
+        second_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")], id="ai_2")
+        second_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1", id="t_2")
+        first_round: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        second_round: Dict[str, Any] = {"messages": [human, first_call, first_result, second_call, second_result]}
+        answered: Dict[str, Any] = {"messages": second_round.get("messages") + [AIMessage(content="the answer",
+                                                                                          id="ai_3")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of,
+                                                            first_round, second_round, answered))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [4])
+        self.assertEqual(chat_history[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(chat_history[2].tool_calls, [self._tool_call("call_1")])
+        self.assertEqual(chat_history[3].content, "{'running_cost': 6.0}")
+
+    async def test_invoke_agent_chain_keeps_a_retry_round_that_reuses_a_call_id(self) -> None:
+        """
+        A retry whose round reuses a call id of the failed attempt keeps both rounds:
+        the retry's AIMessage has its own message id, so its round is recorded too.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")], id="ai_1")
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1", id="t_1")
+        retry_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")], id="ai_2")
+        retry_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1", id="t_2")
+        failed_round: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        retry_round: Dict[str, Any] = {"messages": [human, retry_call, retry_result]}
+        answered: Dict[str, Any] = {"messages": retry_round.get("messages") + [AIMessage(content="the answer",
+                                                                                         id="ai_3")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        # The first attempt fails after its round. The retry starts again from the same inputs.
+        agent_chain.astream = MagicMock(side_effect=[
+            RunContextRunnableTestHelpers.state_stream(failed_round, KeyError("missing")),
+            RunContextRunnableTestHelpers.state_stream(retry_round, answered),
+        ])
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        # should_log() is True, so the retry notice is journaled too.
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(),
+            sensitive_logger=MagicMock(should_log=MagicMock(return_value=True)))
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 2)
+
+        # The retry notice is journaled after the failed attempt's round, the answer after both rounds.
+        self.assertEqual(lengths, [2, 4])
+        self.assertEqual(chat_history[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(chat_history[2].tool_calls, [self._tool_call("call_1")])
+        self.assertEqual(chat_history[3].content, "{'running_cost': 6.0}")

@@ -429,9 +429,15 @@ class RunContextRunnable(NeuroSanRunnable):
         or a step limit is left out. The answer, the last AIMessage of the turn,
         is not included; it is journaled separately. Contents are projected to
         history-safe text so no provider-native blocks reach another provider
-        or the client. An exchange this turn already put in the history is
-        skipped: every later state still holds it, and a summarization that
-        keeps the round in context copies it there first.
+        or the client.
+
+        Each round of tool calls is handled on its own: its results are the
+        ToolMessages between its AIMessage and the next one. A round this turn
+        already put in the history is skipped: every later state still holds it,
+        and a summarization that keeps the round in context copies it there first.
+        Rounds are told apart by message id, which LangGraph gives every message in
+        the state. So two rounds that share a call id are both kept, even when one
+        of them comes from a retry.
 
         :param inputs: The inputs the agent chain was invoked with
         :param chain_result: The result from invoking the agent chain
@@ -446,23 +452,27 @@ class RunContextRunnable(NeuroSanRunnable):
             return []
 
         turn: List[BaseMessage] = RunContextRunnable.before_answer(messages[start + 1:])
-        results: Dict[str, ToolMessage] = RunContextRunnable.results_by_call_id(turn)
-        recorded_ids: Set[str] = self.recorded_call_ids(inputs)
+        recorded_keys: Set[str] = self.recorded_round_keys(inputs)
 
         exchange: List[BaseMessage] = []
         # Each tool-calling AIMessage goes in followed by the results of its calls.
+        index: int = 0
         message: BaseMessage = None
-        for message in turn:
+        for index, message in enumerate(turn):
             if not isinstance(message, AIMessage) or not message.tool_calls:
                 continue
-            if RunContextRunnable.is_recorded(message, recorded_ids):
+            if RunContextRunnable.is_recorded(message, recorded_keys):
                 continue
+            round_tool_messages: List[ToolMessage] = RunContextRunnable.round_results(turn, index + 1)
+            results: Dict[str, ToolMessage] = RunContextRunnable.results_by_call_id(round_tool_messages)
             paired: Optional[List[ToolMessage]] = RunContextRunnable.paired_results(message, results)
             if paired is None:
                 # A call without its result would be rejected on replay.
                 continue
+            # The copy keeps the message id, which marks the round as recorded.
             exchange.append(AIMessage(content=ContentUtils.history_safe_text(message),
-                                      tool_calls=message.tool_calls))
+                                      tool_calls=message.tool_calls,
+                                      id=message.id))
             # Results follow their call, in call order. The status is kept: LangChain sets
             # "error" on a call it could not run, and some providers pass that on to the model.
             result: ToolMessage = None
@@ -472,15 +482,15 @@ class RunContextRunnable(NeuroSanRunnable):
                                             status=result.status))
         return exchange
 
-    def recorded_call_ids(self, inputs: Dict[str, Any]) -> Set[str]:
+    def recorded_round_keys(self, inputs: Dict[str, Any]) -> Set[str]:
         """
-        Collects the ids of the tool calls this turn has already put in the chat history.
+        Collects the keys of the tool rounds this turn has already put in the chat history.
 
         Messages from earlier turns are left out. A model can give a new call the
         same id as a call from an earlier turn, and that call still has to be recorded.
 
         :param inputs: The inputs the agent chain was invoked with
-        :return: The ids of the tool calls this turn added to the chat history.
+        :return: The round_keys() of every tool round this turn added to the chat history.
                  Empty when no history is kept.
         """
         # wait_on_run() builds the inputs from a shallow copy of the history, so the
@@ -494,35 +504,78 @@ class RunContextRunnable(NeuroSanRunnable):
         for message in input_messages:
             earlier.add(id(message))
 
-        ids: Set[str] = set()
+        keys: Set[str] = set()
         # No history kept means nothing recorded.
         history: List[BaseMessage] = self.chat_history or []
-        # Collect the id of every tool call this turn added to the history.
+        # Collect the keys of every tool round this turn added to the history.
         for message in history:
             if id(message) in earlier:
                 continue
             if not isinstance(message, AIMessage) or not message.tool_calls:
                 continue
-            tool_call: Dict[str, Any] = None
-            for tool_call in message.tool_calls:
-                ids.add(tool_call.get("id"))
-        return ids
+            keys.update(RunContextRunnable.round_keys(message))
+        return keys
 
     @staticmethod
-    def is_recorded(message: AIMessage, recorded_ids: Set[str]) -> bool:
+    def round_keys(message: AIMessage) -> List[str]:
         """
-        Tells whether a tool-calling message is already in the chat history.
+        Gives the keys that tell a tool round apart from the other rounds of a turn.
+
+        LangGraph gives every message in the chain state an id, and the history copy
+        of a round keeps it, so the message id is the key. Two rounds can share a call
+        id, even across a retry, but each has its own message id. A message without an
+        id is known by its call ids instead.
 
         :param message: An AIMessage with tool calls
-        :param recorded_ids: The ids of the tool calls the history already holds
-        :return: True if any call of the message is among them
+        :return: The message id, or the ids of its tool calls when it has none,
+                 each with a prefix that says which kind of id it is
         """
-        # One shared id is enough: the whole exchange was copied together.
+        if message.id:
+            return [f"message:{message.id}"]
+        keys: List[str] = []
+        # Without a message id, the round is known by its calls.
         tool_call: Dict[str, Any] = None
         for tool_call in message.tool_calls:
-            if tool_call.get("id") in recorded_ids:
+            keys.append(f"call:{tool_call.get('id')}")
+        return keys
+
+    @staticmethod
+    def is_recorded(message: AIMessage, recorded_keys: Set[str]) -> bool:
+        """
+        Tells whether a tool round is already in the chat history.
+
+        :param message: An AIMessage with tool calls
+        :param recorded_keys: The round_keys() of the rounds the history already holds
+        :return: True if any key of the message is among them
+        """
+        # One shared key is enough: the whole round was copied together.
+        key: str = None
+        for key in RunContextRunnable.round_keys(message):
+            if key in recorded_keys:
                 return True
         return False
+
+    @staticmethod
+    def round_results(turn: List[BaseMessage], start: int) -> List[ToolMessage]:
+        """
+        Collects the tool results of one round: the ToolMessages between its
+        AIMessage and the next AIMessage of the turn.
+
+        A later round can reuse a call id. Looking only within the round keeps each
+        call paired with its own result.
+
+        :param turn: The messages of a turn
+        :param start: The index right after the round's AIMessage
+        :return: The round's ToolMessages, in order
+        """
+        results: List[ToolMessage] = []
+        index: int = start
+        # The next AIMessage starts the next round.
+        while index < len(turn) and not isinstance(turn[index], AIMessage):
+            if isinstance(turn[index], ToolMessage):
+                results.append(turn[index])
+            index += 1
+        return results
 
     @staticmethod
     def before_answer(turn: List[BaseMessage]) -> List[BaseMessage]:
@@ -540,17 +593,17 @@ class RunContextRunnable(NeuroSanRunnable):
         return turn
 
     @staticmethod
-    def results_by_call_id(turn: List[BaseMessage]) -> Dict[str, ToolMessage]:
+    def results_by_call_id(messages: List[BaseMessage]) -> Dict[str, ToolMessage]:
         """
-        Indexes the tool results of a turn by the call each one answers.
+        Indexes tool results by the call each one answers.
 
-        :param turn: The messages of a turn
-        :return: The turn's ToolMessages, by the id of the tool call each one answers
+        :param messages: The messages to look through, such as the results of one round
+        :return: The ToolMessages among them, by the id of the tool call each one answers
         """
         results: Dict[str, ToolMessage] = {}
         # Index the results by the call they answer.
         message: BaseMessage = None
-        for message in turn:
+        for message in messages:
             if isinstance(message, ToolMessage) and message.tool_call_id:
                 results[message.tool_call_id] = message
         return results
@@ -564,7 +617,7 @@ class RunContextRunnable(NeuroSanRunnable):
         merge repeated ids on replay, so a message that repeats one is not kept.
 
         :param message: An AIMessage with tool calls
-        :param results: The turn's ToolMessages by tool call id
+        :param results: The round's ToolMessages by tool call id
         :return: One ToolMessage per tool call, in call order, or None when any
                  call has no result or two calls share an id
         """
