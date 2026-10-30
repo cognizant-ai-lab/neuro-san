@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import List
 
 from typing_extensions import override
 
@@ -31,11 +32,34 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         """
         Get AgentNetworkProvider for a specific agent
 
-        :param agent_name: name of an agent
+        :param agent_name: name of an agent which in this case is a full URL
+        :return: an AgentNetworkProvider corresponding to the contents of the URL or
+                None if the file was not found or had the wrong suffix.
         """
+        if not FetchedAgentNetworkStorage.has_correct_suffix(agent_name):
+            return None
+
         # Use the synchronous version on the super class to maybe return what was already cached.
         network_provider: AgentNetworkProvider = super().get_agent_network_provider(agent_name)
         if network_provider is not None:
             return network_provider
 
         return network_provider
+
+    @staticmethod
+    def has_correct_suffix(agent_name: str) -> bool:
+        """
+        :param agent_name: name of an agent
+        :return: whether the agent name has the correct filename suffix
+        """
+        # We only do data file fetching.
+        suffixes: List[str] = [".hocon", ".json"]
+
+        suffix: str = None
+        found_suffix: bool = False
+        for suffix in suffixes:
+            if agent_name.endswith(suffix):
+                found_suffix = True
+                break
+
+        return found_suffix
