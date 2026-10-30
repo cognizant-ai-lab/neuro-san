@@ -115,6 +115,7 @@ class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
         # Figure out current_agents - new_agents (in terms of sets),
         # but still keep ordering intact.
         agents_to_remove: List[str] = []
+        agent_name: str = None
         for agent_name in current_agents:
             if agent_name not in new_agents:
                 agents_to_remove.append(agent_name)
