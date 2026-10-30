@@ -70,7 +70,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         session.function = AsyncMock(return_value={"function": function_json})
 
         session_factory = MagicMock()
-        session_factory.create_session = MagicMock(return_value=session)
+        session_factory.create_session = AsyncMock(return_value=session)
 
         invocation_context = MagicMock()
         invocation_context.get_async_session_factory = MagicMock(return_value=session_factory)
@@ -271,7 +271,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         is a connectivity problem and must keep the "unreachable" banner.
         """
         creator: ExternalAgentToolCreator = self.make_creator({})
-        session = creator.invocation_context.get_async_session_factory().create_session()
+        session = creator.invocation_context.get_async_session_factory().create_session.return_value
         session.function = AsyncMock(side_effect=ValueError("connection refused"))
 
         tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
