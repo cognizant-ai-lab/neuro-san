@@ -279,6 +279,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentStorageSourc
     def remove_agent_network(self, agent_name: str):
         """
         Remove agent name and its AgentNetwork from service internal tables.
+        Note: This method should be called while holding the lock of the network_storage
         :param agent_name: name of an agent to remove
         """
         self.reservations_table.pop(agent_name, None)
