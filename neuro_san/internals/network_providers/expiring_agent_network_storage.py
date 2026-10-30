@@ -289,8 +289,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentStorageSourc
     @override
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """
-        Replace agents networks with a new collection.
-        Previous state could be empty.
+        The implementation of this method always raises NotImplementedError
+        Please use add_reservations() instead.
 
         :param agent_networks: A dictionary of agent name -> AgentNetwork
         """
