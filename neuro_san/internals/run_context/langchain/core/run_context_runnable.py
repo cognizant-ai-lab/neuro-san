@@ -253,7 +253,7 @@ class RunContextRunnable(NeuroSanRunnable):
                 # run_chain() follows the agent loop step by step so that each tool round is
                 # recorded as it completes. A step that fails still raises here, as it would
                 # from ainvoke().
-                chain_result: Dict[str, Any] = await self.run_chain(inputs, runnable_config)
+                chain_result: Optional[Dict[str, Any]] = await self.run_chain(inputs, runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
@@ -330,7 +330,7 @@ class RunContextRunnable(NeuroSanRunnable):
         # Chat history is updated in write_message
         await self.journal.write_message(return_message)
 
-    async def run_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]) -> Dict[str, Any]:
+    async def run_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Runs the agent chain, the agent's loop of model calls and tool calls, and
         returns its final state.
@@ -385,7 +385,7 @@ class RunContextRunnable(NeuroSanRunnable):
         :return: The loop's final state, the same value ainvoke() returns.
                  None when the chain produced no state at all.
         """
-        final_state: Dict[str, Any] = None
+        final_state: Optional[Dict[str, Any]] = None
         # Each state is a snapshot of the agent loop after one step (a model call, a round
         # of tool calls or a middleware hook), not a stream of tokens; see the docstring.
         state: Dict[str, Any] = None
@@ -395,7 +395,7 @@ class RunContextRunnable(NeuroSanRunnable):
         return final_state
 
     def record_tool_exchange(self, inputs: Dict[str, Any],
-                             chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]):
+                             chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) -> None:
         """
         Appends this turn's tool calls and their results to the chat history,
         ahead of the answer that is journaled next.
