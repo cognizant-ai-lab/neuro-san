@@ -137,8 +137,8 @@ class HttpServer(AgentStateListener):
         network_storage_dict: Dict[str, AgentStorageSource] = self.server_context.get_network_storage_dict()
         for network_storage in network_storage_dict.values():
             # We assume each AgentStorageSource is also a Listenable[AgentStateListener]
-            lisentable: Listenable[AgentStateListener] = network_storage
-            lisentable.add_listener(self)
+            listenable: Listenable[AgentStateListener] = network_storage
+            listenable.add_listener(self)
 
         self.server_context.set_agent_authorizer(self.authorization_policy)
 

@@ -76,7 +76,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
     def get_networks_order(self, storage_source_dict: Dict[str, AgentStorageSource]) -> List[str]:
         """
-        :param network_storage_dict: The dictionary of AgentStorageSource instances to check for networks.
+        :param storage_source_dict: The dictionary of AgentStorageSource instances to check for networks.
         :return: A List of AgentStorageSource names in the order they should be checked.
         Note: we need our "temp" storage to be checked last,
         because in the general case this might involve querying external storage, which is potentially slow.
