@@ -40,8 +40,8 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
     """
     Tests for how RunContextRunnable records a turn's tool calls and results
     in the chat history: finding the turn's exchanges in the chain state,
-    pairing each call with its result, leaving out what the history already
-    holds, and recording while the chain streams its states.
+    pairing each call with its result, leaving out what this turn already
+    recorded, and recording while the chain streams its states.
     """
 
     @staticmethod
@@ -167,6 +167,32 @@ class TestRunContextRunnableToolExchange(IsolatedAsyncioTestCase):
 
         runnable.chat_history = [human]
         self.assertEqual(len(runnable.find_tool_exchange({"messages": [human]}, state)), 2)
+
+    def test_record_tool_exchange_keeps_a_round_that_reuses_an_earlier_turn_call_id(self) -> None:
+        """
+        A round whose call id is the same as a call from an earlier turn is recorded,
+        and only once: only what this turn added counts as already recorded.
+        """
+        earlier_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")])
+        earlier_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1")
+        earlier: List[BaseMessage] = [HumanMessage(content="earlier", id="h0"), earlier_call, earlier_result,
+                                      AIMessage(content="earlier answer", id="a0")]
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        # As in wait_on_run(), the inputs hold the same message objects as the history.
+        inputs: Dict[str, Any] = {"messages": earlier + [human]}
+        new_call: AIMessage = AIMessage(content="", tool_calls=[self._tool_call("call_1")])
+        new_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1")
+        state: Dict[str, Any] = {"messages": inputs.get("messages") + [new_call, new_result]}
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
+        runnable.chat_history = earlier + [human]
+
+        # Every later state still holds the round, so it is seen twice here.
+        runnable.record_tool_exchange(inputs, state)
+        runnable.record_tool_exchange(inputs, state)
+
+        self.assertEqual(len(runnable.chat_history), 7)
+        self.assertEqual(runnable.chat_history[5].tool_calls, [self._tool_call("call_1")])
+        self.assertEqual(runnable.chat_history[6].content, "{'running_cost': 6.0}")
 
     def test_find_tool_exchange_keeps_the_result_status(self) -> None:
         """

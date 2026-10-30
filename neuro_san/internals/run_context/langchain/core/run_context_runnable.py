@@ -429,8 +429,9 @@ class RunContextRunnable(NeuroSanRunnable):
         or a step limit is left out. The answer, the last AIMessage of the turn,
         is not included; it is journaled separately. Contents are projected to
         history-safe text so no provider-native blocks reach another provider
-        or the client. An exchange the history already holds is skipped: a
-        summarization that keeps the round in context copies it there first.
+        or the client. An exchange this turn already put in the history is
+        skipped: every later state still holds it, and a summarization that
+        keeps the round in context copies it there first.
 
         :param inputs: The inputs the agent chain was invoked with
         :param chain_result: The result from invoking the agent chain
@@ -446,7 +447,7 @@ class RunContextRunnable(NeuroSanRunnable):
 
         turn: List[BaseMessage] = RunContextRunnable.before_answer(messages[start + 1:])
         results: Dict[str, ToolMessage] = RunContextRunnable.results_by_call_id(turn)
-        recorded_ids: Set[str] = self.recorded_call_ids()
+        recorded_ids: Set[str] = self.recorded_call_ids(inputs)
 
         exchange: List[BaseMessage] = []
         # Each tool-calling AIMessage goes in followed by the results of its calls.
@@ -462,8 +463,8 @@ class RunContextRunnable(NeuroSanRunnable):
                 continue
             exchange.append(AIMessage(content=ContentUtils.history_safe_text(message),
                                       tool_calls=message.tool_calls))
-            # Results follow their call, in call order. The status says whether
-            # the tool failed, which providers pass on to the model.
+            # Results follow their call, in call order. The status is kept: LangChain sets
+            # "error" on a call it could not run, and some providers pass that on to the model.
             result: ToolMessage = None
             for result in paired:
                 exchange.append(ToolMessage(content=ContentUtils.history_safe_text(result),
@@ -471,19 +472,35 @@ class RunContextRunnable(NeuroSanRunnable):
                                             status=result.status))
         return exchange
 
-    def recorded_call_ids(self) -> Set[str]:
+    def recorded_call_ids(self, inputs: Dict[str, Any]) -> Set[str]:
         """
-        Collects the ids of the tool calls already recorded in the chat history.
+        Collects the ids of the tool calls this turn has already put in the chat history.
 
-        :return: The ids of the tool calls the chat history already holds.
+        Messages from earlier turns are left out. A model can give a new call the
+        same id as a call from an earlier turn, and that call still has to be recorded.
+
+        :param inputs: The inputs the agent chain was invoked with
+        :return: The ids of the tool calls this turn added to the chat history.
                  Empty when no history is kept.
         """
+        # wait_on_run() builds the inputs from a shallow copy of the history, so the
+        # messages of earlier turns are the same objects in both lists.
+        earlier: Set[int] = set()
+        input_messages: List[BaseMessage] = []
+        if isinstance(inputs, dict):
+            input_messages = inputs.get("messages") or []
+        message: BaseMessage = None
+        # Note each input message by its identity.
+        for message in input_messages:
+            earlier.add(id(message))
+
         ids: Set[str] = set()
         # No history kept means nothing recorded.
         history: List[BaseMessage] = self.chat_history or []
-        # Collect the id of every tool call already in the history.
-        message: BaseMessage = None
+        # Collect the id of every tool call this turn added to the history.
         for message in history:
+            if id(message) in earlier:
+                continue
             if not isinstance(message, AIMessage) or not message.tool_calls:
                 continue
             tool_call: Dict[str, Any] = None
