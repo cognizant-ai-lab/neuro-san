@@ -354,8 +354,10 @@ class RunContextRunnable(NeuroSanRunnable):
 
         This keeps two kinds of tool rounds that the final state can miss: a round that
         completed before a later step failed, and a round that a middleware which
-        summarizes older messages (such as NeuroSanSummarizationMiddleware) replaced
-        with a summary later in the turn. An error raised by a step leaves this loop
+        summarizes older messages replaced with a summary later in the turn.
+        NeuroSanSummarizationMiddleware does that with keep_summary_in_context false;
+        with it true, the middleware also puts the summary in place of the round in the
+        chat history. An error raised by a step leaves this loop
         just as it leaves ainvoke(), and invoke_agent_chain() catches and retries it.
         A retry runs the chain again from the same inputs, so the rounds of a failed
         attempt stay in the history next to the rounds of the retry.

@@ -426,7 +426,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
 
         With a tool_call_id it is the ToolMessage that answers a tool call of the AI
         message before it. Without one it is the stand-alone AgentToolResultMessage
-        form, which no model accepts, so on the chat-history leg it is left out.
+        form, which some models reject, so on the chat-history leg it is left out.
 
         :param content: The content of the message, its text or a list of content blocks
         :param chat_message: The ChatMessage dictionary
