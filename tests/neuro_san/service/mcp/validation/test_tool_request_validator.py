@@ -42,7 +42,7 @@ class TestToolRequestValidator(TestCase):
     # The components a ChatRequest can reach; the validator prunes every other one.
     CHAT_REQUEST_COMPONENTS: List[str] = [
         "ChatContext", "ChatFilter", "ChatHistory", "ChatMessage", "ChatRequest", "ContentBlocks", "MimeData",
-        "Origin",
+        "Origin", "ToolCall",
     ]
 
     # A user_message carrying one text block in the tagged wrapper from chat.proto.

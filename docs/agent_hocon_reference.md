@@ -1010,9 +1010,11 @@ _Front Man only_
 An integer which tells the server how many of the most recent chat history messages
 to send back in its chat_context field which allows for continuing a conversation
 on the next client invocation.  By default this value is None, indicating there is no limit.
+A value of 1 or less also means no limit.
 
 This is useful when end-user conversations with agents are expected to be lengthy and/or change
-topics frequently.
+topics frequently. See [How much history comes back](clients.md#how-much-history-comes-back) for how
+the limit counts messages and why the history can come back empty.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### verbose

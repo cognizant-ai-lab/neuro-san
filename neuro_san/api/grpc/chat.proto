@@ -80,6 +80,21 @@ message ContentBlocks {
 }
 
 
+// A tool call made by an AI message. Its result is the AGENT_TOOL_RESULT
+// message whose tool_call_id equals this id.
+message ToolCall {
+
+    // The id the model gave the call.
+    string id = 1 [json_name="id"];
+
+    // The name of the tool that was called.
+    string name = 2 [json_name="name"];
+
+    // The arguments the call was made with.
+    google.protobuf.Struct args = 3 [json_name="args"];
+}
+
+
 // Structure describing a single chat message.
 // This could be a single response, or a list of these might comprise
 // a chat history.
@@ -158,4 +173,16 @@ message ChatMessage {
     // Optional structured content of the message, tagged with its format.
     // The text field is always populated and remains the flattened view.
     ContentBlocks content_blocks = 9 [json_name="content_blocks"];
+
+    // Optional tool calls an AI message made. Each is answered by the
+    // AGENT_TOOL_RESULT message that follows with the matching tool_call_id.
+    // A chat history keeps both, so the next turn sees where a value came from.
+    repeated ToolCall tool_calls = 10 [json_name="tool_calls"];
+
+    // Optional id of the tool call an AGENT_TOOL_RESULT message answers.
+    string tool_call_id = 11 [json_name="tool_call_id"];
+
+    // Optional status of the tool call an AGENT_TOOL_RESULT message answers:
+    // "error" when the tool failed. Absent when the tool succeeded.
+    string tool_status = 12 [json_name="tool_status"];
 }
