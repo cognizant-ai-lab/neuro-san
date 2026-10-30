@@ -461,7 +461,7 @@ class LangChainRunContext(RunContext):
                 if tool_message is not None:
                     # Write the tool message to the journal.
                     # The chat history is not updated here. After each step of the agent graph,
-                    # RunContextRunnable.record_tool_exchange() adds the tool call and its result as a pair.
+                    # ToolExchangeRecorder.record_tool_exchange() adds the tool call and its result as a pair.
                     await self.journal.write_message(tool_message)
 
         # Create a run to return

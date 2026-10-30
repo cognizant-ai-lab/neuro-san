@@ -36,6 +36,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
+from langchain_core.messages.tool import ToolMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
 from openai import RateLimitError
@@ -73,6 +74,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
     invoke_agent_chain journals the provider-native answer (normalized to
     standard blocks) when it carries block content, and keeps the plain
     text-only AIMessage shape for everything else.
+
+    invoke_agent_chain also puts each turn's tool rounds in the chat history
+    as the chain streams, before the answer is journaled. ToolExchangeRecorder's
+    own tests cover how the rounds are found and paired.
     """
 
     @staticmethod
@@ -704,3 +709,187 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         # The SDK error only reads request, status_code and headers from its response.
         response: MagicMock = MagicMock(status_code=429)
         return RateLimitError("rate limited", response=response, body=None)
+
+    @staticmethod
+    def _record_history_length(lengths: List[int], chat_history: List[BaseMessage],
+                               message: BaseMessage, *_args: Any, **_kwargs: Any) -> None:
+        """
+        Note how many messages the chat history holds when the journal is written to,
+        standing in for Journal.write_message.
+
+        :param lengths: The list that collects the chat history length at each write
+        :param chat_history: The chat history being watched
+        :param message: The message being journaled (ignored)
+        :param _args: Further positional arguments write_message accepts; ignored
+        :param _kwargs: Further keyword arguments write_message accepts; ignored
+        """
+        _ = message
+        lengths.append(len(chat_history))
+
+    async def test_invoke_agent_chain_appends_tool_exchange_before_answer(self) -> None:
+        """
+        The tool call and its result are appended to the chat history before the
+        answer is journaled, so the history reads call, result, answer.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        tool_turn: Dict[str, Any] = RunContextRunnableTestHelpers.tool_turn_state(human)
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, tool_turn))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [2])
+        self.assertIsInstance(chat_history[0], AIMessage)
+        self.assertEqual(chat_history[0].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        self.assertIsInstance(chat_history[1], ToolMessage)
+
+    async def test_invoke_agent_chain_records_tool_exchange_when_a_later_step_fails(self) -> None:
+        """
+        A tool round that completed before a later step failed is in the history when
+        the error answer is journaled: it was recorded from the state the chain reached.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        state: Dict[str, Any] = RunContextRunnableTestHelpers.tool_turn_state(human)
+        reached: Dict[str, Any] = {"messages": state["messages"][:-1]}  # the round is done, no answer yet
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, reached,
+                                                            RuntimeError("Server error '504 Gateway Time-out'")))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        sensitive_logger: MagicMock = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=sensitive_logger)
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [2])
+        self.assertEqual(chat_history[0].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        self.assertIsInstance(chat_history[1], ToolMessage)
+        self.assertEqual(chat_history[1].tool_call_id, "toolu_1")
+
+    async def test_invoke_agent_chain_records_a_round_compacted_out_of_the_state(self) -> None:
+        """
+        A tool round recorded from an earlier state stays in the history when a later
+        state no longer holds it, as after a summarization; the next round is recorded once.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="toolu_1")
+        second_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("toolu_2")])
+        second_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="toolu_2")
+        summary: HumanMessage = HumanMessage(content="Here is a summary of the conversation to date.", id="s1")
+        before: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        after: Dict[str, Any] = {"messages": [summary, second_call, second_result, AIMessage(content="the answer")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, before, after))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [4])
+        self.assertEqual(chat_history[0].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        self.assertEqual(chat_history[1].tool_call_id, "toolu_1")
+        self.assertEqual(chat_history[2].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_2")])
+        self.assertEqual(chat_history[3].tool_call_id, "toolu_2")
+
+    async def test_invoke_agent_chain_keeps_two_streamed_rounds_that_share_a_call_id(self) -> None:
+        """
+        Two rounds of one turn that reuse a call id are both recorded as the chain
+        streams, each once: rounds are told apart by message id, as LangGraph gives
+        every message in the state an id.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                          id="ai_1")
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1", id="t_1")
+        second_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                           id="ai_2")
+        second_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1", id="t_2")
+        first_round: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        second_round: Dict[str, Any] = {"messages": [human, first_call, first_result, second_call, second_result]}
+        answered: Dict[str, Any] = {"messages": second_round.get("messages") + [AIMessage(content="the answer",
+                                                                                          id="ai_3")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of,
+                                                            first_round, second_round, answered))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [4])
+        self.assertEqual(chat_history[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(chat_history[2].tool_calls, [RunContextRunnableTestHelpers.tool_call("call_1")])
+        self.assertEqual(chat_history[3].content, "{'running_cost': 6.0}")
+
+    async def test_invoke_agent_chain_keeps_a_retry_round_that_reuses_a_call_id(self) -> None:
+        """
+        A retry whose round reuses a call id of the failed attempt keeps both rounds:
+        the retry's AIMessage has its own message id, so its round is recorded too.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                          id="ai_1")
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1", id="t_1")
+        retry_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                          id="ai_2")
+        retry_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1", id="t_2")
+        failed_round: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        retry_round: Dict[str, Any] = {"messages": [human, retry_call, retry_result]}
+        answered: Dict[str, Any] = {"messages": retry_round.get("messages") + [AIMessage(content="the answer",
+                                                                                         id="ai_3")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        # The first attempt fails after its round. The retry starts again from the same inputs.
+        agent_chain.astream = MagicMock(side_effect=[
+            RunContextRunnableTestHelpers.state_stream(failed_round, KeyError("missing")),
+            RunContextRunnableTestHelpers.state_stream(retry_round, answered),
+        ])
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        # should_log() is True, so the retry notice is journaled too.
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(),
+            sensitive_logger=MagicMock(should_log=MagicMock(return_value=True)))
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 2)
+
+        # The retry notice is journaled after the failed attempt's round, the answer after both rounds.
+        self.assertEqual(lengths, [2, 4])
+        self.assertEqual(chat_history[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(chat_history[2].tool_calls, [RunContextRunnableTestHelpers.tool_call("call_1")])
+        self.assertEqual(chat_history[3].content, "{'running_cost': 6.0}")

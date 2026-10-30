@@ -17,18 +17,25 @@
 
 from typing import Any
 from typing import AsyncIterator
+from typing import Dict
+from typing import List
 
 from unittest.mock import MagicMock
+
+from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.human import HumanMessage
+from langchain_core.messages.tool import ToolMessage
 
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 
 
 class RunContextRunnableTestHelpers:
     """
-    Helpers shared by the RunContextRunnable test modules.
+    Helpers shared by the RunContextRunnable and ToolExchangeRecorder tests.
 
-    They build a runnable whose error detector passes output through, and
-    stand-in streams for agent_chain.astream().
+    They build a runnable whose error detector passes output through, stand-in
+    streams for agent_chain.astream(), and the tool calls and chain state of a
+    turn in which the model called a tool.
     """
 
     @staticmethod
@@ -79,3 +86,46 @@ class RunContextRunnableTestHelpers:
         :return: An async iterator over the states
         """
         return RunContextRunnableTestHelpers.state_stream(*states)
+
+    @staticmethod
+    def tool_call(call_id: str) -> Dict[str, Any]:
+        """
+        Builds a tool call dictionary for the Accountant tool.
+
+        :param call_id: The id of the tool call
+        :return: A langchain tool call dictionary for the Accountant tool
+        """
+        return {
+            "name": "Accountant",
+            "args": {"running_cost": 0.0},
+            "id": call_id,
+            "type": "tool_call",
+        }
+
+    @staticmethod
+    def tool_turn_state(human: HumanMessage) -> Dict[str, Any]:
+        """
+        Builds a chain state for a turn in which the model called a tool once.
+
+        :param human: The user's message that started the turn
+        :return: A state dict whose messages are an earlier exchange, the user's
+                 message, a tool-calling AIMessage with Anthropic-shaped content,
+                 the ToolMessage answering it, and the answer
+        """
+        tool_call: Dict[str, Any] = RunContextRunnableTestHelpers.tool_call("toolu_1")
+        content: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": "Let me check.",
+            },
+            {
+                "type": "tool_use",
+                "id": "toolu_1",
+                "name": "Accountant",
+                "input": {"running_cost": 0.0},
+            },
+        ]
+        calling: AIMessage = AIMessage(content=content, tool_calls=[tool_call])
+        result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="toolu_1", name="Accountant")
+        return {"messages": [HumanMessage(content="earlier", id="h0"), AIMessage(content="earlier answer", id="a0"),
+                             human, calling, result, AIMessage(content="the answer")]}

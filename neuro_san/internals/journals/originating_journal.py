@@ -90,7 +90,7 @@ class OriginatingJournal(Journal):
             # separate, provider-aware piece of work.
             #
             # Tool results never reach this point: is_relevant_to_chat_history
-            # keeps them out, and RunContextRunnable appends each turn's tool
+            # keeps them out, and ToolExchangeRecorder appends each turn's tool
             # calls and results to the history as a pair instead.
             chat_history_message: BaseMessage = None
             if isinstance(message, AIMessage) and not isinstance(message.content, str):

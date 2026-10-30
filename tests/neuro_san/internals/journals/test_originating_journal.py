@@ -153,7 +153,7 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         A tool result carrying text + image blocks is journaled with its blocks
         intact, but it is not appended to the chat history on its own. The history
         gets the tool call and its result as a pair from the chain state instead
-        (see RunContextRunnable.record_tool_exchange).
+        (see ToolExchangeRecorder.record_tool_exchange).
         """
         wrapped: MagicMock = self._make_wrapped_journal()
         chat_history: List[BaseMessage] = []
