@@ -32,7 +32,7 @@ from neuro_san.internals.run_context.langchain.token_counting.langchain_token_co
 from neuro_san.message.types.agent_message import AgentMessage
 
 
-class TestReport(IsolatedAsyncioTestCase):
+class TestLangChainTokenCounterReport(IsolatedAsyncioTestCase):
     """
     Test cases for report(): request-level accumulation and network-message gating.
 

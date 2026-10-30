@@ -17,9 +17,11 @@
 
 import logging
 
+from time import time
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 from unittest import IsolatedAsyncioTestCase
 from uuid import UUID
@@ -30,6 +32,7 @@ from typing_extensions import override
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration
 from langchain_core.outputs import LLMResult
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
@@ -40,8 +43,14 @@ from tests.neuro_san.internals.run_context.langchain.token_counting.owning_agent
 
 class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
     """
-    Test cases for LlmTokenCallbackHandler: cost calculation from llm_infos, and the accounting hints an
-    LlmPolicy can put in a chat model's metadata.
+    Test cases for LlmTokenCallbackHandler: cost calculation from llm_infos, the accounting hints an
+    LlmPolicy can put in a chat model's metadata, own-call vs downstream-call attribution, and the
+    tracking of empty responses.
+
+    Handlers are inheritable langchain callbacks, so an agent's handler also receives
+    events for LLM calls made by downstream agents.  Those events must update the
+    scalar subtree totals but NOT models_token_dict, so that merging every agent's
+    models_token_dict into the request-wide accounting counts each call exactly once.
     """
 
     # What langchain serializes for a stock ChatOpenAI; the last id element is the class name.
@@ -274,3 +283,185 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
 
         self.assertEqual(self.priced_handler.price_model_names, {})
         self.assertEqual(self.priced_handler.successful_requests, 0)
+
+    # ---- Own calls and downstream calls ---------------------------------------------------------
+
+    async def test_own_call_updates_models_and_scalars(self) -> None:
+        """
+        An LLM call belonging to this handler's own agent updates both tallies.
+        """
+        handler = LlmTokenCallbackHandler(llm_infos={})
+        with owning_agent_scope(handler):
+            await handler.on_chat_model_start(self.SERIALIZED_CHAT_OPENAI, [])
+            await handler.on_llm_end(self._make_gpt_4_result())
+
+        # DictionaryExtractor splits keys on ".", so these lookups only work for model names without a dot.
+        models_token_extractor = DictionaryExtractor(handler.models_token_dict)
+        self.assertEqual(handler.total_tokens, 15)
+        self.assertEqual(handler.successful_requests, 1)
+        self.assertEqual(models_token_extractor.get("openai.gpt-4.total_tokens"), 15)
+        self.assertEqual(models_token_extractor.get("openai.gpt-4.successful_requests"), 1)
+
+    async def test_downstream_call_updates_scalars_only(self) -> None:
+        """
+        A downstream agent's LLM call updates the subtree scalars of an ancestor
+        handler, but not its per-model (exclusive) stats.
+        """
+        ancestor_handler = LlmTokenCallbackHandler(llm_infos={})
+        downstream_handler = LlmTokenCallbackHandler(llm_infos={})
+
+        # At event time, the var holds the handler of the agent that owns the call:
+        # the downstream one.  The ancestor hears the same events through callback
+        # inheritance.
+        with owning_agent_scope(downstream_handler):
+            for handler in (downstream_handler, ancestor_handler):
+                await handler.on_chat_model_start(self.SERIALIZED_CHAT_OPENAI, [])
+                await handler.on_llm_end(self._make_gpt_4_result())
+
+        # The owning agent counts the call in both tallies.
+        downstream_models_token_extractor = DictionaryExtractor(downstream_handler.models_token_dict)
+        self.assertEqual(downstream_handler.total_tokens, 15)
+        self.assertEqual(downstream_models_token_extractor.get("openai.gpt-4.total_tokens"), 15)
+
+        # The ancestor's subtree totals include the downstream call...
+        self.assertEqual(ancestor_handler.total_tokens, 15)
+        self.assertEqual(ancestor_handler.successful_requests, 1)
+        # ... but its per-model stats do not: the call is not its own.
+        self.assertFalse(ancestor_handler.models_token_dict)
+        # And its per-call timer state stays unset.
+        self.assertIsNone(ancestor_handler.start_time)
+
+    async def test_call_outside_any_agent_scope_updates_scalars_only(self) -> None:
+        """
+        With no owning agent scope at all, the handler treats the call as not its own.
+        """
+        handler = LlmTokenCallbackHandler(llm_infos={})
+
+        await handler.on_chat_model_start(self.SERIALIZED_CHAT_OPENAI, [])
+        await handler.on_llm_end(self._make_gpt_4_result())
+
+        self.assertEqual(handler.total_tokens, 15)
+        self.assertFalse(handler.models_token_dict)
+
+    def _make_gpt_4_result(self) -> LLMResult:
+        """
+        Build an LLMResult that wraps a single AIMessage with usage metadata.
+
+        :return: An LLMResult holding one ChatGeneration for a gpt-4 answer of 15 total tokens
+        """
+        message = AIMessage(
+            content="an answer",
+            usage_metadata={
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "total_tokens": 15,
+            },
+            response_metadata={"model_name": "gpt-4"},
+        )
+        generation = ChatGeneration(message=message)
+        return LLMResult(generations=[[generation]])
+
+    # ---- Empty responses ------------------------------------------------------------------------
+
+    @staticmethod
+    def _make_ollama_handler() -> LlmTokenCallbackHandler:
+        """
+        Builds a handler whose provider is ollama, with an empty ollama entry in models_token_dict and a start time.
+
+        :return: The LlmTokenCallbackHandler under test
+        """
+        handler: LlmTokenCallbackHandler = LlmTokenCallbackHandler(llm_infos={})
+        handler.provider_class = "ollama"
+        handler.models_token_dict = {"ollama": {}}
+        handler.start_time = time()
+        return handler
+
+    @staticmethod
+    def _make_ollama_result(content: Any, tool_calls: Optional[List[Dict[str, Any]]] = None) -> LLMResult:
+        """
+        Builds an LLMResult wrapping a single gpt-oss:20B AIMessage with usage metadata.
+
+        :param content: The content of the AIMessage
+        :param tool_calls: The tool calls of the AIMessage, or None for no tool calls
+        :return: The LLMResult on_llm_end() receives
+        """
+        message: AIMessage = AIMessage(
+            content=content,
+            tool_calls=tool_calls or [],
+            usage_metadata={
+                "input_tokens": 10,
+                "output_tokens": 0,
+                "total_tokens": 10,
+            },
+            response_metadata={"model_name": "gpt-oss:20B"},
+        )
+        return LLMResult(generations=[[ChatGeneration(message=message)]])
+
+    def test_is_empty_response(self) -> None:
+        """
+        A response is empty only when it carries neither content nor a tool call.
+        """
+        tool_call: Dict[str, Any] = {
+            "name": "search",
+            "args": {},
+            "id": "1",
+            "type": "tool_call",
+        }
+        cases: List[Tuple[str, AIMessage, bool]] = [
+            ("empty string", AIMessage(content=""), True),
+            ("blank string", AIMessage(content="   "), True),
+            ("text", AIMessage(content="here is the answer"), False),
+            ("empty list", AIMessage(content=[]), True),
+            ("blank string in a list", AIMessage(content=[" "]), True),
+            ("empty text block", AIMessage(content=[self._text_block("")]), True),
+            ("blank text block", AIMessage(content=[self._text_block("   ")]), True),
+            ("text block", AIMessage(content=[self._text_block("real text")]), False),
+            ("tool call without content", AIMessage(content="", tool_calls=[tool_call]), False),
+        ]
+        # Check each message; the subTest label is a plain string so xdist can send it between workers.
+        label: str = None
+        message: AIMessage = None
+        expected: bool = None
+        for label, message, expected in cases:
+            with self.subTest(case=label):
+                # pylint: disable=protected-access
+                self.assertIs(LlmTokenCallbackHandler._is_empty_response(message), expected)
+
+    @staticmethod
+    def _text_block(text: str) -> Dict[str, Any]:
+        """
+        Builds a standard text content block.
+
+        :param text: The text of the block
+        :return: The text block
+        """
+        return {
+            "type": "text",
+            "text": text,
+        }
+
+    async def test_on_llm_end_counts_empty_response(self) -> None:
+        """
+        An empty response counts as a successful request AND an empty one.
+        """
+        handler: LlmTokenCallbackHandler = self._make_ollama_handler()
+        with owning_agent_scope(handler):
+            await handler.on_llm_end(self._make_ollama_result(content=""))
+
+        model_entry: Dict[str, Any] = handler.models_token_dict.get("ollama", {}).get("gpt-oss:20B", {})
+        self.assertEqual(handler.successful_requests, 1)
+        self.assertEqual(handler.empty_responses, 1)
+        self.assertEqual(model_entry.get("empty_responses"), 1)
+
+    async def test_on_llm_end_does_not_count_nonempty_response(self) -> None:
+        """
+        A response with content is a successful request but not an empty one.
+        """
+        handler: LlmTokenCallbackHandler = self._make_ollama_handler()
+        with owning_agent_scope(handler):
+            await handler.on_llm_end(self._make_ollama_result(content="a real answer"))
+
+        model_entry: Dict[str, Any] = handler.models_token_dict.get("ollama", {}).get("gpt-oss:20B", {})
+        self.assertEqual(handler.successful_requests, 1)
+        self.assertEqual(handler.empty_responses, 0)
+        self.assertEqual(model_entry.get("empty_responses"), 0)

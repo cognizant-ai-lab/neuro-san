@@ -16,8 +16,8 @@
 # END COPYRIGHT
 """
 Pytest configuration for the agent-session close()/is_closed() contract tests
-in this directory (test_http_service_agent_session_close.py and
-test_async_http_service_agent_session_close.py).
+in this directory (test_http_service_agent_session.py and
+test_async_http_service_agent_session.py).
 
 Why this file exists -- and why it must be named "conftest.py":
     pytest discovers configuration by the exact filename "conftest.py" and
