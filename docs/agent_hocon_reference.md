@@ -1010,14 +1010,26 @@ _Front Man only_
 An integer which tells the server how many of the most recent chat history messages
 to send back in its chat_context field which allows for continuing a conversation
 on the next client invocation.  By default this value is None, indicating there is no limit.
-
-The count includes the tool calls an agent made and their results, which the chat history
-keeps alongside the user and agent messages. The messages kept always start at a user
-message, so a tool result is never sent back without the call that asked for it; when the
-cut lands inside a turn, that turn is dropped.
+A value of 1 or less also means no limit.
 
 This is useful when end-user conversations with agents are expected to be lengthy and/or change
 topics frequently.
+
+How the limit works:
+
+- The server applies it once per turn, when it builds the chat_context it sends back with the
+  answer. It does not shorten what the model sees during that turn. The model sees the shorter
+  history on the next turn, when the client sends that chat_context back. A chat_context that a
+  client sends in is not trimmed.
+- Each user message, agent answer, agent message that calls tools, and tool result counts as one
+  message. So a turn that uses tools is longer than a plain question and answer: it holds the user
+  message, one message for each round of tool calls, one result for each call, and the answer.
+- The messages kept always start at a user message. When the limit cuts through a turn, the part
+  of that turn that is left is dropped too. Providers reject a tool result whose call is missing,
+  and some models reject a history that starts with an agent message.
+- If the limit is smaller than the latest turn, nothing is kept, and the next turn starts with no
+  history at all. To always keep the latest turn, set the limit to at least the number of messages
+  in the longest turn you expect.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### verbose

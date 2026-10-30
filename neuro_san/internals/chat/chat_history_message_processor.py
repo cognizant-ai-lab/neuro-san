@@ -69,8 +69,9 @@ class ChatHistoryMessageProcessor(MessageProcessor):
 
         Trimming happens only when max_message_history is above 1. It keeps the most recent
         messages, then drops any before the first user message among them, so a tool result
-        is never cut off from its call. Redacted instructions at the start stay in front and
-        do not count toward the maximum.
+        is never cut off from its call and the history never starts with an AI message.
+        When none of the most recent messages is a user message, nothing is kept. Redacted
+        instructions at the start stay in front and do not count toward the maximum.
 
         :param chat_message_dicts: The ChatMessage dictionaries to process, oldest first
         """
@@ -92,7 +93,8 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         self.message_history = self.message_history[-self.max_message_history:]
 
         # Start at a user message. A cut inside a turn would leave a tool result
-        # without the call that asked for it, which providers reject.
+        # without the call that asked for it, which providers reject, and some
+        # models reject a history that starts with an AI message.
         while len(self.message_history) > 0 and self.message_history[0].get("type") != ChatMessageType.HUMAN:
             self.message_history.pop(0)
 
