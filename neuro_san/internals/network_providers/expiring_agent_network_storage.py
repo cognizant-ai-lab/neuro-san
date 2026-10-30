@@ -41,17 +41,15 @@ from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSour
 from neuro_san.internals.interfaces.listenable import Listenable
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.network_providers.agent_network_storage_manager import AgentNetworkStorageManager
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
 
 
 # pylint: disable=too-many-instance-attributes
-class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStorageManager, AgentStorageSource,
-                                  Listenable[AgentStateListener]):
+class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentStorageSource, Listenable[AgentStateListener]):
     """
-    An AgentNetworkStorage instance where AgentNetworks are allowed to expire.
+    An AgentStorageSource instance where AgentNetworks are allowed to expire.
     This implementation also allows for an optional "source" storage to be set,
     which will be used as a "base" source of truth.
     """
@@ -278,21 +276,10 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             reservations_snapshot = self.reservations_table.copy()
         return reservations_snapshot
 
-    @override
-    def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
-        """
-        This method is a single point of entry in the service
-        where we register a new agent name -> AgentNetwork pair.
-
-        :param agent_name: name of an agent
-        :param agent_network: An agent network
-        """
-        self.network_storage.add_agent_network(agent_name, agent_network)
-
-    @override
     def remove_agent_network(self, agent_name: str):
         """
         Remove agent name and its AgentNetwork from service internal tables.
+        Note: This method should be called while holding the lock of the network_storage
         :param agent_name: name of an agent to remove
         """
         self.reservations_table.pop(agent_name, None)
@@ -303,12 +290,14 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
     @override
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """
-        Replace agents networks with a new collection.
-        Previous state could be empty.
+        The implementation of this method always raises NotImplementedError
+        Please use add_reservations() instead.
 
         :param agent_networks: A dictionary of agent name -> AgentNetwork
         """
-        self.network_storage.setup_agent_networks(agent_networks)
+        # For this class, this method is never used.
+        # Call add_reservations() instead.
+        raise NotImplementedError
 
     @override
     def get_agent_names(self) -> List[str]:
