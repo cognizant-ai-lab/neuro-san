@@ -448,7 +448,8 @@ class LangChainRunContext(RunContext):
                     "origin"        A List of origin dictionaries indicating the origin of the run.
                     "output"        A string representing the output of the tool call
                     "sly_data"      Optional sly_data dictionary that might have returned from an external tool.
-                    "tool_call_id"  The string id of the tool_call being executed
+                    "tool_call_id"  neuro-san's own string id for the tool call, not the id the model
+                                    gave it. The chat history pairs calls and results by the model's id.
         :return: A potentially updated run handle
         """
         _ = run
