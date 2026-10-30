@@ -120,7 +120,6 @@ class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
             if agent_name not in new_agents:
                 agents_to_remove.append(agent_name)
 
-        agent_name: str = None
         for agent_name in agents_to_remove:
             self.remove_agent_network(agent_name)
 
