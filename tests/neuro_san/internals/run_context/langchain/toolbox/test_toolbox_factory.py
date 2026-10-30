@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import WARNING
 
 from typing import Any
 from typing import Dict
@@ -90,15 +90,16 @@ class TestToolboxFactory(TestCase):
         }
 
         # Mock user-provided arguments
-        user_args: Dict[str, Any] = {"param2": "user_value", "param3": "extra_value"}
+        user_args: Dict[str, Any] = {
+            "param2": "user_value",
+            "param3": "extra_value"
+        }
 
         with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
-            mock_tool_class = MagicMock(spec=BaseTool)
+            mock_tool_class: MagicMock = MagicMock(spec=BaseTool)
             mock_resolver.return_value = mock_tool_class
 
-            mock_instance = MagicMock(spec=BaseTool)
-            mock_instance.name = MagicMock(spec=str)
-            mock_instance.tags = MagicMock(spec=list)
+            mock_instance: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_tool_class.return_value = mock_instance
 
             tool: BaseTool = self.factory.create_tool_from_toolbox("test_tool", user_args)
@@ -222,16 +223,14 @@ class TestToolboxFactory(TestCase):
         }
 
         with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH):
-            mock_tool_class = MagicMock(spec=BaseTool)
+            mock_tool_class: MagicMock = MagicMock(spec=BaseTool)
             mock_resolver.return_value = mock_tool_class
 
-            mock_instance = MagicMock(spec=BaseTool)
-            mock_instance.name = MagicMock(spec=str)
-            mock_instance.tags = MagicMock(spec=list)
+            mock_instance: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_tool_class.return_value = mock_instance
 
             # ToolboxFactory logs through logging.warning(), so the record goes to the root logger.
-            with self.assertLogs(level=logging.WARNING) as captured_logs:
+            with self.assertLogs(level=WARNING) as captured_logs:
                 self.factory.create_tool_from_toolbox("community_tool", {})
 
         log_text: str = "\n".join(captured_logs.output)
@@ -264,6 +263,8 @@ class TestToolboxFactory(TestCase):
         from both toolbox entry points.
         """
         bad_classes: List[Any] = [None, 123, ""]
+        bad_class: Any
+        # Check each bad class value with both toolbox entry points
         for bad_class in bad_classes:
             with self.subTest(bad_class=bad_class):
                 self.factory.toolbox_infos = {
@@ -293,19 +294,18 @@ class TestToolboxFactory(TestCase):
         }
 
         # Mock user-provided arguments
-        user_args: Dict[str, Any] = {"param2": "user_value", "param3": "extra_value"}
+        user_args: Dict[str, Any] = {
+            "param2": "user_value",
+            "param3": "extra_value"
+        }
 
         with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
-            mock_toolkit_class = MagicMock(spec=BaseToolkit)
+            mock_toolkit_class: MagicMock = MagicMock(spec=BaseToolkit)
             mock_resolver.return_value = mock_toolkit_class
 
-            mock_instance = MagicMock()
-            mock_tool_1 = MagicMock(spec=BaseTool)
-            mock_tool_1.name = MagicMock(spec=str)
-            mock_tool_1.tags = MagicMock(spec=list)
-            mock_tool_2 = MagicMock(spec=BaseTool)
-            mock_tool_2.name = MagicMock(spec=str)
-            mock_tool_2.tags = MagicMock(spec=list)
+            mock_instance: MagicMock = MagicMock()
+            mock_tool_1: MagicMock = TestToolboxFactory._create_mock_tool()
+            mock_tool_2: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_tools: List[MagicMock] = [mock_tool_1, mock_tool_2]
             mock_instance.get_tools.return_value = mock_tools
             mock_toolkit_class.return_value = mock_instance
@@ -339,24 +339,23 @@ class TestToolboxFactory(TestCase):
         }
 
         # Mock user-provided arguments
-        user_args: Dict[str, Any] = {"param2": "user_value", "param3": "extra_value"}
+        user_args: Dict[str, Any] = {
+            "param2": "user_value",
+            "param3": "extra_value"
+        }
 
         with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATOR_PATH) as mock_check_invalid:
             # Mock the toolkit class
-            mock_toolkit_class = MagicMock()
+            mock_toolkit_class: MagicMock = MagicMock()
             mock_resolver.return_value = mock_toolkit_class
 
             # Mock the class method
-            mock_toolkit_instance = MagicMock()
+            mock_toolkit_instance: MagicMock = MagicMock()
             mock_toolkit_class.from_tool_api_wrapper.return_value = mock_toolkit_instance
 
             # Mock get_tools() returning a list of tools
-            mock_tool_1 = MagicMock(spec=BaseTool)
-            mock_tool_1.name = MagicMock(spec=str)
-            mock_tool_1.tags = MagicMock(spec=list)
-            mock_tool_2 = MagicMock(spec=BaseTool)
-            mock_tool_2.name = MagicMock(spec=str)
-            mock_tool_2.tags = MagicMock(spec=list)
+            mock_tool_1: MagicMock = TestToolboxFactory._create_mock_tool()
+            mock_tool_2: MagicMock = TestToolboxFactory._create_mock_tool()
             mock_toolkit_instance.get_tools.return_value = [mock_tool_1, mock_tool_2]
 
             # Call the factory method
@@ -374,3 +373,16 @@ class TestToolboxFactory(TestCase):
 
             # Ensure the returned tools match the mocked tools
             self.assertEqual(tools, [mock_tool_1, mock_tool_2])
+
+    @staticmethod
+    def _create_mock_tool() -> MagicMock:
+        """
+        Creates a mock BaseTool with mock name and tags.
+
+        :return: A MagicMock that stands in for a BaseTool instance
+        """
+        mock_tool: MagicMock = MagicMock(spec=BaseTool)
+        # spec=BaseTool does not give the name and tags fields, so set them by hand.
+        mock_tool.name = MagicMock(spec=str)
+        mock_tool.tags = MagicMock(spec=list)
+        return mock_tool
