@@ -229,6 +229,25 @@ chat_context and add that to your next streaming_chat request:
 
 ... and back comes the next result for your conversation
 
+##### How much history comes back
+
+An agent network can limit the chat history in the chat_context it sends back with
+[`max_message_history`](agent_hocon_reference.md#max_message_history). How the limit works:
+
+* The server applies it once per turn, when it builds the chat_context it sends back with the
+  answer. It does not shorten what the model sees during that turn. The model sees the shorter
+  history on the next turn, when the client sends that chat_context back. A chat_context that a
+  client sends in is not trimmed.
+* Each user message, agent answer, agent message that calls tools, and tool result counts as one
+  message. So a turn that uses tools is longer than a plain question and answer: it holds the user
+  message, one message for each round of tool calls, one result for each call, and the answer.
+* The messages kept always start at a user message. When the limit cuts through a turn, the part
+  of that turn that is left is dropped too. Providers reject a tool result whose call is missing,
+  and some models reject a history that starts with an agent message.
+* If the limit is smaller than the latest turn, nothing is kept, and the next turn starts with no
+  history at all. To always keep the latest turn, set the limit to at least the number of messages
+  in the longest turn you expect.
+
 ##### Adding Private Data to the User Request
 
 One strength of the neuro-san infrastructure is that you can add private data to the user request.
