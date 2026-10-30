@@ -15,10 +15,13 @@
 # END COPYRIGHT
 
 
+from logging import getLogger
+from logging import Logger
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
@@ -35,7 +38,8 @@ class ToolPairing:
     result is missing. A history restored from a chat_context can hold either:
     a client may have cut it, or a call may have been dropped as malformed on
     the way in. Each tool-calling AI message keeps only the calls that the tool
-    results right after it answer, and only those results are kept.
+    results right after it answer, and only those results are kept. Each call
+    or result that is dropped is logged as a warning, by its id.
     """
 
     @staticmethod
@@ -54,6 +58,7 @@ class ToolPairing:
             message: BaseMessage = messages[index]
             if isinstance(message, ToolMessage):
                 # A result with no call before it.
+                ToolPairing.warn_dropped_result(message)
                 index += 1
                 continue
             if not isinstance(message, AIMessage) or not message.tool_calls:
@@ -111,6 +116,17 @@ class ToolPairing:
             if result is not None:
                 answered_calls.append(tool_call)
                 answered_results.append(result)
+            else:
+                ToolPairing.warn_dropped_call(tool_call)
+
+        kept_result_ids: Set[int] = set()
+        # Note the kept results by identity: a repeated result can equal a kept one.
+        for result in answered_results:
+            kept_result_ids.add(id(result))
+        # A result that answers none of the kept calls is dropped.
+        for result in results:
+            if id(result) not in kept_result_ids:
+                ToolPairing.warn_dropped_result(result)
 
         kept_message: Optional[AIMessage] = message
         if len(answered_calls) < len(message.tool_calls):
@@ -136,3 +152,27 @@ class ToolPairing:
             return None
         update: Dict[str, Any] = {"tool_calls": calls}
         return ContentUtils.message_model_copy(message, update)
+
+    @staticmethod
+    def warn_dropped_call(tool_call: Dict[str, Any]) -> None:
+        """
+        Logs a tool call that is dropped because no tool result answers it.
+
+        :param tool_call: The dropped tool call
+        """
+        # The arguments are not logged: a client's call can carry secrets.
+        logger: Logger = getLogger(ToolPairing.__name__)
+        logger.warning("Dropping a tool call in chat_context that has no result (id %r, name %r)",
+                       tool_call.get("id"), tool_call.get("name"))
+
+    @staticmethod
+    def warn_dropped_result(result: ToolMessage) -> None:
+        """
+        Logs a tool result that is dropped because no tool call before it asked for it.
+
+        :param result: The dropped tool result
+        """
+        # The content is not logged: a tool result can carry secrets.
+        logger: Logger = getLogger(ToolPairing.__name__)
+        logger.warning("Dropping a tool result in chat_context that answers no call before it (tool_call_id %r)",
+                       result.tool_call_id)

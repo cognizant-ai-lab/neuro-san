@@ -147,3 +147,56 @@ class TestToolPairing(TestCase):
         self.assertEqual(kept[0].content, "I asked the Accountant.")
         self.assertEqual(kept[0].tool_calls, [])
         self.assertEqual(kept[1].content, "answer")
+
+    def test_complete_pairs_warns_about_each_dropped_result(self) -> None:
+        """
+        A dropped result is logged by its tool_call_id, never by its content:
+        one that comes first, and one that answers no call of the message before it.
+        """
+        messages: List[BaseMessage] = [
+            ToolMessage(content="orphan", tool_call_id="c0"),
+            HumanMessage(content="question"),
+            AIMessage(content="", tool_calls=[self.tool_call("c1")]),
+            ToolMessage(content="3.0", tool_call_id="c1"),
+            ToolMessage(content="stray", tool_call_id="c9"),
+        ]
+
+        with self.assertLogs("ToolPairing", level="WARNING") as logs:
+            ToolPairing.complete_pairs(messages)
+
+        self.assertEqual(len(logs.output), 2)
+        self.assertIn("'c0'", logs.output[0])
+        self.assertIn("'c9'", logs.output[1])
+        self.assertNotIn("orphan", "".join(logs.output))
+        self.assertNotIn("stray", "".join(logs.output))
+
+    def test_complete_pairs_warns_about_each_dropped_call(self) -> None:
+        """
+        An unanswered call is logged by its id and name, never by its arguments.
+        """
+        messages: List[BaseMessage] = [
+            AIMessage(content="", tool_calls=[self.tool_call("c1"), self.tool_call("c2")]),
+            ToolMessage(content="6.0", tool_call_id="c2"),
+        ]
+
+        with self.assertLogs("ToolPairing", level="WARNING") as logs:
+            ToolPairing.complete_pairs(messages)
+
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("'c1'", logs.output[0])
+        self.assertIn("'Accountant'", logs.output[0])
+        self.assertNotIn("running_cost", logs.output[0])
+
+    def test_complete_pairs_logs_nothing_for_complete_pairs(self) -> None:
+        """
+        A history whose tool calls and results are all in complete pairs logs no warning.
+        """
+        messages: List[BaseMessage] = [
+            HumanMessage(content="question"),
+            AIMessage(content="", tool_calls=[self.tool_call("c1")]),
+            ToolMessage(content="3.0", tool_call_id="c1"),
+            AIMessage(content="answer"),
+        ]
+
+        with self.assertNoLogs("ToolPairing", level="WARNING"):
+            ToolPairing.complete_pairs(messages)
