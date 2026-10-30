@@ -84,7 +84,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         storage = self._make_storage()
         self.assertIsNotNone(storage)
         self.assertEqual(0, storage.max_items)
-        self.assertEqual(0, len(storage.agents_table))
+        self.assertEqual(0, len(storage.get_agent_names()))
 
     async def test_add_reservations(self):
         """
@@ -93,7 +93,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         storage = self._make_storage()
         r_a = self._make_reservation("agent_a")
         await storage.add_reservations({r_a: self._make_agent_spec("agent_a")}, source="test")
-        self.assertIn("agent_a", storage.agents_table)
+        self.assertIn("agent_a", storage.get_agent_names())
         self.assertIn("agent_a", storage.reservations_table)
         self.assertIn("agent_a", storage.access_times)
 
@@ -115,7 +115,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         await storage.add_reservations({r_a2: self._make_agent_spec("agent_a")}, source="test")
         self.assertEqual([], listener.added)
         self.assertEqual(["agent_a"], listener.modified)
-        self.assertEqual(1, len(storage.agents_table))
+        self.assertEqual(1, len(storage.get_agent_names()))
 
     def test_set_max_agent_networks(self):
         """
@@ -153,7 +153,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         for i in range(20):
             r = self._make_reservation(f"agent_{i}")
             await storage.add_reservations({r: self._make_agent_spec(f"agent_{i}")}, source="test")
-        self.assertEqual(20, len(storage.agents_table))
+        self.assertEqual(20, len(storage.get_agent_names()))
 
     async def test_lru_eviction_on_add(self):
         """
@@ -170,7 +170,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             await storage.add_reservations({r: self._make_agent_spec(f"agent_{i}")}, source="test")
             time.sleep(0.005)
 
-        self.assertEqual(5, len(storage.agents_table))
+        self.assertEqual(5, len(storage.get_agent_names()))
         listener.reset()
 
         # Add 2 more to exceed the overflow threshold (5 + 1 = 6)
@@ -180,7 +180,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             time.sleep(0.005)
 
         # Eviction should have brought us back to max_items or below
-        self.assertLessEqual(len(storage.agents_table), 5)
+        self.assertLessEqual(len(storage.get_agent_names()), 5)
         # Oldest agents should have been evicted
         self.assertTrue(len(listener.removed) > 0)
 
@@ -211,7 +211,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             await storage.add_reservations({r: self._make_agent_spec(f"agent_{i}")}, source="test")
 
         # agent_0 should still be present (it was recently accessed)
-        self.assertIn("agent_0", storage.agents_table)
+        self.assertIn("agent_0", storage.get_agent_names())
         # Some older agents should have been evicted
         self.assertTrue(len(listener.removed) > 0)
 
@@ -256,7 +256,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
 
         storage.expire_reservations()
 
-        self.assertNotIn("agent_expired", storage.agents_table)
+        self.assertNotIn("agent_expired", storage.get_agent_names())
         self.assertNotIn("agent_expired", storage.reservations_table)
         self.assertNotIn("agent_expired", storage.access_times)
 
@@ -282,7 +282,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
 
         storage.remove_agent_network("agent_a")
 
-        self.assertNotIn("agent_a", storage.agents_table)
+        self.assertNotIn("agent_a", storage.get_agent_names())
         self.assertNotIn("agent_a", storage.reservations_table)
         self.assertNotIn("agent_a", storage.access_times)
 
@@ -325,14 +325,14 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             await storage.add_reservations({r: self._make_agent_spec(f"agent_{i}")}, source="test")
             time.sleep(0.005)
 
-        self.assertEqual(10, len(storage.agents_table))
+        self.assertEqual(10, len(storage.get_agent_names()))
         listener.reset()
 
         # Now set a limit of 3
         storage.set_max_agent_networks(3)
 
         # Eviction should have reduced to 3
-        self.assertLessEqual(len(storage.agents_table), 3)
+        self.assertLessEqual(len(storage.get_agent_names()), 3)
         self.assertTrue(len(listener.removed) > 0)
 
     async def test_add_empty_reservations(self):
@@ -341,7 +341,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         """
         storage = self._make_storage(max_items=5)
         await storage.add_reservations({}, source="test")
-        self.assertEqual(0, len(storage.agents_table))
+        self.assertEqual(0, len(storage.get_agent_names()))
 
     def test_get_nonexistent_returns_none(self):
         """
@@ -377,9 +377,9 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
 
         storage.expire_reservations()
 
-        self.assertIn("valid", storage.agents_table)
+        self.assertIn("valid", storage.get_agent_names())
         self.assertIn("valid", storage.access_times)
-        self.assertNotIn("expired", storage.agents_table)
+        self.assertNotIn("expired", storage.get_agent_names())
         self.assertNotIn("expired", storage.access_times)
 
     async def test_tables_stay_consistent(self):
@@ -396,11 +396,11 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
 
         # All three tables should have the same keys
         self.assertEqual(
-            set(storage.agents_table.keys()),
+            set(storage.get_agent_names()),
             set(storage.reservations_table.keys())
         )
         self.assertEqual(
-            set(storage.agents_table.keys()),
+            set(storage.get_agent_names()),
             set(storage.access_times.keys())
         )
 
@@ -415,7 +415,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         r_a: Reservation = self._make_reservation("agent_a")
         await storage.add_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")}, source="test")
 
-        agent_network: AgentNetwork = storage.agents_table["agent_a"]
+        agent_network: AgentNetwork = storage.network_storage.get_without_lock("agent_a")
         front_man_spec: Dict[str, Any] = ByokAgentSpecBuilder.front_man_spec(agent_network)
         sly_data_schema: Dict[str, Any] = front_man_spec["function"]["sly_data_schema"]
         self.assertEqual(["llm_config"], sly_data_schema["required"])
@@ -451,7 +451,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertEqual([r_a], list(written.keys()))
         written_spec: Dict[str, Any] = written[r_a]
         self.assertEqual(["llm_config"], written_spec["tools"][0]["function"]["sly_data_schema"]["required"])
-        self.assertIs(written_spec, storage.agents_table["agent_a"].get_config())
+        self.assertIs(written_spec, storage.network_storage.get_without_lock("agent_a").get_config())
 
     async def test_add_reservations_does_not_mutate_caller_spec(self):
         """
@@ -474,7 +474,7 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         # The whole dictionary, not just the keys the filters are known to touch.
         self.assertEqual(expected, spec)
         # ... while the stored network did get the correction and the metadata.
-        stored: Dict[str, Any] = storage.agents_table["agent_a"].get_config()
+        stored: Dict[str, Any] = storage.network_storage.get_without_lock("agent_a").get_config()
         self.assertEqual("help_er", stored["tools"][1]["name"])
         self.assertEqual(["help_er"], stored["tools"][0]["tools"])
         self.assertIn("reservation", stored["metadata"])

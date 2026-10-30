@@ -15,14 +15,20 @@
 #
 # END COPYRIGHT
 
+from abc import abstractmethod
+
+from leaf_common.utils.interface import interface
+
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 
 
+@interface
 class AgentStorageSource:
     """
     Interface onto AgentNetworkStorage so that there is not a tangle with the service side.
     """
 
+    @abstractmethod
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
         Get AgentNetworkProvider for a specific agent
