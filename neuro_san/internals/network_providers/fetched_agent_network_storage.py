@@ -35,6 +35,7 @@ from leaf_common.serialization.format.hocon_serialization_format import HoconSer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.message.utils.decode_utils import DecodeUtils
 
 
 class FetchedAgentNetworkStorage(AgentNetworkStorage):
@@ -177,7 +178,8 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
                 async for chunk in response.content.iter_chunked(1024):
                     stream.write(chunk)
 
-        contents: str = stream.getvalue().decode("utf-8")
+        my_bytes: bytes = stream.getvalue()
+        contents: str = DecodeUtils.decode(my_bytes)
         return contents
 
     def parse_contents(self, contents: str, suffix: str, url: str) -> Dict[str, Any]:
@@ -192,8 +194,9 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if serialization_format is None:
             return None
 
-        # HoconSerializationFormat requires a bytes stream.
-        stream: BytesIO = BytesIO(contents.encode("utf-8"))
+        # SerializationFormat requires a bytes stream.
+        my_bytes: bytes = contents.encode("utf-8")
+        stream: BytesIO = BytesIO(my_bytes)
         agent_spec: Dict[str, Any] = None
         try:
             agent_spec = serialization_format.to_object(stream)
