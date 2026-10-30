@@ -32,11 +32,10 @@ from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkPr
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.listenable import Listenable
-from neuro_san.internals.network_providers.agent_network_storage_manager import AgentNetworkStorageManager
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 
-class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listenable[AgentStateListener]):
+class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
     """
     Service-wide storage for AgentNetworkProviders containing
     a table of currently active AgentNetworks for each agent registered to the service.
@@ -76,7 +75,6 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         """
         return list(self.listeners)
 
-    @override
     def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
         """
         This method is a single point of entry in the service
@@ -129,7 +127,6 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         for agent_name in new_agents:
             self.add_agent_network(agent_name, agent_networks[agent_name])
 
-    @override
     def remove_agent_network(self, agent_name: str):
         """
         Remove agent name and its AgentNetwork from service scope,
