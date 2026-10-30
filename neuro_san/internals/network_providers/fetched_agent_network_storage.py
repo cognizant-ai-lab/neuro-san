@@ -41,7 +41,7 @@ from neuro_san.message.utils.decode_utils import DecodeUtils
 class FetchedAgentNetworkStorage(AgentNetworkStorage):
     """
     AgentNetworkStorage implementation where AgentNetworks' names are full URLs
-    and their contents are fetched from the network.
+    and their contents are fetched from the network or a local file.
     """
 
     def __init__(self):
