@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from typing import Dict
 from typing import List
-from typing import Set
 from typing import Type
 from types import TracebackType
 
@@ -111,13 +110,21 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         Replace agents networks with a new collection.
         Previous state could be empty.
         """
-        current_agents: Set[str] = set(self.agents_table.keys())
-        new_agents: Set[str] = set(agent_networks.keys())
+        current_agents: List[str] = list(self.agents_table.keys())
+        new_agents: List[str] = list(agent_networks.keys())
+
         # Remove agents which are not in the new collection:
-        agents_to_remove: Set[str] = current_agents - new_agents
+        # Figure out current_agents - new_agents (in terms of sets),
+        # but still keep ordering intact.
+        agents_to_remove: List[str] = []
+        for agent_name in current_agents:
+            if agent_name not in new_agents:
+                agents_to_remove.append(agent_name)
+
         agent_name: str = None
         for agent_name in agents_to_remove:
             self.remove_agent_network(agent_name)
+
         # Now add (or possibly replace) agents from new collection:
         for agent_name in new_agents:
             self.add_agent_network(agent_name, agent_networks[agent_name])

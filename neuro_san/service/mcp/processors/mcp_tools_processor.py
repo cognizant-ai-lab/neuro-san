@@ -28,8 +28,8 @@ import tornado
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.storage_class import StorageClass
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
@@ -48,11 +48,11 @@ class McpToolsProcessor:
 
     def __init__(self,
                  logger: HttpLogger,
-                 network_storage_dict: AgentNetworkStorage,
+                 network_storage_dict: Dict[str, AgentStorageSource],
                  agent_policy: AgentAuthorizer,
                  tool_request_validator: ToolRequestValidator):
         self.logger: HttpLogger = logger
-        self.network_storage_dict: AgentNetworkStorage = network_storage_dict
+        self.network_storage_dict: Dict[str, AgentStorageSource] = network_storage_dict
         self.agent_policy: AgentAuthorizer = agent_policy
         self.tool_request_validator: ToolRequestValidator = tool_request_validator
 
@@ -66,7 +66,7 @@ class McpToolsProcessor:
         # See which agents the user has access to per authorization policy
         authorized_agents: List[str] = await self.agent_policy.list_agents(metadata)
 
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
+        public_storage: AgentStorageSource = self.network_storage_dict.get(StorageClass.PUBLIC)
         tools_description: List[Dict[str, Any]] = []
         for agent_name in public_storage.get_agent_names():
 
@@ -277,7 +277,7 @@ class McpToolsProcessor:
                  exists, so a name is never both one network's advertised name
                  and another's network name.
         """
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
+        public_storage: AgentStorageSource = self.network_storage_dict.get(StorageClass.PUBLIC)
 
         # Fast path: a name that is itself a public network's network name means
         # that network. Top-level names, the legacy slash spelling, and any other
@@ -287,7 +287,7 @@ class McpToolsProcessor:
         # below. Answering without the scan is safe because of the reservation
         # described in the docstring: once storage has settled, the scan could
         # not have returned anything else. The two can differ only mid-reload,
-        # while AgentNetworkStorage.setup_agent_networks() has added a new
+        # while AgentStorageSource.setup_agent_networks() has added a new
         # network but not yet replaced a stale one still advertised under its
         # name, and then this is the answer the reservation intends: the name
         # belongs to the network so called.

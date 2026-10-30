@@ -28,10 +28,10 @@ from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.network_providers.expiring_agent_network_storage \
-    import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.service.utils.server_status import ServerStatus
@@ -70,8 +70,8 @@ class ServerContext(ServerContextLite):
         # Id of the current worker process. To be set by the server initialization code.
         self.worker_id: int = 0
 
-        # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = {}
+        # Dictionary is string key (describing scope) to AgentStorageSource grouping.
+        self.network_storage_dict: Dict[str, AgentStorageSource] = {}
         for storage_class in StorageClass.ALL_PERMANENT:
             self.network_storage_dict[storage_class] = AgentNetworkStorage()
         self.network_storage_dict[StorageClass.TEMP] = ExpiringAgentNetworkStorage()
@@ -206,7 +206,7 @@ class ServerContext(ServerContextLite):
         """
         return self.server_status
 
-    def get_network_storage_dict(self) -> Dict[str, AgentNetworkStorage]:
+    def get_network_storage_dict(self) -> Dict[str, AgentStorageSource]:
         """
         :return: The Network Storage dictionary
         """
