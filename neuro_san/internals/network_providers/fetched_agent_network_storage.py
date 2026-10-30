@@ -17,7 +17,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from io import StringIO
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
@@ -60,9 +60,9 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         # Populate the dictionary from the list of SerializationFormats.
         one_format: SerializationFormat = None
         for one_format in format_list:
+            # The file extension already includes the leading dot.
             file_extension: str = one_format.get_file_extension()
-            extension_with_dot: str = f".{file_extension}"
-            self.extension_to_serialization_format[extension_with_dot] = one_format
+            self.extension_to_serialization_format[file_extension] = one_format
 
     @override
     async def async_get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
@@ -74,8 +74,9 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
                 None if the file was not found or had the wrong suffix.
         """
         # Use the synchronous version on the super class to maybe return what was already cached.
+        # The provider itself is never None, so check its network.
         network_provider: AgentNetworkProvider = super().get_agent_network_provider(agent_name)
-        if network_provider is not None:
+        if network_provider.get_agent_network() is not None:
             return network_provider
 
         # See if we support the serialization format
@@ -114,7 +115,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         # For now, no retries
         try:
             if scheme == "file":
-                contents = await self.fetch_local_file(url)
+                contents = await self.fetch_local_file(parse_result.path)
             else:
                 contents = await self.fetch_over_network(url)
         # pylint: disable=broad-except
@@ -140,7 +141,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
                 found_suffix = True
                 break
 
-        if not found_suffix:
+        if found_suffix:
             return suffix
 
         return None
@@ -167,14 +168,16 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         :param url: The location of an agent network description
         :return: the contents of the agent network file
         """
-        stream: StringIO = StringIO()
+        # Collect raw bytes and decode once, so multibyte characters split across chunks stay intact.
+        stream: BytesIO = BytesIO()
         async with ClientSession() as session:
             async with session.get(url) as response:
                 response.raise_for_status()
+                chunk: bytes = None
                 async for chunk in response.content.iter_chunked(1024):
                     stream.write(chunk)
 
-        contents: str = stream.getvalue()
+        contents: str = stream.getvalue().decode("utf-8")
         return contents
 
     def parse_contents(self, contents: str, suffix: str, url: str) -> Dict[str, Any]:
@@ -189,7 +192,8 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if serialization_format is None:
             return None
 
-        stream: StringIO = StringIO(contents)
+        # HoconSerializationFormat requires a bytes stream.
+        stream: BytesIO = BytesIO(contents.encode("utf-8"))
         agent_spec: Dict[str, Any] = None
         try:
             agent_spec = serialization_format.to_object(stream)
