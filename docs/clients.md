@@ -52,7 +52,7 @@ The `use_direct` parameter controls how **external networks** are resolved:
   If no server is running, **it silently hangs** with no error message.
 
 For a working example of an external network, see
-[`math_guy_passthrough`](../registries/math_guy_passthrough.hocon),
+[`math_guy_passthrough`](../neuro_san/registries/math_guy_passthrough.hocon),
 which delegates to the `/math_guy` external network.
 
 ### Setting `use_direct`
@@ -201,9 +201,10 @@ This response is telling you:
 * The chat_context that is returned is a structure that helps you continue the conversation.
   For the most part, you can think of this as semi-opaque chat history data. Besides the user
   and agent messages, it holds the tool calls the agent made (`tool_calls` on an AI message) and
-  their results (AGENT_TOOL_RESULT messages whose `tool_call_id` names the call they answer, with
-  `tool_status` set to `error` when the tool failed), so on the next turn the model can see which
-  values came from tools rather than from its own text.
+  their results (AGENT_TOOL_RESULT messages whose `tool_call_id` names the call they answer), so
+  on the next turn the model can see which values came from tools rather than from its own text.
+  A result has `tool_status` set to `error` when the call could not run, such as a call to a tool
+  that does not exist. An error raised inside a tool comes back as the text of its result.
 
 For a single-shot conversation, this is all you really need to report back to your user.
 
