@@ -291,12 +291,12 @@ class McpToolsProcessor:
         # network but not yet replaced a stale one still advertised under its
         # name, and then this is the answer the reservation intends: the name
         # belongs to the network so called.
-        provider: AgentNetworkProvider = await public_storage.get_agent_network_provider(tool_name)
+        provider: AgentNetworkProvider = await public_storage.async_get_agent_network_provider(tool_name)
         if provider is not None and provider.get_agent_network() is not None:
             return tool_name
 
         for agent_name in public_storage.get_agent_names():
-            provider = await public_storage.get_agent_network_provider(agent_name)
+            provider = await public_storage.async_get_agent_network_provider(agent_name)
             if provider is None:
                 continue
             agent_network: AgentNetwork = provider.get_agent_network()
