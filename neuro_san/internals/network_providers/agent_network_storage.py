@@ -44,6 +44,9 @@ class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
     """
 
     def __init__(self):
+        """
+        Constructor
+        """
         self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.lock: RLock = RLock()
