@@ -407,7 +407,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentStorageSourc
     @override
     async def async_get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
-        Get AgentNetworkProvider for a specific agent
+        Get AgentNetworkProvider for a specific agent asynchronously.
+        Prefer this when you are tool-building in the middle of agent graph activations.
 
         :param agent_name: name of an agent
         """
