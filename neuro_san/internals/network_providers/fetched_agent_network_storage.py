@@ -162,7 +162,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         """
         contents: str = None
 
-        # DEF: strip "file://"?
+        # Caller should have already taken care of any "file://" scheme.
         async with async_open(url, "r") as file_obj:
             contents = await file_obj.read()
 
