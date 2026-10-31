@@ -14,9 +14,16 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from asyncio import get_running_loop
+from asyncio import run
+from concurrent.futures import Future
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from typing import Coroutine
 from typing import Dict
 from typing import List
+
+from typing_extensions import override
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -52,9 +59,46 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             # Only store the reference if we will need it
             self.storage_source_dict = network_storage_dict
 
-    async def create_session(self, agent_url: str,
-                             invocation_context: InvocationContext,
-                             invocation: str = None) -> AsyncAgentSession:
+    @override
+    def create_session(self, agent_url: str,
+                       invocation_context: InvocationContext,
+                       invocation: str = None) -> AsyncAgentSession:
+        """
+        Synchronous version of async_create_session(), kept for backwards
+        compatibility with external clients. Code within neuro-san calls
+        async_create_session() instead.
+
+        :param agent_url: An url string pointing to an external agent that came from
+                    a tools list in an agent spec.
+        :param invocation_context: The context policy container that pertains to the invocation
+                    of the agent.
+        :param invocation: String describing how the agent wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
+        :return: An AsyncAgentSession through which communications about the external agent can be made.
+        """
+        coroutine: Coroutine[Any, Any, AsyncAgentSession] = self.async_create_session(
+            agent_url,
+            invocation_context,
+            invocation)
+        try:
+            get_running_loop()
+        except RuntimeError:
+            # No event loop is running in this thread, so run one here.
+            return run(coroutine)
+
+        # An event loop is already running in this thread. Waiting on it here would deadlock,
+        # so run the coroutine on a fresh event loop in a worker thread and wait for that.
+        # Sessions bind to an event loop lazily, when a request is first made, so the
+        # returned session is still usable on the caller's loop.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future: Future = executor.submit(run, coroutine)
+            return future.result()
+
+    async def async_create_session(self, agent_url: str,
+                                   invocation_context: InvocationContext,
+                                   invocation: str = None) -> AsyncAgentSession:
         """
         :param agent_url: An url string pointing to an external agent that came from
                     a tools list in an agent spec.

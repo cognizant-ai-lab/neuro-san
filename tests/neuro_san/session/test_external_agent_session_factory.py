@@ -132,14 +132,15 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
         self.assertIsNone(http_cfg)
         self.assertIsNone(legacy_cfg)
 
-    async def test_create_session_https_reference_end_to_end(self) -> None:
+    async def test_async_create_session_https_reference_end_to_end(self) -> None:
         """
         Tests the parse-then-build path for the reference shape that used to
         come out as http://host:8080: an https url with no port and a nested
         registry path now yields an https url on port 443.
         """
         session: AsyncAgentSession = \
-            await self.factory.create_session("https://neuro-san.decisionai.ml/deep/math_guy", self.invocation_context)
+            await self.factory.async_create_session("https://neuro-san.decisionai.ml/deep/math_guy",
+                                                    self.invocation_context)
         self.assertIsInstance(session, AsyncHttpServiceAgentSession)
         self.assertEqual(session.get_request_path("function"),
                          "https://neuro-san.decisionai.ml:443/api/v1/deep/math_guy/function")
@@ -150,7 +151,8 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
         still builds its url, since the session now really is https.
         """
         session: AsyncAgentSession = \
-            await self.factory.create_session("https://neuro-san.decisionai.ml/deep/math_guy", self.invocation_context)
+            await self.factory.async_create_session("https://neuro-san.decisionai.ml/deep/math_guy",
+                                                    self.invocation_context)
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
             path: str = session.get_request_path("function")
         self.assertEqual(path, "https://neuro-san.decisionai.ml:443/api/v1/deep/math_guy/function")
@@ -161,19 +163,20 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
         rejected when its url is built, matching the hardening contract.
         """
         session: AsyncAgentSession = \
-            await self.factory.create_session("http://neuro-san.decisionai.ml/deep/math_guy", self.invocation_context)
+            await self.factory.async_create_session("http://neuro-san.decisionai.ml/deep/math_guy",
+                                                    self.invocation_context)
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
             with self.assertRaises(ValueError):
                 session.get_request_path("function")
 
-    async def test_create_session_ipv6_https_reference_builds_bracketed_url(self) -> None:
+    async def test_async_create_session_ipv6_https_reference_builds_bracketed_url(self) -> None:
         """
         Tests that a bracketed IPv6 https reference ends up as a well-formed
         https url with the brackets kept around the address and the 443
         default port after them.
         """
         session: AsyncAgentSession = \
-            await self.factory.create_session("https://[2001:db8::1]/deep/math_guy", self.invocation_context)
+            await self.factory.async_create_session("https://[2001:db8::1]/deep/math_guy", self.invocation_context)
         self.assertIsInstance(session, AsyncHttpServiceAgentSession)
         self.assertEqual(session.get_request_path("function"),
                          "https://[2001:db8::1]:443/api/v1/deep/math_guy/function")

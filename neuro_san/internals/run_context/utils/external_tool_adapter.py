@@ -47,7 +47,7 @@ class ExternalToolAdapter:
         if self.function_json is None:
 
             # Lazily get the information about the service
-            session: AsyncAgentSession = await self.session_factory.create_session(
+            session: AsyncAgentSession = await self.session_factory.async_create_session(
                 self.agent_url,
                 invocation_context=invocation_context)
 
