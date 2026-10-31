@@ -77,7 +77,8 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         # Use the synchronous version on the super class to maybe return what was already cached.
         # The provider itself is never None, so check its network.
         network_provider: AgentNetworkProvider = super().get_agent_network_provider(agent_name)
-        if network_provider.get_agent_network() is not None:
+        agent_network: AgentNetwork = network_provider.get_agent_network()
+        if agent_network is not None:
             return network_provider
 
         # See if we support the serialization format
@@ -94,7 +95,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
             return None
 
         # DEF: Validate spec?
-        agent_network: AgentNetwork = AgentNetwork(agent_spec, agent_name)
+        agent_network = AgentNetwork(agent_spec, agent_name)
         # Note: Synchronous lock inside
         self.add_agent_network(agent_name, agent_network)
 
