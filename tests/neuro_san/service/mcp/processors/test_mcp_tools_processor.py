@@ -271,21 +271,21 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         self.assertIn(f"Service not available as MCP tool: {self.NESTED_TOOL_NAME}", text)
         self.assertNotIn(self.NESTED_NAME, text)
 
-    def test_resolve_network_name_maps_safe_name_back(self) -> None:
+    async def test_resolve_network_name_maps_safe_name_back(self) -> None:
         """
         The advertised name resolves to the network name it stands for.
         """
-        self.assertEqual(self.NESTED_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
+        self.assertEqual(self.NESTED_NAME, await self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
 
-    def test_resolve_network_name_passes_other_names_through(self) -> None:
+    async def test_resolve_network_name_passes_other_names_through(self) -> None:
         """
         Top-level names, the legacy slash spelling, and unknown names come back unchanged.
         """
-        self.assertEqual(self.TOP_NAME, self.processor._resolve_network_name(self.TOP_NAME))
-        self.assertEqual(self.NESTED_NAME, self.processor._resolve_network_name(self.NESTED_NAME))
-        self.assertEqual("no_such_tool", self.processor._resolve_network_name("no_such_tool"))
+        self.assertEqual(self.TOP_NAME, await self.processor._resolve_network_name(self.TOP_NAME))
+        self.assertEqual(self.NESTED_NAME, await self.processor._resolve_network_name(self.NESTED_NAME))
+        self.assertEqual("no_such_tool", await self.processor._resolve_network_name("no_such_tool"))
 
-    def test_resolve_network_name_ignores_non_mcp_networks(self) -> None:
+    async def test_resolve_network_name_ignores_non_mcp_networks(self) -> None:
         """
         A network that is not an MCP tool never claims a tool name, even if its stale
         mcp_tool_name attribute would match.
@@ -293,22 +293,22 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         # clear_mcp_tool() would also drop the name; flip only the flag so the
         # stale name is really there to be ignored.
         self.nested.is_mcp_network = False
-        self.assertEqual(self.NESTED_TOOL_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
+        self.assertEqual(self.NESTED_TOOL_NAME, await self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
 
-    def test_resolve_network_name_skips_scan_for_network_names(self) -> None:
+    async def test_resolve_network_name_skips_scan_for_network_names(self) -> None:
         """
         A name that is itself a public network's network name is answered from the
         storage table without scanning the other networks; only an advertised name
         that differs from its network name pays for the scan.
         """
         with patch.object(self.storage, "get_agent_names", wraps=self.storage.get_agent_names) as scan:
-            self.assertEqual(self.TOP_NAME, self.processor._resolve_network_name(self.TOP_NAME))
-            self.assertEqual(self.NESTED_NAME, self.processor._resolve_network_name(self.NESTED_NAME))
+            self.assertEqual(self.TOP_NAME, await self.processor._resolve_network_name(self.TOP_NAME))
+            self.assertEqual(self.NESTED_NAME, await self.processor._resolve_network_name(self.NESTED_NAME))
             scan.assert_not_called()
-            self.assertEqual(self.NESTED_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
+            self.assertEqual(self.NESTED_NAME, await self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
             scan.assert_called_once()
 
-    def test_resolve_network_name_lets_network_name_mean_itself(self) -> None:
+    async def test_resolve_network_name_lets_network_name_mean_itself(self) -> None:
         """
         Should storage hold both a network "deep__math_guy" and a network
         "deep/math_guy" advertised as "deep__math_guy", the name means the network
@@ -319,4 +319,4 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         """
         lookalike: AgentNetwork = self.make_agent_network(self.NESTED_TOOL_NAME)
         self.storage.add_agent_network(self.NESTED_TOOL_NAME, lookalike)
-        self.assertEqual(self.NESTED_TOOL_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
+        self.assertEqual(self.NESTED_TOOL_NAME, await self.processor._resolve_network_name(self.NESTED_TOOL_NAME))

@@ -44,6 +44,9 @@ class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
     """
 
     def __init__(self):
+        """
+        Constructor
+        """
         self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.lock: RLock = RLock()
@@ -152,6 +155,16 @@ class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
         :param agent_name: name of an agent
         """
         return SingleAgentNetworkProvider(agent_name, self.agents_table)
+
+    @override
+    async def async_get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
+        """
+        Get AgentNetworkProvider for a specific agent asynchronously.
+        Prefer this when you are tool-building in the middle of agent graph activations.
+
+        :param agent_name: name of an agent
+        """
+        return self.get_agent_network_provider(agent_name)
 
     @override
     def get_agent_names(self) -> List[str]:
