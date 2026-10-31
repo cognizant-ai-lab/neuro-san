@@ -26,6 +26,7 @@ from typing import Union
 import traceback
 
 from pydantic import ConfigDict
+from pydantic import SkipValidation
 
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
@@ -45,6 +46,7 @@ from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
+from neuro_san.internals.run_context.langchain.core.tool_exchange_recorder import ToolExchangeRecorder
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
@@ -100,6 +102,20 @@ class RunContextRunnable(NeuroSanRunnable):
     error_detector: ErrorDetector
 
     session_id: str
+
+    # The chat history of the RunContext this runnable works for.
+    # A ToolExchangeRecorder appends each turn's tool calls and their results to it,
+    # and the chat_context sent back to the client is built from it. So this must be
+    # the RunContext's own list, not a copy.
+    #
+    # This class is a pydantic model, because it extends RunnablePassthrough, which is
+    # one. For a field typed as a list, pydantic stores a copy of the list it is given,
+    # so the appends would go to the copy and never reach the client. SkipValidation
+    # tells pydantic to store the list exactly as given, without checking it. See
+    # https://docs.pydantic.dev/latest/api/functional_validators/#pydantic.functional_validators.SkipValidation
+    #
+    # None when no history is kept, as in unit tests that only check the chain result.
+    chat_history: SkipValidation[List[BaseMessage]] = None
 
     # This guy needs to be a pydantic class and in order to have
     # a non-pydantic Journal as a member, we need to do this.
@@ -232,7 +248,10 @@ class RunContextRunnable(NeuroSanRunnable):
             # ended it (not every branch below captures a backtrace).
             backtrace = None
             try:
-                chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
+                # run_chain() follows the agent loop step by step so that each tool round is
+                # recorded as it completes. A step that fails still raises here, as it would
+                # from ainvoke().
+                chain_result: Optional[Dict[str, Any]] = await self.run_chain(inputs, runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
@@ -304,8 +323,78 @@ class RunContextRunnable(NeuroSanRunnable):
         output: str = self.parse_chain_result(chain_result, exception)
         return_message: BaseMessage = self.build_return_message(chain_result, output)
 
+        # The turn's tool calls and results went into the chat history as the
+        # chain ran (see run_chain); the answer follows them.
         # Chat history is updated in write_message
         await self.journal.write_message(return_message)
+
+    async def run_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Runs the agent chain, the agent's loop of model calls and tool calls, and
+        returns its final state.
+
+        The loop works like this: the model is called; if its reply asks for tools,
+        the tools run and their results go back to the model; this repeats until the
+        model replies without asking for a tool. LangChain's create_agent() builds this
+        loop as a LangGraph graph, and three terms below come from there:
+          * A step is one stage of the loop: one model call, one round of tool calls
+            (every call of one model reply, run together), or one middleware hook.
+          * The state is a dictionary that carries the loop's data from step to step.
+            Its "messages" key holds the conversation so far: the chat history, the
+            user's message, and every message the loop has added, tool calls and tool
+            results included. It is the only key of the state that neuro-san uses.
+          * The stream mode says what astream() yields. With stream_mode="values" it
+            yields the input state, then the full state after each step that changes it.
+
+        The chain runs through astream() instead of ainvoke() because the tool calls
+        the model makes are recorded only in the state's messages. ainvoke() returns
+        only the final state, and no state at all when a step raises. With astream(),
+        each state goes to a ToolExchangeRecorder, so a tool round enters the chat
+        history as soon as it is complete.
+
+        This keeps two kinds of tool rounds that the final state can miss: a round that
+        completed before a later step failed, and a round that a middleware which
+        summarizes older messages replaced with a summary later in the turn.
+        NeuroSanSummarizationMiddleware does that with keep_summary_in_context false;
+        with it true, the middleware also puts the summary in place of the round in the
+        chat history. An error raised by a step leaves this loop
+        just as it leaves ainvoke(), and invoke_agent_chain() catches and retries it.
+        A retry runs the chain again from the same inputs, so the rounds of a failed
+        attempt stay in the history next to the rounds of the retry.
+
+        The final state is the value ainvoke() returns: in LangGraph, ainvoke() is
+        itself a loop over astream() that keeps the last state. ainvoke() also adds an
+        "__interrupt__" key, used when a graph pauses to wait for a person, which
+        neuro-san does not use. A streamed state can also hold LangChain's own
+        bookkeeping keys, such as "jump_to", which neuro-san ignores.
+
+        The states are snapshots of the loop, not tokens. Whether one model call
+        streams its reply token by token from the provider is set by "streaming" in
+        the llm_config, false by default in the class args of default_llm_info.hocon.
+        stream_mode="values" does not change that: LangGraph asks a model to stream
+        tokens only for stream_mode="messages", and "streaming": false keeps token
+        streaming off even then (see BaseChatModel._should_stream() in langchain_core).
+
+        See https://docs.langchain.com/oss/python/langgraph/streaming for the stream
+        modes, and Pregel.ainvoke() in
+        https://github.com/langchain-ai/langgraph/blob/1.2.9/libs/langgraph/langgraph/pregel/main.py#L4013
+        for how ainvoke() reads the same stream.
+
+        :param inputs: The inputs to the agent chain
+        :param runnable_config: The runnable_config to send to the agent chain
+        :return: The loop's final state, the same value ainvoke() returns.
+                 None when the chain produced no state at all.
+        """
+        final_state: Optional[Dict[str, Any]] = None
+        # The recorder appends to the RunContext's own chat history list.
+        recorder: ToolExchangeRecorder = ToolExchangeRecorder(self.chat_history)
+        # Each state is a snapshot of the agent loop after one step (a model call, a round
+        # of tool calls or a middleware hook), not a stream of tokens; see the docstring.
+        state: Dict[str, Any] = None
+        async for state in self.agent_chain.astream(input=inputs, config=runnable_config, stream_mode="values"):
+            final_state = state
+            recorder.record_tool_exchange(inputs, state)
+        return final_state
 
     async def journal_retry_reason(self, error: Exception, reason: str):
         """

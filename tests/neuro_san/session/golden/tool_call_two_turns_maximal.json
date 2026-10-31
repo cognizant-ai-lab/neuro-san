@@ -1,0 +1,576 @@
+[
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "text": "System prompt for the mock llm",
+      "type": 1
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "text": "call accountant: 0.0",
+      "type": 2
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "structure": {
+        "invoked_agent_name": "Accountant",
+        "invoking_start": true,
+        "params": {
+          "running_cost": 0.0
+        }
+      },
+      "text": "Invoking: `Accountant` with:",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        },
+        {
+          "instantiation_index": 1,
+          "tool": "Accountant"
+        }
+      ],
+      "structure": {
+        "tool_args": {
+          "origin": [
+            {
+              "instantiation_index": 1,
+              "tool": "caller"
+            },
+            {
+              "instantiation_index": 1,
+              "tool": "Accountant"
+            }
+          ],
+          "origin_str": "caller.Accountant",
+          "running_cost": 0.0
+        },
+        "tool_start": true
+      },
+      "text": "Received arguments:",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        },
+        {
+          "instantiation_index": 1,
+          "tool": "Accountant"
+        }
+      ],
+      "structure": {
+        "tool_end": true,
+        "tool_error": false,
+        "tool_output": {
+          "running_cost": 3.0
+        }
+      },
+      "text": "Got result:",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "text": "{'running_cost': 3.0}",
+      "tool_result_origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        },
+        {
+          "instantiation_index": 1,
+          "tool": "Accountant"
+        }
+      ],
+      "type": 103
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "text": "tool result: {'running_cost': 3.0}; tool results in history: 1",
+      "type": 4
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "structure": {
+        "caveats": [
+          "Token usage from agents of the main agent network only. Usage from external agents is not included.",
+          "Token counts are approximate and estimated using tiktoken.",
+          "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+        ],
+        "completion_tokens": 16,
+        "empty_responses": 0,
+        "prompt_tokens": 16,
+        "successful_requests": 2,
+        "time_taken_in_seconds": 0.0,
+        "total_cost": 0.0,
+        "total_tokens": 32
+      },
+      "text": "",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "structure": {
+        "caveats": [
+          "Request total: includes token usage from external agents invoked via direct sessions on this server. Usage from external agents reached over the network is not included.",
+          "Token counts are approximate and estimated using tiktoken.",
+          "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+        ],
+        "completion_tokens": 16,
+        "empty_responses": 0,
+        "models": {
+          "ChatMockLlm": {
+            "tool-caller": {
+              "completion_tokens": 16,
+              "empty_responses": 0,
+              "prompt_tokens": 16,
+              "successful_requests": 2,
+              "time_taken_in_seconds": 0.0,
+              "total_cost": 0.0,
+              "total_tokens": 32
+            }
+          }
+        },
+        "prompt_tokens": 16,
+        "successful_requests": 2,
+        "time_taken_in_seconds": 0.0,
+        "total_cost": 0.0,
+        "total_tokens": 32
+      },
+      "text": "",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "chat_context": {
+        "chat_histories": [
+          {
+            "messages": [
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "call accountant: 0.0",
+                "type": 2
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "",
+                "tool_calls": [
+                  {
+                    "args": {
+                      "running_cost": 0.0
+                    },
+                    "id": "call_mock_1",
+                    "name": "Accountant"
+                  }
+                ],
+                "type": 4
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "{'running_cost': 3.0}",
+                "tool_call_id": "call_mock_1",
+                "type": 103
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "tool result: {'running_cost': 3.0}; tool results in history: 1",
+                "type": 4
+              }
+            ],
+            "origin": [
+              {
+                "instantiation_index": 1,
+                "tool": "caller"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "tool result: {'running_cost': 3.0}; tool results in history: 1",
+      "type": 101
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "text": "call accountant: 3.0",
+      "type": 2
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "structure": {
+        "invoked_agent_name": "Accountant",
+        "invoking_start": true,
+        "params": {
+          "running_cost": 3.0
+        }
+      },
+      "text": "Invoking: `Accountant` with:",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        },
+        {
+          "instantiation_index": 1,
+          "tool": "Accountant"
+        }
+      ],
+      "structure": {
+        "tool_args": {
+          "origin": [
+            {
+              "instantiation_index": 1,
+              "tool": "caller"
+            },
+            {
+              "instantiation_index": 1,
+              "tool": "Accountant"
+            }
+          ],
+          "origin_str": "caller.Accountant",
+          "running_cost": 3.0
+        },
+        "tool_start": true
+      },
+      "text": "Received arguments:",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        },
+        {
+          "instantiation_index": 1,
+          "tool": "Accountant"
+        }
+      ],
+      "structure": {
+        "tool_end": true,
+        "tool_error": false,
+        "tool_output": {
+          "running_cost": 6.0
+        }
+      },
+      "text": "Got result:",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "text": "{'running_cost': 6.0}",
+      "tool_result_origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        },
+        {
+          "instantiation_index": 1,
+          "tool": "Accountant"
+        }
+      ],
+      "type": 103
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "text": "tool result: {'running_cost': 6.0}; tool results in history: 2",
+      "type": 4
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "structure": {
+        "caveats": [
+          "Token usage from agents of the main agent network only. Usage from external agents is not included.",
+          "Token counts are approximate and estimated using tiktoken.",
+          "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+        ],
+        "completion_tokens": 16,
+        "empty_responses": 0,
+        "prompt_tokens": 16,
+        "successful_requests": 2,
+        "time_taken_in_seconds": 0.0,
+        "total_cost": 0.0,
+        "total_tokens": 32
+      },
+      "text": "",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "caller"
+        }
+      ],
+      "structure": {
+        "caveats": [
+          "Request total: includes token usage from external agents invoked via direct sessions on this server. Usage from external agents reached over the network is not included.",
+          "Token counts are approximate and estimated using tiktoken.",
+          "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+        ],
+        "completion_tokens": 16,
+        "empty_responses": 0,
+        "models": {
+          "ChatMockLlm": {
+            "tool-caller": {
+              "completion_tokens": 16,
+              "empty_responses": 0,
+              "prompt_tokens": 16,
+              "successful_requests": 2,
+              "time_taken_in_seconds": 0.0,
+              "total_cost": 0.0,
+              "total_tokens": 32
+            }
+          }
+        },
+        "prompt_tokens": 16,
+        "successful_requests": 2,
+        "time_taken_in_seconds": 0.0,
+        "total_cost": 0.0,
+        "total_tokens": 32
+      },
+      "text": "",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "chat_context": {
+        "chat_histories": [
+          {
+            "messages": [
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "call accountant: 0.0",
+                "type": 2
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "",
+                "tool_calls": [
+                  {
+                    "args": {
+                      "running_cost": 0.0
+                    },
+                    "id": "call_mock_1",
+                    "name": "Accountant"
+                  }
+                ],
+                "type": 4
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "{'running_cost': 3.0}",
+                "tool_call_id": "call_mock_1",
+                "type": 103
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "tool result: {'running_cost': 3.0}; tool results in history: 1",
+                "type": 4
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "call accountant: 3.0",
+                "type": 2
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "",
+                "tool_calls": [
+                  {
+                    "args": {
+                      "running_cost": 3.0
+                    },
+                    "id": "call_mock_2",
+                    "name": "Accountant"
+                  }
+                ],
+                "type": 4
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "{'running_cost': 6.0}",
+                "tool_call_id": "call_mock_2",
+                "type": 103
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "caller"
+                  }
+                ],
+                "text": "tool result: {'running_cost': 6.0}; tool results in history: 2",
+                "type": 4
+              }
+            ],
+            "origin": [
+              {
+                "instantiation_index": 1,
+                "tool": "caller"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "tool result: {'running_cost': 6.0}; tool results in history: 2",
+      "type": 101
+    }
+  }
+]

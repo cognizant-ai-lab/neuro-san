@@ -38,7 +38,7 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         :param max_message_history: The maximum number of messages to preserve
                 in the message history, not including the instructions.
                 The default value of None implies there is no maximum.
-                Non-positive numbers revert to no-maximum behavior.
+                So does a value of 1 or less, or a value that is not a number.
         """
         self.max_message_history: int = max_message_history
         if self.max_message_history is not None:
@@ -60,8 +60,20 @@ class ChatHistoryMessageProcessor(MessageProcessor):
 
     def process_messages(self, chat_message_dicts: List[Dict[str, Any]]):
         """
-        Convenience method for processing lists of messages.
-        :param chat_message_dicts: The messages to process.
+        Builds the chat history from the given messages, then trims it to max_message_history.
+
+        Each message goes through process_message(). It keeps user, system and AI messages
+        and the tool results that answer a call, and replaces the text of the first system
+        message, the front man's instructions, with "<redacted>". The result goes back to
+        the client in the chat_context.
+
+        Trimming happens only when max_message_history is above 1. It keeps the most recent
+        messages, then drops any before the first user message among them, so a tool result
+        is never cut off from its call and the history never starts with an AI message.
+        When none of the most recent messages is a user message, nothing is kept. Redacted
+        instructions at the start stay in front and do not count toward the maximum.
+
+        :param chat_message_dicts: The ChatMessage dictionaries to process, oldest first
         """
         super().process_messages(chat_message_dicts)
 
@@ -70,14 +82,24 @@ class ChatHistoryMessageProcessor(MessageProcessor):
             # Nothing to do.
             return
 
-        # Save the first item in the list. This is the redacted placeholder for instructions
-        instructions: Dict[str, Any] = self.message_history.pop(0)
+        # A history that starts with the redacted placeholder for the instructions
+        # keeps it in front of whatever is trimmed. The server's own histories
+        # carry no system message and start at the first user message.
+        instructions: Optional[Dict[str, Any]] = None
+        if len(self.message_history) > 0 and self.message_history[0].get("type") == ChatMessageType.SYSTEM:
+            instructions = self.message_history.pop(0)
 
         # Preserve the most recent n elements in the message history
         self.message_history = self.message_history[-self.max_message_history:]
 
-        # Prepend the instructions to the list
-        self.message_history.insert(0, instructions)
+        # Start at a user message. A cut inside a turn would leave a tool result
+        # without the call that asked for it, which providers reject, and some
+        # models reject a history that starts with an AI message.
+        while len(self.message_history) > 0 and self.message_history[0].get("type") != ChatMessageType.HUMAN:
+            self.message_history.pop(0)
+
+        if instructions is not None:
+            self.message_history.insert(0, instructions)
 
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):
         """
@@ -85,7 +107,8 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         :param chat_message_dict: The ChatMessage dictionary to process.
         :param message_type: The ChatMessageType of the chat_message_dictionary to process.
         """
-        if message_type not in (ChatMessageType.HUMAN, ChatMessageType.SYSTEM, ChatMessageType.AI):
+        if message_type not in (ChatMessageType.HUMAN, ChatMessageType.SYSTEM, ChatMessageType.AI) \
+                and not ChatHistoryMessageProcessor.is_tool_result(chat_message_dict, message_type):
             # Don't send any messages over the wire that won't be re-ingestable.
             return
 
@@ -97,11 +120,28 @@ class ChatHistoryMessageProcessor(MessageProcessor):
             transformed_message_dict = self.redact_instructions(chat_message_dict)
             self.saw_first_system = True
         else:
-            # Transform the message with properly escaped text.
-            transformed_message_dict = self.escape_message(chat_message_dict)
+            transformed_message_dict = ChatHistoryMessageProcessor.keep_message(chat_message_dict)
 
         if transformed_message_dict is not None:
             self.message_history.append(transformed_message_dict)
+
+    @staticmethod
+    def is_tool_result(chat_message_dict: Dict[str, Any], message_type: ChatMessageType) -> bool:
+        """
+        Tells whether the message answers a tool call made earlier in the history.
+
+        Such a message carries the id of the call it answers, so the next turn can
+        put the call and its result back together. A tool result without that id
+        is the stand-alone form and stays out of the history.
+
+        :param chat_message_dict: The ChatMessage dictionary to examine
+        :param message_type: The ChatMessageType of the dictionary
+        :return: True if the message is an AGENT_TOOL_RESULT with a tool_call_id
+        """
+        if message_type != ChatMessageType.AGENT_TOOL_RESULT:
+            return False
+        tool_call_id: Any = chat_message_dict.get("tool_call_id")
+        return isinstance(tool_call_id, str) and len(tool_call_id) > 0
 
     def redact_instructions(self, chat_message_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -113,54 +153,26 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         redacted["text"] = "<redacted>"
         return redacted
 
-    def escape_message(self, chat_message_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    @staticmethod
+    def keep_message(chat_message_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Prepare a message such that it can be re-ingested by the system nicely.
-        This means properly escaping any text that is sent.
+        Copies a message into the history as it is.
 
-        :param chat_message_dict: The ChatMessage dictionary to transform
-        :return: A shallow copy of the dictionary with its text escaped,
-                or None if the message carries no text at all.
-                A message that carries content_blocks keeps its text as it is,
-                so that the text still matches its blocks.
+        The text is not changed. It goes back to the model as a message, not through
+        a template, so braces and other characters need no escaping and the model
+        sees the text exactly as it was written.
+
+        A message that takes part in a tool exchange, a call or a result, is kept
+        even without text, with empty text, so the exchange stays complete.
+
+        :param chat_message_dict: The ChatMessage dictionary to copy
+        :return: A shallow copy of the dictionary, or None if the message carries no text
+                 and is neither a tool call nor a tool result
         """
-        transformed: Dict[str, Any] = copy(chat_message_dict)
-        text: Any = transformed.get("text")
-
-        if text is None:
-            return None
-
-        if transformed.get("content_blocks") is not None:
-            # A block message is rebuilt from its blocks, and the blocks are
-            # used only while the text equals their flattened text. History
-            # reaches the model as messages, not through a template, so the
-            # text is safe without escaping.
-            return transformed
-
-        if not isinstance(text, str):
-            # Brace escaping only applies to str text. Every dict reaching this
-            # processor today comes from BaseMessageDictionaryConverter.to_dict,
-            # which always emits str text, so this is a defensive guard for
-            # future non-str text: pass the message through untouched rather
-            # than silently dropping a history entry.
-            return transformed
-
-        # Braces are a problem for chat history being read back into the system
-        # if they are not properly escaped.
-
-        # First replace any pre-escaped braces with normal braces
-        remove_escaped_curly_open: str = text.replace("{{", "{")
-        remove_escaped_curly_close = remove_escaped_curly_open.replace("}}", "}")
-
-        # Now replace normal braces with escaped braces.
-        # Idea is to catch everything pre-escaped or not
-        escape_curly_open = remove_escaped_curly_close.replace("{", "{{")
-        use_text = escape_curly_open.replace("}", "}}")
-
-        # JSON spec does not allow control characters in strings and newlines in particular
-        # can be a problem for http clients that expect one full JSON message per line.
-        # Replace any lurking newlines with the 2 raw characters \ and n.
-        # DEF - for the future.
-
-        transformed["text"] = use_text
-        return transformed
+        kept: Dict[str, Any] = copy(chat_message_dict)
+        if kept.get("text") is None:
+            if not kept.get("tool_calls") and not kept.get("tool_call_id"):
+                return None
+            # A call-only message from some providers has list content with no text.
+            kept["text"] = ""
+        return kept

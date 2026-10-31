@@ -21,18 +21,21 @@ from typing import Dict
 from typing import Iterator
 from typing import List
 from typing import Optional
+from typing import Sequence
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.messages import AIMessageChunk
 from langchain_core.messages import BaseMessage
+from langchain_core.messages import ToolMessage
 from langchain_core.outputs import ChatGeneration
 from langchain_core.outputs import ChatGenerationChunk
 from langchain_core.outputs import ChatResult
 from pydantic import ConfigDict
 from pydantic import Field
 from tiktoken import get_encoding
+from typing_extensions import override
 
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -44,6 +47,8 @@ class ChatMockLlm(BaseChatModel):
     Inputs starting with ANTHROPIC_THINKING_MARKER, OPENAI_REASONING_MARKER
     or GEMINI_THINKING_MARKER make _generate return provider-shaped block content
     ahead of the echoed text instead of the plain echo; see the constants below.
+    An input starting with TOOL_CALL_MARKER makes it call the Accountant tool
+    and then answer with the tool's result.
 
     Adapted from https://python.langchain.com/docs/how_to/custom_chat_model/
     """
@@ -60,6 +65,12 @@ class ChatMockLlm(BaseChatModel):
     OPENAI_REASONING_MARKER: ClassVar[str] = "emit openai reasoning:"
     # Gemini 3 with include_thoughts: a thinking block, then a text block signed in extras.
     GEMINI_THINKING_MARKER: ClassVar[str] = "emit gemini thinking:"
+    # A tool-calling turn. "call accountant: 2.5" calls the Accountant tool with running_cost 2.5
+    # (0.0 when no number follows). The call's id and the answer both count the tool results
+    # already in the history, so a test can see whether an earlier turn's tool call and result
+    # came back through the chat_context.
+    TOOL_CALL_MARKER: ClassVar[str] = "call accountant:"
+    TOOL_NAME: ClassVar[str] = "Accountant"
 
     # This is required field and it is possible to have multiple test models.
     model_name: str = Field(default=None, alias="model")
@@ -93,9 +104,9 @@ class ChatMockLlm(BaseChatModel):
         :return: chat result containing chat generation which includes ai message.
         """
 
-        # The last message should be human message.
-        # Its content can be a plain string or a list of content blocks,
-        # so token counting always goes through the flattened text.
+        # The last message is the human message, or the result of the tool call
+        # this model just made. Its content can be a plain string or a list of
+        # content blocks, so token counting always goes through the flattened text.
         last_message = messages[-1]
         content = last_message.content
         text: str = ContentUtils.flatten_to_text(content)
@@ -104,18 +115,25 @@ class ChatMockLlm(BaseChatModel):
         response_metadata: Dict[str, Any] = {  # Use for response metadata
             "model_name": self.model_name,
         }
-        if text.startswith(self.ANTHROPIC_THINKING_MARKER):
+        tool_calls: List[Dict[str, Any]] = []
+        if isinstance(last_message, ToolMessage):
+            # The tool answered: report its result and how many tool results the history holds.
+            content = f"tool result: {text}; tool results in history: {ChatMockLlm._count_tool_results(messages)}"
+        elif text.startswith(ChatMockLlm.TOOL_CALL_MARKER):
+            content = ""
+            tool_calls = [ChatMockLlm._tool_call(messages, text)]
+        elif text.startswith(ChatMockLlm.ANTHROPIC_THINKING_MARKER):
             # ChatAnthropic with thinking on: the signed thinking block comes first.
-            answer: str = text[len(self.ANTHROPIC_THINKING_MARKER):].strip()
+            answer: str = text[len(ChatMockLlm.ANTHROPIC_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking.", "signature": "mock-signature"},
                 {"type": "text", "text": answer},
             ]
             response_metadata["model_provider"] = "anthropic"
-        elif text.startswith(self.OPENAI_REASONING_MARKER):
+        elif text.startswith(ChatMockLlm.OPENAI_REASONING_MARKER):
             # ChatOpenAI responses/v1: the reasoning item (id, summary parts, empty content,
             # encrypted_content) comes first. The translator makes one reasoning block per summary part.
-            answer = text[len(self.OPENAI_REASONING_MARKER):].strip()
+            answer = text[len(ChatMockLlm.OPENAI_REASONING_MARKER):].strip()
             content = [
                 {"type": "reasoning", "id": "rs_mock", "content": [],
                  "encrypted_content": "mock-encrypted-reasoning",
@@ -124,10 +142,10 @@ class ChatMockLlm(BaseChatModel):
                 {"type": "text", "text": answer, "id": "msg_mock", "annotations": []},
             ]
             response_metadata["model_provider"] = "openai"
-        elif text.startswith(self.GEMINI_THINKING_MARKER):
+        elif text.startswith(ChatMockLlm.GEMINI_THINKING_MARKER):
             # ChatGoogleGenerativeAI on Gemini 3: an unsigned thinking block comes first; the
             # thought signature rides on the text block, in its extras.
-            answer = text[len(self.GEMINI_THINKING_MARKER):].strip()
+            answer = text[len(ChatMockLlm.GEMINI_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking."},
                 {"type": "text", "text": answer, "extras": {"signature": "mock-thought-signature"}},
@@ -136,6 +154,7 @@ class ChatMockLlm(BaseChatModel):
 
         message = AIMessage(
             content=content,
+            tool_calls=tool_calls,
             additional_kwargs={},  # Used to add additional payload to the message
             response_metadata=response_metadata,
             usage_metadata={
@@ -147,6 +166,59 @@ class ChatMockLlm(BaseChatModel):
 
         generation = ChatGeneration(message=message)
         return ChatResult(generations=[generation])
+
+    @staticmethod
+    def _tool_call(messages: List[BaseMessage], text: str) -> Dict[str, Any]:
+        """
+        Builds the Accountant call for an input that starts with TOOL_CALL_MARKER.
+
+        :param messages: The prompt, used to number the call
+        :param text: The input text; the number after the marker is the running_cost, 0.0 if none
+        :return: A langchain tool call dictionary whose id counts the tool results already in the history
+        """
+        value_text: str = text[len(ChatMockLlm.TOOL_CALL_MARKER):].strip()
+        running_cost: float = 0.0
+        if len(value_text) > 0:
+            try:
+                running_cost = float(value_text)
+            except ValueError:
+                running_cost = 0.0
+        call_index: int = ChatMockLlm._count_tool_results(messages) + 1
+        return {
+            "name": ChatMockLlm.TOOL_NAME,
+            "args": {"running_cost": running_cost},
+            "id": f"call_mock_{call_index}",
+            "type": "tool_call",
+        }
+
+    @staticmethod
+    def _count_tool_results(messages: List[BaseMessage]) -> int:
+        """
+        Counts the tool results in the prompt.
+
+        :param messages: The prompt
+        :return: How many tool results the prompt holds
+        """
+        count: int = 0
+        # Every ToolMessage in the prompt is one earlier tool result.
+        message: BaseMessage = None
+        for message in messages:
+            if isinstance(message, ToolMessage):
+                count += 1
+        return count
+
+    @override
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ChatMockLlm":
+        """
+        Accepts the tools an agent gives this model. The mock reads no tool schemas;
+        it calls the Accountant by name when asked to, so the model itself is returned.
+
+        :param tools: The tool definitions (unused)
+        :param kwargs: Other binding arguments (unused)
+        :return: This model
+        """
+        _ = tools, kwargs
+        return self
 
     def _stream(
         self,

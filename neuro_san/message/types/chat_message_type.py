@@ -24,6 +24,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
+from langchain_core.messages.tool import ToolMessage
 
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.agent_message import AgentMessage
@@ -55,6 +56,9 @@ MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
     SystemMessage: ChatMessageType.SYSTEM,
     HumanMessage: ChatMessageType.HUMAN,
     AIMessage: ChatMessageType.AI,
+    # A tool's answer to a tool call made by an AI message. On the wire it carries
+    # the tool_call_id of that call, which is what tells it apart from an AgentToolResultMessage.
+    ToolMessage: ChatMessageType.AGENT_TOOL_RESULT,
 
     AgentMessage: ChatMessageType.AGENT,
     AgentFrameworkMessage: ChatMessageType.AGENT_FRAMEWORK,

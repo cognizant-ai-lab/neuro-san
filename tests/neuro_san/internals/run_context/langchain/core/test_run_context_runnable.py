@@ -18,6 +18,7 @@
 from functools import partial
 
 from typing import Any
+from typing import AsyncIterator
 from typing import Awaitable
 from typing import Dict
 from typing import List
@@ -35,6 +36,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
+from langchain_core.messages.tool import ToolMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
 from openai import RateLimitError
@@ -47,6 +49,8 @@ from neuro_san.message.utils.content_utils import ContentUtils
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 
 from tests.neuro_san.message.content_fixtures import ContentFixtures
+from tests.neuro_san.internals.run_context.langchain.core.run_context_runnable_test_helpers import \
+    RunContextRunnableTestHelpers
 
 
 # One test module per class is the repo convention, and RunContextRunnable
@@ -70,18 +74,11 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
     invoke_agent_chain journals the provider-native answer (normalized to
     standard blocks) when it carries block content, and keeps the plain
     text-only AIMessage shape for everything else.
+
+    invoke_agent_chain also puts each turn's tool rounds in the chat history
+    as the chain streams, before the answer is journaled. ToolExchangeRecorder's
+    own tests cover how the rounds are found and paired.
     """
-
-    @staticmethod
-    def _passthrough(output: str) -> str:
-        """
-        Return the given output unchanged, standing in for ErrorDetector.handle_error
-        in tests that do not exercise error rewriting.
-
-        :param output: The chain output text handed to the error detector
-        :return: The same output, untouched
-        """
-        return output
 
     @staticmethod
     def _record(written: List[BaseMessage], message: BaseMessage, *_args: Any, **_kwargs: Any) -> None:
@@ -109,18 +106,11 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
                 return True
         return False
 
-    @staticmethod
-    def _make_runnable() -> RunContextRunnable:
-        """Build a runnable whose error detector is a pass-through."""
-        error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
-        return RunContextRunnable.model_construct(error_detector=error_detector)
-
     def test_parse_chain_result_thinking_first_returns_answer(self):
         """
         An Anthropic thinking-first AIMessage projects to its answer text.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         output = runnable.parse_chain_result(ContentFixtures.anthropic_thinking_first(), exception=None)
         self.assertEqual(output, "the answer")
 
@@ -129,7 +119,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         Text blocks after the first must not be dropped: the old flatten
         stopped at the first type=="text" block and returned "part one, ".
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         message = ContentFixtures.multi_text_blocks()
         self.assertEqual(runnable.parse_chain_result(message, exception=None), "part one, part two")
 
@@ -138,7 +128,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         List-of-strings content is legal per the pydantic annotation; the old
         flatten skipped non-dict items and returned "".
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         output = runnable.parse_chain_result(ContentFixtures.list_of_str(), exception=None)
         self.assertEqual(output, "part one, part two")
 
@@ -147,7 +137,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         The normal chain result is a dict whose "messages" hold chat history;
         the last AIMessage found there gets the same full-text projection.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         chain_result = {"messages": [
             HumanMessage(content="question"),
             ContentFixtures.anthropic_thinking_first(),
@@ -197,7 +187,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         A chain result with no AIMessage but an "output" key parses to that
         text, exactly as before the lookup moved into find_ai_message.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         output: str = runnable.parse_chain_result({"output": "Please set OPENAI_API_KEY"}, exception=None)
         self.assertEqual(output, "Please set OPENAI_API_KEY")
 
@@ -206,7 +196,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         An AgentFinish whose return_values carry only an "output" key parses to
         that text: the unwrap applies on the fallback path too.
         """
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         finish: AgentFinish = AgentFinish(return_values={"output": "done"}, log="")
         self.assertEqual(runnable.parse_chain_result(finish, exception=None), "done")
 
@@ -222,7 +212,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         message = ContentFixtures.multi_text_blocks()
 
-        runnable = self._make_runnable()
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
         parsed: str = runnable.parse_chain_result(message, exception=None)
         self.assertEqual(parsed, "part one, part two")
 
@@ -278,11 +268,12 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # A non-parse ValueError exercises the retry branch on every attempt.
         agent_chain = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=ValueError("not a parsing error"))
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of,
+                                                            ValueError("not a parsing error")))
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -318,11 +309,12 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # A RuntimeError exercises the non-retryable broad-exception branch.
         agent_chain = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=RuntimeError("Server error '504 Gateway Time-out'"))
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of,
+                                                            RuntimeError("Server error '504 Gateway Time-out'")))
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -365,11 +357,13 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         rate_limit_error = RateLimitError("rate limited", response=response, body=None)
 
         agent_chain = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=[KeyError("missing field"), rate_limit_error])
+        failing: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream(KeyError("missing field"))
+        rate_limited: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream(rate_limit_error)
+        agent_chain.astream = MagicMock(side_effect=[failing, rate_limited])
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -395,7 +389,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         Build a runnable whose agent chain returns the given result and whose
         journal records every written message.
 
-        :param chain_result: What agent_chain.ainvoke should return
+        :param chain_result: The one state agent_chain.astream should yield
         :param error_detector: Optional error detector; defaults to a pass-through
         :return: The runnable and the list its journal appends written messages to
         """
@@ -403,10 +397,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         journal: MagicMock = MagicMock()
         journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         agent_chain: MagicMock = MagicMock()
-        agent_chain.ainvoke = AsyncMock(return_value=chain_result)
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, chain_result))
         if error_detector is None:
             error_detector = MagicMock()
-            error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
+            error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
         sensitive_logger: MagicMock = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
         runnable: RunContextRunnable = RunContextRunnable.model_construct(
@@ -644,14 +638,15 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         written: List[BaseMessage] = runnable_and_written[1]
 
         # Attempt 1 is rate limited, attempt 2 succeeds.
-        chain_results: List[Any] = [self._rate_limit_error(), {"output": "the answer"}]
         agent_chain: MagicMock = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=chain_results)
+        rate_limited: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream(self._rate_limit_error())
+        answered: AsyncIterator[Any] = RunContextRunnableTestHelpers.state_stream({"output": "the answer"})
+        agent_chain.astream = MagicMock(side_effect=[rate_limited, answered])
         copy_update: Dict[str, Any] = {"agent_chain": agent_chain}
         retrying_runnable: RunContextRunnable = runnable.model_copy(update=copy_update)
         await retrying_runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
 
-        self.assertEqual(agent_chain.ainvoke.await_count, 2)
+        self.assertEqual(agent_chain.astream.call_count, 2)
         final: BaseMessage = written[-1]
         self.assertIsInstance(final, AIMessage)
         self.assertEqual(final.content, "the answer")
@@ -668,7 +663,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         rate_limit_error: RateLimitError = self._rate_limit_error()
         agent_chain: MagicMock = MagicMock()
-        agent_chain.ainvoke = AsyncMock(side_effect=rate_limit_error)
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, rate_limit_error))
         tool_caller: MagicMock = MagicMock()
         tool_caller.get_agent_tool_spec = MagicMock(return_value=agent_spec)
         invocation_context: MagicMock = MagicMock()
@@ -690,7 +685,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         with patch.object(LangChainTokenCounter, "count_tokens", new=count_tokens):
             await run_it_runnable.run_it({})
 
-        return agent_chain.ainvoke.await_count
+        return agent_chain.astream.call_count
 
     @staticmethod
     async def _await_awaitable(awaitable: Awaitable, max_execution_seconds: float = None) -> Any:
@@ -714,3 +709,187 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         # The SDK error only reads request, status_code and headers from its response.
         response: MagicMock = MagicMock(status_code=429)
         return RateLimitError("rate limited", response=response, body=None)
+
+    @staticmethod
+    def _record_history_length(lengths: List[int], chat_history: List[BaseMessage],
+                               message: BaseMessage, *_args: Any, **_kwargs: Any) -> None:
+        """
+        Note how many messages the chat history holds when the journal is written to,
+        standing in for Journal.write_message.
+
+        :param lengths: The list that collects the chat history length at each write
+        :param chat_history: The chat history being watched
+        :param message: The message being journaled (ignored)
+        :param _args: Further positional arguments write_message accepts; ignored
+        :param _kwargs: Further keyword arguments write_message accepts; ignored
+        """
+        _ = message
+        lengths.append(len(chat_history))
+
+    async def test_invoke_agent_chain_appends_tool_exchange_before_answer(self) -> None:
+        """
+        The tool call and its result are appended to the chat history before the
+        answer is journaled, so the history reads call, result, answer.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        tool_turn: Dict[str, Any] = RunContextRunnableTestHelpers.tool_turn_state(human)
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, tool_turn))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [2])
+        self.assertIsInstance(chat_history[0], AIMessage)
+        self.assertEqual(chat_history[0].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        self.assertIsInstance(chat_history[1], ToolMessage)
+
+    async def test_invoke_agent_chain_records_tool_exchange_when_a_later_step_fails(self) -> None:
+        """
+        A tool round that completed before a later step failed is in the history when
+        the error answer is journaled: it was recorded from the state the chain reached.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        state: Dict[str, Any] = RunContextRunnableTestHelpers.tool_turn_state(human)
+        reached: Dict[str, Any] = {"messages": state.get("messages")[:-1]}  # the round is done, no answer yet
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, reached,
+                                                            RuntimeError("Server error '504 Gateway Time-out'")))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        sensitive_logger: MagicMock = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=sensitive_logger)
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [2])
+        self.assertEqual(chat_history[0].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        self.assertIsInstance(chat_history[1], ToolMessage)
+        self.assertEqual(chat_history[1].tool_call_id, "toolu_1")
+
+    async def test_invoke_agent_chain_records_a_round_compacted_out_of_the_state(self) -> None:
+        """
+        A tool round recorded from an earlier state stays in the history when a later
+        state no longer holds it, as after a summarization; the next round is recorded once.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="toolu_1")
+        second_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("toolu_2")])
+        second_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="toolu_2")
+        summary: HumanMessage = HumanMessage(content="Here is a summary of the conversation to date.", id="s1")
+        before: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        after: Dict[str, Any] = {"messages": [summary, second_call, second_result, AIMessage(content="the answer")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of, before, after))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [4])
+        self.assertEqual(chat_history[0].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        self.assertEqual(chat_history[1].tool_call_id, "toolu_1")
+        self.assertEqual(chat_history[2].tool_calls, [RunContextRunnableTestHelpers.tool_call("toolu_2")])
+        self.assertEqual(chat_history[3].tool_call_id, "toolu_2")
+
+    async def test_invoke_agent_chain_keeps_two_streamed_rounds_that_share_a_call_id(self) -> None:
+        """
+        Two rounds of one turn that reuse a call id are both recorded as the chain
+        streams, each once: rounds are told apart by message id, as LangGraph gives
+        every message in the state an id.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                          id="ai_1")
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1", id="t_1")
+        second_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                           id="ai_2")
+        second_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1", id="t_2")
+        first_round: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        second_round: Dict[str, Any] = {"messages": [human, first_call, first_result, second_call, second_result]}
+        answered: Dict[str, Any] = {"messages": second_round.get("messages") + [AIMessage(content="the answer",
+                                                                                          id="ai_3")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.astream = MagicMock(side_effect=partial(RunContextRunnableTestHelpers.stream_of,
+                                                            first_round, second_round, answered))
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(), sensitive_logger=MagicMock())
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 1)
+
+        self.assertEqual(lengths, [4])
+        self.assertEqual(chat_history[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(chat_history[2].tool_calls, [RunContextRunnableTestHelpers.tool_call("call_1")])
+        self.assertEqual(chat_history[3].content, "{'running_cost': 6.0}")
+
+    async def test_invoke_agent_chain_keeps_a_retry_round_that_reuses_a_call_id(self) -> None:
+        """
+        A retry whose round reuses a call id of the failed attempt keeps both rounds:
+        the retry's AIMessage has its own message id, so its round is recorded too.
+        """
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        first_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                          id="ai_1")
+        first_result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="call_1", id="t_1")
+        retry_call: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("call_1")],
+                                          id="ai_2")
+        retry_result: ToolMessage = ToolMessage(content="{'running_cost': 6.0}", tool_call_id="call_1", id="t_2")
+        failed_round: Dict[str, Any] = {"messages": [human, first_call, first_result]}
+        retry_round: Dict[str, Any] = {"messages": [human, retry_call, retry_result]}
+        answered: Dict[str, Any] = {"messages": retry_round.get("messages") + [AIMessage(content="the answer",
+                                                                                         id="ai_3")]}
+        chat_history: List[BaseMessage] = []
+        lengths: List[int] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=partial(self._record_history_length, lengths, chat_history))
+        agent_chain: MagicMock = MagicMock()
+        # The first attempt fails after its round. The retry starts again from the same inputs.
+        agent_chain.astream = MagicMock(side_effect=[
+            RunContextRunnableTestHelpers.state_stream(failed_round, KeyError("missing")),
+            RunContextRunnableTestHelpers.state_stream(retry_round, answered),
+        ])
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
+        # should_log() is True, so the retry notice is journaled too.
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal, chat_history=chat_history, agent_chain=agent_chain,
+            error_detector=error_detector, logger=MagicMock(),
+            sensitive_logger=MagicMock(should_log=MagicMock(return_value=True)))
+
+        await runnable.invoke_agent_chain({"messages": [human]}, {}, 2)
+
+        # The retry notice is journaled after the failed attempt's round, the answer after both rounds.
+        self.assertEqual(lengths, [2, 4])
+        self.assertEqual(chat_history[1].content, "{'running_cost': 3.0}")
+        self.assertEqual(chat_history[2].tool_calls, [RunContextRunnableTestHelpers.tool_call("call_1")])
+        self.assertEqual(chat_history[3].content, "{'running_cost': 6.0}")
