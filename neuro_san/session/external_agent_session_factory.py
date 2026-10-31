@@ -14,16 +14,16 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from asyncio import get_running_loop
-from asyncio import run
+from asyncio import run_coroutine_threadsafe
 from concurrent.futures import Future
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from typing import Coroutine
 from typing import Dict
 from typing import List
 
 from typing_extensions import override
+
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -82,19 +82,13 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             agent_url,
             invocation_context,
             invocation)
-        try:
-            get_running_loop()
-        except RuntimeError:
-            # No event loop is running in this thread, so run one here.
-            return run(coroutine)
-
-        # An event loop is already running in this thread. Waiting on it here would deadlock,
-        # so run the coroutine on a fresh event loop in a worker thread and wait for that.
+        # Run the coroutine on the event loop of the invocation's AsyncioExecutor
+        # and block this thread until it completes.
         # Sessions bind to an event loop lazily, when a request is first made, so the
         # returned session is still usable on the caller's loop.
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future: Future = executor.submit(run, coroutine)
-            return future.result()
+        executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
+        future: Future = run_coroutine_threadsafe(coroutine, executor.get_event_loop())
+        return future.result()
 
     async def async_create_session(self, agent_url: str,
                                    invocation_context: InvocationContext,
