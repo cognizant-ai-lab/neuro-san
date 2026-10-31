@@ -86,19 +86,24 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if suffix is None:
             return None
 
+        # Fetch the contents of the file
         contents: str = await self.fetch_contents(agent_name)
         if contents is None:
             return None
 
+        # Parse the contents of the file into a dictionary
         agent_spec: Dict[str, Any] = self.parse_contents(contents, suffix, agent_name)
         if agent_spec is None:
             return None
 
         # DEF: Validate spec?
         agent_network = AgentNetwork(agent_spec, agent_name)
+
+        # Add the AgentNetwork to the cache
         # Note: Synchronous lock inside
         self.add_agent_network(agent_name, agent_network)
 
+        # Return the provider, as the method signature requires
         network_provider = super().get_agent_network_provider(agent_name)
         return network_provider
 
