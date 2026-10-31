@@ -88,7 +88,8 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         # returned session is still usable on the caller's loop.
         executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
         future: Future = run_coroutine_threadsafe(coroutine, executor.get_event_loop())
-        return future.result()
+        session: AsyncAgentSession = future.result()
+        return session
 
     async def async_create_session(self, agent_url: str,
                                    invocation_context: InvocationContext,
