@@ -164,7 +164,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         contents: str = None
 
         # Caller should have already taken care of any "file://" scheme.
-        async with async_open(url, "r") as file_obj:
+        async with async_open(url, "rb") as file_obj:
             contents = await file_obj.read()
 
         return contents
@@ -195,6 +195,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
 
         :param contents: The contents of an agent network file
         :param suffix: The suffix of the file
+        :param url: The location of an agent network description
         :return: the contents of the agent network file
         """
         serialization_format: SerializationFormat = self.extension_to_serialization_format.get(suffix)
