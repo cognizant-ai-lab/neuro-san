@@ -21,9 +21,13 @@ from typing import Coroutine
 from typing import Dict
 from typing import List
 
+from logger import getLogger
+from logger import Logger
+
 from typing_extensions import override
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.logging.log_once import LogOnce
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -32,6 +36,7 @@ from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgen
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
+from neuro_san.intnernas.utils.asyncio_util import AsyncioUtil
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
@@ -78,6 +83,14 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                                     None - implies chatbot
         :return: An AsyncAgentSession through which communications about the external agent can be made.
         """
+        if AsyncioUtil.is_called_by_async_method():
+            raise RuntimeError("create_session() cannot be called from within an async method."
+                               "It will hang. Use async_create_session() instead")
+
+        logger: Logger = getLogger(ExternalAgentSessionFactory.__name__)
+        log_once: LogOnce = LogOnce(logger)
+        log_once.info("create_session() is deprecated. Use async_create_session() instead.")
+
         coroutine: Coroutine[Any, Any, AsyncAgentSession] = self.async_create_session(
             agent_url,
             invocation_context,
