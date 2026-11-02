@@ -19,6 +19,7 @@
 from inspect import CO_ASYNC_GENERATOR  # pylint: disable=no-name-in-module
 from inspect import CO_COROUTINE  # pylint: disable=no-name-in-module
 from inspect import currentframe
+from types import CodeType
 from types import FrameType
 
 
@@ -40,11 +41,14 @@ class AsyncioUtil:
         :return: True if an async method is anywhere up the current call stack.
                  False if the call stack is entirely synchronous.
         """
-        frame: FrameType = currentframe().f_back
+        current_frame: FrameType = currentframe()
+        frame: FrameType = current_frame.f_back
         try:
             # Walk up the call stack from the immediate caller
             while frame is not None:
-                if frame.f_code.co_flags & AsyncioUtil.ASYNC_CODE_FLAGS:
+                f_code: CodeType = frame.f_code
+                co_flags: int = f_code.co_flags
+                if co_flags & AsyncioUtil.ASYNC_CODE_FLAGS:
                     return True
                 frame = frame.f_back
         finally:
