@@ -21,8 +21,8 @@ from typing import Coroutine
 from typing import Dict
 from typing import List
 
-from logger import getLogger
-from logger import Logger
+from logging import getLogger
+from logging import Logger
 
 from typing_extensions import override
 
