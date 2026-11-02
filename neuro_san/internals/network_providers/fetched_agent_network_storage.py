@@ -96,7 +96,8 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if agent_spec is None:
             return None
 
-        # DEF: Validate spec?
+        # DEF: Apply filters
+        # DEF: Validate spec
         agent_network = AgentNetwork(agent_spec, agent_name)
 
         # Add the AgentNetwork to the cache
