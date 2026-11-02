@@ -164,6 +164,7 @@ class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
 
         :param agent_name: name of an agent
         """
+        # Nothing to wait on, so simply call the sync version.
         return self.get_agent_network_provider(agent_name)
 
     @override
