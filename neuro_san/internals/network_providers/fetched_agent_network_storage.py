@@ -22,6 +22,7 @@ from pathlib import Path
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
 from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 from aiohttp import ClientSession
 from aiofiles import open as async_open
@@ -116,14 +117,19 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         :return: the contents of the agent network file
         """
         parse_result: ParseResult = urlparse(agent_name)
-        scheme: str = parse_result.scheme or "file"
+        scheme: str = parse_result.scheme
         url: str = parse_result.geturl()
         contents: str = None
 
         # For now, no retries
         try:
             if scheme == "file":
-                contents = await self.fetch_local_file(parse_result.path)
+                # A file URL is percent-encoded, so decode it to a local path.
+                contents = await self.fetch_local_file(url2pathname(parse_result.path))
+            elif len(scheme) <= 1:
+                # No scheme is a plain path, used literally.
+                # A one-letter scheme is a Windows drive letter, as in C:\nets\a.hocon.
+                contents = await self.fetch_local_file(agent_name)
             else:
                 contents = await self.fetch_over_network(url)
         # pylint: disable=broad-except

@@ -59,6 +59,9 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
 
     MALFORMED_CONTENTS: str = '{"tools": [ '
 
+    # Raw string, so the backslashes are not escape sequences.
+    WINDOWS_PATH: str = r"C:\nets\a.hocon"
+
     def setUp(self):
         """
         Create a temporary directory and a fresh storage for each test.
@@ -168,6 +171,18 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         """
         self.assertIsNone(self.storage.get_supported_suffix("https://example.com/networks/network"))
 
+    def test_get_supported_suffix_percent_encoded(self):
+        """
+        Tests that a percent-encoded name keeps its suffix.
+        """
+        self.assertEqual(".json", self.storage.get_supported_suffix("my%20net.json"))
+
+    def test_get_supported_suffix_windows_path(self):
+        """
+        Tests that a Windows path with a drive letter keeps its suffix.
+        """
+        self.assertEqual(".hocon", self.storage.get_supported_suffix(self.WINDOWS_PATH))
+
     def test_parse_contents_hocon(self):
         """
         Tests parsing valid HOCON contents.
@@ -232,6 +247,50 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         """
         path: str = os.path.join(self.temp_dir, "missing.hocon")
         self.assertIsNone(await self.storage.fetch_contents(path))
+
+    async def test_fetch_contents_percent_encoded_plain_path(self):
+        """
+        Tests that a plain path is used literally, so %20 is not decoded.
+        """
+        path: str = self.write_file("my%20net.json", self.JSON_CONTENTS)
+        contents: str = await self.storage.fetch_contents(path)
+        self.assertEqual(self.JSON_CONTENTS, contents)
+
+    async def test_fetch_contents_percent_encoded_file_url(self):
+        """
+        Tests that %20 in a file:// URL is decoded to a space in the local path.
+        """
+        path: str = self.write_file("my net.json", self.JSON_CONTENTS)
+        url: str = Path(path).as_uri()
+        self.assertIn("my%20net.json", url)
+        contents: str = await self.storage.fetch_contents(url)
+        self.assertEqual(self.JSON_CONTENTS, contents)
+
+    async def test_get_provider_percent_encoded_file_url(self):
+        """
+        Tests getting a provider for a file:// URL with %20, stored under the URL as given.
+        """
+        path: str = self.write_file("my net.json", self.JSON_CONTENTS)
+        url: str = Path(path).as_uri()
+        provider: AgentNetworkProvider = await self.storage.async_get_agent_network_provider(url)
+        self.assertIsNotNone(provider)
+
+        agent_network: AgentNetwork = provider.get_agent_network()
+        self.assertIsNotNone(agent_network)
+        self.assertEqual("greeter", agent_network.get_config().get("tools")[0].get("name"))
+        self.assertIn(url, self.storage.get_agent_names())
+
+    async def test_fetch_contents_windows_path(self):
+        """
+        Tests that a Windows drive letter is read as a local file, not a URL scheme.
+        """
+        self.storage.fetch_local_file = AsyncMock(return_value=self.HOCON_CONTENTS)
+        self.storage.fetch_over_network = AsyncMock(return_value=None)
+
+        contents: str = await self.storage.fetch_contents(self.WINDOWS_PATH)
+        self.assertEqual(self.HOCON_CONTENTS, contents)
+        self.storage.fetch_local_file.assert_awaited_once_with(self.WINDOWS_PATH)
+        self.storage.fetch_over_network.assert_not_awaited()
 
     async def test_fetch_over_network(self):
         """
