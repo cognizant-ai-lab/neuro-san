@@ -62,9 +62,9 @@ class LangChainOpenAIFunctionTool(BaseTool):
     # which is a type validator that langchain is based on which
     # is able to use JSON schema definitions to validate fields.
     #
-    # Also note that any of the function_json's parameters has to satisfy the
-    # non-optional schema spec of this object. That is it needs:
-    #       "name", "description" and "parameters" all as keys.
+    # Also note that the function_json has to satisfy the non-optional
+    # schema spec of this object. That is it needs "name" and "description"
+    # as keys. "parameters" is optional.
 
     # This group of member variables are required in OpenAI function definitions
     name: str
@@ -89,11 +89,16 @@ class LangChainOpenAIFunctionTool(BaseTool):
     @staticmethod
     def verify_function_json(function_json: Dict[str, Any]):
         """
+        Checks that a function json can be turned into a tool.
+
         :param function_json: The function json description of the tool.
             Must have at least:
                 * A name
                 * A description
-                * A parameters dictionary with at least one entry in its properties dict
+            A parameters dictionary is optional. A non-empty one needs a type
+            and at least one entry in its properties dict.
+        :raises ToolSpecError: When the name or the description is missing,
+            or the parameters are malformed
         """
         message: str = ""
         name: str = function_json.get("name")
