@@ -539,8 +539,8 @@ An agent can also give its description at its top level, as a [description](#des
 <!--- pyml disable-next-line no-duplicate-heading -->
 #### description
 
-Every agent _must_ have its function description filled out, here or as a top-level
-[description](#description-2).
+Every agent other than a [toolbox](#toolbox) agent _must_ have its function description filled out, here or as a
+top-level [description](#description-2).
 This is a single string value which informs anything upstream as to what _this_ agent can do for it.
 
 For a user-facing front-man, what is contained in this description often suffices as a prompt for the user.
@@ -551,9 +551,10 @@ Parameters contains an optional [JSON Schema](https://json-schema.org) dictionar
 specific information the agent needs as input arguments when it is called.
 Only the `type: object` + `properties` form described below is supported.
 JSON Schema constructs outside this form (such as `additionalProperties`,
-`anyOf`, or `$ref`) are not honored: a schema without a `properties` dictionary
-is rejected as invalid when the agent is called as a tool, and unsupported
-constructs appearing alongside a `properties` dictionary are ignored.
+`anyOf`, or `$ref`) are not honored: a schema that uses them without a
+`properties` dictionary is rejected as invalid when the agent is called as a
+tool, and unsupported constructs appearing alongside a `properties` dictionary
+are ignored.
 
 An LLM-enabled agent other than the front-man whose function has no `parameters`, or a null one, gets one
 required `inquiry` string parameter, because its input prompt is built from the arguments of the call. This is
