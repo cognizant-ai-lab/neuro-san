@@ -36,7 +36,6 @@ from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgen
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
-from neuro_san.internals.utils.asyncio_util import AsyncioUtil
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
@@ -84,7 +83,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         :return: An AsyncAgentSession through which communications about the external agent can be made.
         """
         executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
-        if AsyncioUtil.is_running_in_executor(executor):
+        if executor.is_running_in_owned_loop():
             raise RuntimeError("create_session() cannot be called from the event loop of the invocation's "
                                "AsyncioExecutor. It will hang. Use async_create_session() instead")
 
