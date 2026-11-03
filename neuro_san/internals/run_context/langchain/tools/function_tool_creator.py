@@ -105,12 +105,13 @@ class FunctionToolCreator(ToolCreator):
     @staticmethod
     def declares_no_parameters(function_json: Dict[str, Any]) -> bool:
         """
-        Tells whether a function specification declares no parameters: none at all,
-        null, an empty dictionary, or only an empty properties declaration.
+        Tells whether a function specification declares no parameters: none at all, null,
+        or a block that holds nothing but an empty "properties", an empty "required" and
+        a "type" of "object". Each of these keys may also be left out or null.
 
         :param function_json: The function specification
         :return: True when the specification declares no parameters. False when it declares
-                some, or when it or its parameters are not something this can reason about.
+                some, or when it or its parameters are malformed.
         """
         if not isinstance(function_json, dict):
             # Only a spec that skipped validation gets here. create_tool() rejects it.
@@ -125,14 +126,13 @@ class FunctionToolCreator(ToolCreator):
             return False
 
         parameters: Dict[str, Any] = raw_parameters
-        properties: Any = parameters.get("properties")
-        if properties is not None and not isinstance(properties, dict):
-            # Malformed, however truthy or falsy (e.g. [] or false). verify_function_json() reports it.
-            # A null value counts as not given, as it does for "parameters".
-            return False
-        if properties:
-            return False
-
         # Any other key (e.g. additionalProperties, anyOf, $ref) marks an unsupported dialect.
         # It gets no default, so that verify_function_json() reports it.
-        return {"type", "properties", "required"}.issuperset(parameters.keys())
+        if not {"type", "properties", "required"}.issuperset(parameters.keys()):
+            return False
+
+        # Null counts as not given, as it does for "parameters". Any other value that is not
+        # the empty form declares something, or is malformed (e.g. [] or false) and gets reported.
+        return (parameters.get("properties") in (None, {})
+                and parameters.get("required") in (None, [])
+                and parameters.get("type") in (None, "object"))

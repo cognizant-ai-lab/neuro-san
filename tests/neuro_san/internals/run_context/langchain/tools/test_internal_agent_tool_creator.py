@@ -155,28 +155,47 @@ class TestInternalAgentToolCreator(IsolatedAsyncioTestCase):
                 with self.assertRaises(ValueError):
                     await self.make_creator(function_cases.get(label)).create_tool("helper")
 
-    async def test_properties_that_are_not_a_dictionary_raise_value_error(self) -> None:
+    async def test_malformed_parameters_raise_value_error(self) -> None:
         """
-        A properties value that is not a dictionary, such as [] or false, is malformed,
-        so the tool does not get the default. Building it raises a ValueError that names
-        the problem, which the validators do not catch.
+        A parameters block whose properties, required or type value is not the empty
+        form, such as properties [] or a required argument that is not declared, is
+        malformed, so the tool does not get the default. Building it raises a ValueError
+        that names the problem, which the validators do not catch.
         """
-        properties_cases: Dict[str, Any] = {
-            "list": [],
-            "empty_string": "",
-            "false": False,
+        parameters_cases: Dict[str, Any] = {
+            "properties_list": {
+                "type": "object",
+                "properties": [],
+            },
+            "properties_empty_string": {
+                "type": "object",
+                "properties": "",
+            },
+            "properties_false": {
+                "type": "object",
+                "properties": False,
+            },
+            "required_without_properties": {
+                "type": "object",
+                "properties": {},
+                "required": ["question"],
+            },
+            "required_not_a_list": {
+                "type": "object",
+                "required": "question",
+            },
+            "type_not_object": {
+                "type": "string",
+            },
         }
 
         # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
         label: str = None
-        for label in properties_cases:
+        for label in parameters_cases:
             with self.subTest(case=label):
                 function_json: Dict[str, Any] = {
                     "description": "Answers questions.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": properties_cases.get(label),
-                    },
+                    "parameters": parameters_cases.get(label),
                 }
 
                 with self.assertRaises(ValueError):

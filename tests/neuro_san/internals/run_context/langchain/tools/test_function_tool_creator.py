@@ -97,11 +97,12 @@ class TestFunctionToolCreator(IsolatedAsyncioTestCase):
 
     def test_declares_no_parameters(self) -> None:
         """
-        A function with no parameters, null ones, an empty dictionary or only an empty or
-        null properties declaration declares no parameters, so the answer is True. One with
-        properties or with a block in an unsupported dialect declares some, and a block or
-        a properties value that is not a dictionary is malformed, so for those the answer
-        is False. So it is for a function that is not a dictionary.
+        A function with no parameters, null ones, an empty dictionary, or a block with only
+        an empty or null properties declaration declares no parameters, so the answer is True.
+        One with properties or with a block in an unsupported dialect declares some. A block,
+        properties or required value that is not the empty form, or a type other than object,
+        is malformed. For those the answer is False, as it is for a function that is not a
+        dictionary.
         """
         # Each case maps the "parameters" value of a function to the expected answer.
         cases: Dict[str, Dict[str, Any]] = {
@@ -147,6 +148,27 @@ class TestFunctionToolCreator(IsolatedAsyncioTestCase):
                 "parameters": {
                     "type": "object",
                     "properties": [],
+                },
+                "expected": False,
+            },
+            "required_without_properties": {
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": ["question"],
+                },
+                "expected": False,
+            },
+            "required_not_a_list": {
+                "parameters": {
+                    "type": "object",
+                    "required": "question",
+                },
+                "expected": False,
+            },
+            "type_not_object": {
+                "parameters": {
+                    "type": "string",
                 },
                 "expected": False,
             },

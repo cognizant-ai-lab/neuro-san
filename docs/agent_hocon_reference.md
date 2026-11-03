@@ -557,9 +557,9 @@ tool, and unsupported constructs appearing alongside a `properties` dictionary
 are ignored.
 
 When an agent calls an LLM-enabled agent of its own network that declares no parameters (no `parameters`, or
-only `type`, `required` and an empty or null `properties`), the tool it calls through gets one required `inquiry`
-string parameter, because the called agent's input prompt is built from the arguments of the call. The tool
-then has these parameters:
+one with nothing but `"type": "object"` and an empty or null `properties` and `required`), the tool it calls
+through gets one required `inquiry` string parameter, because the called agent's input prompt is built from
+the arguments of the call. The tool then has these parameters:
 
 ```json
 {
