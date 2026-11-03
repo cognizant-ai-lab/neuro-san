@@ -105,8 +105,8 @@ class TestInternalAgentToolCreator(IsolatedAsyncioTestCase):
 
     async def test_empty_parameters_count_as_none(self) -> None:
         """
-        Null parameters, an empty dictionary and an empty properties declaration all
-        declare no parameters, so each of these tools gets the default.
+        Null parameters, an empty dictionary and an empty or null properties declaration
+        all declare no parameters, so each of these tools gets the default.
         """
         parameters_cases: Dict[str, Any] = {
             "null": None,
@@ -117,6 +117,10 @@ class TestInternalAgentToolCreator(IsolatedAsyncioTestCase):
             "empty_properties": {
                 "type": "object",
                 "properties": {},
+            },
+            "null_properties": {
+                "type": "object",
+                "properties": None,
             },
         }
 

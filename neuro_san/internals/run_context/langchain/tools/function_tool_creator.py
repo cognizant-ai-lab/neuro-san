@@ -128,6 +128,7 @@ class FunctionToolCreator(ToolCreator):
         properties: Any = parameters.get("properties")
         if properties is not None and not isinstance(properties, dict):
             # Malformed, however truthy or falsy (e.g. [] or false). verify_function_json() reports it.
+            # A null value counts as not given, as it does for "parameters".
             return False
         if properties:
             return False

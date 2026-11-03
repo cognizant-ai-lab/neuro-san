@@ -97,8 +97,8 @@ class TestFunctionToolCreator(IsolatedAsyncioTestCase):
 
     def test_declares_no_parameters(self) -> None:
         """
-        A function with no parameters, null ones, an empty dictionary or only an empty
-        properties declaration declares no parameters, so the answer is True. One with
+        A function with no parameters, null ones, an empty dictionary or only an empty or
+        null properties declaration declares no parameters, so the answer is True. One with
         properties or with a block in an unsupported dialect declares some, and a block or
         a properties value that is not a dictionary is malformed, so for those the answer
         is False. So it is for a function that is not a dictionary.
@@ -118,6 +118,13 @@ class TestFunctionToolCreator(IsolatedAsyncioTestCase):
                     "type": "object",
                     "properties": {},
                     "required": [],
+                },
+                "expected": True,
+            },
+            "null_properties": {
+                "parameters": {
+                    "type": "object",
+                    "properties": None,
                 },
                 "expected": True,
             },
