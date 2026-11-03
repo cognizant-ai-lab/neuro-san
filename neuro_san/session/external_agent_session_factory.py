@@ -125,41 +125,6 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                                                                                   invocation)
         return session
 
-    async def create_fetched_session(self, agent_url: str,
-                                     invocation_context: InvocationContext,
-                                     invocation: str = None) -> AsyncAgentSession:
-        """
-        Creates a direct session for an agent network whose spec is fetched from the given URL.
-
-        :param agent_url: An url string pointing to an agent network file
-        :param invocation_context: The context policy container that pertains to the invocation
-                    of the agent.
-        :param invocation: String describing how the agent wants to be invoked.
-        :return: An AsyncAgentSession for the fetched agent network, or None when
-                 there is no fetched storage or the URL does not yield an agent network.
-        """
-        if not self.is_use_direct() or self.storage_source_dict is None:
-            return None
-
-        fetched_storage: AgentStorageSource = self.storage_source_dict.get(StorageClass.FETCHED)
-        if fetched_storage is None:
-            return None
-
-        agent_network_provider: AgentNetworkProvider = \
-            await fetched_storage.async_get_agent_network_provider(agent_url)
-        if agent_network_provider is None:
-            return None
-
-        agent_network: AgentNetwork = agent_network_provider.get_agent_network()
-        if agent_network is None:
-            return None
-
-        metadata: Dict[str, str] = invocation_context.get_metadata()
-        safe_invocation_context: SessionInvocationContext = invocation_context.safe_shallow_copy(invocation)
-        session: AsyncAgentSession = AsyncDirectAgentSession(agent_network, safe_invocation_context,
-                                                             metadata=metadata)
-        return session
-
     def get_networks_order(self, storage_source_dict: Dict[str, AgentStorageSource]) -> List[str]:
         """
         :param storage_source_dict: The dictionary of AgentStorageSource instances to check for networks.
@@ -317,3 +282,38 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         :return: When True, will use a Direct session for external agents that would reside on the same server.
         """
         return self.use_direct
+
+    async def create_fetched_session(self, agent_url: str,
+                                     invocation_context: InvocationContext,
+                                     invocation: str = None) -> AsyncAgentSession:
+        """
+        Creates a direct session for an agent network whose spec is fetched from the given URL.
+
+        :param agent_url: An url string pointing to an agent network file
+        :param invocation_context: The context policy container that pertains to the invocation
+                    of the agent.
+        :param invocation: String describing how the agent wants to be invoked.
+        :return: An AsyncAgentSession for the fetched agent network, or None when
+                 there is no fetched storage or the URL does not yield an agent network.
+        """
+        if not self.is_use_direct() or self.storage_source_dict is None:
+            return None
+
+        fetched_storage: AgentStorageSource = self.storage_source_dict.get(StorageClass.FETCHED)
+        if fetched_storage is None:
+            return None
+
+        agent_network_provider: AgentNetworkProvider = \
+            await fetched_storage.async_get_agent_network_provider(agent_url)
+        if agent_network_provider is None:
+            return None
+
+        agent_network: AgentNetwork = agent_network_provider.get_agent_network()
+        if agent_network is None:
+            return None
+
+        metadata: Dict[str, str] = invocation_context.get_metadata()
+        safe_invocation_context: SessionInvocationContext = invocation_context.safe_shallow_copy(invocation)
+        session: AsyncAgentSession = AsyncDirectAgentSession(agent_network, safe_invocation_context,
+                                                             metadata=metadata)
+        return session
