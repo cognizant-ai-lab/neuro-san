@@ -39,6 +39,10 @@ class AgentNetworkOnBoarding(ConfigFilter, DictionaryValidator):
                  network_name: str = None):
         """
         Constructor
+
+        :param external_network_names: A list of external network names
+        :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
+        :param network_name: The agent network name for diagnostic log lines
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.filter: ConfigFilter = NetworkConfigFilterChain()

@@ -33,6 +33,7 @@ from leaf_common.serialization.interface.serialization_format import Serializati
 from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
 from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
 
+from neuro_san.internals.graph.persistence.agent_network_on_boarding import AgentNetworkOnBoarding
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
@@ -97,9 +98,12 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if agent_spec is None:
             return None
 
-        # DEF: Apply filters
-        # DEF: Validate spec
+        # Create the AgentNetwork and have it go through on-boarding
         agent_network = AgentNetwork(agent_spec, agent_name)
+        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding()
+        agent_network = on_boarding.on_board(agent_network)
+        if agent_network is None:
+            return None
 
         # Add the AgentNetwork to the cache
         # Note: Synchronous lock inside
