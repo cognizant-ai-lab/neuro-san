@@ -717,8 +717,9 @@ and the context of its query.
 
 #### External Agents
 
-A `/name` entry or a URL entry refers to an agent network outside this one, on the same server or on another
-neuro-san server. See [External Agents](./external_agents.md) for the reference forms, ports and the https rule.
+A `/name` entry or a URL entry refers to an agent network outside this one: on the same server, on another
+neuro-san server, or in an agent network file fetched by URL. See [External Agents](./external_agents.md) for the
+reference forms, ports and the https rule.
 
 #### MCP Servers
 

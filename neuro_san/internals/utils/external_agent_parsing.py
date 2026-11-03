@@ -94,8 +94,8 @@ class ExternalAgentParsing:
 
         # No normalization is done on the scheme: the network validators
         # (AbstractNetworkValidator.is_url_or_path) only recognize the lower-case
-        # "http://" and "https://" spellings in hocon tool references, so that is
-        # the only form that reaches this parser in normal operation.
+        # "http://", "https://" and "file://" spellings in hocon tool references, so those are
+        # the only forms that reach this parser in normal operation.
         scheme: str = parse_result.scheme or ""
 
         host: str = None
