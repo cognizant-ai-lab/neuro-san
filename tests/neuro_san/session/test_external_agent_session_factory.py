@@ -38,7 +38,7 @@ from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceA
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 
 
-class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
+class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disable=too-many-public-methods
     """
     Unit tests for ExternalAgentSessionFactory class.
 
@@ -324,3 +324,27 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
             await factory.create_session_from_location_dict(agent_location, self.invocation_context)
         self.assertIsInstance(session, AsyncHttpServiceAgentSession)
         self.fetched_storage.async_get_agent_network_provider.assert_not_awaited()
+
+    async def test_direct_require_https_skips_http_fetch(self) -> None:
+        """
+        Tests that with AGENT_SESSION_REQUIRE_HTTPS=true a direct factory does not fetch a plain http URL
+        """
+        agent_url: str = "http://example.com/nets/math_guy.hocon"
+        factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
+
+        with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
+            session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
+        self.assertIsInstance(session, AsyncHttpServiceAgentSession)
+        self.fetched_storage.async_get_agent_network_provider.assert_not_awaited()
+
+    async def test_direct_require_https_allows_https_fetch(self) -> None:
+        """
+        Tests that with AGENT_SESSION_REQUIRE_HTTPS=true a direct factory still fetches an https URL
+        """
+        agent_url: str = "https://example.com/nets/math_guy.hocon"
+        factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
+
+        with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
+            session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
+        self.assertIsInstance(session, AsyncDirectAgentSession)
+        self.fetched_storage.async_get_agent_network_provider.assert_awaited_once_with(agent_url)

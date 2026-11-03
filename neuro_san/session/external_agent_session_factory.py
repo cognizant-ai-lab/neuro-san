@@ -20,6 +20,7 @@ from typing import Any
 from typing import Coroutine
 from typing import Dict
 from typing import List
+from urllib.parse import urlparse
 
 from logging import getLogger
 from logging import Logger
@@ -28,6 +29,7 @@ from typing_extensions import override
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.logging.log_once import LogOnce
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -294,9 +296,20 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                     of the agent.
         :param invocation: String describing how the agent wants to be invoked.
         :return: An AsyncAgentSession for the fetched agent network, or None when
-                 there is no fetched storage or the URL does not yield an agent network.
+                 there is no fetched storage, the URL is plain http while
+                 AGENT_SESSION_REQUIRE_HTTPS is true, or the URL does not yield an agent network.
         """
         if not self.is_use_direct() or self.storage_source_dict is None:
+            return None
+
+        # Same default and parsing as AbstractHttpServiceAgentSession.get_request_path():
+        # permissive unless a server opts in.
+        require_https: bool = Env.getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
+        scheme: str = urlparse(agent_url).scheme
+        lower_scheme: str = scheme.lower()
+        if require_https and lower_scheme == "http":
+            logger: Logger = getLogger(ExternalAgentSessionFactory.__name__)
+            logger.warning("AGENT_SESSION_REQUIRE_HTTPS=true forbids fetching %s over plain http", agent_url)
             return None
 
         fetched_storage: AgentStorageSource = self.storage_source_dict.get(StorageClass.FETCHED)

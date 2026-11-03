@@ -69,6 +69,8 @@ Examples: `https://example.com/nets/math_guy.hocon`, `file:///opt/nets/math_guy.
 - An `http://` or `https://` URL is downloaded. A `file://` URL or a bare path is read from the local filesystem of
   the process that runs the referencing network, which for a deployment is the server.
 - A fetched network is cached by its URL, so the same reference is not fetched again on every call.
+- When the server runs with `AGENT_SESSION_REQUIRE_HTTPS=true`, an `http://` URL is not downloaded; only
+  `https://`, `file://` and bare-path references are fetched.
 - Files are fetched only by in-process sessions, which a server always uses. When fetching fails, or the file
   does not pass the checks below, the reference is treated as a [remote server reference](#remote-server-references)
   instead, which normally leaves the tool out as unreachable.
