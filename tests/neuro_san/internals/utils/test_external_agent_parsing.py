@@ -225,3 +225,33 @@ class TestExternalAgentParsing(TestCase):
         self.assertIsNone(ExternalAgentParsing.parse_external_agent("https://agents.example.com:/math_guy"))
         self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://[::1]:/math_guy"))
         self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://user@agents.example.com:/math_guy"))
+
+    def test_get_safe_agent_name_agent_reference(self) -> None:
+        """
+        Tests that a reference to an agent becomes "__" plus its agent name with "/" mapped to "__".
+        """
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("/deep/math_guy"), "__deep__math_guy")
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("http://localhost:8080/math_guy"), "__math_guy")
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("math_guy"), "math_guy")
+
+    def test_get_safe_agent_name_network_file_with_hostname(self) -> None:
+        """
+        Tests that a URL to an agent network file keeps only its hostname and file name,
+        with each character that a tool name does not allow replaced by "_".
+        """
+        agent_url: str = "https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main" \
+                         "/neuro_san/registries/math_guy_fully_qualified.hocon"
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name(agent_url),
+                         "raw_githubusercontent_com-math_guy_fully_qualified_hocon")
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("http://myhost:8080/networks/my_net.json"),
+                         "myhost-my_net_json")
+
+    def test_get_safe_agent_name_network_file_without_hostname(self) -> None:
+        """
+        Tests that a reference to an agent network file without a hostname
+        gets the "__" prefix of other external agents.
+        """
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("file:///tmp/networks/my_net.hocon"),
+                         "__my_net_hocon")
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("/tmp/networks/my_net.json"),
+                         "__my_net_json")

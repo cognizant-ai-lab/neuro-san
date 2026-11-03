@@ -30,13 +30,12 @@ from typing_extensions import override
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.serialization.interface.serialization_format import SerializationFormat
-from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
-from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
 
 from neuro_san.internals.graph.persistence.agent_network_on_boarding import AgentNetworkOnBoarding
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.message.utils.decode_utils import DecodeUtils
 
 
@@ -55,14 +54,9 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
         self.extension_to_serialization_format: Dict[str, SerializationFormat] = {}
 
-        format_list: List[SerializationFormat] = [
-            JsonSerializationFormat(),
-            HoconSerializationFormat(),
-        ]
-
         # Populate the dictionary from the list of SerializationFormats.
         one_format: SerializationFormat = None
-        for one_format in format_list:
+        for one_format in ExternalAgentParsing.AGENT_NETWORK_SERIALIZATION_FORMATS:
             # The file extension already includes the leading dot.
             file_extension: str = one_format.get_file_extension()
             self.extension_to_serialization_format[file_extension] = one_format

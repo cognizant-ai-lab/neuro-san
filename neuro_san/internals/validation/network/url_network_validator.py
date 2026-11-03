@@ -24,9 +24,7 @@ from logging import Logger
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
-from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
-
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
@@ -34,13 +32,6 @@ class UrlNetworkValidator(AbstractNetworkValidator):
     """
     AbstractNetworkValidator that looks for correct URLs in an agent network
     """
-
-    # File extensions of agent network files that a tool reference can point to,
-    # the same ones FetchedAgentNetworkStorage can parse.
-    AGENT_NETWORK_FILE_EXTENSIONS: List[str] = [
-        HoconSerializationFormat().get_file_extension(),
-        JsonSerializationFormat().get_file_extension(),
-    ]
 
     def __init__(self, external_agents: List[str] = None, mcp_servers: List[str] = None,
                  network_name: str = None):
@@ -133,5 +124,5 @@ class UrlNetworkValidator(AbstractNetworkValidator):
 
         split_path = urlsplit(tool).path
         file_extension: str = Path(split_path).suffix
-        acceptable: bool = file_extension in UrlNetworkValidator.AGENT_NETWORK_FILE_EXTENSIONS
+        acceptable: bool = file_extension in ExternalAgentParsing.get_agent_network_file_extensions()
         return acceptable

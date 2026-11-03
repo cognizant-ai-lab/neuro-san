@@ -20,10 +20,17 @@ from typing import List
 from typing import Optional
 from typing import Union
 
+from pathlib import Path
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
 
+from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
+from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
+from leaf_common.serialization.interface.file_extension_provider import FileExtensionProvider
+from leaf_common.serialization.interface.serialization_format import SerializationFormat
+
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
+from neuro_san.internals.utils.mcp_tool_name_filter import McpToolNameFilter
 
 
 class ExternalAgentParsing:
@@ -31,6 +38,13 @@ class ExternalAgentParsing:
     Class handles parsing references to an external agent server
     so that its agents can be used as tools.
     """
+
+    # The SerializationFormats of agent network files that a tool reference can point to.
+    # This is the single source of truth for those formats and their file extensions.
+    AGENT_NETWORK_SERIALIZATION_FORMATS: List[SerializationFormat] = [
+        JsonSerializationFormat(),
+        HoconSerializationFormat(),
+    ]
 
     @staticmethod
     def parse_external_agent(agent_url: str, server_port: int = None) -> Dict[str, str]:
@@ -230,11 +244,55 @@ class ExternalAgentParsing:
         if ExternalAgentParsing.is_external_agent(agent_url):
 
             agent_location: Dict[str, str] = ExternalAgentParsing.parse_external_agent(agent_url)
+            agent_name: str = agent_location.get("agent_name")
 
-            # FWIW: langchain internal tool references must satisfy the regex: "^[a-zA-Z0-9_-]+$"
-            # It's possible that more complex external references might have the agent_name
-            # needing further mangling.  Cross that bridge when we have a real example.
-            # As a part of valid URL, agent_name can only have "/" in it.
-            safe_name = "__" + agent_location.get("agent_name").replace("/", "__")
+            if Path(agent_name).suffix in ExternalAgentParsing.get_agent_network_file_extensions():
+                # A reference to an agent network file has a long path that ends
+                # in a file extension, and the "." in that extension fails the regex below.
+                safe_name = ExternalAgentParsing.get_safe_network_file_name(agent_url, agent_name)
+            else:
+                # FWIW: langchain internal tool references must satisfy the regex: "^[a-zA-Z0-9_-]+$"
+                # It's possible that more complex external references might have the agent_name
+                # needing further mangling.  Cross that bridge when we have a real example.
+                # As a part of valid URL, agent_name can only have "/" in it.
+                safe_name = "__" + agent_name.replace("/", "__")
 
         return safe_name
+
+    @staticmethod
+    def get_agent_network_file_extensions() -> List[str]:
+        """
+        :return: The file extensions of agent network files, each with its leading dot,
+                from AGENT_NETWORK_SERIALIZATION_FORMATS.
+        """
+        file_extensions: List[str] = []
+        # Collect the file extension of each format.
+        one_format: FileExtensionProvider = None
+        for one_format in ExternalAgentParsing.AGENT_NETWORK_SERIALIZATION_FORMATS:
+            file_extensions.append(one_format.get_file_extension())
+        return file_extensions
+
+    @staticmethod
+    def get_safe_network_file_name(agent_url: str, agent_name: str) -> str:
+        """
+        Creates a tool name for a reference to an agent network file.
+        The name keeps only the hostname and the file name, in the form
+        "<hostname>-<filebase>_<fileextension>", and replaces each character
+        that a tool name does not allow with "_".
+        A reference without a hostname gets the "__" prefix of other external agents instead.
+
+        :param agent_url: The URL of the agent network file.
+        :param agent_name: The agent name parsed from agent_url, which is the path of the file.
+        :return: A name that is suitable for using within agent toolkits (like langchain)
+                for internal tool reference.
+        """
+        name_filter: McpToolNameFilter = McpToolNameFilter()
+        safe_file_name: str = name_filter.filter(Path(agent_name).name)
+
+        # Use the hostname as written in the URL, not the "localhost" default of parse_external_agent().
+        hostname: str = urlparse(agent_url).hostname
+        if not hostname:
+            return "__" + safe_file_name
+
+        safe_hostname: str = name_filter.filter(hostname)
+        return f"{safe_hostname}-{safe_file_name}"
