@@ -458,9 +458,9 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         Filtering must not leak into the caller's dictionary: reservationists and coded tools
         may keep using the spec they deployed.  The spec deliberately exercises every filter
         that writes into a spec (defaults, commondefs substitution and stripping, the function
-        block made from a top-level description, and the in-place name correction of a "/"
-        agent name) as well as a metadata-injecting base storage writer, and the caller's
-        dictionary must still come out untouched.
+        block made from a top-level description with its default parameters, and the in-place
+        name correction of a "/" agent name) as well as a metadata-injecting base storage
+        writer, and the caller's dictionary must still come out untouched.
         """
         storage: ExpiringAgentNetworkStorage = self._make_storage()
         storage.set_base_storage(RecordingReservationsStorage(inject_metadata=True))
@@ -482,4 +482,4 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertEqual("help_er", stored["tools"][1]["name"])
         self.assertEqual(["help_er"], stored["tools"][0]["tools"])
         self.assertIn("reservation", stored["metadata"])
-        self.assertEqual({"description": "Helps the front man."}, stored.get("tools")[1].get("function"))
+        self.assertEqual(["inquiry"], stored.get("tools")[1].get("function").get("parameters").get("required"))

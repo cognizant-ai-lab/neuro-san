@@ -551,15 +551,13 @@ Parameters contains an optional [JSON Schema](https://json-schema.org) dictionar
 specific information the agent needs as input arguments when it is called.
 Only the `type: object` + `properties` form described below is supported.
 JSON Schema constructs outside this form (such as `additionalProperties`,
-`anyOf`, or `$ref`) are not honored: a schema that uses them without a
-`properties` dictionary is rejected as invalid when the agent is called as a
-tool, and unsupported constructs appearing alongside a `properties` dictionary
-are ignored.
+`anyOf`, or `$ref`) are not honored: a schema without a `properties` dictionary
+is rejected as invalid when the agent is called as a tool, and unsupported
+constructs appearing alongside a `properties` dictionary are ignored.
 
-When an agent calls an LLM-enabled agent of its own network that declares no parameters (no `parameters`, or
-one with nothing but `"type": "object"` and an empty or null `properties` and `required`), the tool it calls
-through gets one required `inquiry` string parameter, because the called agent's input prompt is built from
-the arguments of the call. The tool then has these parameters:
+An LLM-enabled agent other than the front-man whose function has no `parameters`, or a null one, gets one
+required `inquiry` string parameter, because its input prompt is built from the arguments of the call. This is
+the same as declaring these parameters:
 
 ```json
 {
@@ -574,9 +572,9 @@ the arguments of the call. The tool then has these parameters:
 }
 ```
 
-The called agent's function itself is not changed, so a [coded tool](#class-1) that calls it can still pass any
-arguments, and all of them reach it. A coded tool or [toolbox](#toolbox) agent that is called gets no default.
-A coded tool that takes no arguments leaves out `parameters`.
+An LLM sub-agent with these default parameters gets only `inquiry`, so a [coded tool](#class-1) that calls one
+sends `inquiry`. Coded tools, [toolbox](#toolbox) agents and agents that put `parameters` outside their function
+get no default parameters.
 
 A front-man typically does not need parameters defined when its agent network is only
 ever talked to directly by a user.
@@ -739,8 +737,8 @@ works the same as this one:
 }
 ```
 
-Neither form declares parameters, so another agent calls this one through a tool with the default `inquiry`
-parameter described under [parameters](#parameters).
+Neither form declares parameters, so when this agent is a sub-agent, it gets the default `inquiry` parameter
+described under [parameters](#parameters).
 
 The description is not used when the function has a description of its own, for a [toolbox](#toolbox)
 agent, which gets its function from the toolbox, or for an agent that gives `parameters` outside its

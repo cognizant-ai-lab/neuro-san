@@ -34,9 +34,8 @@ class DescriptionConfigFilter(ConfigFilter):
     top-level "description" instead of inside its "function" block.
 
     The description goes into the agent's function block, which is made when the
-    agent has none. No parameters are added. When an LLM sub-agent declares none,
-    InternalAgentToolCreator adds a default "inquiry" parameter to the tool
-    through which it is called.
+    agent has none. The default parameters of an LLM sub-agent come from
+    DefaultParametersConfigFilter, which runs next.
 
     A function block with its own description is left as it is, and so is a
     "function" value that is not a dictionary, which the validators report. Any

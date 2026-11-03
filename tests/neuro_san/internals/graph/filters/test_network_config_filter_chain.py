@@ -56,10 +56,9 @@ class TestNetworkConfigFilterChain(TestCase):
         result: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
 
         tools: List[Dict[str, Any]] = result.get("tools")
-        expected: Dict[str, Any] = {
-            "description": "Recommends fiction books.",
-        }
-        self.assertEqual(tools[1].get("function"), expected)
+        function: Dict[str, Any] = tools[1].get("function")
+        self.assertEqual(function.get("description"), "Recommends fiction books.")
+        self.assertEqual(function.get("parameters").get("required"), ["inquiry"])
         self.assertIsNone(tools[0].get("function"))
 
     def test_agent_spec_from_replacement_values_gets_a_function(self) -> None:
@@ -89,10 +88,9 @@ class TestNetworkConfigFilterChain(TestCase):
 
         result: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
 
-        expected: Dict[str, Any] = {
-            "description": "Recommends fiction books.",
-        }
-        self.assertEqual(result.get("tools")[1].get("function"), expected)
+        function: Dict[str, Any] = result.get("tools")[1].get("function")
+        self.assertEqual(function.get("description"), "Recommends fiction books.")
+        self.assertEqual(function.get("parameters").get("required"), ["inquiry"])
 
     def test_front_man_description_joins_the_global_sly_data_schema(self) -> None:
         """
@@ -125,11 +123,36 @@ class TestNetworkConfigFilterChain(TestCase):
         self.assertEqual(function.get("sly_data_schema").get("required"), ["llm_config"])
         self.assertIsNone(function.get("parameters"))
 
-    def test_function_without_parameters_is_left_as_written(self) -> None:
+    def test_function_made_from_a_description_gets_the_default_parameters(self) -> None:
         """
-        A sub-agent whose function block declares no parameters keeps it as written.
-        Only the tool its caller uses gets a default, so a coded tool that calls the
-        sub-agent can still pass any arguments.
+        A sub-agent that gives only a top-level description gets the default parameters,
+        because DefaultParametersConfigFilter runs after DescriptionConfigFilter.
+        """
+        config: Dict[str, Any] = {
+            "tools": [
+                {
+                    "name": "book_recommender",
+                    "instructions": "Recommend books.",
+                    "tools": ["fiction_recommender"],
+                },
+                {
+                    "name": "fiction_recommender",
+                    "description": "Recommends fiction books.",
+                    "instructions": "Recommend fiction books.",
+                },
+            ],
+        }
+
+        result: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
+
+        function: Dict[str, Any] = result.get("tools")[1].get("function")
+        self.assertEqual(function.get("description"), "Recommends fiction books.")
+        self.assertEqual(function.get("parameters").get("required"), ["inquiry"])
+
+    def test_sub_agent_with_a_function_without_parameters_gets_the_default(self) -> None:
+        """
+        A sub-agent whose function block has a description and no parameters gets the
+        default parameters, so its caller can send it the request.
         """
         config: Dict[str, Any] = {
             "tools": [
@@ -150,7 +173,9 @@ class TestNetworkConfigFilterChain(TestCase):
 
         result: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
 
-        self.assertEqual(result, config)
+        function: Dict[str, Any] = result.get("tools")[1].get("function")
+        self.assertEqual(function.get("description"), "Recommends fiction books.")
+        self.assertEqual(function.get("parameters").get("required"), ["inquiry"])
 
     def test_coded_tool_with_description_gets_a_function_without_parameters(self) -> None:
         """

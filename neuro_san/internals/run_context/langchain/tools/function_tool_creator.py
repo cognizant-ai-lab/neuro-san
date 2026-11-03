@@ -87,52 +87,8 @@ class FunctionToolCreator(ToolCreator):
         # returns it by reference), and internal and toolbox tools funnel
         # here with their registry/toolbox entries too. Writing the lookup
         # name into it would leak this caller's reference string into that
-        # shared state. The copy is deliberately shallow: only
+        # shared state (issue #1230). The copy is deliberately shallow: only
         # the top-level "name" key is written here, so nested dicts stay shared.
-        use_function_json: Dict[str, Any] = dict(self.get_tool_function_json())
+        use_function_json: Dict[str, Any] = dict(self.function_json)
         use_function_json["name"] = tool_name
         return LangChainOpenAIFunctionTool.from_function_json(use_function_json, self.tool_caller)
-
-    def get_tool_function_json(self) -> Dict[str, Any]:
-        """
-        Gives the function specification that the tool is made from, once create_tool()
-        knows it is not None. A subclass can override this to return a changed copy.
-
-        :return: The function specification given to the constructor
-        """
-        return self.function_json
-
-    @staticmethod
-    def declares_no_parameters(function_json: Dict[str, Any]) -> bool:
-        """
-        Tells whether a function specification declares no parameters: none at all, null,
-        or a block that holds nothing but an empty "properties", an empty "required" and
-        a "type" of "object". Each of these keys may also be left out or null.
-
-        :param function_json: The function specification
-        :return: True when the specification declares no parameters. False when it declares
-                some, or when it or its parameters are malformed.
-        """
-        if not isinstance(function_json, dict):
-            # Only a spec that skipped validation gets here. create_tool() rejects it.
-            return False
-
-        raw_parameters: Any = function_json.get("parameters")
-        if raw_parameters is None:
-            return True
-        if not isinstance(raw_parameters, dict):
-            # Not a schema we can reason about, however truthy or falsy
-            # (e.g. a string, a list, a boolean). verify_function_json() reports it.
-            return False
-
-        parameters: Dict[str, Any] = raw_parameters
-        # Any other key (e.g. additionalProperties, anyOf, $ref) marks an unsupported dialect.
-        # It gets no default, so that verify_function_json() reports it.
-        if not {"type", "properties", "required"}.issuperset(parameters.keys()):
-            return False
-
-        # Null counts as not given, as it does for "parameters". Any other value that is not
-        # the empty form declares something, or is malformed (e.g. [] or false) and gets reported.
-        return (parameters.get("properties") in (None, {})
-                and parameters.get("required") in (None, [])
-                and parameters.get("type") in (None, "object"))

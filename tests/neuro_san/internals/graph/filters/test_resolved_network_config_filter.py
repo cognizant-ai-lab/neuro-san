@@ -132,8 +132,8 @@ class TestResolvedNetworkConfigFilter(TestCase):
         """
         The input must come out untouched even though every filter that writes into a spec
         is exercised: defaults, commondefs substitution and stripping, the function block
-        made from a top-level description, and the in-place name correction of a "/" agent
-        name.  Callers keep using the spec they deployed.
+        made from a top-level description with its default parameters, and the in-place name
+        correction of a "/" agent name.  Callers keep using the spec they deployed.
         """
         spec: Dict[str, Any] = self._make_spec()
         spec["commondefs"] = {"replacement_strings": {"greet": "hello"}}
@@ -151,8 +151,8 @@ class TestResolvedNetworkConfigFilter(TestCase):
         # ... while the result did get the correction on both ends of the edge.
         self.assertEqual("help_er", resolved["tools"][1]["name"])
         self.assertEqual(["help_er"], resolved["tools"][0]["tools"])
-        # ... and the helper's function block made from its description.
-        self.assertEqual({"description": "Helper"}, resolved.get("tools")[1].get("function"))
+        # ... and the helper's function block with its default parameters.
+        self.assertEqual(["inquiry"], resolved.get("tools")[1].get("function").get("parameters").get("required"))
 
     def test_filter_config_returns_a_copy_without_tools(self) -> None:
         """

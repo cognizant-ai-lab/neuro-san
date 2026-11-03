@@ -266,56 +266,6 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
                 reported: AgentMessage = creator.journal.write_message.await_args.args[0]
                 self.assertIn("invalid function definition", str(reported.content))
 
-    async def test_malformed_parameters_reported_as_invalid(self) -> None:
-        """
-        A parameters block whose properties, required or type value is not the empty
-        form, truthy or falsy, is malformed. It is reported as an invalid function
-        definition, not repaired with the synthesized default.
-        """
-        parameters_cases: Dict[str, Any] = {
-            "properties_list": {
-                "type": "object",
-                "properties": [],
-            },
-            "properties_empty_string": {
-                "type": "object",
-                "properties": "",
-            },
-            "properties_false": {
-                "type": "object",
-                "properties": False,
-            },
-            "required_without_properties": {
-                "type": "object",
-                "properties": {},
-                "required": ["question"],
-            },
-            "required_not_a_list": {
-                "type": "object",
-                "required": "question",
-            },
-            "type_not_object": {
-                "type": "string",
-            },
-        }
-
-        # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
-        label: str = None
-        for label in parameters_cases:
-            with self.subTest(case=label):
-                creator: ExternalAgentToolCreator = self.make_creator({
-                    "description": "Answers music questions.",
-                    "parameters": parameters_cases.get(label),
-                })
-
-                tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
-
-                self.assertIsNone(tool)
-                creator.journal.write_message.assert_awaited_once()
-                reported: AgentMessage = creator.journal.write_message.await_args.args[0]
-                self.assertIn("invalid function definition", str(reported.content))
-                self.assertNotIn("synthesized", str(reported.content))
-
     async def test_unreachable_external_tool_reported_as_unreachable(self) -> None:
         """
         A transport-level failure fetching the external agent's function spec

@@ -173,41 +173,6 @@ class TestBaseToolFactory(IsolatedAsyncioTestCase):
         self.assertEqual(tool.description, "Answers questions.")
         self.assertEqual(tool.get_input_jsonschema().get("required"), ["inquiry"])
 
-    async def test_only_llm_agents_get_the_default_inquiry(self) -> None:
-        """
-        An LLM agent whose function declares no parameters goes to InternalAgentToolCreator,
-        so its tool gets the default "inquiry" argument. A coded tool with the same function
-        goes to FunctionToolCreator and takes no arguments.
-        """
-        # Each case is an agent spec and the "required" list its tool must have.
-        cases: Dict[str, Dict[str, Any]] = {
-            "llm_agent": {
-                "spec": {
-                    "function": {"description": "Tells the time."},
-                    "instructions": "Tell the time.",
-                },
-                "required": ["inquiry"],
-            },
-            "coded_tool": {
-                "spec": {
-                    "function": {"description": "Tells the time."},
-                    "class": "clock.Clock",
-                },
-                "required": None,
-            },
-        }
-
-        # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
-        label: str = None
-        for label in cases:
-            with self.subTest(case=label):
-                case: Dict[str, Any] = cases.get(label)
-                factory: BaseToolFactory = self.make_factory(agent_spec=case.get("spec"))
-
-                tool: Union[BaseTool, List[BaseTool]] = await factory.create_base_tool("clock")
-
-                self.assertEqual(tool.get_input_jsonschema().get("required"), case.get("required"))
-
     async def test_internal_agent_with_toolbox_goes_to_the_toolbox(self) -> None:
         """
         A spec naming a "toolbox" entry is handed to the toolbox creator with
