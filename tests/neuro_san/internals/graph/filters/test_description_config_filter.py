@@ -241,6 +241,12 @@ class TestDescriptionConfigFilter(TestCase):
                 },
                 "reason": "put them in function.parameters",
             },
+            # A null value is still a misplaced key, so it is reported the same way.
+            "null_parameters": {
+                "key": "parameters",
+                "value": None,
+                "reason": "put them in function.parameters",
+            },
         }
 
         # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.

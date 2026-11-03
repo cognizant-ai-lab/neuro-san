@@ -126,7 +126,8 @@ class DescriptionConfigFilter(ConfigFilter):
         description: Any = tool.get("description")
         if tool.get("toolbox") is not None:
             reason = "a toolbox agent gets its function from the toolbox"
-        elif tool.get("parameters") is not None:
+        elif "parameters" in tool:
+            # Even a null value is a misplaced key, which the validators report.
             reason = "parameters only work inside the function block, so put them in function.parameters"
         elif not isinstance(description, str):
             reason = f"it must be a string, not {type(description).__name__}"

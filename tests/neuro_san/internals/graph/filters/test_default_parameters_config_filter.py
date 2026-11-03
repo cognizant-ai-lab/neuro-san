@@ -171,25 +171,35 @@ class TestDefaultParametersConfigFilter(TestCase):
 
     def test_top_level_parameters_are_left_for_the_validators(self) -> None:
         """
-        A sub-agent that gives its parameters outside its function block gets no default,
-        so the validators still check those parameters, and a warning names the agent.
+        A sub-agent that gives its parameters outside its function block, even null ones,
+        gets no default, so the validators still check those parameters, and a warning
+        names the agent.
         """
-        helper: Dict[str, Any] = self.make_helper()
-        helper["parameters"] = {
-            "type": "object",
-            "properties": {
-                "genre": {
-                    "type": "string",
-                    "description": "The genre to recommend.",
+        top_level_parameters: Dict[str, Any] = {
+            "declared": {
+                "type": "object",
+                "properties": {
+                    "genre": {
+                        "type": "string",
+                        "description": "The genre to recommend.",
+                    },
                 },
             },
+            "null": None,
         }
 
-        with self.assertLogs(self.LOGGER_NAME, level="WARNING") as logs:
-            self.assert_unchanged(self.make_config([helper]))
+        # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
+        label: str = None
+        for label in top_level_parameters:
+            with self.subTest(case=label):
+                helper: Dict[str, Any] = self.make_helper()
+                helper["parameters"] = top_level_parameters.get(label)
 
-        self.assertIn("fiction_recommender", logs.output[0])
-        self.assertIn("parameters only work inside the function block", logs.output[0])
+                with self.assertLogs(self.LOGGER_NAME, level="WARNING") as logs:
+                    self.assert_unchanged(self.make_config([helper]))
+
+                self.assertIn("fiction_recommender", logs.output[0])
+                self.assertIn("parameters only work inside the function block", logs.output[0])
 
     def test_a_shared_function_block_changes_only_for_the_sub_agent(self) -> None:
         """

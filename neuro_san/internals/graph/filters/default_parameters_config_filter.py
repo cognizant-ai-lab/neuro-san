@@ -98,9 +98,9 @@ class DefaultParametersConfigFilter(ConfigFilter):
                 continue
 
             tool_dict: Dict[str, Any] = tool
-            if tool_dict.get("parameters") is not None:
-                # The validators check top-level parameters only when the function block has none,
-                # so the function block stays as it is.
+            if "parameters" in tool_dict:
+                # The validators check top-level parameters, even null ones, only when the
+                # function block has none, so the function block stays as it is.
                 self.logger.warning("The top-level parameters of agent %s are not used: parameters only work "
                                     "inside the function block, so put them in function.parameters.",
                                     tool_dict.get("name"))
