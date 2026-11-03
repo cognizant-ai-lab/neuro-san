@@ -13,11 +13,16 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from typing import List
+from asyncio import run_coroutine_threadsafe
+from concurrent.futures import Future
+from typing import Any
+from typing import Coroutine
 
 from unittest import IsolatedAsyncioTestCase
 
 from typing_extensions import override
+
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.internals.utils.asyncio_util import AsyncioUtil
 from tests.neuro_san.internals.utils.asyncio_util_call_stacks import AsyncioUtilCallStacks
@@ -25,106 +30,118 @@ from tests.neuro_san.internals.utils.asyncio_util_call_stacks import AsyncioUtil
 
 class TestAsyncioUtil(IsolatedAsyncioTestCase):
     """
-    Unit tests for AsyncioUtil.is_called_by_async_method(), called 1, 2 and 3 levels deep
-    from purely synchronous call stacks and from call stacks that contain an async method.
-    Synchronous test methods run without an event loop, so their stacks contain no async frames.
+    Unit tests for AsyncioUtil.is_running_in_executor(), called 1, 2 and 3 levels deep
+    from threads with no running event loop, from the test's own event loop,
+    and from the event loop of a running AsyncioExecutor.
+    Synchronous test methods run without an event loop on their thread.
+    Async test methods run on the test's own event loop, which is not the executor's loop.
     """
+
+    # Seconds to wait for a coroutine scheduled on the executor's event loop
+    TIMEOUT_SECONDS: float = 10.0
 
     @override
     def setUp(self) -> None:
         """
-        Creates the call stack helper.
+        Creates and starts the AsyncioExecutor whose event loop is checked.
         """
-        self.stacks: AsyncioUtilCallStacks = AsyncioUtilCallStacks()
+        self.executor: AsyncioExecutor = AsyncioExecutor()
+        self.executor.start()
 
-    # Purely synchronous call stacks
+    @override
+    def tearDown(self) -> None:
+        """
+        Shuts down the AsyncioExecutor.
+        """
+        self.executor.shutdown()
 
-    def test_sync_stack_level_1(self) -> None:
+    def run_on_executor_loop(self, coroutine: Coroutine[Any, Any, Any]) -> Any:
         """
-        Tests that a direct call from a synchronous method returns False.
-        """
-        self.assertFalse(AsyncioUtil.is_called_by_async_method())
-        self.assertFalse(self.stacks.sync_level_1())
+        Runs a coroutine on the executor's event loop and blocks until it completes.
 
-    def test_sync_stack_level_2(self) -> None:
+        :param coroutine: The coroutine to run
+        :return: The result of the coroutine
         """
-        Tests that a call 2 levels deep in a synchronous stack returns False.
-        """
-        self.assertFalse(self.stacks.sync_level_2())
+        future: Future = run_coroutine_threadsafe(coroutine, self.executor.get_event_loop())
+        return future.result(timeout=self.TIMEOUT_SECONDS)
 
-    def test_sync_stack_level_3(self) -> None:
-        """
-        Tests that a call 3 levels deep in a synchronous stack returns False.
-        """
-        self.assertFalse(self.stacks.sync_level_3())
+    # No running event loop
 
-    def test_sync_method_kinds(self) -> None:
+    def test_no_loop_level_1(self) -> None:
         """
-        Tests that synchronous instance and class methods return False.
+        Tests that a direct call from a thread with no running event loop returns False.
         """
-        self.assertFalse(self.stacks.sync_instance_level_1())
-        self.assertFalse(AsyncioUtilCallStacks.sync_class_level_1())
+        self.assertFalse(AsyncioUtil.is_running_in_executor(self.executor))
+        self.assertFalse(AsyncioUtilCallStacks.sync_level_1(self.executor))
 
-    # Call stacks of async methods only
+    def test_no_loop_level_2(self) -> None:
+        """
+        Tests that a call 2 levels deep on a thread with no running event loop returns False.
+        """
+        self.assertFalse(AsyncioUtilCallStacks.sync_level_2(self.executor))
 
-    async def test_async_stack_level_1(self) -> None:
+    def test_no_loop_level_3(self) -> None:
         """
-        Tests that a direct call from an async method returns True.
+        Tests that a call 3 levels deep on a thread with no running event loop returns False.
         """
-        self.assertTrue(AsyncioUtil.is_called_by_async_method())
-        self.assertTrue(await self.stacks.async_level_1())
+        self.assertFalse(AsyncioUtilCallStacks.sync_level_3(self.executor))
 
-    async def test_async_stack_level_2(self) -> None:
-        """
-        Tests that a call 2 levels deep in an all-async stack returns True.
-        """
-        self.assertTrue(await self.stacks.async_level_2())
+    # Running event loop that is not the executor's
 
-    async def test_async_stack_level_3(self) -> None:
+    async def test_other_loop_async_stacks(self) -> None:
         """
-        Tests that a call 3 levels deep in an all-async stack returns True.
+        Tests that async calls 1, 2 and 3 levels deep on a different event loop return False.
         """
-        self.assertTrue(await self.stacks.async_level_3())
+        self.assertFalse(AsyncioUtil.is_running_in_executor(self.executor))
+        self.assertFalse(await AsyncioUtilCallStacks.async_level_1(self.executor))
+        self.assertFalse(await AsyncioUtilCallStacks.async_level_2(self.executor))
+        self.assertFalse(await AsyncioUtilCallStacks.async_level_3(self.executor))
 
-    async def test_async_method_kinds(self) -> None:
+    async def test_other_loop_sync_stacks(self) -> None:
         """
-        Tests that async instance methods, class methods and async generators return True.
+        Tests that synchronous calls below an async method on a different event loop return False.
         """
-        self.assertTrue(await self.stacks.async_instance_level_1())
-        self.assertTrue(await AsyncioUtilCallStacks.async_class_level_1())
+        self.assertFalse(AsyncioUtilCallStacks.sync_level_1(self.executor))
+        self.assertFalse(AsyncioUtilCallStacks.sync_level_3(self.executor))
 
-        results: List[bool] = []
-        # Collect every value the async generator yields
-        result: bool
-        async for result in self.stacks.async_generator_level_1():
-            results.append(result)
-        self.assertEqual([True], results)
+    # Running event loop that is the executor's
 
-    # Async test methods calling through synchronous methods
+    def test_executor_loop_level_1(self) -> None:
+        """
+        Tests that a direct call from an async method on the executor's event loop returns True.
+        """
+        self.assertTrue(self.run_on_executor_loop(AsyncioUtilCallStacks.async_level_1(self.executor)))
 
-    async def test_async_then_sync_level_1(self) -> None:
+    def test_executor_loop_level_2(self) -> None:
         """
-        Tests that a synchronous method called directly by an async method returns True.
+        Tests that a call 2 async levels deep on the executor's event loop returns True.
         """
-        self.assertTrue(self.stacks.sync_level_1())
+        self.assertTrue(self.run_on_executor_loop(AsyncioUtilCallStacks.async_level_2(self.executor)))
 
-    async def test_async_then_sync_level_2(self) -> None:
+    def test_executor_loop_level_3(self) -> None:
         """
-        Tests that a call 2 synchronous levels below an async method returns True.
+        Tests that a call 3 async levels deep on the executor's event loop returns True.
         """
-        self.assertTrue(self.stacks.sync_level_2())
+        self.assertTrue(self.run_on_executor_loop(AsyncioUtilCallStacks.async_level_3(self.executor)))
 
-    async def test_async_then_sync_level_3(self) -> None:
+    def test_executor_loop_sync_below_async(self) -> None:
         """
-        Tests that a call 3 synchronous levels below an async method returns True.
+        Tests that a call 3 synchronous levels below an async method on the executor's event loop returns True.
         """
-        self.assertTrue(self.stacks.sync_level_3())
+        self.assertTrue(self.run_on_executor_loop(AsyncioUtilCallStacks.async_then_sync_level_3(self.executor)))
+
+    def test_executor_loop_async_generator(self) -> None:
+        """
+        Tests that a call from an async generator on the executor's event loop returns True.
+        """
+        self.assertEqual([True],
+                         self.run_on_executor_loop(AsyncioUtilCallStacks.async_collect_generator(self.executor)))
 
     # Thread boundaries
 
-    def test_executor_thread_is_sync(self) -> None:
+    def test_executor_thread_pool_is_not_loop(self) -> None:
         """
-        Tests that a synchronous call made on an executor thread returns False,
-        because the async caller is on a different thread's call stack.
+        Tests that a call made on a thread pool worker of the executor's event loop returns False,
+        because the worker thread runs no event loop of its own.
         """
-        self.assertFalse(self.stacks.sync_in_executor())
+        self.assertFalse(self.run_on_executor_loop(AsyncioUtilCallStacks.async_run_in_thread_pool(self.executor)))

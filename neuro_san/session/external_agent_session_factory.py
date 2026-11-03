@@ -83,9 +83,10 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                                     None - implies chatbot
         :return: An AsyncAgentSession through which communications about the external agent can be made.
         """
-        if AsyncioUtil.is_called_by_async_method():
-            raise RuntimeError("create_session() cannot be called from within an async method."
-                               "It will hang. Use async_create_session() instead")
+        executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
+        if AsyncioUtil.is_running_in_executor(executor):
+            raise RuntimeError("create_session() cannot be called from the event loop of the invocation's "
+                               "AsyncioExecutor. It will hang. Use async_create_session() instead")
 
         logger: Logger = getLogger(ExternalAgentSessionFactory.__name__)
         log_once: LogOnce = LogOnce(logger)
@@ -99,7 +100,6 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         # and block this thread until it completes.
         # Sessions bind to an event loop lazily, when a request is first made, so the
         # returned session is still usable on the caller's loop.
-        executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
         future: Future = run_coroutine_threadsafe(coroutine, executor.get_event_loop())
         session: AsyncAgentSession = future.result()
         return session

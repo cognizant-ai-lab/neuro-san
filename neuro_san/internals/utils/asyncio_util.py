@@ -15,12 +15,10 @@
 #
 # END COPYRIGHT
 
-# inspect generates its CO_* flag constants at import time, so pylint cannot see them.
-from inspect import CO_ASYNC_GENERATOR  # pylint: disable=no-name-in-module
-from inspect import CO_COROUTINE  # pylint: disable=no-name-in-module
-from inspect import currentframe
-from types import CodeType
-from types import FrameType
+from asyncio import AbstractEventLoop
+from asyncio import get_running_loop
+
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 
 class AsyncioUtil:
@@ -28,31 +26,23 @@ class AsyncioUtil:
     Utilities to deal with asyncio execution
     """
 
-    # Code flags that mark a frame as executing inside an async def or async generator
-    ASYNC_CODE_FLAGS: int = CO_COROUTINE | CO_ASYNC_GENERATOR
-
     @staticmethod
-    def is_called_by_async_method() -> bool:
+    def is_running_in_executor(executor: AsyncioExecutor) -> bool:
         """
-        Determines whether any frame up the current call stack is executing an async method.
-        Frames are checked via their code flags, so module-level functions, instance methods,
-        class methods and static methods are all detected.
+        Determines whether the current thread is running the event loop of the given executor.
+        A synchronous call that blocks on a coroutine scheduled onto that same loop never completes,
+        so callers use this to detect that case before it hangs.
 
-        :return: True if an async method is anywhere up the current call stack.
-                 False if the call stack is entirely synchronous.
+        :param executor: The AsyncioExecutor whose event loop is checked
+        :return: True if the event loop running on the current thread is the executor's event loop.
+                 False if no event loop is running on the current thread, or if it is a different loop.
         """
-        current_frame: FrameType = currentframe()
-        frame: FrameType = current_frame.f_back
+        running_loop: AbstractEventLoop = None
         try:
-            # Walk up the call stack from the immediate caller
-            while frame is not None:
-                f_code: CodeType = frame.f_code
-                co_flags: int = f_code.co_flags
-                if co_flags & AsyncioUtil.ASYNC_CODE_FLAGS:
-                    return True
-                frame = frame.f_back
-        finally:
-            # Drop the frame reference to avoid a reference cycle
-            del frame
+            running_loop = get_running_loop()
+        except RuntimeError:
+            # No event loop is running on the current thread
+            return False
 
-        return False
+        in_executor: bool = running_loop is executor.get_event_loop()
+        return in_executor
