@@ -459,12 +459,6 @@ ENV LEAF_LOG_SENSITIVE="false"
 # while this is "true".  Such a network passes validation and starts, but fails
 # with 'Could not find class' when the CodedTool is called.  See
 # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/external_agents.md#agent-network-file-references
-# For example, the same CodedTool referenced two ways:
-#   math_guy.hocon, served from the registries -- resolves while "true":
-#       "class": "calculator.Calculator"
-#   math_guy_fully_qualified.hocon, fetched by math_guy_passthrough_to_network_file
-#   -- fails while "true":
-#       "class": "neuro_san.coded_tools.math_guy.calculator.Calculator"
 # To use fetched agent networks with CodedTools, set this to "false".
 ENV AGENT_TOOL_PATH_ONLY="true"
 
