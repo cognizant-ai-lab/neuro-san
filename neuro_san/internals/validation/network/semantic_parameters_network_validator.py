@@ -39,7 +39,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
 
     Expects a fully-resolved config: ParametersSchemaNetworkValidator,
     the composite that owns this validator, applies NetworkConfigFilterChain
-    (commondefs, defaults, name-correction) once before running both phases.
+    once before running both phases.
     """
 
     def __init__(self, network_name: str = None):

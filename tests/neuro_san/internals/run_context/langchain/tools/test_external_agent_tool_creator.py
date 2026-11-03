@@ -181,10 +181,11 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
     async def test_external_tool_without_description_is_not_synthesized(self) -> None:
         """
         A front-man spec with no description fails validation no matter what
-        parameters it has (e.g. a hocon with no "function" block at all, for
-        which the server reports {}). No synthesis message may be journaled
-        for it - the client would see a promise that the request will get
-        through, immediately followed by the tool being dropped.
+        parameters it has (e.g. a hocon whose front man has neither a "function"
+        block nor a top-level "description", for which the server reports {}).
+        No synthesis message may be journaled for it - the client would see a
+        promise that the request will get through, immediately followed by the
+        tool being dropped.
         """
         creator: ExternalAgentToolCreator = self.make_creator({})
 

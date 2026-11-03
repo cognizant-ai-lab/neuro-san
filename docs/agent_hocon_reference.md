@@ -58,6 +58,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [http_headers](#http_headers)
         - [sly_data_output_schema](#sly_data_output_schema)
         - [invocation](#invocation)
+    - [description - a shorter way to give the function description](#description-2)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
@@ -533,10 +534,13 @@ and we also do not require redefining the `type` as this is always the same for 
 
 What is defined in this dictionary is what is returned for the agent's Function() neuro-san web API call.
 
+An agent can also give its description at its top level, as a [description](#description-2).
+
 <!--- pyml disable-next-line no-duplicate-heading -->
 #### description
 
-Every agent _must_ have its function description filled out.
+Every agent other than a [toolbox](#toolbox) agent _must_ have its function description filled out, here or as a
+top-level [description](#description-2).
 This is a single string value which informs anything upstream as to what _this_ agent can do for it.
 
 For a user-facing front-man, what is contained in this description often suffices as a prompt for the user.
@@ -547,9 +551,31 @@ Parameters contains an optional [JSON Schema](https://json-schema.org) dictionar
 specific information the agent needs as input arguments when it is called.
 Only the `type: object` + `properties` form described below is supported.
 JSON Schema constructs outside this form (such as `additionalProperties`,
-`anyOf`, or `$ref`) are not honored: a schema without a `properties` dictionary
-is rejected as invalid when the agent is called as a tool, and unsupported
-constructs appearing alongside a `properties` dictionary are ignored.
+`anyOf`, or `$ref`) are not honored: a schema that uses them without a
+`properties` dictionary is rejected as invalid when the agent is called as a
+tool, and unsupported constructs appearing alongside a `properties` dictionary
+are ignored.
+
+An LLM-enabled agent other than the front-man whose function has no `parameters`, or a null one, gets one
+required `inquiry` string parameter, because its input prompt is built from the arguments of the call. This is
+the same as declaring these parameters:
+
+```json
+{
+    "type": "object",
+    "properties": {
+        "inquiry": {
+            "type": "string",
+            "description": "The request to send to this agent."
+        }
+    },
+    "required": ["inquiry"]
+}
+```
+
+An LLM sub-agent with these default parameters gets only `inquiry`, so a [coded tool](#class-1) that calls one
+sends `inquiry`. Coded tools, [toolbox](#toolbox) agents and agents that put `parameters` outside their function
+get no default parameters.
 
 A front-man typically does not need parameters defined when its agent network is only
 ever talked to directly by a user.
@@ -683,6 +709,41 @@ message that the information has been received and the network's processing cont
 the caller disconnects.  Events can also be called periodically by configuration in the manifest.
 See the [periodic key in the manifest documentation](./manifest_hocon_reference.md#periodic) for
 more information.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+### description
+
+A shorter way to give the [function description](#description-1) of an agent: a single string that
+tells clients and calling agents what _this_ agent can do. It is put into the agent's [function](#function),
+which is made when the agent has none, so a function dictionary is needed only for what else it holds,
+such as [parameters](#parameters). For example, this agent:
+
+```json
+{
+    "name": "fiction_recommender",
+    "description": "Recommends fiction books based on the user's preferences.",
+    "instructions": "Recommend fiction books that match the preferences you are given."
+}
+```
+
+works the same as this one:
+
+```json
+{
+    "name": "fiction_recommender",
+    "function": {
+        "description": "Recommends fiction books based on the user's preferences."
+    },
+    "instructions": "Recommend fiction books that match the preferences you are given."
+}
+```
+
+Neither form declares parameters, so when this agent is a sub-agent, it gets the default `inquiry` parameter
+described under [parameters](#parameters).
+
+The description is not used when the function has a description of its own, for a [toolbox](#toolbox)
+agent, which gets its function from the toolbox, or for an agent that gives `parameters` outside its
+function dictionary. Parameters only work inside the function dictionary.
 
 ### instructions
 
