@@ -14,7 +14,10 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from asyncio import run_coroutine_threadsafe
+from concurrent.futures import Future
 from typing import Any
+from typing import Coroutine
 from typing import Dict
 
 import os
@@ -24,6 +27,8 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from typing_extensions import override
+
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
@@ -38,6 +43,9 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
     that the scheme parsed out of an external agent reference is honored
     when the factory builds the url the session will call.
     """
+
+    # Seconds to wait for a coroutine scheduled on the executor's event loop
+    TIMEOUT_SECONDS: float = 10.0
 
     @override
     def setUp(self) -> None:
@@ -180,3 +188,51 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
         self.assertIsInstance(session, AsyncHttpServiceAgentSession)
         self.assertEqual(session.get_request_path("function"),
                          "https://[2001:db8::1]:443/api/v1/deep/math_guy/function")
+
+    def start_executor(self) -> AsyncioExecutor:
+        """
+        Starts an AsyncioExecutor and makes the invocation context return it.
+
+        :return: The started AsyncioExecutor
+        """
+        executor: AsyncioExecutor = AsyncioExecutor()
+        executor.start()
+        # Do not join the loop thread: if create_session() regresses and blocks the
+        # executor's loop, a join would hang the test run instead of failing the test.
+        self.addCleanup(executor.shutdown, False)
+        self.invocation_context.get_asyncio_executor.return_value = executor
+        return executor
+
+    async def create_session_from_coroutine(self, agent_url: str) -> AsyncAgentSession:
+        """
+        Calls the synchronous create_session() from within a coroutine.
+
+        :param agent_url: The external agent reference passed to create_session()
+        :return: The session returned by create_session()
+        """
+        return self.factory.create_session(agent_url, self.invocation_context)
+
+    def test_create_session_on_executor_loop_raises(self) -> None:
+        """
+        Tests that create_session() called from a coroutine on the event loop of the
+        invocation's AsyncioExecutor raises RuntimeError instead of blocking that loop
+        on a coroutine scheduled onto itself.
+        """
+        executor: AsyncioExecutor = self.start_executor()
+        coroutine: Coroutine[Any, Any, AsyncAgentSession] = \
+            self.create_session_from_coroutine("https://neuro-san.decisionai.ml/deep/math_guy")
+        future: Future = run_coroutine_threadsafe(coroutine, executor.get_event_loop())
+        with self.assertRaises(RuntimeError):
+            future.result(timeout=self.TIMEOUT_SECONDS)
+
+    def test_create_session_off_executor_loop_returns_session(self) -> None:
+        """
+        Tests that create_session() called from a thread with no running event loop
+        runs async_create_session() on the executor's loop and returns its session.
+        """
+        self.start_executor()
+        session: AsyncAgentSession = \
+            self.factory.create_session("https://neuro-san.decisionai.ml/deep/math_guy", self.invocation_context)
+        self.assertIsInstance(session, AsyncHttpServiceAgentSession)
+        self.assertEqual(session.get_request_path("function"),
+                         "https://neuro-san.decisionai.ml:443/api/v1/deep/math_guy/function")
