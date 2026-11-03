@@ -32,6 +32,9 @@
     "intranet_agents_middleware.hocon": true,
     "math_guy.hocon": true,
     "math_guy_passthrough.hocon": true,
+
+    # This particular network will not work with the standard AGENT_TOOL_PATH_ONLY
+    # env var turned on in the Dockerfile. It is turned on here for testing purposes.
     "math_guy_passthrough_to_network_file.hocon": true,
     "music_nerd.hocon": true,
     "music_nerd_pro_sly.hocon": true,
