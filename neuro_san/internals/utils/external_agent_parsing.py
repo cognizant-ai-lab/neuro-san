@@ -20,6 +20,7 @@ from typing import List
 from typing import Optional
 from typing import Union
 
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
@@ -45,6 +46,13 @@ class ExternalAgentParsing:
         JsonSerializationFormat(),
         HoconSerializationFormat(),
     ]
+
+    # Longest tool name that OpenAI accepts, which is also within the Anthropic limit.
+    MAX_TOOL_NAME_LENGTH: int = 64
+
+    # Number of hex characters of the URL digest kept in the name of an agent network file.
+    # 12 hex characters are 48 bits, so two references in one agent collide only by chance.
+    URL_DIGEST_LENGTH: int = 12
 
     @staticmethod
     def parse_external_agent(agent_url: str, server_port: int = None) -> Dict[str, str]:
@@ -276,10 +284,12 @@ class ExternalAgentParsing:
     def get_safe_network_file_name(agent_url: str, agent_name: str) -> str:
         """
         Creates a tool name for a reference to an agent network file.
-        The name keeps only the hostname and the file name, in the form
-        "<hostname>-<filebase>_<fileextension>", and replaces each character
-        that a tool name does not allow with "_".
+        The name has the form "<hostname>-<filebase>_<fileextension>-<digest>", where
+        each character that a tool name does not allow is replaced by "_".
         A reference without a hostname gets the "__" prefix of other external agents instead.
+        The digest comes from the full agent_url, so references that share a hostname and
+        a file name but differ elsewhere get different names. The readable part is truncated
+        so that the whole name fits in MAX_TOOL_NAME_LENGTH.
 
         :param agent_url: The URL of the agent network file.
         :param agent_name: The agent name parsed from agent_url, which is the path of the file.
@@ -291,9 +301,20 @@ class ExternalAgentParsing:
 
         # Use the hostname as written in the URL, not the "localhost" default of parse_external_agent().
         hostname: str = urlparse(agent_url).hostname
-        if not hostname:
-            return "__" + safe_file_name
+        readable_name: str = "__" + safe_file_name
+        if hostname:
+            safe_hostname: str = name_filter.filter(hostname)
+            readable_name = f"{safe_hostname}-{safe_file_name}"
 
-        safe_hostname: str = name_filter.filter(hostname)
-        safe_network_file_name: str = f"{safe_hostname}-{safe_file_name}"
+        # sha256 rather than hash(), so the name is the same in every process.
+        url_bytes: bytes = agent_url.encode("utf-8")
+        url_hash: Any = sha256(url_bytes)
+        full_digest: str = url_hash.hexdigest()
+        digest: str = full_digest[:ExternalAgentParsing.URL_DIGEST_LENGTH]
+
+        # Leave room for the "-" separator and the digest.
+        suffix: str = "-" + digest
+        readable_length: int = ExternalAgentParsing.MAX_TOOL_NAME_LENGTH - len(suffix)
+        truncated_name: str = readable_name[:readable_length]
+        safe_network_file_name: str = truncated_name + suffix
         return safe_network_file_name
