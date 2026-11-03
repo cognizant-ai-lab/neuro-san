@@ -28,6 +28,7 @@ from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.tools.exposed_tool_names import ExposedToolNames
 from neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator import ExternalAgentToolCreator
 from neuro_san.internals.run_context.langchain.tools.function_tool_creator import FunctionToolCreator
+from neuro_san.internals.run_context.langchain.tools.internal_agent_tool_creator import InternalAgentToolCreator
 from neuro_san.internals.run_context.langchain.tools.mcp_tool_creator import McpToolCreator
 from neuro_san.internals.run_context.langchain.tools.tool_creator import ToolCreator
 from neuro_san.internals.run_context.langchain.tools.toolbox_tool_creator import ToolboxToolCreator
@@ -39,13 +40,13 @@ class BaseToolFactory:
     Creates langchain BaseTools for the tools an agent lists.
 
     This class only decides which kind of tool a reference is and builds the
-    creator for that kind, all in the tools package: FunctionToolCreator
-    for coded tools and internal agents, ToolboxToolCreator for toolbox
-    entries, ExternalAgentToolCreator for other agent networks, and
-    McpToolCreator for MCP servers. A creator is built for one reference,
-    with what its kind needs in its constructor, and every creator is then
-    called the same way: create_tool(tool_name). Each creator owns the policy
-    for its kind.
+    creator for that kind, all in the tools package: FunctionToolCreator for
+    coded tools, its subclass InternalAgentToolCreator for the network's LLM
+    agents, ToolboxToolCreator for toolbox entries, ExternalAgentToolCreator
+    for other agent networks, and McpToolCreator for MCP servers. A creator
+    is built for one reference, with what its kind needs in its constructor,
+    and every creator is then called the same way: create_tool(tool_name).
+    Each creator owns the policy for its kind.
     The one thing kept across kinds is ExposedToolNames, so that a later tool
     repeating a name is caught whatever kind either tool is.
     """
@@ -118,12 +119,17 @@ class BaseToolFactory:
             creator = ToolboxToolCreator(self.tool_caller, self.invocation_context, self.journal,
                                          self.agent_location, agent_spec)
         else:
-            # Handle coded tools
             function_json: Dict[str, Any] = agent_spec.get("function")
             if function_json is None:
                 return None
-            creator = FunctionToolCreator(self.tool_caller, self.invocation_context, self.journal,
-                                          self.agent_location, function_json)
+            if agent_spec.get("class") is not None:
+                # Handle coded tools, which take the arguments their function declares, or none.
+                creator = FunctionToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                              self.agent_location, function_json)
+            else:
+                # Handle LLM agents. BranchActivationPrepper runs an agent with a function and no class.
+                creator = InternalAgentToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                                   self.agent_location, function_json)
 
         return await creator.create_tool(name)
 

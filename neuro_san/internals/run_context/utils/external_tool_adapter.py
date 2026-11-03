@@ -82,8 +82,9 @@ an agent network by that name. Try these hints:
     c. There is one and only one "front man" agent note in each network described
        by a hocon file that receives input on behalf of the network.
     d. In order to be called by external agents, that front man must have a
-       "function" definition which includes a description. Declaring at least
-       one parameter is recommended, as parameters are how calling agents know
+       description, either in its "function" definition or as a top-level
+       "description". Declaring at least one parameter in its "function"
+       definition is recommended, as parameters are how calling agents know
        what to pass; when none are declared, a single "inquiry" string parameter
        is synthesized on the calling side so the caller's request still gets through.
 """

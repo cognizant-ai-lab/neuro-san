@@ -83,3 +83,79 @@ class TestFunctionToolCreator(IsolatedAsyncioTestCase):
             await creator.create_tool("/network_b")
 
         self.assertIn("/network_b", str(context.exception))
+
+    def test_tool_function_json_is_the_given_specification(self) -> None:
+        """
+        The tool is made from the function specification the creator was built with.
+        """
+        function_json: Dict[str, Any] = {
+            "description": "Answers questions.",
+        }
+        creator: FunctionToolCreator = self.make_creator(function_json)
+
+        self.assertIs(creator.get_tool_function_json(), function_json)
+
+    def test_declares_no_parameters(self) -> None:
+        """
+        A function with no parameters, null ones, an empty dictionary or only an empty
+        properties declaration declares no parameters, so the answer is True. One with
+        properties or with a block in an unsupported dialect declares some, and a block
+        that is not a dictionary is not a schema at all, so for those the answer is False.
+        So it is for a function that is not a dictionary.
+        """
+        # Each case maps the "parameters" value of a function to the expected answer.
+        cases: Dict[str, Dict[str, Any]] = {
+            "null": {
+                "parameters": None,
+                "expected": True,
+            },
+            "empty_dictionary": {
+                "parameters": {},
+                "expected": True,
+            },
+            "empty_properties": {
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+                "expected": True,
+            },
+            "with_properties": {
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                        },
+                    },
+                },
+                "expected": False,
+            },
+            "not_a_dictionary": {
+                "parameters": "question",
+                "expected": False,
+            },
+            "unsupported_dialect": {
+                "parameters": {
+                    "type": "object",
+                    "anyOf": [],
+                },
+                "expected": False,
+            },
+        }
+
+        self.assertTrue(FunctionToolCreator.declares_no_parameters({"description": "Answers questions."}))
+        self.assertFalse(FunctionToolCreator.declares_no_parameters("aaosa_call"))
+
+        # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
+        label: str = None
+        for label in cases:
+            with self.subTest(case=label):
+                case: Dict[str, Any] = cases.get(label)
+                function_json: Dict[str, Any] = {
+                    "description": "Answers questions.",
+                    "parameters": case.get("parameters"),
+                }
+
+                self.assertEqual(FunctionToolCreator.declares_no_parameters(function_json), case.get("expected"))

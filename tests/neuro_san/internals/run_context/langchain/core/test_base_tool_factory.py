@@ -29,6 +29,7 @@ from typing_extensions import override
 from langchain_core.tools import BaseTool
 from langchain_core.tools import StructuredTool
 
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
 from neuro_san.internals.run_context.langchain.core.base_tool_factory import BaseToolFactory
@@ -144,6 +145,68 @@ class TestBaseToolFactory(IsolatedAsyncioTestCase):
         self.assertIsInstance(tool, BaseTool)
         self.assertEqual(tool.name, "helper")
         self.assertEqual(factory.exposed_tool_names.get_names(), {"helper"})
+
+    async def test_internal_agent_with_description_becomes_a_function_tool(self) -> None:
+        """
+        A sub-agent that gives only a description, once the filter chain has made its
+        function block, becomes a function tool with one required "inquiry" argument.
+        """
+        config: Dict[str, Any] = {
+            "tools": [
+                {
+                    "name": "researcher",
+                    "tools": ["helper"],
+                },
+                {
+                    "name": "helper",
+                    "description": "Answers questions.",
+                },
+            ],
+        }
+        filtered: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
+        factory: BaseToolFactory = self.make_factory(agent_spec=filtered.get("tools")[1])
+
+        tool: Union[BaseTool, List[BaseTool]] = await factory.create_base_tool("helper")
+
+        self.assertIsInstance(tool, BaseTool)
+        self.assertEqual(tool.name, "helper")
+        self.assertEqual(tool.description, "Answers questions.")
+        self.assertEqual(tool.get_input_jsonschema().get("required"), ["inquiry"])
+
+    async def test_only_llm_agents_get_the_default_inquiry(self) -> None:
+        """
+        An LLM agent whose function declares no parameters goes to InternalAgentToolCreator,
+        so its tool gets the default "inquiry" argument. A coded tool with the same function
+        goes to FunctionToolCreator and takes no arguments.
+        """
+        # Each case is an agent spec and the "required" list its tool must have.
+        cases: Dict[str, Dict[str, Any]] = {
+            "llm_agent": {
+                "spec": {
+                    "function": {"description": "Tells the time."},
+                    "instructions": "Tell the time.",
+                },
+                "required": ["inquiry"],
+            },
+            "coded_tool": {
+                "spec": {
+                    "function": {"description": "Tells the time."},
+                    "class": "clock.Clock",
+                },
+                "required": None,
+            },
+        }
+
+        # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
+        label: str = None
+        for label in cases:
+            with self.subTest(case=label):
+                case: Dict[str, Any] = cases.get(label)
+                factory: BaseToolFactory = self.make_factory(agent_spec=case.get("spec"))
+
+                tool: Union[BaseTool, List[BaseTool]] = await factory.create_base_tool("clock")
+
+                self.assertEqual(tool.get_input_jsonschema().get("required"), case.get("required"))
 
     async def test_internal_agent_with_toolbox_goes_to_the_toolbox(self) -> None:
         """

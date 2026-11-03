@@ -33,8 +33,8 @@ from neuro_san.message.types.agent_message import AgentMessage
 class ToolCreator:
     """
     Common state and reporting for the classes that each create one kind of
-    langchain BaseTool for an agent: function (coded) tools, toolbox tools,
-    external agents and MCP servers.
+    langchain BaseTool for an agent: coded tools, LLM agents of the same
+    network, toolbox tools, external agents and MCP servers.
 
     BaseToolFactory decides which creator a tool reference goes to and builds
     one creator for that reference. Whatever a kind needs beyond the tool's

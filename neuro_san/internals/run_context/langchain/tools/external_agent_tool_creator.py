@@ -121,9 +121,9 @@ class ExternalAgentToolCreator(ToolCreator):
         which the LLM would invoke with an empty {} - and the external network
         would silently never receive the caller's request (issue #1228).
 
-        Note this is external-tools-only on purpose: internal tools without
-        parameters (e.g. no-argument coded tools) legitimately take no
-        arguments and are left alone.
+        This method is for external agents only. InternalAgentToolCreator gives
+        the LLM agents of the calling network their own default, and coded tools
+        without parameters legitimately take no arguments and are left alone.
 
         :param function_json: The function spec reported by the external agent.
                     Can be None when the agent was unreachable.
@@ -143,26 +143,8 @@ class ExternalAgentToolCreator(ToolCreator):
             # followed by the tool being dropped.
             return function_json
 
-        raw_parameters: Any = function_json.get("parameters")
-        if raw_parameters is not None and not isinstance(raw_parameters, Dict):
-            # Not a schema we can reason about, however truthy or falsy
-            # (e.g. a string, a list, a boolean).
-            # Let verify_function_json() report it as invalid.
-            return function_json
-
-        parameters: Dict[str, Any] = {}
-        if raw_parameters is not None:
-            parameters = raw_parameters
-        properties: Dict[str, Any] = parameters.get("properties") or {}
-        if properties:
-            return function_json
-
-        # A parameters block carrying anything beyond an empty properties
-        # declaration is a declared schema in an unsupported dialect
-        # (e.g. additionalProperties, anyOf, $ref). Let verify_function_json()
-        # report it rather than silently replacing the declared contract
-        # with the synthesized one.
-        if parameters and not {"type", "properties", "required"}.issuperset(parameters.keys()):
+        if not FunctionToolCreator.declares_no_parameters(function_json):
+            # It declares parameters, or a block that verify_function_json() reports.
             return function_json
 
         log_once: LogOnce = LogOnce(self.logger)

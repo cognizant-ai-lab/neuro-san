@@ -22,6 +22,7 @@ from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.config.config_filter_chain import ConfigFilterChain
 
 from neuro_san.internals.graph.filters.defaults_config_filter import DefaultsConfigFilter
+from neuro_san.internals.graph.filters.description_config_filter import DescriptionConfigFilter
 from neuro_san.internals.graph.filters.dictionary_common_defs_config_filter \
     import DictionaryCommonDefsConfigFilter
 from neuro_san.internals.graph.filters.name_correction_config_filter import NameCorrectionConfigFilter
@@ -31,8 +32,8 @@ from neuro_san.internals.graph.filters.string_common_defs_config_filter import S
 class NetworkConfigFilterChain(ConfigFilter):
     """
     A reusable ConfigFilter that applies the standard agent network
-    filter chain: commondefs substitution, defaults injection, and
-    name correction.
+    filter chain: commondefs substitution, defaults injection,
+    top-level descriptions copied into function blocks, and name correction.
 
     This is the canonical ordering of filters for any agent network
     config dictionary.  Both AgentNetworkRestorer and the validation
@@ -49,6 +50,8 @@ class NetworkConfigFilterChain(ConfigFilter):
         filter_chain.register(DictionaryCommonDefsConfigFilter())
         filter_chain.register(StringCommonDefsConfigFilter())
         filter_chain.register(DefaultsConfigFilter())
+        # After commondefs substitution, so an agent spec taken from replacement_values is seen in its final form.
+        filter_chain.register(DescriptionConfigFilter())
         filter_chain.register(NameCorrectionConfigFilter())
 
         config: Dict[str, Any] = filter_chain.filter_config(basis_config)

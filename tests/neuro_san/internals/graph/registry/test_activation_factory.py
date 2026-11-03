@@ -23,10 +23,12 @@ from typing import List
 from typing import Optional
 
 from unittest import TestCase
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import neuro_san
 
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.activation_factory import ActivationFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 
@@ -35,7 +37,7 @@ class TestActivationFactory(TestCase):
     """
     Unit tests for how ActivationFactory reads AGENT_TOOL_PATH: each root it lists
     becomes one dotted module path, ending with the agent network name, under which
-    coded tools are looked up.
+    coded tools are looked up. One test checks which activation a sub-agent gets.
     """
 
     # The repo root is the PYTHONPATH entry that directory roots are mapped against.
@@ -51,6 +53,10 @@ class TestActivationFactory(TestCase):
     # Where the imported neuro_san package lives, for the default root
     PACKAGE_PARENT: str = str(Path(neuro_san.__file__).resolve().parent.parent)
     NETWORK_NAME: str = "my_network"
+    # Where the activation preppers look up the activation classes they build
+    BRANCH_ACTIVATION_PATH: str = "neuro_san.internals.graph.preppers.branch_activation_prepper.BranchActivation"
+    FRONT_MAN_ACTIVATION_PATH: str = \
+        "neuro_san.internals.graph.preppers.front_man_activation_prepper.FrontManActivation"
 
     def make_factory(self, network_name: str, agent_tool_path: Optional[str],
                      pythonpath: str = None) -> ActivationFactory:
@@ -179,3 +185,33 @@ class TestActivationFactory(TestCase):
             TestActivationFactory.NETWORK_NAME, None, TestActivationFactory.PACKAGE_PARENT)
 
         self.assertEqual(factory.get_agent_tool_paths(), ["neuro_san.coded_tools.my_network"])
+
+    def test_sub_agent_with_description_is_activated_as_a_branch(self) -> None:
+        """
+        A sub-agent that gives only a description is activated as a BranchActivation
+        once the filter chain has made its function block, and not as a front man.
+        """
+        config: Dict[str, Any] = {
+            "tools": [
+                {
+                    "name": "front",
+                    "tools": ["helper"],
+                },
+                {
+                    "name": "helper",
+                    "description": "Answers questions.",
+                },
+            ],
+        }
+        filtered: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
+        agent_network: AgentNetwork = AgentNetwork(filtered, TestActivationFactory.NETWORK_NAME)
+        with patch.dict(os.environ, {"AGENT_TOOL_PATH": "neuro_san.coded_tools"}):
+            factory: ActivationFactory = ActivationFactory(agent_network)
+
+        # Both activation classes are mocked, so no real RunContext or LLM is made.
+        with patch(TestActivationFactory.BRANCH_ACTIVATION_PATH) as branch_class, \
+                patch(TestActivationFactory.FRONT_MAN_ACTIVATION_PATH) as front_man_class:
+            activation: Any = factory.create_agent_activation(MagicMock(), {}, "helper", {}, {"inquiry": "Hi"})
+
+        self.assertIs(activation, branch_class.return_value)
+        front_man_class.assert_not_called()

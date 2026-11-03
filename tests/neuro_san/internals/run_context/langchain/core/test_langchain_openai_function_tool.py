@@ -100,7 +100,7 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
     def test_from_function_json_without_parameters_builds_empty_args_schema(self):
         """
-        An internal tool with no "parameters" block must still get an explicit,
+        A coded tool with no "parameters" block must still get an explicit,
         empty args_schema. Leaving args_schema unset lets langchain auto-derive
         a schema from _arun(*args, **kwargs), which produces an "args" array
         property with no "items" field - Gemini rejects that with
@@ -121,9 +121,10 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         external agents send over the network - is normalized to the same
         explicit empty args_schema as a missing parameters block, now that
         the converter honors the DictionaryConverter None -> None contract.
-        (External agents get parameters synthesized by
-        ensure_external_parameters() before reaching this code; this covers
-        every other caller.)
+        (External agents get a default "inquiry" parameter from
+        ensure_external_parameters() before reaching this code, and LLM agents
+        of the calling network get one from InternalAgentToolCreator. This
+        covers coded tools.)
         """
         function_json = {"name": "ext_agent", "description": "d", "parameters": None}
         tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
