@@ -99,9 +99,9 @@ class TestFunctionToolCreator(IsolatedAsyncioTestCase):
         """
         A function with no parameters, null ones, an empty dictionary or only an empty
         properties declaration declares no parameters, so the answer is True. One with
-        properties or with a block in an unsupported dialect declares some, and a block
-        that is not a dictionary is not a schema at all, so for those the answer is False.
-        So it is for a function that is not a dictionary.
+        properties or with a block in an unsupported dialect declares some, and a block or
+        a properties value that is not a dictionary is malformed, so for those the answer
+        is False. So it is for a function that is not a dictionary.
         """
         # Each case maps the "parameters" value of a function to the expected answer.
         cases: Dict[str, Dict[str, Any]] = {
@@ -134,6 +134,13 @@ class TestFunctionToolCreator(IsolatedAsyncioTestCase):
             },
             "not_a_dictionary": {
                 "parameters": "question",
+                "expected": False,
+            },
+            "properties_not_a_dictionary": {
+                "parameters": {
+                    "type": "object",
+                    "properties": [],
+                },
                 "expected": False,
             },
             "unsupported_dialect": {

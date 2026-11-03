@@ -125,7 +125,11 @@ class FunctionToolCreator(ToolCreator):
             return False
 
         parameters: Dict[str, Any] = raw_parameters
-        if parameters.get("properties"):
+        properties: Any = parameters.get("properties")
+        if properties is not None and not isinstance(properties, dict):
+            # Malformed, however truthy or falsy (e.g. [] or false). verify_function_json() reports it.
+            return False
+        if properties:
             return False
 
         # Any other key (e.g. additionalProperties, anyOf, $ref) marks an unsupported dialect.

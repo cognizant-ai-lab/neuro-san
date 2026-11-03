@@ -266,6 +266,38 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
                 reported: AgentMessage = creator.journal.write_message.await_args.args[0]
                 self.assertIn("invalid function definition", str(reported.content))
 
+    async def test_non_dict_properties_reported_as_invalid(self) -> None:
+        """
+        A "properties" value that is not a dictionary, truthy or falsy, is malformed.
+        It is reported as an invalid function definition, not repaired with the
+        synthesized default.
+        """
+        properties_cases: Dict[str, Any] = {
+            "list": [],
+            "empty_string": "",
+            "false": False,
+        }
+
+        # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
+        label: str = None
+        for label in properties_cases:
+            with self.subTest(case=label):
+                creator: ExternalAgentToolCreator = self.make_creator({
+                    "description": "Answers music questions.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": properties_cases.get(label),
+                    },
+                })
+
+                tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
+
+                self.assertIsNone(tool)
+                creator.journal.write_message.assert_awaited_once()
+                reported: AgentMessage = creator.journal.write_message.await_args.args[0]
+                self.assertIn("invalid function definition", str(reported.content))
+                self.assertNotIn("synthesized", str(reported.content))
+
     async def test_unreachable_external_tool_reported_as_unreachable(self) -> None:
         """
         A transport-level failure fetching the external agent's function spec
