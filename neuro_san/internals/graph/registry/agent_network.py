@@ -22,8 +22,7 @@ from objsize import get_deep_size
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from neuro_san.internals.run_context.interfaces.agent_network_inspector import \
-    AgentNetworkInspector
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 
 
 class AgentNetwork(AgentNetworkInspector):
