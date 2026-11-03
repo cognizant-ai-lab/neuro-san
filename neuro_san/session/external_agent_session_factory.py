@@ -326,6 +326,12 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             return None
 
         metadata: Dict[str, str] = invocation_context.get_metadata()
+
+        # DEF: The shallow copy retains the caller's factories, so the fetched network's llm_info_file
+        #      and toolbox_info_file are ignored. A toolbox defined only in the fetched network's info file
+        #      will then fail to resolve because ToolboxToolCreator uses the inherited factory.
+        #      Maybe?: initialize and load network-specific factories on the child context,
+        #      as DirectAgentSessionFactory does, while preserving shared execution and reporting state.
         safe_invocation_context: SessionInvocationContext = invocation_context.safe_shallow_copy(invocation)
         session: AsyncAgentSession = AsyncDirectAgentSession(agent_network, safe_invocation_context,
                                                              metadata=metadata)
