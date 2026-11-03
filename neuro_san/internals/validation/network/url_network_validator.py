@@ -131,5 +131,7 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         if not tool.startswith("file://") and not tool.startswith("/"):
             return False
 
-        file_extension: str = Path(urlsplit(tool).path).suffix
-        return file_extension in UrlNetworkValidator.AGENT_NETWORK_FILE_EXTENSIONS
+        split_path = urlsplit(tool).path
+        file_extension: str = Path(split_path).suffix
+        acceptable: bool = file_extension in UrlNetworkValidator.AGENT_NETWORK_FILE_EXTENSIONS
+        return acceptable
