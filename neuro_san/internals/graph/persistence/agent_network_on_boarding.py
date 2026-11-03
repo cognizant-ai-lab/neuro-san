@@ -38,16 +38,18 @@ class AgentNetworkOnBoarding(ConfigFilter, DictionaryValidator):
     Perform common on-boarding tasks for an agent network.
     """
 
-    def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None,
-                 network_name: str = None, require_fully_qualified_classes: bool = False):
+    def __init__(self, network_name: str = None,
+                 require_fully_qualified_classes: bool = False,
+                 external_network_names: List[str] = None,
+                 mcp_servers: List[str] = None):
         """
         Constructor
 
-        :param external_network_names: A list of external network names
-        :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         :param network_name: The agent network name for diagnostic log lines
         :param require_fully_qualified_classes: When True, every CodedTool "class" reference
                     must be fully-qualified. Default is False.
+        :param external_network_names: A list of external network names
+        :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.filter: ConfigFilter = NetworkConfigFilterChain()

@@ -102,8 +102,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         # A URL does not map to a package under AGENT_TOOL_PATH,
         # so CodedTool class references must be fully-qualified.
         agent_network = AgentNetwork(agent_spec, agent_name)
-        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding(network_name=agent_name,
-                                                                     require_fully_qualified_classes=True)
+        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding(agent_name, True)
         agent_network = on_boarding.on_board(agent_network)
         if agent_network is None:
             return None
