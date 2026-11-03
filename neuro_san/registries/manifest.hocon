@@ -32,6 +32,7 @@
     "intranet_agents_middleware.hocon": true,
     "math_guy.hocon": true,
     "math_guy_passthrough.hocon": true,
+    "math_guy_passthrough_to_network_file.hocon": true,
     "music_nerd.hocon": true,
     "music_nerd_pro_sly.hocon": true,
     "music_nerd_pro_sly_api_key.hocon": true,

@@ -23,6 +23,7 @@ from typing import Dict
 import os
 
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -31,6 +32,8 @@ from typing_extensions import override
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
+from neuro_san.internals.interfaces.storage_class import StorageClass
+from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 
@@ -39,9 +42,10 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
     """
     Unit tests for ExternalAgentSessionFactory class.
 
-    These exercise the http-session path only (use_direct=False), checking
+    Most of these exercise the http-session path (use_direct=False), checking
     that the scheme parsed out of an external agent reference is honored
-    when the factory builds the url the session will call.
+    when the factory builds the url the session will call. The direct_* tests
+    check the order in which a direct factory consults its storages.
     """
 
     # Seconds to wait for a coroutine scheduled on the executor's event loop
@@ -70,6 +74,10 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
         self.invocation_context.get_metadata.return_value = {}
         # No server port configured; only the localhost rule would consume it anyway.
         self.invocation_context.get_port.return_value = None
+
+        # Mock storages of a direct factory, set by create_direct_factory()
+        self.public_storage: MagicMock = None
+        self.fetched_storage: MagicMock = None
 
     async def test_https_location_builds_https_url(self) -> None:
         """
@@ -236,3 +244,83 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):
         self.assertIsInstance(session, AsyncHttpServiceAgentSession)
         self.assertEqual(session.get_request_path("function"),
                          "https://neuro-san.decisionai.ml:443/api/v1/deep/math_guy/function")
+
+    @staticmethod
+    def create_storage(agent_network: Any) -> MagicMock:
+        """
+        Creates a mock AgentStorageSource whose provider yields the given agent network.
+
+        :param agent_network: The agent network the provider returns, or None for a miss
+        :return: The mock storage source
+        """
+        provider: MagicMock = MagicMock()
+        provider.get_agent_network.return_value = agent_network
+        storage: MagicMock = MagicMock()
+        storage.async_get_agent_network_provider = AsyncMock(return_value=provider)
+        return storage
+
+    def create_direct_factory(self, public_network: Any, fetched_network: Any) -> ExternalAgentSessionFactory:
+        """
+        Creates a direct factory with one public and one fetched mock storage.
+
+        :param public_network: The agent network the public storage yields, or None for a miss
+        :param fetched_network: The agent network the fetched storage yields, or None for a miss
+        :return: The direct factory
+        """
+        self.public_storage = self.create_storage(public_network)
+        self.fetched_storage = self.create_storage(fetched_network)
+        storage_dict: Dict[str, Any] = {
+            StorageClass.PUBLIC: self.public_storage,
+            StorageClass.FETCHED: self.fetched_storage,
+        }
+        return ExternalAgentSessionFactory(use_direct=True, network_storage_dict=storage_dict)
+
+    async def test_direct_fetched_is_last_resort_before_http(self) -> None:
+        """
+        Tests that a direct factory fetches by the full URL when no local storage has the agent
+        """
+        agent_url: str = "https://example.com/nets/math_guy.hocon"
+        factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
+
+        session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
+        self.assertIsInstance(session, AsyncDirectAgentSession)
+        self.fetched_storage.async_get_agent_network_provider.assert_awaited_once_with(agent_url)
+
+    async def test_direct_local_storage_wins_over_fetched(self) -> None:
+        """
+        Tests that a direct factory uses a local agent network without fetching anything
+        """
+        factory: ExternalAgentSessionFactory = self.create_direct_factory(MagicMock(), MagicMock())
+
+        session: AsyncAgentSession = await factory.async_create_session("/math_guy", self.invocation_context)
+        self.assertIsInstance(session, AsyncDirectAgentSession)
+        self.public_storage.async_get_agent_network_provider.assert_awaited_once_with("math_guy")
+        self.fetched_storage.async_get_agent_network_provider.assert_not_awaited()
+
+    async def test_direct_fetch_miss_falls_back_to_http(self) -> None:
+        """
+        Tests that a direct factory makes an http session when the fetched storage has no agent network
+        """
+        agent_url: str = "https://example.com/math_guy"
+        factory: ExternalAgentSessionFactory = self.create_direct_factory(None, None)
+
+        session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
+        self.assertIsInstance(session, AsyncHttpServiceAgentSession)
+        self.fetched_storage.async_get_agent_network_provider.assert_awaited_once_with(agent_url)
+
+    async def test_direct_location_without_agent_url_does_not_fetch(self) -> None:
+        """
+        Tests that a location dict without an "agent_url" key, as built by older callers, never fetches
+        """
+        agent_location: Dict[str, str] = {
+            "host": "example.com",
+            "port": "443",
+            "agent_name": "nets/math_guy.hocon",
+            "scheme": "https",
+        }
+        factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
+
+        session: AsyncAgentSession = \
+            await factory.create_session_from_location_dict(agent_location, self.invocation_context)
+        self.assertIsInstance(session, AsyncHttpServiceAgentSession)
+        self.fetched_storage.async_get_agent_network_provider.assert_not_awaited()

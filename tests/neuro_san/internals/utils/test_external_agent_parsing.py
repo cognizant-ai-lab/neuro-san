@@ -36,6 +36,7 @@ class TestExternalAgentParsing(TestCase):
         self.assertEqual(agent_location.get("host"), "myhost")
         self.assertEqual(agent_location.get("port"), "8080")
         self.assertEqual(agent_location.get("agent_name"), "my_agent")
+        self.assertEqual(agent_location.get("agent_url"), "http://myhost:8080/my_agent")
 
     def test_parse_external_agent_unparseable_url_returns_none(self) -> None:
         """

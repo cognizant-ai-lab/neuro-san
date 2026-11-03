@@ -49,6 +49,7 @@ class ExternalAgentParsing:
                            "https"), or "" when the reference has no
                            scheme, e.g. "/math_guy" for an agent on the
                            same server.
+                "agent_url" - the agent_url as given
 
                 OR
 
@@ -153,6 +154,7 @@ class ExternalAgentParsing:
             "port": port,
             "agent_name": agent_name,
             "scheme": scheme,
+            "agent_url": agent_url,
         }
         return return_dict
 

@@ -23,10 +23,13 @@ from logging import getLogger
 from logging import Logger
 
 from leaf_common.config.config_filter import ConfigFilter
+from leaf_common.validation.composite_dictionary_validator import CompositeDictionaryValidator
 from leaf_common.validation.dictionary_validator import DictionaryValidator
 
 from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.validation.network.fully_qualified_class_network_validator import \
+    FullyQualifiedClassNetworkValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -36,19 +39,27 @@ class AgentNetworkOnBoarding(ConfigFilter, DictionaryValidator):
     """
 
     def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None,
-                 network_name: str = None):
+                 network_name: str = None, require_fully_qualified_classes: bool = False):
         """
         Constructor
 
         :param external_network_names: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         :param network_name: The agent network name for diagnostic log lines
+        :param require_fully_qualified_classes: When True, every CodedTool "class" reference
+                    must be fully-qualified. Default is False.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.filter: ConfigFilter = NetworkConfigFilterChain()
-        self.validator: DictionaryValidator = ManifestNetworkValidator(external_network_names,
-                                                                       mcp_servers,
-                                                                       network_name)
+
+        # On-boarding runs the standard manifest validation plus checks that apply
+        # only to networks that do not come from the manifest.
+        validators: List[DictionaryValidator] = [
+            ManifestNetworkValidator(external_network_names, mcp_servers, network_name),
+        ]
+        if require_fully_qualified_classes:
+            validators.append(FullyQualifiedClassNetworkValidator(network_name=network_name))
+        self.validator: DictionaryValidator = CompositeDictionaryValidator(validators)
 
     def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -94,7 +94,7 @@ Return verbatim whatever it returns.
 """,
             # Call the math_guy as an "external tool" which is an http hocon reference. Tools that are prefixed
             # with a slash "/" are expected to reside as agents on the same server.
-            "tools": ["https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main/neuro_san/registries/math_guy.hocon"],
+            "tools": ["https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main/neuro_san/registries/math_guy_fully_qualified.hocon"],
 
             # The allow block below lets us deviate from the standard security policy.
             # This policy is one of securtiy-by-default, whereby no sly_data gets out
@@ -112,7 +112,7 @@ Return verbatim whatever it returns.
 
                     # Allow all messages sent from specific downstream agents to be reported
                     # as if they came back from this agent network
-                    "messages": ["https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main/neuro_san/registries/math_guy.hocon"]
+                    "messages": ["https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main/neuro_san/registries/math_guy_fully_qualified.hocon"]
                 },
                 "to_upstream": {
                     # Specifying this allows sly_data keys from this network to be passed back
