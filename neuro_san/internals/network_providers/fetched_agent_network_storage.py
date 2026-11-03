@@ -172,7 +172,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         # Caller should have already taken care of any "file://" scheme.
         async with async_open(url, "rb") as file_obj:
             my_bytes: bytes = await file_obj.read()
-            contents: str = DecodeUtils.decode(my_bytes)
+            contents = DecodeUtils.decode(my_bytes)
 
         return contents
 
