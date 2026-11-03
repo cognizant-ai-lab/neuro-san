@@ -295,4 +295,5 @@ class ExternalAgentParsing:
             return "__" + safe_file_name
 
         safe_hostname: str = name_filter.filter(hostname)
-        return f"{safe_hostname}-{safe_file_name}"
+        safe_network_file_name: str = f"{safe_hostname}-{safe_file_name}"
+        return safe_network_file_name
