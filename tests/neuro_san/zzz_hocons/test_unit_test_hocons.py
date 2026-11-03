@@ -43,6 +43,7 @@ class TestUnitTestHocons(TestCase):
         "math_guy/basic_sly_data.hocon",
         "math_guy/forwarded_sly_data.hocon",
         "math_guy/deep_forwarded_sly_data.hocon",
+        "math_guy/forwarded_sly_data_from_network_file.hocon",
         "music_nerd/beatles_with_history.hocon",
         "music_nerd_pro_sly_api_key/no_user_api_key.hocon",
         "music_nerd_pro_sly_api_key/with_user_api_key.hocon",
