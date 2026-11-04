@@ -15,6 +15,9 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
+
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -23,23 +26,24 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
 class TestBranchActivation(IsolatedAsyncioTestCase):
     """
-    Tests for the return contract of BranchActivation.use_tool.
+    Tests for the return contract of BranchActivation.use_tool, and for the
+    assignments a sub-agent receives from its caller.
 
-    use_tool is documented to return a str, but it used to return the
-    sub-agent's raw message content. Today that content is always a str
-    (the sub-agent's chain output is flattened before it is journaled), so
-    the projection is an identity; once native block content is preserved
+    use_tool returns a str. Today the sub-agent's message content is always
+    a str (the sub-agent's chain output is flattened before it is journaled),
+    so the projection is an identity. Once native block content is preserved
     through that message, callers such as the copy_cat Copyist, which
     f-string the value straight into the calling LLM's tool result, would
-    otherwise see a Python repr of the block list. These tests lock the
-    text projection and confirm that plain-string content is returned
-    untouched.
+    otherwise see a Python repr of the block list. The use_tool tests lock
+    the text projection, confirm that plain-string content is returned
+    untouched, and check that the sub-agent's resources are released.
     """
 
     @staticmethod
@@ -92,3 +96,48 @@ class TestBranchActivation(IsolatedAsyncioTestCase):
 
         callable_activation: MagicMock = activation.factory.create_agent_activation.return_value
         callable_activation.close_of_work.assert_awaited_once_with(activation.run_context)
+
+    def test_get_assignments_from_the_default_parameters(self) -> None:
+        """
+        A sub-agent that has no parameters, whether it gives a top-level description
+        or a function block without parameters, gets the caller's inquiry in its message
+        once the filter chain has added the default parameters. Arguments it does not
+        declare are left out.
+        """
+        helpers: Dict[str, Dict[str, Any]] = {
+            "top_level_description": {
+                "name": "helper",
+                "description": "Answers questions.",
+            },
+            "function_without_parameters": {
+                "name": "helper",
+                "function": {
+                    "description": "Answers questions.",
+                },
+            },
+        }
+
+        # Each label is a string, so the subTest parameters stay picklable under pytest-xdist.
+        label: str = None
+        for label in helpers:
+            with self.subTest(case=label):
+                config: Dict[str, Any] = {
+                    "tools": [
+                        {
+                            "name": "front",
+                            "tools": ["helper"],
+                        },
+                        helpers.get(label),
+                    ],
+                }
+                filtered: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
+
+                # Skip the constructor, which creates a real RunContext.
+                activation: BranchActivation = BranchActivation.__new__(BranchActivation)
+                activation.agent_tool_spec = filtered.get("tools")[1]
+                activation.arguments = {
+                    "inquiry": "I loved Dune.",
+                    "genre": "science fiction",
+                }
+
+                self.assertEqual(activation.get_assignments(), "The inquiry is 'I loved Dune.'.")

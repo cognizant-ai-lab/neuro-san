@@ -32,11 +32,10 @@ from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkPr
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.listenable import Listenable
-from neuro_san.internals.network_providers.agent_network_storage_manager import AgentNetworkStorageManager
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 
-class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listenable[AgentStateListener]):
+class AgentNetworkStorage(AgentStorageSource, Listenable[AgentStateListener]):
     """
     Service-wide storage for AgentNetworkProviders containing
     a table of currently active AgentNetworks for each agent registered to the service.
@@ -45,6 +44,9 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
     """
 
     def __init__(self):
+        """
+        Constructor
+        """
         self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.lock: RLock = RLock()
@@ -76,7 +78,6 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         """
         return list(self.listeners)
 
-    @override
     def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
         """
         This method is a single point of entry in the service
@@ -117,11 +118,11 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         # Figure out current_agents - new_agents (in terms of sets),
         # but still keep ordering intact.
         agents_to_remove: List[str] = []
+        agent_name: str = None
         for agent_name in current_agents:
             if agent_name not in new_agents:
                 agents_to_remove.append(agent_name)
 
-        agent_name: str = None
         for agent_name in agents_to_remove:
             self.remove_agent_network(agent_name)
 
@@ -129,7 +130,6 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         for agent_name in new_agents:
             self.add_agent_network(agent_name, agent_networks[agent_name])
 
-    @override
     def remove_agent_network(self, agent_name: str):
         """
         Remove agent name and its AgentNetwork from service scope,
@@ -155,6 +155,17 @@ class AgentNetworkStorage(AgentStorageSource, AgentNetworkStorageManager, Listen
         :param agent_name: name of an agent
         """
         return SingleAgentNetworkProvider(agent_name, self.agents_table)
+
+    @override
+    async def async_get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
+        """
+        Get AgentNetworkProvider for a specific agent asynchronously.
+        Prefer this when you are tool-building in the middle of agent graph activations.
+
+        :param agent_name: name of an agent
+        """
+        # Nothing to wait on, so simply call the sync version.
+        return self.get_agent_network_provider(agent_name)
 
     @override
     def get_agent_names(self) -> List[str]:

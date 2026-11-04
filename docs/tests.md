@@ -5,7 +5,7 @@
 To run a specifc unit test
 
     pytest -v PathToPythonTestFile::TestClassName::TestMethodName
-    pytest -v ./tests/neuro_san/internals/graph/test_sly_data_redactor.py::TestSlyDataRedactor::test_assumptions
+    pytest -v ./tests/neuro_san/message/utils/test_sly_data_redactor.py::TestSlyDataRedactor::test_assumptions
 
 ## Different kinds of tests
 
@@ -149,7 +149,7 @@ Set a trace to stop the debugger on the next line
 
 Run pytest with '--pdb' flag
 
-    pytest -v --pdb ./tests/neuro_san/internals/graph/test_sly_data_redactor.py
+    pytest -v --pdb ./tests/neuro_san/message/utils/test_sly_data_redactor.py
 
 ## Writing unit tests
 
