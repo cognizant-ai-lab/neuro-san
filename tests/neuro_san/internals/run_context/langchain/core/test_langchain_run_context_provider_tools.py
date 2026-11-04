@@ -24,8 +24,6 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-import pytest
-
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
@@ -33,9 +31,6 @@ from langchain_core.runnables import Runnable
 from pydantic import PrivateAttr
 
 from neuro_san.internals.run_context.langchain.core.langchain_run_context import LangChainRunContext
-
-
-pytestmark = [pytest.mark.non_default_llm_provider, pytest.mark.ollama]
 
 
 class RecordingFakeChatModel(FakeMessagesListChatModel):

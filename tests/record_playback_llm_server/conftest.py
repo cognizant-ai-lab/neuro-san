@@ -27,17 +27,6 @@ import tornado.web
 from tornado.testing import bind_unused_port
 
 
-@pytest.fixture(autouse=True)
-def configure_llm_provider_keys():
-    """
-    Override the repo-wide autouse fixture of the same name (tests/conftest.py),
-    which skips tests when no LLM provider API key is present. These proxy tests
-    drive a local in-process fake upstream and never contact a real LLM, so no
-    provider key is required.
-    """
-    yield
-
-
 @pytest.fixture
 def start_app():
     """
