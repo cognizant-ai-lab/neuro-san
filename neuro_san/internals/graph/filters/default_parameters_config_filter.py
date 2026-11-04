@@ -112,10 +112,12 @@ class DefaultParametersConfigFilter(ConfigFilter):
                 result_config = deepcopy(basis_config)
 
             result_tools: List[Any] = result_config.get("tools")
+            result_tool: Dict[str, Any] = result_tools[index]
+            result_function: Dict[str, Any] = result_tool.get("function")
             # A new function block, so other agents that share this one keep it as it is.
-            new_function: Dict[str, Any] = dict(result_tools[index].get("function"))
+            new_function: Dict[str, Any] = dict(result_function)
             new_function["parameters"] = deepcopy(DefaultParametersConfigFilter.DEFAULT_PARAMETERS)
-            result_tools[index]["function"] = new_function
+            result_tool["function"] = new_function
 
         return result_config
 

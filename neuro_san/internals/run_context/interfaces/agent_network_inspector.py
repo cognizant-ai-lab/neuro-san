@@ -66,9 +66,10 @@ class AgentNetworkInspector:
     @abstractmethod
     def find_front_man(self) -> str:
         """
-        :return: A single tool name to use as the root of the chat agent.
-                 This guy will be user facing.  If there are none or > 1,
-                 an exception will be raised.
+        Finds the front man: the first agent in the "tools" list of the agent network.
+
+        :return: The name of the front man, the user-facing root of the chat agent
+        :raises ValueError: When the network has no agents, or its first agent has a "class" or "toolbox" key
         """
         raise NotImplementedError
 

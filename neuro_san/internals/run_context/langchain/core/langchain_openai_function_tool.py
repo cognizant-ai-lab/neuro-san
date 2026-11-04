@@ -128,7 +128,7 @@ class LangChainOpenAIFunctionTool(BaseTool):
         if len(message) > 0:
             message += """
 This most often happens when calling an /external agent for the first time
-and the front man in the hocon file for the agent network has no description,
+and the front man in the hocon file for the agent network has no usable description,
 either top-level or in its function definition, or has malformed function parameters.
 """
             raise ToolSpecError(message)
