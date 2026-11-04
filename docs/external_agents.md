@@ -65,9 +65,10 @@ Examples: `https://example.com/nets/math_guy.hocon`, `file:///opt/nets/math_guy.
 
 - Fetching is off by default. The `AGENT_FETCHABLE_TOOL_SCHEMES` environment variable lists the url schemes that may
   be fetched, separated by commas or whitespace, for example `AGENT_FETCHABLE_TOOL_SCHEMES="https,file"`. Only
-  `http`, `https` and `file` are supported; any other entry is logged as a warning and ignored. A bare path counts as
-  `file`. A reference whose scheme is not listed is not fetched, which is logged at info level. When no scheme is
-  listed, the default, no fetched-network storage is set up at all, in the server or in a direct client.
+  `http`, `https` and `file` are supported; any other entry is logged as a warning and ignored. A bare url path
+  with no scheme counts as `file`. A reference whose scheme is not listed is not fetched, which is logged at info level.
+  When no scheme is listed, the default, no fetched-network storage is set up at all, in the server or in a direct
+  client.
 - The path must end in `.hocon` or `.json`, which selects how the file is parsed. A `file://` URL that ends in
   anything else fails validation, and so does a bare path that is not a
   [same-server reference](#same-server-references).

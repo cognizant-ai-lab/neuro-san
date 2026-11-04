@@ -617,7 +617,7 @@ ENV AGENT_TOOL_PATH_ONLY="true"
 
 # Url schemes for which an agent network file named by a tool reference may be fetched,
 # separated by commas or whitespace.  Supported schemes are "http", "https" and "file"
-# (a bare path counts as "file").  Empty (the default) turns fetching off entirely.  See
+# (a bare url path with no scheme counts as "file").  Empty (the default) turns fetching off entirely.  See
 # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/external_agents.md#agent-network-file-references
 ENV AGENT_FETCHABLE_TOOL_SCHEMES=""
 
