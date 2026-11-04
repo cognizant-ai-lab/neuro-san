@@ -1126,10 +1126,10 @@ parsing of that structure is removed from the ChatMessage text field.
 
 Supported values are:
 
-- `json`    Looks for JSON in the messages from the LLM and extracts
+- `json`    Looks for a JSON dictionary in the messages from the LLM and extracts it.
 
-Currently, the front-man is the only agent node that ever needs to specify this aspect of the [function](#function)
-definition.
+Only the front-man's `structure_formats` is used. It is an agent key, like `tools`, not part of the
+[function](#function).
 
 Example networks that parse their structure_formats:
 
@@ -1142,7 +1142,7 @@ Note that the order of appearance in the list can matter.
 
 For an overview of middleware, see the [Overview](https://docs.langchain.com/oss/python/langchain/middleware/overview).
 
-Example networks that parse their structure_formats:
+Example networks that use middleware:
 
 - [pii_middleware.hocon](../neuro_san/registries/pii_middleware.hocon)
 

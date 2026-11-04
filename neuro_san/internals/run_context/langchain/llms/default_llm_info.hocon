@@ -93,7 +93,7 @@
         "capabilities": [ "tools" ],
         # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
         # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "04/20/2026",
@@ -112,7 +112,7 @@
         "capabilities": [ "tools" ],
         # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
         # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "05/18/2026",

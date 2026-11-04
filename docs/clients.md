@@ -52,7 +52,7 @@ The `use_direct` parameter controls how **external networks** are resolved:
   If no server is running, **it silently hangs** with no error message.
 
 For a working example of an external network, see
-[`math_guy_passthrough`](../registries/math_guy_passthrough.hocon),
+[`math_guy_passthrough`](../neuro_san/registries/math_guy_passthrough.hocon),
 which delegates to the `/math_guy` external network.
 
 ### Setting `use_direct`
