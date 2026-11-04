@@ -53,7 +53,7 @@ class TestAgentNetworkOnBoarding(TestCase):
 
         errors: List[str] = on_boarding.validate(agent_network.get_config())
         self.assertEqual(0, len(errors), errors)
-        self.assertIsNotNone(on_boarding.on_board(agent_network))
+        self.assertIsNotNone(on_boarding.on_board(agent_network.get_config()))
 
     def test_relative_class_rejected_when_fully_qualified_required(self):
         """
@@ -66,7 +66,7 @@ class TestAgentNetworkOnBoarding(TestCase):
         errors: List[str] = on_boarding.validate(agent_network.get_config())
         self.assertEqual(1, len(errors))
         self.assertIn("calculator.Calculator", errors[0])
-        self.assertIsNone(on_boarding.on_board(agent_network))
+        self.assertIsNone(on_boarding.on_board(agent_network.get_config()))
 
     def test_fully_qualified_class_accepted_when_required(self):
         """
@@ -78,4 +78,4 @@ class TestAgentNetworkOnBoarding(TestCase):
 
         errors: List[str] = on_boarding.validate(agent_network.get_config())
         self.assertEqual(0, len(errors), errors)
-        self.assertIsNotNone(on_boarding.on_board(agent_network))
+        self.assertIsNotNone(on_boarding.on_board(agent_network.get_config()))
