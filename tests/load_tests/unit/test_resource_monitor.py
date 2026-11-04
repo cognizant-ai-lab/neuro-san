@@ -23,9 +23,8 @@ from typing import Optional
 from unittest import TestCase
 from unittest.mock import patch
 
-from psutil import Process
-
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 
 
 class TestResourceMonitor(TestCase):
@@ -47,13 +46,12 @@ class TestResourceMonitor(TestCase):
         """
         A snapshot of this test process names its memory and CPU keys with their units.
         """
-        process_snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(Process())
+        process_snapshot: Optional[Dict[str, Any]] = ResourceMonitor.snapshot(TrackedProcess())
 
         self.assertIsNotNone(process_snapshot)
         snapshot_keys: List[str] = sorted(process_snapshot.keys())
-        expected_keys: List[str] = sorted(
-            ["rss_megabytes", "fds", "threads", "connections", "children", "cpu_percent", "cpu_seconds"]
-        )
+        expected_keys: List[str] = sorted(["rss_megabytes", "fds", "threads", "connections", "children", "cpu_percent",
+                                           "cpu_seconds"])
         self.assertEqual(expected_keys, snapshot_keys)
 
     def test_snapshot_of_no_process(self) -> None:
@@ -79,8 +77,8 @@ class TestResourceMonitor(TestCase):
         memory_stats: SimpleNamespace = TestResourceMonitor._fake_memory_stats()
 
         with patch("tests.load_tests.monitoring.resource_monitor.virtual_memory", return_value=memory_stats):
-            with self.assertLogs("tests.load_tests.monitoring.resource_monitor", level="INFO") as captured:
-                ResourceMonitor.log_system_memory("BEFORE")
+            with self.assertLogs("ResourceMonitor", level="INFO") as captured:
+                ResourceMonitor().log_system_memory("BEFORE")
 
         messages: List[str] = TestResourceMonitor._messages(captured.records)
         expected_line: str = "  System BEFORE: 75% used (6144 MB used / 2.0 GB free / 8.0 GB total)"

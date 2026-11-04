@@ -14,14 +14,13 @@
 #
 # END COPYRIGHT
 
-import logging
+from logging import Logger
+from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
 
 from tests.load_tests.reporting.formatters import Formatters
-
-logger: logging.Logger = logging.getLogger(__name__)
 
 
 class DisconnectionReporter:
@@ -37,6 +36,7 @@ class DisconnectionReporter:
 
         :param stage_summaries: Per-stage summaries collected during the run
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self._summaries: List[Dict[str, Any]] = stage_summaries
 
     def log_disconnection_summary(self) -> None:
@@ -56,21 +56,17 @@ class DisconnectionReporter:
                 all_disconnections.append(disconnection_copy)
         if not all_disconnections:
             return
-        logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        logger.info("  CLIENT DISCONNECTIONS (%s detected in server log)", len(all_disconnections))
-        logger.info("%s", Formatters.SEPARATOR_LINE)
+        disconnection_count: int = len(all_disconnections)
+        title: str = f"CLIENT DISCONNECTIONS ({disconnection_count} detected in server log)"
+        self.logger.info("\n%s", Formatters.section_header(title))
         # One log line per disconnection.
         for disconnection in all_disconnections:
-            logger.info(
-                "  Batch %s: %s — %s still processing at disconnect",
-                disconnection.get("batch", "?"),
-                disconnection.get("request_id", "unknown"),
-                disconnection.get("agent", "unknown"),
-            )
-        logger.info(
-            """
+            batch_number: int = disconnection.get("batch")
+            request_id: str = disconnection.get("request_id", "unknown")
+            agent_name: str = disconnection.get("agent", "unknown")
+            self.logger.info("  Batch %s: %s — %s still processing at disconnect", batch_number, request_id, agent_name)
+        self.logger.info("""
   These requests had their client disconnect
   before the server finished. The server detected the
   disconnection and cancelled in-flight tasks.
-  If unexpected, consider increasing --idle-timeout.""",
-        )
+  If unexpected, consider increasing --idle-timeout or --request-timeout.""")

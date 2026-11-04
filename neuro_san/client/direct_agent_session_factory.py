@@ -29,7 +29,7 @@ from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkPr
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.storage_class import StorageClass
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.internals.reservations.direct_agent_reservationist import DirectAgentReservationist
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
@@ -45,8 +45,7 @@ class DirectAgentSessionFactory:
     Sets up everything needed to use a DirectAgentSession more as a library.
     This includes:
         * Some reading of AgentNetworks
-        * Setting up AgentNetworkStorage with agent networks
-          which were read in
+        * Setting up AgentStorageSource with agent networks which were read in
         * Initializing an LlmFactory
     """
 
@@ -58,14 +57,14 @@ class DirectAgentSessionFactory:
         manifest_restorer: RegistryManifestRestorer = RegistryManifestRestorer()
         manifest_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
 
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
+        self.network_storage_dict: Dict[str, AgentStorageSource] = {
             StorageClass.TEMP: ExpiringAgentNetworkStorage()
         }
 
         storage_class: str = None
         for storage_class in StorageClass.ALL_PERMANENT:
-            storage: AgentNetworkStorage = DirectAgentStorageUtil.create_network_storage(manifest_networks,
-                                                                                         storage_type=storage_class)
+            storage: AgentStorageSource = DirectAgentStorageUtil.create_network_storage(manifest_networks,
+                                                                                        storage_type=storage_class)
             self.network_storage_dict[storage_class] = storage
 
     def create_session(self, agent_name: str, use_direct: bool = False,
@@ -132,7 +131,7 @@ class DirectAgentSessionFactory:
             # Use the standard stuff available via the manifest file.
             storage_type: str = None
             for storage_type in StorageClass.ALL_PERMANENT:
-                storage: AgentNetworkStorage = self.network_storage_dict.get(storage_type)
+                storage: AgentStorageSource = self.network_storage_dict.get(storage_type)
                 agent_network_provider: AgentNetworkProvider = storage.get_agent_network_provider(agent_name)
                 if agent_network_provider is None:
                     continue

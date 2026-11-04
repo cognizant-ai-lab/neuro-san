@@ -37,7 +37,7 @@ class StorageWatcher(Startable):
     """
     Class implementing periodic server updates
     by watching agent files and manifest file itself
-    and other changes to AgentNetworkStorage instances.
+    and other changes to AgentStorageSource instances.
     """
 
     def __init__(self,

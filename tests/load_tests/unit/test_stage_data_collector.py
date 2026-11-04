@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from argparse import Namespace
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -34,15 +33,18 @@ class TestStageDataCollector(TestCase):
         """
         A 105 second --settle-time is logged as "1m 45s", and without a server process there is no server snapshot.
         """
-        args: Namespace = Namespace(settle_time=105, client_only=True, level=LoadTestConstants.LEVEL_MIN)
         collector_parts: Dict[str, Any] = {
             "profile": None,
             "log_monitor": None,
             "resource_reporter": None,
             "server_process": None,
             "output_dir": None,
+            "agent": None,
+            "level": LoadTestConstants.LEVEL_MIN,
+            "client_only": True,
+            "settle_time_seconds": 105,
         }
-        data_collector: StageDataCollector = StageDataCollector(args, collector_parts)
+        data_collector: StageDataCollector = StageDataCollector(collector_parts)
         post_stage_inputs: Dict[str, Any] = {
             "actual_requests": 0,
             "monitor_resources": True,

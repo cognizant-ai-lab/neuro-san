@@ -24,7 +24,7 @@ from http import HTTPStatus
 
 from leaf_common.validation.dictionary_validator import DictionaryValidator
 
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.service.utils.mcp_server_context import McpServerContext
 from neuro_san.service.mcp.interfaces.client_session_policy import ClientSessionPolicy
@@ -59,9 +59,9 @@ class McpRootHandler(BaseRequestHandler):
         # type: McpServerContext
         self.mcp_context: McpServerContext = self.server_context.get_mcp_server_context()
         # A dictionary of string (describing scope) to
-        #     AgentNetworkStorage instance which keeps all the AgentNetwork instances
+        #     AgentStorageSource instance which keeps all the AgentNetwork instances
         #     of a particular grouping.
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+        self.network_storage_dict: Dict[str, AgentStorageSource] = self.server_context.get_network_storage_dict()
 
         # For tool requests, we need to validate tool call arguments:
         self.tool_request_validator: ToolRequestValidator = ToolRequestValidator(self.openapi_service_spec)

@@ -26,6 +26,18 @@ class Formatters:
     SEPARATOR_LINE: str = "============================================================"
 
     @staticmethod
+    def section_header(title: str) -> str:
+        """
+        Build the header of a report section: a separator line, the title
+        indented by 2 spaces, and another separator line.
+
+        :param title: Section title
+        :return: The 3 header lines joined by newlines, with no newline at
+                 either end
+        """
+        return f"{Formatters.SEPARATOR_LINE}\n  {title}\n{Formatters.SEPARATOR_LINE}"
+
+    @staticmethod
     def format_rss(rss_megabytes: float) -> str:
         """
         Format RSS in human-readable units.

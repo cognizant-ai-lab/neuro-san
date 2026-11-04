@@ -14,7 +14,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version
 from json import loads
@@ -47,14 +46,19 @@ class ServerChecker:
 
     SECONDS_PER_MINUTE: int = 60
 
-    def __init__(self, args: Namespace) -> None:
+    def __init__(self, host: str, port: int, https: bool) -> None:
         """
-        Store the parsed arguments.
+        Store where the server is.
 
-        :param args: Parsed command-line arguments
+        :param host: Server host name or address
+        :param port: Server TCP port
+        :param https: True with --https
         """
-        self.args: Namespace = args
-        self.logger: Logger = getLogger(__name__)
+        self._host: str = host
+        self._port: int = port
+        self._https: bool = https
+        self.logger: Logger = getLogger(self.__class__.__name__)
+        self.confirm: Confirm = Confirm()
         self._server_ns_version: Optional[str] = None
 
     def preflight_server_check(self) -> None:
@@ -67,8 +71,8 @@ class ServerChecker:
 
         :raises LoadTestAbortError: When the server can't be reached
         """
-        host: str = self.args.host
-        port: int = self.args.port
+        host: str = self._host
+        port: int = self._port
         if EnvironmentValidator.is_port_open(host, port):
             self.logger.info("  Preflight: server %s:%s reachable.", host, port)
             self._server_ns_version = self.fetch_server_version()
@@ -78,11 +82,8 @@ class ServerChecker:
                 self.logger.info("  Preflight: server version unavailable (no /healthz response).")
             return
         scheme: str = self._scheme()
-        self.logger.error(
-            """ABORT: server %s:%s (%s) is unreachable — not firing any requests.
-  Check --host/--port/--https, or start the server.""",
-            host, port, scheme,
-        )
+        self.logger.error("""ABORT: server %s:%s (%s) is unreachable — not firing any requests.
+  Check --host/--port/--https, or start the server.""", host, port, scheme)
         raise LoadTestAbortError(1)
 
     def fetch_server_version(self) -> Optional[str]:
@@ -98,7 +99,7 @@ class ServerChecker:
                  unreachable or unparseable (e.g. an older/gRPC-only server)
         """
         scheme: str = self._scheme()
-        url: str = f"{scheme}://{self.args.host}:{self.args.port}/healthz"
+        url: str = f"{scheme}://{self._host}:{self._port}/healthz"
         response_bytes: bytes = b""
         response_text: str = ""
         payload: Dict[str, Any] = {}
@@ -147,7 +148,7 @@ class ServerChecker:
         """
         return self._server_ns_version
 
-    def validate_server_log(self) -> Optional[int]:
+    def validate_server_log(self, level: str, server_log: Optional[str]) -> Optional[int]:
         """
         Validate --server-log path when provided.
 
@@ -156,12 +157,11 @@ class ServerChecker:
         without --server-log, logs a warning listing which features
         will be unavailable.
 
+        :param level: Test level
+        :param server_log: The --server-log value: a path, "auto" or None
         :return: The stale log age in minutes, or None when the log is not stale, not given, or "auto"
         :raises LoadTestAbortError: When the --server-log file is not found
         """
-        level: str = self.args.level
-        server_log: Optional[str] = self.args.server_log
-
         if server_log == "auto":
             return None
 
@@ -169,8 +169,7 @@ class ServerChecker:
             return None
 
         if not server_log:
-            self.logger.warning(
-                """No --server-log provided at %s level.
+            self.logger.warning("""No --server-log provided at %s level.
   The following will be unavailable:
     - Retry counts and amplification factor
     - Server-side request validation
@@ -179,9 +178,7 @@ class ServerChecker:
   Resource monitoring (psutil) and aggregated token accounting (--tokens) still work.
   To enable full analysis, add:
     --server-log  (auto-detect)
-    --server-log logs/server.log""",
-                level,
-            )
+    --server-log logs/server.log""", level)
             return None
 
         if not isfile(server_log):
@@ -209,10 +206,8 @@ class ServerChecker:
         """
         self.logger.warning(
             """Server log not found for --level %s. Without it: no retry, disconnection, or pool analysis.
-  Set it with --server-log <path>, or use --no-server-log to skip this prompt.""",
-            level,
-        )
-        if not Confirm.ask("Continue without server-log analysis?"):
+  Set it with --server-log <path>, or use --no-server-log to skip this prompt.""", level)
+        if not self.confirm.ask("Continue without server-log analysis?"):
             self.logger.info("Aborted by user.")
             raise LoadTestAbortError(0)
         self.logger.info("  Continuing without server-log analysis.")
@@ -239,6 +234,6 @@ class ServerChecker:
         :return: "https" when --https is set, else "http"
         """
         scheme: str = "http"
-        if self.args.https:
+        if self._https:
             scheme = "https"
         return scheme

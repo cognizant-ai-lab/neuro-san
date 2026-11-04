@@ -19,9 +19,9 @@ from typing import Any
 from typing import Dict
 
 from leaf_common.time.timeout import Timeout
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class AbstractHttpServiceAgentSession(AgentSessionConstants):

@@ -61,8 +61,13 @@ class ServerLogParser:
         Extract token accounting fields from a Request reporting log block.
 
         :param block: Text of one Request reporting log block
-        :return: A dict with "request_id", "total_tokens", "prompt_tokens", "completion_tokens", "llm_calls"
-                 and "model", or None when the block has no request_id
+        :return: A dict with the following keys, or None when the block has no request_id:
+                 "request_id"         Server request id
+                 "total_tokens"       Total tokens
+                 "prompt_tokens"      Prompt tokens
+                 "completion_tokens"  Completion tokens
+                 "llm_calls"          Number of LLM calls
+                 "model"              Model name
         """
         request_id_match: Optional[re.Match] = re.search(r'"request_id": "([^"]+)"', block)
         if not request_id_match:
@@ -95,8 +100,9 @@ class ServerLogParser:
         Collect Request reporting blocks with their line positions.
 
         :param lines: Server log lines
-        :return: One dict per Request reporting block, with "text" (its lines joined) and "end_index"
-                 (index of its "request_id" line)
+        :return: One dict per Request reporting block, with the following keys:
+                 "text"       The block's lines joined
+                 "end_index"  Index of the block's "request_id" line
         """
         blocks: List[Dict[str, object]] = []
         in_block: bool = False
@@ -126,9 +132,16 @@ class ServerLogParser:
 
         :param blocks: Blocks from collect_reporting_blocks()
         :param lines: Server log lines
-        :return: One dict per block that has a token entry and a network name, with "request_id",
-                 "network", "total_tokens", "prompt_tokens", "completion_tokens", "llm_calls", "duration",
-                 "model" and "cost"
+        :return: One dict per block that has a token entry and a network name, with the following keys:
+                 "request_id"         Server request id
+                 "network"            Sub-network name
+                 "total_tokens"       Total tokens
+                 "prompt_tokens"      Prompt tokens
+                 "completion_tokens"  Completion tokens
+                 "llm_calls"          Number of LLM calls
+                 "duration_seconds"   Server-side time in seconds
+                 "model"              Model name
+                 "cost_usd"           Server-side cost in USD
         """
         results: List[Dict[str, Any]] = []
         block: Dict[str, object]
@@ -159,9 +172,9 @@ class ServerLogParser:
                 "prompt_tokens": entry.get("prompt_tokens", 0),
                 "completion_tokens": entry.get("completion_tokens", 0),
                 "llm_calls": entry.get("llm_calls", 0),
-                "duration": duration_seconds,
+                "duration_seconds": duration_seconds,
                 "model": entry.get("model", "unknown"),
-                "cost": total_cost_usd,
+                "cost_usd": total_cost_usd,
             })
         return results
 
@@ -191,8 +204,11 @@ class ServerLogParser:
         Group validation log lines by request_id.
 
         :param lines: Server log lines
-        :return: One dict with "request_id", "attempts", "fix_cycles" and "errors" for each request that
-                 needed a fix cycle, sorted by request_id
+        :return: One dict for each request that needed a fix cycle, sorted by request_id, with the following keys:
+                 "request_id"  Server request id
+                 "attempts"    Number of attempts
+                 "fix_cycles"  Number of fix cycles
+                 "errors"      Validation errors
         """
         by_request: Dict[str, Dict[str, object]] = {}
         request_id: str = ""
@@ -266,8 +282,12 @@ class ServerLogParser:
         Match Start/Finish pairs from server log lines.
 
         :param lines: Server log lines
-        :return: One dict per Start/Finish pair, with "agent", "start_ts", "finish_ts", "duration_seconds"
-            and "request_id"
+        :return: One dict per Start/Finish pair, with the following keys:
+            "agent"             Agent name
+            "start_seconds"     Start time in seconds
+            "finish_seconds"    Finish time in seconds
+            "duration_seconds"  Finish minus start, in seconds
+            "request_id"        Server request id
         """
         # Start times keyed by "<agent> <request_id>": neither part holds a space.
         starts: Dict[str, float] = {}
@@ -307,8 +327,8 @@ class ServerLogParser:
                 if start_seconds is not None:
                     results.append({
                         "agent": agent,
-                        "start_ts": start_seconds,
-                        "finish_ts": timestamp_seconds,
+                        "start_seconds": start_seconds,
+                        "finish_seconds": timestamp_seconds,
                         "duration_seconds": timestamp_seconds - start_seconds,
                         "request_id": request_id,
                     })

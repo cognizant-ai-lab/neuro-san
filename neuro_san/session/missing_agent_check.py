@@ -15,8 +15,9 @@
 #
 # END COPYRIGHT
 
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
+
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 
 
 class MissingAgentCheck:

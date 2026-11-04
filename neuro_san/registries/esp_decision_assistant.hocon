@@ -38,9 +38,10 @@
         # key/value pairs can further describe how the nth llm should be configured.
         "fallbacks": [
             {   
-                # This first preferred model is intended to fail with this agent network
-                # because the prompts are too big.  The next llm should kick in as a fallback.
-                "model_name": "gpt-4"
+                # This first preferred model is used unless it fails.
+                # If it fails, the next llm kicks in as a fallback.
+                # "gpt-luna" is shorthand for the latest GPT Luna model.
+                "model_name": "gpt-luna"
             },
             {
                 "model_name": "gpt-5.2"

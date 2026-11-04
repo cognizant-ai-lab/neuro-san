@@ -28,8 +28,8 @@ import tornado
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.storage_class import StorageClass
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
@@ -48,11 +48,11 @@ class McpToolsProcessor:
 
     def __init__(self,
                  logger: HttpLogger,
-                 network_storage_dict: AgentNetworkStorage,
+                 network_storage_dict: Dict[str, AgentStorageSource],
                  agent_policy: AgentAuthorizer,
                  tool_request_validator: ToolRequestValidator):
         self.logger: HttpLogger = logger
-        self.network_storage_dict: AgentNetworkStorage = network_storage_dict
+        self.network_storage_dict: Dict[str, AgentStorageSource] = network_storage_dict
         self.agent_policy: AgentAuthorizer = agent_policy
         self.tool_request_validator: ToolRequestValidator = tool_request_validator
 
@@ -66,7 +66,7 @@ class McpToolsProcessor:
         # See which agents the user has access to per authorization policy
         authorized_agents: List[str] = await self.agent_policy.list_agents(metadata)
 
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
+        public_storage: AgentStorageSource = self.network_storage_dict.get(StorageClass.PUBLIC)
         tools_description: List[Dict[str, Any]] = []
         for agent_name in public_storage.get_agent_names():
 
@@ -74,7 +74,7 @@ class McpToolsProcessor:
             if agent_name not in authorized_agents:
                 continue
 
-            provider: AgentNetworkProvider = public_storage.get_agent_network_provider(agent_name)
+            provider: AgentNetworkProvider = await public_storage.async_get_agent_network_provider(agent_name)
             if provider is not None:
                 agent_network: AgentNetwork = provider.get_agent_network()
                 if agent_network.is_mcp_tool():
@@ -116,7 +116,7 @@ class McpToolsProcessor:
         # Clients address the tool by its advertised name (e.g. "deep__math_guy"),
         # but the authorizer and the service table are keyed by network name
         # ("deep/math_guy"). Error strings keep the name the client used.
-        network_name: str = self._resolve_network_name(tool_name)
+        network_name: str = await self._resolve_network_name(tool_name)
 
         is_authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
@@ -257,7 +257,7 @@ class McpToolsProcessor:
             tool_dict["title"] = agent_name
         return tool_dict
 
-    def _resolve_network_name(self, tool_name: str) -> str:
+    async def _resolve_network_name(self, tool_name: str) -> str:
         """
         Map the tool name a client sent in tools/call to the network name it stands for.
 
@@ -277,7 +277,7 @@ class McpToolsProcessor:
                  exists, so a name is never both one network's advertised name
                  and another's network name.
         """
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
+        public_storage: AgentStorageSource = self.network_storage_dict.get(StorageClass.PUBLIC)
 
         # Fast path: a name that is itself a public network's network name means
         # that network. Top-level names, the legacy slash spelling, and any other
@@ -287,15 +287,16 @@ class McpToolsProcessor:
         # below. Answering without the scan is safe because of the reservation
         # described in the docstring: once storage has settled, the scan could
         # not have returned anything else. The two can differ only mid-reload,
-        # while AgentNetworkStorage.setup_agent_networks() has added a new
+        # while AgentStorageSource.setup_agent_networks() has added a new
         # network but not yet replaced a stale one still advertised under its
         # name, and then this is the answer the reservation intends: the name
         # belongs to the network so called.
-        if public_storage.get_agent_network_provider(tool_name).get_agent_network() is not None:
+        provider: AgentNetworkProvider = await public_storage.async_get_agent_network_provider(tool_name)
+        if provider is not None and provider.get_agent_network() is not None:
             return tool_name
 
         for agent_name in public_storage.get_agent_names():
-            provider: AgentNetworkProvider = public_storage.get_agent_network_provider(agent_name)
+            provider = await public_storage.async_get_agent_network_provider(agent_name)
             if provider is None:
                 continue
             agent_network: AgentNetwork = provider.get_agent_network()

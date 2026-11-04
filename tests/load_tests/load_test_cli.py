@@ -17,9 +17,7 @@
 from argparse import Namespace
 from functools import partial
 from inspect import cleandoc
-from logging import INFO
 from logging import Logger
-from logging import basicConfig
 from logging import getLogger
 from os import _exit
 from signal import SIGINT
@@ -36,13 +34,13 @@ from typing import List
 from typing import Optional
 from typing import Union
 
-from psutil import Process
-
 from tests.load_tests.load_test_constants import LoadTestConstants
+from tests.load_tests.load_test_logging import LoadTestLogging
 from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.monitoring.server_link import ServerLink
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.monitoring.server_only_monitor import ServerOnlyMonitor
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
@@ -53,9 +51,9 @@ from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.run_output_writer import RunOutputWriter
-from tests.load_tests.reporting.summary import SummaryReporter
+from tests.load_tests.reporting.summary_reporter import SummaryReporter
 from tests.load_tests.reporting.trend_history import TrendHistory
-from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.traffic.traffic_runner import TrafficRunner
 from tests.load_tests.traffic.stage_executor import StageExecutor
 from tests.load_tests.traffic.stage_run import StageRun
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
@@ -80,22 +78,23 @@ class LoadTestCli:
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
-        input_validator: InputValidator = InputValidator(args)
-        hocon_files: List[str] = input_validator.validate_fixtures_hocon_dir()
-        self.profile: AgentProfile = AgentProfileFactory().create(
-            args.agent, args.profile_path, args.project_root,
-            hocon_files=hocon_files,
-        )
-        self.server_link: ServerLink = ServerLink(args)
-        self._cancel_event: Event = Event()
-        self.runner: TrafficRunner = TrafficRunner(args, self.profile, self._cancel_event)
-        resource_reporter: ResourceReporter = ResourceReporter()
-        output_parts: Dict[str, Any] = {
-            "server_checker": self.server_link.get_server_checker(),
-            "hocon_files": hocon_files,
-            "resource_reporter": resource_reporter,
+        fixture_settings: Dict[str, Any] = {
+            "agent": args.agent,
+            "fixtures_hocon_dir": args.fixtures_hocon_dir,
+            "project_root": args.project_root,
         }
-        self._output_writer: RunOutputWriter = RunOutputWriter(args, output_parts)
+        input_validator: InputValidator = InputValidator(fixture_settings)
+        hocon_files: List[str] = input_validator.validate_fixtures_hocon_dir()
+        self.profile: AgentProfile = AgentProfileFactory().create(args.agent, args.profile_path, args.project_root,
+                                                                  hocon_files=hocon_files)
+        server_checker: ServerChecker = ServerChecker(args.host, args.port, args.https)
+        self.server_link: ServerLink = ServerLink(args.server_log, server_checker)
+        self._cancel_event: Event = Event()
+        # The CLI keeps its settled values on args; _build_runner_and_writer() hands these to RunOutputWriter.
+        self.args.hocon_files = hocon_files
+        # Built by run() once _check_mode_args() has settled the arguments they read.
+        self.runner: Optional[TrafficRunner] = None
+        self._output_writer: Optional[RunOutputWriter] = None
 
     def run(self) -> int:
         """
@@ -106,10 +105,15 @@ class LoadTestCli:
         :raises SystemExit: When the arguments don't fit together
         :raises LoadTestAbortError: When the server can't be reached or the --server-log file is not found
         """
-        input_validator: InputValidator = InputValidator(self.args)
-        level: str = self._check_mode_args(input_validator)
+        level: str = self._check_mode_args()
+        run_values: Dict[str, Any] = LoadTestArguments.settled_values(self.args)
+        input_validator: InputValidator = InputValidator(run_values)
+        input_validator.validate_agent_name()
+        environment_validator: EnvironmentValidator = EnvironmentValidator()
+        environment_validator.validate_environment()
+        self._build_runner_and_writer(run_values)
         server_checker: ServerChecker = self.server_link.get_server_checker()
-        stale_log_age_minutes: Optional[int] = server_checker.validate_server_log()
+        stale_log_age_minutes: Optional[int] = server_checker.validate_server_log(self.args.level, self.args.server_log)
 
         stages: List[int] = input_validator.resolve_stages()
         total_cap: int = input_validator.resolve_max_requests(stages)
@@ -119,33 +123,21 @@ class LoadTestCli:
         if not self.args.server_only:
             server_checker.preflight_server_check()
             output_dir: Optional[str] = self._output_writer.get_output_dir()
-            probe_result = input_validator.confirm_cost(stages, total_cap, runner=self.runner,
-                                                        output_dir=output_dir,
+            probe_result = input_validator.confirm_cost(stages, total_cap, runner=self.runner, output_dir=output_dir,
                                                         stale_log_age_minutes=stale_log_age_minutes)
 
         is_local: bool = self.args.host in LoadTestConstants.LOCAL_HOSTS
-        self._find_server(is_local)
+        self._find_server(is_local, environment_validator)
         if self.args.server_only:
-            return self._run_server_only()
+            return self._run_server_only(run_values)
 
         if not is_local:
             self.logger.info("Remote mode: targeting %s:%s", self.args.host, self.args.port)
             self.logger.info("  Process monitoring disabled (server is not local)")
 
-        # Server-only runs return above, so only --client-only is left of the split modes here.
-        monitor_resources: bool = level != LoadTestConstants.LEVEL_MIN or self.args.client_only
-        primary_start_pattern: str = self.profile.get_primary_start_pattern()
-        server_log: Optional[str] = self.server_link.get_server_log()
-        run_inputs: Dict[str, Any] = {
-            "stages": stages,
-            "total_cap": total_cap,
-            "monitor_resources": monitor_resources,
-            "has_server_log": server_log is not None,
-            "probe_result": probe_result,
-            "primary_start_pattern": primary_start_pattern,
-        }
+        run_inputs: Dict[str, Any] = self._new_run_inputs(level, stages, total_cap, probe_result)
         self._log_run_config(level, run_inputs)
-        exit_code: int = self._run_stages(level, run_inputs)
+        exit_code: int = self._run_stages(level, run_inputs, run_values)
         return exit_code
 
     def was_interrupted(self) -> bool:
@@ -161,7 +153,7 @@ class LoadTestCli:
         """
         Entry point for the load test script.
         """
-        basicConfig(level=INFO, format="%(message)s")
+        LoadTestLogging.setup()
         epilog: str = cleandoc(LoadTestCli.__doc__)
         args: Namespace = LoadTestArguments.parse_args(epilog)
         if args.rebuild:
@@ -209,12 +201,10 @@ class LoadTestCli:
             _exit(exit_code)
         raise SystemExit(exit_code)
 
-    def _check_mode_args(self, input_validator: InputValidator) -> str:
+    def _check_mode_args(self) -> str:
         """
-        Check that the mode arguments fit together, fill in the server log and level defaults,
-        then validate the agent name and the environment.
+        Check that the mode arguments fit together, and fill in the server log and level defaults.
 
-        :param input_validator: Checks the agent name
         :return: The test level
         :raises SystemExit: When the arguments don't fit together
         """
@@ -246,7 +236,7 @@ class LoadTestCli:
                 and not self.args.server_only
                 and self.args.host in LoadTestConstants.LOCAL_HOSTS
                 and level != LoadTestConstants.LEVEL_MIN):
-            self.args.server_log = EnvironmentValidator.try_auto_detect_server_log(self.args)
+            self.args.server_log = EnvironmentValidator.try_auto_detect_server_log(self.args.host, self.args.port)
         if (level != LoadTestConstants.LEVEL_MIN
                 and not self.args.client_only
                 and not self.args.server_only
@@ -264,33 +254,50 @@ class LoadTestCli:
             server_checker.confirm_no_server_log(level)
         LoadTestArguments.apply_level_defaults(self.args, self.args.explicit_args)
         LoadTestArguments.apply_scale(self.args)
-        input_validator.validate_agent_name()
-        EnvironmentValidator.validate_environment()
         return level
 
-    def _find_server(self, is_local: bool) -> None:
+    def _build_runner_and_writer(self, run_values: Dict[str, Any]) -> None:
+        """
+        Make the TrafficRunner and the RunOutputWriter over the settled arguments.
+
+        :param run_values: The dict of LoadTestArguments.settled_values()
+        """
+        self.runner = TrafficRunner(run_values, self.profile, self._cancel_event)
+        server_checker: ServerChecker = self.server_link.get_server_checker()
+        resource_reporter: ResourceReporter = ResourceReporter()
+        output_parts: Dict[str, Any] = {
+            "server_checker": server_checker,
+            "hocon_files": self.args.hocon_files,
+            "resource_reporter": resource_reporter,
+        }
+        self._output_writer = RunOutputWriter(run_values, output_parts)
+
+    def _find_server(self, is_local: bool, environment_validator: EnvironmentValidator) -> None:
         """
         Find the local server process and resolve an "auto" --server-log path.
 
         :param is_local: True when the server host is local
+        :param environment_validator: The EnvironmentValidator that run() checked the environment with
         """
-        server_process: Optional[Process] = None
+        server_process: Optional[TrackedProcess] = None
         if self.args.client_only:
             self.logger.info("Client-only mode: skipping server process detection.")
         elif self.args.server_only:
-            server_process = EnvironmentValidator.find_local_server(self.args)
+            server_process = environment_validator.find_local_server(self.args.host, self.args.port)
         elif is_local:
-            server_process = EnvironmentValidator.find_local_server(self.args)
+            server_process = environment_validator.find_local_server(self.args.host, self.args.port)
 
         if self.args.server_log == "auto":
-            self.args.server_log = EnvironmentValidator.auto_detect_server_log(server_process)
+            self.args.server_log = environment_validator.auto_detect_server_log(server_process)
 
         self.server_link.set_server(server_process, self.args.server_log)
+        self._output_writer.set_server_log(self.args.server_log)
 
-    def _run_server_only(self) -> int:
+    def _run_server_only(self, run_values: Dict[str, Any]) -> int:
         """
         Log the server-only config and run the server-only monitor.
 
+        :param run_values: The dict of LoadTestArguments.settled_values()
         :return: The exit code of the server-only monitor
         """
         self.logger.info(
@@ -305,15 +312,48 @@ class LoadTestCli:
         if server_log:
             self.logger.info("  server_log=%s", server_log)
         output_base: str = self._output_writer.output_base()
-        history_recorder: HistoryRecorder = HistoryRecorder(self.args, output_base)
-        monitor_parts: Dict[str, Any] = {
-            "server_process": self.server_link.get_server_process(),
-            "log_monitor": self.server_link.get_log_monitor(),
-            "history_recorder": history_recorder,
-            "server_checker": self.server_link.get_server_checker(),
-        }
-        server_only_monitor: ServerOnlyMonitor = ServerOnlyMonitor(self.args, self.profile, monitor_parts)
+        history_recorder: HistoryRecorder = HistoryRecorder(self.args.history_file, self.args.host, self.args.agent,
+                                                            output_base)
+        # The settled values, plus the server parts the monitor uses and the resolved server log path.
+        monitor_parts: Dict[str, Any] = run_values.copy()
+        monitor_parts["server_process"] = self.server_link.get_server_process()
+        monitor_parts["log_monitor"] = self.server_link.get_log_monitor()
+        monitor_parts["history_recorder"] = history_recorder
+        monitor_parts["server_checker"] = self.server_link.get_server_checker()
+        monitor_parts["server_log"] = server_log
+        server_only_monitor: ServerOnlyMonitor = ServerOnlyMonitor(self.profile, monitor_parts)
         return server_only_monitor.run(output_base)
+
+    def _new_run_inputs(self, level: str, stages: List[int], total_cap: int,
+                        probe_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Make the run_inputs dict of StageRun for a run with stages (not --server-only).
+
+        :param level: The settled --level value
+        :param stages: Request count of each stage
+        :param total_cap: Most requests of the whole run
+        :param probe_result: Result of the dry-run probe request, or None
+        :return: A dict with the following keys:
+            "stages"                 Request count of each stage
+            "total_cap"              Most requests of the whole run
+            "monitor_resources"      True when the stages take resource snapshots
+            "has_server_log"         True when a server log is read
+            "probe_result"           Result of the dry-run probe request, or None
+            "primary_start_pattern"  Regex for the log line of a primary agent request arriving
+        """
+        # Server-only runs never get here, so only --client-only is left of the split modes.
+        monitor_resources: bool = level != LoadTestConstants.LEVEL_MIN or self.args.client_only
+        primary_start_pattern: str = self.profile.get_primary_start_pattern()
+        server_log: Optional[str] = self.server_link.get_server_log()
+        run_inputs: Dict[str, Any] = {
+            "stages": stages,
+            "total_cap": total_cap,
+            "monitor_resources": monitor_resources,
+            "has_server_log": server_log is not None,
+            "probe_result": probe_result,
+            "primary_start_pattern": primary_start_pattern,
+        }
+        return run_inputs
 
     def _log_run_config(self, level: str, run_inputs: Dict[str, Any]) -> None:
         """
@@ -362,22 +402,20 @@ class LoadTestCli:
         elif estimated_tokens:
             self.logger.info("  estimated_tokens_per_request=%s", f"{estimated_tokens:,}")
 
-    def _run_stages(self, level: str, run_inputs: Dict[str, Any]) -> int:
+    def _run_stages(self, level: str, run_inputs: Dict[str, Any], run_values: Dict[str, Any]) -> int:
         """
         Run the stages, log the results, and save the output files, also after Ctrl-C.
 
         :param level: The test level
         :param run_inputs: The run_inputs dict of StageRun
+        :param run_values: The dict of LoadTestArguments.settled_values()
         :return: The exit code: 0 when every request passes, 1 on failures or an abort, 2 on Ctrl-C
         """
         stage_summaries: List[Dict[str, Any]] = []
         exit_code: int = 1
-        log_monitor: Optional[ServerLogMonitor] = self.server_link.get_log_monitor()
-        pre_test_log_position: Optional[int] = None
-        if self.server_link.get_server_log():
-            pre_test_log_position = log_monitor.read_position()
+        pre_test_log_position: Optional[int] = self._server_log_position()
         estimated_tokens_per_request: Optional[int] = self.profile.get_estimated_tokens_per_request()
-        stage_run: StageRun = self._new_stage_run(run_inputs)
+        stage_run: StageRun = self._new_stage_run(run_inputs, run_values)
         prev_sigint_handler: Optional[Union[Callable, int]] = self._install_interrupt_handler()
         try:
             stages_outcome: Dict[str, Any] = stage_run.run()
@@ -395,10 +433,7 @@ class LoadTestCli:
 
             self._log_results(stage_summaries)
 
-            server_chat_timing: List[Dict[str, object]] = []
-            # The log position is only read when there is a server log.
-            if pre_test_log_position is not None:
-                server_chat_timing = log_monitor.parse_streaming_chat_timing_since(pre_test_log_position)
+            server_chat_timing: List[Dict[str, object]] = self._server_chat_timing(pre_test_log_position)
 
             monitor_resources: bool = run_inputs.get("monitor_resources")
             self._log_server_analysis(level, stage_summaries, monitor_resources)
@@ -425,22 +460,49 @@ class LoadTestCli:
 
         return exit_code
 
-    def _new_stage_run(self, run_inputs: Dict[str, Any]) -> StageRun:
+    def _server_log_position(self) -> Optional[int]:
+        """
+        Read the server log offset before the test.
+
+        :return: The server log offset before the test, or None without a server log
+        """
+        pre_test_log_position: Optional[int] = None
+        if self.server_link.get_server_log():
+            log_monitor: ServerLogMonitor = self.server_link.get_log_monitor()
+            pre_test_log_position = log_monitor.read_position()
+        return pre_test_log_position
+
+    def _server_chat_timing(self, pre_test_log_position: Optional[int]) -> List[Dict[str, object]]:
+        """
+        Read the server's streaming_chat Start/Finish pairs of the test from the server log.
+
+        :param pre_test_log_position: Server log offset before the test, or None without a server log
+        :return: The pairs; empty without a server log
+        """
+        server_chat_timing: List[Dict[str, object]] = []
+        # The log position is only read when there is a server log.
+        if pre_test_log_position is not None:
+            log_monitor: ServerLogMonitor = self.server_link.get_log_monitor()
+            server_chat_timing = log_monitor.parse_streaming_chat_timing_since(pre_test_log_position)
+        return server_chat_timing
+
+    def _new_stage_run(self, run_inputs: Dict[str, Any], run_values: Dict[str, Any]) -> StageRun:
         """
         Make the StageExecutor of this run and the StageRun that runs its stages.
 
         :param run_inputs: The run_inputs dict of StageRun
+        :param run_values: The dict of LoadTestArguments.settled_values()
         :return: The StageRun, with its clock started
         """
-        executor_parts: Dict[str, Any] = {
-            "profile": self.profile,
-            "log_monitor": self.server_link.get_log_monitor(),
-            "resource_reporter": self._output_writer.get_resource_reporter(),
-            "server_process": self.server_link.get_server_process(),
-            "output_dir": self._output_writer.get_output_dir(),
-        }
-        stage_executor: StageExecutor = StageExecutor(self.args, self.runner, executor_parts)
-        stage_run: StageRun = StageRun(self.args, stage_executor, run_inputs)
+        # The settled values, plus the parts the stages use; output_dir is the run's own output folder.
+        executor_parts: Dict[str, Any] = run_values.copy()
+        executor_parts["profile"] = self.profile
+        executor_parts["log_monitor"] = self.server_link.get_log_monitor()
+        executor_parts["resource_reporter"] = self._output_writer.get_resource_reporter()
+        executor_parts["server_process"] = self.server_link.get_server_process()
+        executor_parts["output_dir"] = self._output_writer.get_output_dir()
+        stage_executor: StageExecutor = StageExecutor(self.runner, executor_parts)
+        stage_run: StageRun = StageRun(self.args.num_rounds, stage_executor, run_inputs)
         return stage_run
 
     def _record_history(self, stage_summaries: List[Dict[str, Any]]) -> None:
@@ -452,7 +514,8 @@ class LoadTestCli:
         server_checker: ServerChecker = self.server_link.get_server_checker()
         server_ns_version: Optional[str] = server_checker.get_server_ns_version()
         output_base: str = self._output_writer.output_base()
-        history_recorder: HistoryRecorder = HistoryRecorder(self.args, output_base)
+        history_recorder: HistoryRecorder = HistoryRecorder(self.args.history_file, self.args.host, self.args.agent,
+                                                            output_base)
         history_recorder.append_client_record(stage_summaries, server_ns_version)
         self._output_writer.finalize_test_log(stage_summaries, history_recorder)
 

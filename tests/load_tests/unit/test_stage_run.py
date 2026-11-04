@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
 from typing import Any
 from typing import Dict
 from typing import List
@@ -38,9 +37,8 @@ class TestStageRun(TestCase):
         at the cap with the warning.
         """
         stage_executor: MagicMock = self._stage_executor(timeout_reached=False, should_abort=False)
-        args: Namespace = Namespace(num_rounds=2)
         run_inputs: Dict[str, Any] = self._run_inputs([2, 2], 3)
-        stage_run: StageRun = StageRun(args, stage_executor, run_inputs)
+        stage_run: StageRun = StageRun(2, stage_executor, run_inputs)
         stages_outcome: Dict[str, Any] = {}
         with self.assertLogs(stage_run.logger, level="WARNING") as captured:
             stages_outcome = stage_run.run()
@@ -59,9 +57,8 @@ class TestStageRun(TestCase):
         When --total-timeout is reached, no stage runs and the run is aborted.
         """
         stage_executor: MagicMock = self._stage_executor(timeout_reached=True, should_abort=False)
-        args: Namespace = Namespace(num_rounds=1)
         run_inputs: Dict[str, Any] = self._run_inputs([1], 5)
-        stage_run: StageRun = StageRun(args, stage_executor, run_inputs)
+        stage_run: StageRun = StageRun(1, stage_executor, run_inputs)
         stages_outcome: Dict[str, Any] = stage_run.run()
         aborted: bool = stages_outcome.get("aborted")
         stage_summaries: List[Dict[str, Any]] = stages_outcome.get("stage_summaries")
@@ -74,9 +71,8 @@ class TestStageRun(TestCase):
         A stage that must abort the test stops the run after its summary is kept.
         """
         stage_executor: MagicMock = self._stage_executor(timeout_reached=False, should_abort=True)
-        args: Namespace = Namespace(num_rounds=1)
         run_inputs: Dict[str, Any] = self._run_inputs([1, 1], 5)
-        stage_run: StageRun = StageRun(args, stage_executor, run_inputs)
+        stage_run: StageRun = StageRun(1, stage_executor, run_inputs)
         stages_outcome: Dict[str, Any] = stage_run.run()
         aborted: bool = stages_outcome.get("aborted")
         stage_summaries: List[Dict[str, Any]] = stages_outcome.get("stage_summaries")
@@ -89,10 +85,9 @@ class TestStageRun(TestCase):
         Once a stage uses the dry-run probe result, later stages get None.
         """
         stage_executor: MagicMock = self._stage_executor(timeout_reached=False, should_abort=False)
-        args: Namespace = Namespace(num_rounds=1)
         run_inputs: Dict[str, Any] = self._run_inputs([1, 1], 5)
         run_inputs["probe_result"] = {"total_tokens": 10}
-        stage_run: StageRun = StageRun(args, stage_executor, run_inputs)
+        stage_run: StageRun = StageRun(1, stage_executor, run_inputs)
         stage_run.run()
         probe_results: List[Any] = self._stage_input_values(stage_executor, "probe_result")
         self.assertEqual(probe_results, [{"total_tokens": 10}, None])

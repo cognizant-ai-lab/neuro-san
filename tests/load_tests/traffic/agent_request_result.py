@@ -24,6 +24,7 @@ from neuro_san.message.processors.basic_message_processor import BasicMessagePro
 class AgentRequestResult:
     """
     Data-only holder for what one streaming_chat request produced.
+    A class rather than a dict so that TrafficRunner reads each value through a typed get_*() accessor.
 
     Built by ``AgentRequestExecutor.execute_request()`` and read by
     ``TrafficRunner`` to build the ``RequestResult`` that goes into the report.
@@ -35,18 +36,20 @@ class AgentRequestResult:
 
         :param status: STATUS_CREATED, STATUS_FAILED or STATUS_TIMEOUT
         :param response: What the stream produced, each key optional:
-                         "processor" (the BasicMessageProcessor that saw the whole stream
-                         (answer, structure, sly_data); None when the request did not complete),
-                         "response_text" (the agent's final answer, or the traceback when the request
-                         failed before completing; default ""), "time_to_first_response_seconds"
-                         (seconds until the first streamed message; default 0.0) and
-                         "token_accounting" (token usage reported by the server; default {})
+            "processor": the BasicMessageProcessor that saw the whole stream (answer, structure, sly_data);
+                None when the request did not complete
+            "response_text": the agent's final answer, or the traceback when the request failed before
+                completing; default ""
+            "time_to_first_response_seconds": seconds until the first streamed message; default 0.0
+            "token_accounting": token usage reported by the server; default {}
+            "failure_reason": one line naming the error the request raised; default None
         """
         self._status: str = status
         self._processor: Optional[BasicMessageProcessor] = response.get("processor")
         self._response_text: str = response.get("response_text", "")
         self._time_to_first_response_seconds: float = response.get("time_to_first_response_seconds", 0.0)
         self._token_accounting: Dict[str, Any] = response.get("token_accounting", {})
+        self._failure_reason: Optional[str] = response.get("failure_reason")
 
     def get_status(self) -> str:
         """
@@ -78,3 +81,9 @@ class AgentRequestResult:
         :return: Token usage reported by the server, empty when not available
         """
         return self._token_accounting
+
+    def get_failure_reason(self) -> Optional[str]:
+        """
+        :return: One line naming the error the request raised, or None when it raised none
+        """
+        return self._failure_reason

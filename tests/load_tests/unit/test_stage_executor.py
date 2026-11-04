@@ -15,7 +15,8 @@
 #
 # END COPYRIGHT
 
-from argparse import Namespace
+from typing import Any
+from typing import Dict
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -31,12 +32,12 @@ class TestStageExecutor(TestCase):
         """
         A test past --total-timeout reports the timeout and logs the time taken as minutes and seconds.
         """
-        args: Namespace = Namespace(num_rounds=1, total_timeout=900)
-        stage_executor: StageExecutor = StageExecutor(args, None, {})
+        executor_parts: Dict[str, Any] = {"num_rounds": 1, "total_timeout_seconds": 900}
+        stage_executor: StageExecutor = StageExecutor(None, executor_parts)
         timeout_reached: bool = False
         # The fake clock reads 1205 seconds after a test start at 0.
         with patch("tests.load_tests.traffic.stage_executor.perf_counter", return_value=1205.0):
-            with self.assertLogs(stage_executor.logger, level="WARNING") as captured:
+            with self.assertLogs("StageExecutor", level="WARNING") as captured:
                 timeout_reached = stage_executor.total_timeout_reached(0.0)
         log_text: str = "\n".join(captured.output)
         self.assertTrue(timeout_reached)
@@ -46,7 +47,7 @@ class TestStageExecutor(TestCase):
         """
         --total-timeout 0 never stops the test.
         """
-        args: Namespace = Namespace(num_rounds=1, total_timeout=0)
-        stage_executor: StageExecutor = StageExecutor(args, None, {})
+        executor_parts: Dict[str, Any] = {"num_rounds": 1, "total_timeout_seconds": 0}
+        stage_executor: StageExecutor = StageExecutor(None, executor_parts)
         timeout_reached: bool = stage_executor.total_timeout_reached(0.0)
         self.assertFalse(timeout_reached)

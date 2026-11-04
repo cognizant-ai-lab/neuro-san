@@ -32,7 +32,7 @@ from unittest.mock import patch
 
 from typing_extensions import override
 
-from neuro_san.internals.graph.activations.abstract_class_activation import AbstractClassActivation
+from leaf_common.logging.log_once import LogOnce
 
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import ConcreteClassActivation
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import CREATE_RUN_CONTEXT_PATH
@@ -60,6 +60,11 @@ class TestToolPathOnlyResolution(TestCase):
         """
         Create a mock RunContext and activations pointed at the two test tool roots.
         """
+        # Clear the LogOnce records before each test so tests stay order-independent.
+        patcher: Any = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.mock_run_context = MagicMock()
 
         # Create a mock journal with async write_message
@@ -248,8 +253,6 @@ class TestToolPathOnlyResolution(TestCase):
         """
         Test that the flag-off notice is logged exactly once per process.
         """
-        # pylint: disable=protected-access
-        AbstractClassActivation._unrestricted_notice_logged = False
         with patch.dict(os.environ):
             os.environ.pop("AGENT_TOOL_PATH_ONLY", None)
             with self.assertLogs(level=INFO) as captured_logs:

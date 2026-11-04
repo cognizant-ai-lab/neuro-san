@@ -24,6 +24,7 @@ from os import sep as os_separator
 from pathlib import Path
 
 from leaf_common.resolution.resolver_util import ResolverUtil
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation
@@ -36,7 +37,6 @@ from neuro_san.internals.graph.preppers.front_man_activation_prepper import Fron
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -321,9 +321,10 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
     def find_front_man(self) -> str:
         """
-        :return: A single tool name to use as the root of the chat agent.
-                 This guy will be user facing.  If there are none or > 1,
-                 an exception will be raised.
+        Finds the front man: the first agent in the "tools" list of the agent network.
+
+        :return: The name of the front man, the user-facing root of the chat agent
+        :raises ValueError: When the network has no agents, or its first agent has a "class" or "toolbox" key
         """
         return self.agent_network.find_front_man()
 

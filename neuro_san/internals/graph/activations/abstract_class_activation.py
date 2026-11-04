@@ -35,17 +35,18 @@ from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.config_util import ConfigUtil
+from leaf_common.logging.log_once import LogOnce
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver import Resolver
 from leaf_common.resolution.resolver_util import ResolverUtil
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.graph.activations.abstract_callable_activation import AbstractCallableActivation
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.origination import Origination
@@ -70,10 +71,6 @@ class AbstractClassActivation(AbstractCallableActivation):
     - ClassActivation: retrieves the class reference directly from the tool specification.
     - ToolboxActivation: looks up the class reference from a predefined toolbox.
     """
-
-    # Process-wide guard so the notice that class resolution is unrestricted
-    # is logged only once, not on every tool invocation.
-    _unrestricted_notice_logged: bool = False
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
@@ -404,19 +401,17 @@ Check these things:
         # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
         # operator setting this security flag the way other flags are set gets the
         # behavior they expect rather than a silent fail-open.
-        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", default=False)
+        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", False)
 
     def _log_unrestricted_resolution_notice_once(self):
         """
         Logs a one-time notice that CodedTool class resolution is unrestricted.
         """
-        if not AbstractClassActivation._unrestricted_notice_logged:
-            AbstractClassActivation._unrestricted_notice_logged = True
-            self.logger.info(
-                "AGENT_TOOL_PATH_ONLY is not enabled: CodedTool 'class' references "
-                "can resolve via fully-qualified import from anywhere on the PYTHONPATH. "
-                "Set AGENT_TOOL_PATH_ONLY=true to restrict resolution to the "
-                "AGENT_TOOL_PATH hierarchy.")
+        log_once: LogOnce = LogOnce(self.logger)
+        log_once.info("AGENT_TOOL_PATH_ONLY is not enabled: CodedTool 'class' references "
+                      "can resolve via fully-qualified import from anywhere on the PYTHONPATH. "
+                      "Set AGENT_TOOL_PATH_ONLY=true to restrict resolution to the "
+                      "AGENT_TOOL_PATH hierarchy.")
 
     def instantiate_coded_tool(self, python_class) -> CodedTool:
         """

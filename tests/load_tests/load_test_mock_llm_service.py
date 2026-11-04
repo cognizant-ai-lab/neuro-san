@@ -21,7 +21,6 @@ from logging import FileHandler
 from logging import Formatter
 from logging import INFO
 from logging import Logger
-from logging import basicConfig
 from logging import getLogger
 from os import remove
 from os.path import exists
@@ -31,6 +30,7 @@ from typing import Dict
 from typing import Optional
 
 from tests.load_tests.load_test_constants import LoadTestConstants
+from tests.load_tests.load_test_logging import LoadTestLogging
 from tests.load_tests.mock_service.leak_reporter import LeakReporter
 from tests.load_tests.mock_service.mock_load_test_arguments import MockLoadTestArguments
 from tests.load_tests.mock_service.mock_round_runner import MockRoundRunner
@@ -96,10 +96,21 @@ class MockLlmLoadTest:
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.args: Namespace = args
-        self._server_manager: MockServerManager = MockServerManager(args)
+        self._server_manager: MockServerManager = MockServerManager(args.mock_port)
         prompt_file: str = MockLlmLoadTest.PROMPT_FILE_PATH
-        self._round_runner: MockRoundRunner = MockRoundRunner(args, prompt_file, self._server_manager)
-        self._leak_reporter: LeakReporter = LeakReporter(args)
+        round_settings: Dict[str, Any] = {
+            "num_rounds": args.num_rounds,
+            "num_requests": args.num_requests,
+            "max_workers": args.max_workers,
+            "settle_time_seconds": args.settle_time_seconds,
+            "host": args.host,
+            "port": args.port,
+            "agent": args.agent,
+            "no_sly_data": args.no_sly_data,
+            "sly_data": args.sly_data,
+        }
+        self._round_runner: MockRoundRunner = MockRoundRunner(round_settings, prompt_file, self._server_manager)
+        self._leak_reporter: LeakReporter = LeakReporter(args.num_requests, args.num_rounds)
         self._test_log_path: Optional[str] = None
         self._test_log_handler: Optional[FileHandler] = None
 
@@ -110,7 +121,7 @@ class MockLlmLoadTest:
 
         :raises SystemExit: With code 1 when a check stops the run
         """
-        basicConfig(level=INFO, format="%(message)s")
+        LoadTestLogging.setup()
         # --help prints the class docstring (the usage examples) after the flags, without its indentation.
         usage_text: str = cleandoc(MockLlmLoadTest.__doc__)
         argument_parser: MockLoadTestArguments = MockLoadTestArguments(usage_text)

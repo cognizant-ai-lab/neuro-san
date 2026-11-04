@@ -37,8 +37,8 @@ from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
-from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration as Env
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext

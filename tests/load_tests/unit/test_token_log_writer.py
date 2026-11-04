@@ -26,7 +26,7 @@ from unittest import TestCase
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.reporting.token_log_writer import TokenLogWriter
 
-LOGGER_NAME: str = "tests.load_tests.reporting.token_log_writer"
+LOGGER_NAME: str = "TokenLogWriter"
 
 
 class TestTokenLogWriter(TestCase):
@@ -41,7 +41,8 @@ class TestTokenLogWriter(TestCase):
         """
         with TemporaryDirectory() as output_dir:
             with self.assertNoLogs(LOGGER_NAME):
-                TokenLogWriter.log_token_summary([{"request_id": "request-1"}], output_dir=output_dir)
+                token_log_writer: TokenLogWriter = TokenLogWriter()
+                token_log_writer.log_token_summary([{"request_id": "request-1"}], output_dir=output_dir)
             token_log_path: str = join(output_dir, LoadTestConstants.SERVER_TOKENS_LOG_FILE_NAME)
             token_log_exists: bool = exists(token_log_path)
             self.assertFalse(token_log_exists)
@@ -60,7 +61,8 @@ class TestTokenLogWriter(TestCase):
         results: List[Dict[str, Any]] = TestTokenLogWriter._results()
         with TemporaryDirectory() as output_dir:
             with self.assertLogs(LOGGER_NAME, level="INFO") as logs:
-                TokenLogWriter.log_token_summary(
+                token_log_writer: TokenLogWriter = TokenLogWriter()
+                token_log_writer.log_token_summary(
                     results, output_dir=output_dir,
                     network_tokens=network_tokens, validation_events=validation_events,
                 )
@@ -90,7 +92,8 @@ request-2: 500 tokens (300 prompt + 200 completion), 1 LLM call(s), model=gpt-4o
         first_results: List[Dict[str, Any]] = results[:1]
         with TemporaryDirectory() as output_dir:
             with self.assertLogs(LOGGER_NAME, level="INFO"):
-                TokenLogWriter.log_token_summary(first_results, output_dir=output_dir)
+                token_log_writer: TokenLogWriter = TokenLogWriter()
+                token_log_writer.log_token_summary(first_results, output_dir=output_dir)
             token_file_text: str = TestTokenLogWriter._read_token_file(output_dir)
             self.assertIn("  (agent data not found in server log)\n", token_file_text)
 
@@ -100,7 +103,8 @@ request-2: 500 tokens (300 prompt + 200 completion), 1 LLM call(s), model=gpt-4o
         """
         results: List[Dict[str, Any]] = TestTokenLogWriter._results()
         with self.assertLogs(LOGGER_NAME, level="INFO") as logs:
-            TokenLogWriter.log_token_summary(results)
+            token_log_writer: TokenLogWriter = TokenLogWriter()
+            token_log_writer.log_token_summary(results)
         log_count: int = len(logs.output)
         self.assertEqual(2, log_count)
         self.assertIn(

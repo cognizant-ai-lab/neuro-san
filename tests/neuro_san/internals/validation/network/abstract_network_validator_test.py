@@ -62,9 +62,8 @@ class AbstractNetworkValidatorTest(AssertForwarder):
         """
         Load a HOCON fixture from the subclass's _FIXTURE_DIR.
 
-        Runs through the same AgentNetworkRestorer filter chain
-        (commondefs, defaults, name-correction) that production configs
-        see, so test data mirrors real behaviour.
+        Runs through the same AgentNetworkRestorer filter chain that
+        production configs see, so test data mirrors real behaviour.
         """
         if cls._FIXTURE_DIR is None:
             raise NotImplementedError(

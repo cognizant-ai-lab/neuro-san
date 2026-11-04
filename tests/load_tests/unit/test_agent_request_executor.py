@@ -14,12 +14,19 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from os import environ
 from time import perf_counter
 from typing import Any
+from typing import Callable
 from typing import Dict
+from typing import Iterator
 from typing import Optional
 from unittest import TestCase
+from unittest.mock import MagicMock
 from unittest.mock import patch
+
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from urllib3.exceptions import ReadTimeoutError
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
@@ -82,6 +89,121 @@ class TestAgentRequestExecutor(TestCase):
         self.assertEqual(session.sent, 3)
         self.assertGreater(first_response_seconds, 0.0)
 
+    def test_read_timeout_is_a_timeout_with_its_reason(self) -> None:
+        """
+        No message within the read timeout is a TIMEOUT whose reason is the read timeout, not the help text.
+        """
+        result: AgentRequestResult = TestAgentRequestExecutor._execute_failing(
+            TestAgentRequestExecutor._read_timeout_stream)
+        status: str = result.get_status()
+        failure_reason: Optional[str] = result.get_failure_reason()
+        response_text: str = result.get_response_text()
+        self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, status)
+        self.assertEqual("requests.exceptions.ConnectionError: None: Read timed out.", failure_reason)
+        self.assertEqual("", response_text)
+
+    def test_wrapped_error_reason_names_the_cause(self) -> None:
+        """
+        A request the session client fails with its help text is FAILED, with the cause as reason.
+        """
+        result: AgentRequestResult = TestAgentRequestExecutor._execute_failing(TestAgentRequestExecutor._refused_stream)
+        status: str = result.get_status()
+        failure_reason: Optional[str] = result.get_failure_reason()
+        response_text: str = result.get_response_text()
+        self.assertEqual(LoadTestConstants.STATUS_FAILED, status)
+        self.assertEqual("requests.exceptions.ConnectionError: Connection refused", failure_reason)
+        self.assertIn("Traceback", response_text)
+
+    def test_failure_debug_line_has_only_the_error_type_when_sensitive_logging_is_off(self) -> None:
+        """
+        With LEAF_LOG_SENSITIVE=false the "HTTP request failed" debug line holds the error type, not the traceback.
+        """
+        with patch.dict(environ, {"LEAF_LOG_SENSITIVE": "false"}), \
+                self.assertLogs("AgentRequestExecutor", level="DEBUG") as captured:
+            TestAgentRequestExecutor._execute_failing(TestAgentRequestExecutor._refused_stream)
+        self.assertEqual(captured.output, ["DEBUG:AgentRequestExecutor:HTTP request failed: ValueError"])
+
+    def test_read_timeout_is_at_most_the_request_cap(self) -> None:
+        """
+        The session waits for a message no longer than the lower of --idle-timeout and --request-timeout.
+        """
+        session_class: MagicMock = MagicMock()
+        request_settings: Dict[str, Any] = TestAgentRequestExecutor._request_settings(5)
+        with patch("tests.load_tests.traffic.agent_request_executor.HttpServiceAgentSession", session_class), \
+                patch("tests.load_tests.traffic.agent_request_executor.StreamingInputProcessor", FakeProcessor):
+            executor: AgentRequestExecutor = AgentRequestExecutor()
+            executor.execute_request(request_settings, "prompt")
+        session_arguments: Dict[str, Any] = session_class.call_args.kwargs
+        read_timeout_seconds: float = session_arguments.get("streaming_timeout_in_seconds")
+        self.assertEqual(5, read_timeout_seconds)
+
+    @staticmethod
+    def _execute_failing(stream: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]]) -> AgentRequestResult:
+        """
+        Run one request whose session stream raises.
+
+        :param stream: Stands in for the session's streaming_chat
+        :return: The AgentRequestResult
+        """
+        session: MagicMock = MagicMock()
+        session.streaming_chat = stream
+        request_settings: Dict[str, Any] = TestAgentRequestExecutor._request_settings(30)
+        with patch("tests.load_tests.traffic.agent_request_executor.HttpServiceAgentSession",
+                   return_value=session), \
+                patch("tests.load_tests.traffic.agent_request_executor.StreamingInputProcessor", FakeProcessor):
+            executor: AgentRequestExecutor = AgentRequestExecutor()
+            return executor.execute_request(request_settings, "prompt")
+
+    @staticmethod
+    def _request_settings(timeout_seconds: float) -> Dict[str, Any]:
+        """
+        Build the settings of one test request with a 60 s idle timeout.
+
+        :param timeout_seconds: The --request-timeout cap in seconds
+        :return: The settings AgentRequestExecutor.execute_request() takes
+        """
+        request_settings: Dict[str, Any] = {
+            "host": "localhost",
+            "port": 30011,
+            "agent": "music_nerd",
+            "timeout_seconds": timeout_seconds,
+            "idle_timeout_seconds": 60,
+        }
+        return request_settings
+
+    @staticmethod
+    def _read_timeout_stream(_request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+        """
+        Fail the way the session client does when no data comes within the read timeout: requests raises
+        its ConnectionError while handling urllib3's ReadTimeoutError, and the session raises its help text from it.
+
+        :param _request_dict: The streaming_chat request, ignored
+        :return: Never returns
+        :raises ValueError: Always, with the read timeout in its chain
+        """
+        try:
+            try:
+                raise ReadTimeoutError(None, "/", "Read timed out.")
+            except ReadTimeoutError as read_error:
+                # requests raises its error without "from", so the read timeout is only its context.
+                raise RequestsConnectionError(read_error)  # pylint: disable=raise-missing-from
+        except RequestsConnectionError as connection_error:
+            raise ValueError("Some basic suggestions to help debug connectivity issues:") from connection_error
+
+    @staticmethod
+    def _refused_stream(_request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+        """
+        Fail the way the session client does when the server refuses the connection.
+
+        :param _request_dict: The streaming_chat request, ignored
+        :return: Never returns
+        :raises ValueError: Always, from a ConnectionError
+        """
+        try:
+            raise RequestsConnectionError("Connection refused")
+        except RequestsConnectionError as connection_error:
+            raise ValueError("Some basic suggestions to help debug connectivity issues:") from connection_error
+
     def _execute(
             self, timeout_seconds: float, message_count: int, message_interval_seconds: float,
     ) -> Dict[str, Any]:
@@ -103,13 +225,7 @@ class TestAgentRequestExecutor(TestCase):
             "tests.load_tests.traffic.agent_request_executor.StreamingInputProcessor",
             FakeProcessor,
         ):
-            request_settings: Dict[str, Any] = {
-                "host": "localhost",
-                "port": 30011,
-                "agent": "music_nerd",
-                "timeout_seconds": timeout_seconds,
-                "idle_timeout_seconds": 60,
-            }
+            request_settings: Dict[str, Any] = TestAgentRequestExecutor._request_settings(timeout_seconds)
             executor: AgentRequestExecutor = AgentRequestExecutor()
             result = executor.execute_request(request_settings, "prompt")
         run: Dict[str, Any] = {

@@ -14,9 +14,6 @@
 #
 # END COPYRIGHT
 
-# re.compile stays module-qualified: a specific import would hide the builtin compile.
-import re
-from argparse import Namespace
 from json import dump
 from logging import FileHandler
 from logging import Formatter
@@ -29,30 +26,29 @@ from os.path import join
 from platform import platform
 from platform import python_version
 from re import Pattern
+# Renamed so it does not hide the builtin compile().
+from re import compile as compile_regex
 from socket import gethostname
 from time import strftime
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-
-from psutil import Process
-from psutil import cpu_count
-from psutil import cpu_percent
-from psutil import virtual_memory
+from typing import ValuesView
 
 from tests.load_tests.load_test_constants import LoadTestConstants
 from tests.load_tests.monitoring.kernel_memory import KernelMemory
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.monitoring.server_log_tailer import ServerLogTailer
+from tests.load_tests.monitoring.tracked_process import TrackedProcess
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.history_recorder import HistoryRecorder
 from tests.load_tests.reporting.latency_analyzer import COMPLETION_MILESTONES
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.run_namer import RunNamer
-from tests.load_tests.reporting.summary import SummaryReporter
+from tests.load_tests.reporting.summary_reporter import SummaryReporter
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.validation.output_validator import OutputValidator
 from tests.load_tests.validation.server_checker import ServerChecker
@@ -68,24 +64,34 @@ class ServerOnlyMonitor:
     ROUND_END_LINE: str = "─────────────────────────────────────────────"
     CPU_SAMPLE_SECONDS: float = 0.1
 
-    def __init__(self, args: Namespace, profile: AgentProfile, monitor_parts: Dict[str, Any]) -> None:
+    def __init__(self, profile: AgentProfile, monitor_parts: Dict[str, Any]) -> None:
         """
         Store what the server-only rounds use.
 
-        :param args: Parsed command-line arguments
         :param profile: Agent profile with the primary agent's Start and Finish patterns
-        :param monitor_parts: A dict with "server_process" (the local server process, or None when it is not
-            found), "log_monitor" (monitor of the server log), "history_recorder" (writes the history record of
-            each round) and "server_checker" (gives the neuro-san version to tag each round with)
+        :param monitor_parts: A dict with the following keys:
+            "server_process"         The local server process, or None when it is not found
+            "log_monitor"            Monitor of the server log
+            "history_recorder"       Writes the history record of each round
+            "server_checker"         Gives the neuro-san version to tag each round with
+            "agent"                  Agent name, stored in each history record
+            "host"                   Server host, part of each round folder name
+            "server_log"             Server log path, or None
+            "stage_timeout_seconds"  --stage-timeout in seconds: how long a round may take
         """
-        server_process: Optional[Process] = monitor_parts.get("server_process")
-        self.args: Namespace = args
+        server_process: Optional[TrackedProcess] = monitor_parts.get("server_process")
+        # A dict, not one member per value: the constructor docstring lists the keys this class reads.
+        self._settings: Dict[str, Any] = monitor_parts
         self.profile: AgentProfile = profile
-        self.log_monitor: Optional[ServerLogMonitor] = monitor_parts.get("log_monitor")
-        self.history_recorder: HistoryRecorder = monitor_parts.get("history_recorder")
-        self.server_checker: ServerChecker = monitor_parts.get("server_checker")
-        self.server_log_tailer: ServerLogTailer = ServerLogTailer(args, server_process, self.log_monitor)
-        self.logger: Logger = getLogger(__name__)
+        server_log: Optional[str] = monitor_parts.get("server_log")
+        stage_timeout_seconds: float = monitor_parts.get("stage_timeout_seconds")
+        log_monitor: Optional[ServerLogMonitor] = monitor_parts.get("log_monitor")
+        self.server_log_tailer: ServerLogTailer = ServerLogTailer(server_log, stage_timeout_seconds, server_process,
+                                                                  log_monitor)
+        self.logger: Logger = getLogger(self.__class__.__name__)
+        self.resource_monitor: ResourceMonitor = ResourceMonitor()
+        self.output_validator: OutputValidator = OutputValidator()
+        self.kernel_memory: KernelMemory = KernelMemory()
 
     def run(self, output_base: str) -> int:
         """
@@ -101,8 +107,8 @@ class ServerOnlyMonitor:
         primary_start_pattern: str = self.profile.get_primary_start_pattern()
         primary_finish_pattern: str = self.profile.get_primary_finish_pattern()
         round_settings: Dict[str, Any] = {
-            "primary_start_regex": re.compile(primary_start_pattern),
-            "primary_finish_regex": re.compile(primary_finish_pattern),
+            "primary_start_regex": compile_regex(primary_start_pattern),
+            "primary_finish_regex": compile_regex(primary_finish_pattern),
             "output_base": output_base,
         }
         round_number: int = 0
@@ -139,14 +145,17 @@ class ServerOnlyMonitor:
         handler so each server-only round captures its own console
         output (heartbeats + summary) in its output directory.
 
-        :param round_settings: A dict with "primary_start_regex", "primary_finish_regex" (compiled patterns for
-            the primary agent's Start and Finish lines) and "output_base" (base output directory)
+        :param round_settings: A dict with the following keys:
+            "primary_start_regex"   Compiled pattern of the primary agent's Start line
+            "primary_finish_regex"  Compiled pattern of the primary agent's Finish line
+            "output_base"           Base output directory
         :param expected_count: Number of requests the client will send
         :param round_number: Round number, starting at 1
         """
+        log_monitor: Optional[ServerLogMonitor] = self._settings.get("log_monitor")
         output_base: str = round_settings.get("output_base")
         round_dir: str = self._setup_round_output_dir(expected_count, output_base)
-        log_position: Optional[int] = self.log_monitor.read_position()
+        log_position: Optional[int] = log_monitor.read_position()
         round_log_path: str = join(round_dir, LoadTestConstants.STDOUT_LOG_FILE_NAME)
         round_handler: FileHandler = FileHandler(round_log_path, encoding="utf-8")
         round_handler.setLevel(INFO)
@@ -178,9 +187,11 @@ class ServerOnlyMonitor:
         :param output_base: Base output directory; the round goes under its "server_only" folder
         :return: Path of the round output directory
         """
+        host: str = self._settings.get("host")
+        server_checker: ServerChecker = self._settings.get("server_checker")
         timestamp: str = strftime("%Y%m%d_%H%M%S")
-        neuro_san_version: Optional[str] = self.server_checker.resolve_ns_version()
-        folder_name: str = RunNamer.run_folder_name(timestamp, self.args.host, neuro_san_version, expected_count)
+        neuro_san_version: Optional[str] = server_checker.resolve_ns_version()
+        folder_name: str = RunNamer.run_folder_name(timestamp, host, neuro_san_version, expected_count)
         round_dir: str = join(output_base, "server_only", folder_name)
         makedirs(round_dir, exist_ok=True)
         return round_dir
@@ -190,11 +201,14 @@ class ServerOnlyMonitor:
         Run the steps of one server-only round: snapshots, log tailing, reports, raw_results.json and the
         server log copy.
 
-        :param round_values: A dict with "expected" (requests the client will send), "round_number" (starting at
-                             1), "primary_start_regex", "primary_finish_regex" (compiled patterns for the
-                             primary agent's Start and Finish lines), "round_dir" (output directory of the
-                             round), "log_position" (server log position at the start of the round) and
-                             "round_log_path" (path of the round's stdout.log)
+        :param round_values: A dict with the following keys:
+                             "expected"              Requests the client will send
+                             "round_number"          Round number, starting at 1
+                             "primary_start_regex"   Compiled pattern of the primary agent's Start line
+                             "primary_finish_regex"  Compiled pattern of the primary agent's Finish line
+                             "round_dir"             Output directory of the round
+                             "log_position"          Server log position at the start of the round
+                             "round_log_path"        Path of the round's stdout.log
         """
         expected_count: int = round_values.get("expected")
         round_number: int = round_values.get("round_number")
@@ -245,11 +259,11 @@ Waiting for %d request(s) in server log...
         :param round_number: Round number, starting at 1
         :param expected_count: Number of requests the client will send
         """
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  Round %d: expecting %d request(s)", round_number, expected_count)
-        self.logger.info(Formatters.SEPARATOR_LINE)
+        server_checker: ServerChecker = self._settings.get("server_checker")
+        title: str = f"Round {round_number}: expecting {expected_count} request(s)"
+        self.logger.info("\n%s", Formatters.section_header(title))
         version_text: str = "unknown"
-        resolved_version: Optional[str] = self.server_checker.resolve_ns_version()
+        resolved_version: Optional[str] = server_checker.resolve_ns_version()
         if resolved_version:
             version_text = resolved_version
         self.logger.info("  neuro-san version: %s", version_text)
@@ -258,39 +272,39 @@ Waiting for %d request(s) in server log...
         """
         Log the server and system resources before the round.
 
-        :return: Dict with "before_server" (server snapshot, or None), "before_system_memory_percent" and
-            "system_before" (the system values SystemResources.log_section() reads)
+        :return: A dict with the following keys:
+            "before_server"                 Server snapshot, or None
+            "before_system_memory_percent"  System memory use in percent
+            "before_system"                 The system values SystemResources.log_section() reads
         """
         before_server: Optional[Dict[str, Any]] = self.server_log_tailer.snapshot_server()
         if before_server:
-            ResourceMonitor.log_snapshot("Server BEFORE", before_server)
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        before_memory_stats: Any = virtual_memory()
+            self.resource_monitor.log_snapshot("Server BEFORE", before_server)
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        before_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         before_available_gigabytes: float = before_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
         # Log through self.logger so the line also goes to this round's log file.
         before_memory_line: str = ResourceMonitor.system_memory_line("BEFORE", before_memory_stats)
         self.logger.info("%s", before_memory_line)
         core_count: int = 1
-        logical_core_count: Optional[int] = cpu_count()
+        logical_core_count: Optional[int] = ResourceMonitor.read_cpu_count()
         if logical_core_count:
             core_count = logical_core_count
-        before_system_cpu_percent: float = cpu_percent(interval=ServerOnlyMonitor.CPU_SAMPLE_SECONDS)
+        before_system_cpu_percent: float = ResourceMonitor.read_system_cpu_percent(ServerOnlyMonitor.CPU_SAMPLE_SECONDS)
         self.logger.info("  System CPU: %d cores (%.0f%% in use)", core_count, before_system_cpu_percent)
-        before_system_threads: int = SystemResources.total_threads()
+        before_system_threads: int = ResourceMonitor.total_threads()
         user_limit: str = ""
         system_thread_max: str = ""
         user_limit, system_thread_max = SystemResources.thread_limits()
-        self.logger.info(
-            "  System threads: %s in use / limit %s per-user (%s max)",
-            f"{before_system_threads:,}", user_limit, system_thread_max,
-        )
+        self.logger.info("  System threads: %s in use / limit %s per-user (%s max)", f"{before_system_threads:,}",
+                         user_limit, system_thread_max)
         before_values: Dict[str, Any] = {
             "before_server": before_server,
             "before_system_memory_percent": before_memory_stats.percent,
-            "system_before": {
-                "mem_pct": before_memory_stats.percent,
-                "mem_avail_gb": before_available_gigabytes,
-                "cpu_pct": before_system_cpu_percent,
+            "before_system": {
+                "memory_percent": before_memory_stats.percent,
+                "available_gigabytes": before_available_gigabytes,
+                "cpu_percent": before_system_cpu_percent,
                 "threads": before_system_threads,
             },
         }
@@ -302,26 +316,29 @@ Waiting for %d request(s) in server log...
 
         :param before_values: The dict _log_before_round() returns
         :param tail_result: The dict ServerLogTailer.tail_server_log() returns
-        :return: Dict with "after_server" (server snapshot, or None), "after_kernel" (kernel memory, or None)
-            and "after_system_memory_percent"
+        :return: A dict with the following keys:
+            "after_server"                 Server snapshot, or None
+            "after_kernel"                 Kernel memory, or None
+            "after_system_memory_percent"  System memory use in percent
         """
         after_server: Optional[Dict[str, Any]] = self.server_log_tailer.snapshot_server()
         after_kernel: Optional[Dict[str, float]] = KernelMemory.read_kernel_memory()
-        # psutil.virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
-        after_memory_stats: Any = virtual_memory()
+        # read_virtual_memory() returns psutil's private svmem named tuple, which has no public type to name.
+        after_memory_stats: Any = ResourceMonitor.read_virtual_memory()
         total_gigabytes: float = after_memory_stats.total / ResourceMonitor.ONE_GIGABYTE
         after_available_gigabytes: float = after_memory_stats.available / ResourceMonitor.ONE_GIGABYTE
-        after_system_cpu_percent: float = cpu_percent(interval=ServerOnlyMonitor.CPU_SAMPLE_SECONDS)
-        after_system_threads: int = SystemResources.total_threads()
-        system_before: Dict[str, float] = before_values.get("system_before")
+        after_system_cpu_percent: float = ResourceMonitor.read_system_cpu_percent(ServerOnlyMonitor.CPU_SAMPLE_SECONDS)
+        after_system_threads: int = ResourceMonitor.total_threads()
+        before_system: Dict[str, float] = before_values.get("before_system")
         system_peak: Dict[str, float] = ServerOnlyMonitor._system_peak(tail_result, total_gigabytes)
-        SystemResources.log_section(
-            system_before,
+        system_resources: SystemResources = SystemResources()
+        system_resources.log_section(
+            before_system,
             system_peak,
             {
-                "mem_pct": after_memory_stats.percent,
-                "mem_avail_gb": after_available_gigabytes,
-                "cpu_pct": after_system_cpu_percent,
+                "memory_percent": after_memory_stats.percent,
+                "available_gigabytes": after_available_gigabytes,
+                "cpu_percent": after_system_cpu_percent,
                 "threads": after_system_threads,
             },
         )
@@ -339,16 +356,22 @@ Waiting for %d request(s) in server log...
 
         :param tail_result: The dict ServerLogTailer.tail_server_log() returns
         :param total_gigabytes: Total system memory in GB
-        :return: Dict with "mem_pct", "mem_avail_gb", "cpu_pct" (None when not sampled) and "threads"
+        :return: Dict with these keys:
+            "memory_percent": peak system memory use in percent
+            "available_gigabytes": system memory left at that peak, in GB
+            "cpu_percent": peak system CPU percent, or None when not sampled
+            "threads": peak system thread count
         """
         peak_system_memory_percent: float = tail_result.get("peak_sys_mem_pct")
         peak_used_fraction: float = peak_system_memory_percent / ResourceMonitor.ONE_HUNDRED_PERCENT
         peak_available_gigabytes: float = total_gigabytes - peak_used_fraction * total_gigabytes
+        peak_system_cpu_percent: Optional[float] = tail_result.get("peak_sys_cpu_percent")
+        peak_system_threads: Optional[int] = tail_result.get("peak_sys_threads")
         system_peak: Dict[str, float] = {
-            "mem_pct": peak_system_memory_percent,
-            "mem_avail_gb": peak_available_gigabytes,
-            "cpu_pct": tail_result.get("peak_sys_cpu_percent"),
-            "threads": tail_result.get("peak_sys_threads"),
+            "memory_percent": peak_system_memory_percent,
+            "available_gigabytes": peak_available_gigabytes,
+            "cpu_percent": peak_system_cpu_percent,
+            "threads": peak_system_threads,
         }
         return system_peak
 
@@ -363,22 +386,21 @@ Waiting for %d request(s) in server log...
         :param tail_result: The dict ServerLogTailer.tail_server_log() returns
         :param after_values: The dict _log_after_round() returns
         """
+        log_monitor: Optional[ServerLogMonitor] = self._settings.get("log_monitor")
         expected_count: int = round_values.get("expected")
         log_position: Optional[int] = round_values.get("log_position")
         received_count: int = tail_result.get("count")
         elapsed_seconds: float = tail_result.get("elapsed_seconds")
         peak_server: Optional[Dict[str, Any]] = tail_result.get("peak_server")
-        primary_start_regex: Pattern = round_values.get("primary_start_regex")
-        primary_pairs: List[Dict[str, Any]] = self.server_log_tailer.server_only_primary_pairs(log_position,
-                                                                                               primary_start_regex)
-        self._log_server_completion_percentiles(primary_pairs)
+        front_man_timings: List[Dict[str, Any]] = self._round_front_man_timings(round_values)
+        self._log_server_completion_percentiles(front_man_timings)
 
-        server_errors: List[Dict[str, str]] = self.log_monitor.scan_server_errors_since(log_position)
-        OutputValidator.log_server_errors(server_errors)
-        tool_warnings: List[Dict[str, str]] = self.log_monitor.scan_tool_warnings_since(log_position)
-        OutputValidator.log_tool_warnings(tool_warnings)
+        server_errors: List[Dict[str, str]] = log_monitor.scan_server_errors_since(log_position)
+        self.output_validator.log_server_errors(server_errors)
+        tool_warnings: List[Dict[str, str]] = log_monitor.scan_tool_warnings_since(log_position)
+        self.output_validator.log_tool_warnings(tool_warnings)
 
-        self._log_server_only_token_usage(log_position)
+        self._log_round_token_usage(log_monitor, log_position)
 
         round_results: Dict[str, Any] = {
             "round_dir": round_values.get("round_dir"),
@@ -393,37 +415,53 @@ Waiting for %d request(s) in server log...
             "peak_system_memory_percent": tail_result.get("peak_sys_mem_pct"),
             "after_system_memory_percent": after_values.get("after_system_memory_percent"),
             "interrupted": tail_result.get("interrupted"),
-            "kernel_breakdown": ServerOnlyMonitor._round_kernel_breakdown(peak_server, after_values),
+            "kernel_breakdown": self._round_kernel_breakdown(peak_server, after_values),
             "avg_system_cpu_percent": tail_result.get("avg_sys_cpu_percent"),
             "peak_system_cpu_percent": tail_result.get("peak_sys_cpu_percent"),
             "server_errors": server_errors,
             "tool_warnings": tool_warnings,
         }
+        self._save_round_results(round_results, front_man_timings)
+
+    def _round_front_man_timings(self, round_values: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Read the front-man timings of the round from the server log.
+
+        :param round_values: The dict _server_only_round_body() gets
+        :return: The front-man timings from ServerLogTailer.server_only_front_man_timings()
+        """
+        log_position: Optional[int] = round_values.get("log_position")
+        primary_start_regex: Pattern = round_values.get("primary_start_regex")
+        front_man_timings: List[Dict[str, Any]] = self.server_log_tailer.server_only_front_man_timings(
+            log_position, primary_start_regex)
+        return front_man_timings
+
+    def _log_round_token_usage(self, log_monitor: ServerLogMonitor, log_position: Optional[int]) -> None:
+        """
+        Read the round's token accounting from the server log and log the LLM & TOKEN USAGE section.
+
+        :param log_monitor: The ServerLogMonitor of the server log
+        :param log_position: Server log position at the start of the round
+        """
+        token_data: Dict[str, Dict[str, Any]] = log_monitor.parse_token_accounting_since(log_position)
+        self._log_server_only_token_usage(token_data)
+
+    def _save_round_results(self, round_results: Dict[str, Any], front_man_timings: List[Dict[str, Any]]) -> None:
+        """
+        Add the server version and the front-man timings to the round results, then write raw_results.json and the
+        history record.
+
+        :param round_results: The round results dict of _record_round()
+        :param front_man_timings: The front-man timings of the round from ServerLogTailer
+        """
+        server_checker: ServerChecker = self._settings.get("server_checker")
+        history_recorder: HistoryRecorder = self._settings.get("history_recorder")
+        round_results["neuro_san_version"] = server_checker.get_server_ns_version()
+        round_results["front_man_timings"] = front_man_timings
         self._export_server_only_json(round_results)
-        self._append_history_record(round_results, primary_pairs)
+        history_recorder.append_server_record(round_results)
 
-    def _append_history_record(self, round_results: Dict[str, Any], primary_pairs: List[Dict[str, Any]]) -> None:
-        """
-        Append the round's record to the server history file.
-
-        :param round_results: The dict _export_server_only_json() gets
-        :param primary_pairs: Primary-agent Start/Finish pairs of the round
-        """
-        server_ns_version: Optional[str] = self.server_checker.get_server_ns_version()
-        expected_count: int = round_results.get("expected")
-        received_count: int = round_results.get("count")
-        elapsed_seconds: float = round_results.get("elapsed_seconds")
-        peak_server: Optional[Dict[str, Any]] = round_results.get("peak_server")
-        peak_system_cpu_percent: float = round_results.get("peak_system_cpu_percent")
-        server_errors: List[Dict[str, str]] = round_results.get("server_errors")
-        tool_warnings: List[Dict[str, str]] = round_results.get("tool_warnings")
-        self.history_recorder.append_server_record(
-            server_ns_version, expected_count, received_count, elapsed_seconds, peak_server, peak_system_cpu_percent,
-            primary_pairs, server_errors, tool_warnings,
-        )
-
-    @staticmethod
-    def _round_kernel_breakdown(peak_server: Optional[Dict[str, Any]],
+    def _round_kernel_breakdown(self, peak_server: Optional[Dict[str, Any]],
                                 after_values: Dict[str, Any]) -> Dict[str, float]:
         """
         Work out the round's kernel memory breakdown without logging it.
@@ -439,7 +477,8 @@ Waiting for %d request(s) in server log...
             peak_rss_megabytes = peak_server.get("rss_megabytes", 0)
         elif after_server:
             peak_rss_megabytes = after_server.get("rss_megabytes", 0)
-        kernel_breakdown: Dict[str, float] = KernelMemory.kernel_breakdown(after_kernel, peak_rss_megabytes, log=False)
+        kernel_breakdown: Dict[str, float] = self.kernel_memory.kernel_breakdown(after_kernel, peak_rss_megabytes,
+                                                                                 log=False)
         return kernel_breakdown
 
     def _log_output_files(self, round_dir: str, round_log_path: str) -> None:
@@ -449,17 +488,16 @@ Waiting for %d request(s) in server log...
         :param round_dir: Output directory of the round
         :param round_log_path: Path of the round's stdout.log
         """
-        self.logger.info("\n%s", Formatters.SEPARATOR_LINE)
-        self.logger.info("  OUTPUT FILES")
-        self.logger.info(Formatters.SEPARATOR_LINE)
+        history_recorder: HistoryRecorder = self._settings.get("history_recorder")
+        self.logger.info("\n%s", Formatters.section_header("OUTPUT FILES"))
         self.logger.info("  Directory:   %s", round_dir)
         json_path: str = join(round_dir, LoadTestConstants.RAW_RESULTS_FILE_NAME)
         if isfile(json_path):
             self.logger.info("  Raw results: %s", json_path)
         self.logger.info("  Stdout log:  %s", round_log_path)
-        self.history_recorder.log_existing_history_files()
+        history_recorder.log_existing_history_files()
 
-    def _log_server_only_token_usage(self, log_position: Optional[int]) -> None:
+    def _log_server_only_token_usage(self, token_data: Dict[str, Dict[str, Any]]) -> None:
         """
         Log the LLM & TOKEN USAGE section for a server-only round.
 
@@ -467,16 +505,14 @@ Waiting for %d request(s) in server log...
         reads "not available" and the numbers come solely from
         server.log token accounting.
 
-        :param log_position: Server log position at the start of the round
+        :param token_data: Token accounting of the round from ServerLogMonitor.parse_token_accounting_since()
         """
-        token_data: Dict[str, Dict[str, Any]] = self.log_monitor.parse_token_accounting_since(log_position)
-        token_entries: List[Dict[str, Any]] = []
-        token_entry: Dict[str, Any]
-        # Collect the token entry of each request.
-        for token_entry in token_data.values():
-            token_entries.append(token_entry)
+        token_entries: ValuesView[Dict[str, Any]] = token_data.values()
         server_stats: Optional[Dict[str, int]] = SummaryReporter.aggregate_token_entries(token_entries)
-        printed: bool = SummaryReporter.render_token_usage(None, server_stats, client_source="HTTP token_accounting")
+        # A server-only round has no client stages, so the reporter gets no stage summaries.
+        summary_reporter: SummaryReporter = SummaryReporter([])
+        printed: bool = summary_reporter.render_token_usage(None, server_stats,
+                                                            client_source=LoadTestConstants.CLIENT_TOKEN_SOURCE)
         if not printed:
             return
         model_counts: Dict[str, int] = {}
@@ -506,19 +542,19 @@ Waiting for %d request(s) in server log...
             models_text = ", ".join(model_texts)
             self.logger.info("  LLM models: %s", models_text)
 
-    def _log_server_completion_percentiles(self, primary_pairs: List[Dict[str, Any]]) -> None:
+    def _log_server_completion_percentiles(self, front_man_timings: List[Dict[str, Any]]) -> None:
         """
         Log server-side completion-duration percentiles on one line.
 
         Durations are server-side processing times (Start->Finish from
-        the primary agent's log pairs), so they run slightly shorter
+        the front-man timings), so they run slightly shorter
         than the client's end-to-end per-request duration.  Reuses
         ``LatencyAnalyzer.percentile`` and ``COMPLETION_MILESTONES`` so
         the math and labels match the client's percentile line.
 
-        :param primary_pairs: Primary-agent Start/Finish pairs, each with ``duration_seconds``
+        :param front_man_timings: Front-man Start/Finish timings, each with ``duration_seconds``
         """
-        positive_durations: List[float] = ServerLogTailer.positive_durations(primary_pairs)
+        positive_durations: List[float] = ServerLogTailer.positive_durations(front_man_timings)
         durations: List[float] = sorted(positive_durations)
         if not durations:
             return
@@ -539,13 +575,26 @@ Waiting for %d request(s) in server log...
         """
         Write raw_results.json for a server-only round.
 
-        :param round_results: A dict with "round_dir", "expected", "count", "elapsed_seconds",
-                              "before_server", "after_server", "peak_server" (server process snapshots, or None),
-                              "peak_threads", "before_system_memory_percent", "peak_system_memory_percent",
-                              "after_system_memory_percent", "interrupted" (True when Ctrl-C stops the round),
-                              "kernel_breakdown", "avg_system_cpu_percent", "peak_system_cpu_percent",
-                              "server_errors" and "tool_warnings" (each may be None)
+        :param round_results: A dict with the following keys; the snapshot, server log and CPU keys may be None:
+                              "round_dir"                     Output directory of the round
+                              "expected"                      Requests the client will send
+                              "count"                         Requests received
+                              "elapsed_seconds"               Round time in seconds
+                              "before_server"                 Server process snapshot before the round
+                              "after_server"                  Server process snapshot after the round
+                              "peak_server"                   Peak server process snapshot
+                              "peak_threads"                  Peak server thread count
+                              "before_system_memory_percent"  System memory use in percent before the round
+                              "peak_system_memory_percent"    Peak system memory use in percent
+                              "after_system_memory_percent"   System memory use in percent after the round
+                              "interrupted"                   True when Ctrl-C stops the round
+                              "kernel_breakdown"              Kernel memory breakdown
+                              "avg_system_cpu_percent"        Average system CPU percent
+                              "peak_system_cpu_percent"       Peak system CPU percent
+                              "server_errors"                 Server errors from the server log
+                              "tool_warnings"                 Tool warnings from the server log
         """
+        agent: str = self._settings.get("agent")
         round_dir: str = round_results.get("round_dir")
         elapsed_seconds: float = round_results.get("elapsed_seconds")
         server_cpu_values: Dict[str, Optional[float]] = ServerOnlyMonitor._server_cpu_values(round_results)
@@ -559,7 +608,7 @@ Waiting for %d request(s) in server log...
                 "python_version": python_version(),
                 "platform": platform(),
                 "mode": "server-only",
-                "agent": self.args.agent,
+                "agent": agent,
             },
             "round": {
                 "expected_requests": round_results.get("expected"),
@@ -604,10 +653,13 @@ Waiting for %d request(s) in server log...
         """
         Work out the server CPU seconds used in the round, in total and per received request.
 
-        :param round_results: The dict _export_server_only_json() gets, with "before_server", "after_server"
-            (server snapshots with "cpu_seconds", or None) and "count" (requests received)
-        :return: Dict with "server_cpu_seconds_total" and "server_cpu_seconds_per_request", each None when
-            unknown
+        :param round_results: The dict _export_server_only_json() gets. Keys read here:
+            "before_server"  Server snapshot with "cpu_seconds" before the round, or None
+            "after_server"   Server snapshot with "cpu_seconds" after the round, or None
+            "count"          Requests received
+        :return: A dict with the following keys, each None when unknown:
+            "server_cpu_seconds_total"        Server CPU seconds used in the round
+            "server_cpu_seconds_per_request"  Server CPU seconds per request received
         """
         before_server: Optional[Dict[str, Any]] = round_results.get("before_server")
         after_server: Optional[Dict[str, Any]] = round_results.get("after_server")

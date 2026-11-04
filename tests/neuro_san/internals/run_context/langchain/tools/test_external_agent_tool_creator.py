@@ -23,10 +23,13 @@ from copy import deepcopy
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from typing_extensions import override
 
 from langchain_core.tools import BaseTool
+
+from leaf_common.logging.log_once import LogOnce
 
 from neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator import ExternalAgentToolCreator
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
@@ -49,18 +52,12 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
     @override
     def setUp(self) -> None:
         """
-        The synthesis warning is deduplicated per-process via a class-level
-        set. Clear it before each test so tests stay order-independent.
+        The synthesis warning is deduplicated per-test via a class-level set.
+        Clear the LogOnce records before each test so tests stay order-independent.
         """
-        ExternalAgentToolCreator.synthesis_warned.clear()
-
-    @override
-    def tearDown(self) -> None:
-        """
-        Clear the per-process synthesis warning set again so a test that
-        triggered the warning leaves nothing behind for later modules.
-        """
-        ExternalAgentToolCreator.synthesis_warned.clear()
+        patcher: Any = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def make_creator(self, function_json: Dict[str, Any]) -> ExternalAgentToolCreator:
         """
@@ -73,7 +70,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         session.function = AsyncMock(return_value={"function": function_json})
 
         session_factory = MagicMock()
-        session_factory.create_session = MagicMock(return_value=session)
+        session_factory.async_create_session = AsyncMock(return_value=session)
 
         invocation_context = MagicMock()
         invocation_context.get_async_session_factory = MagicMock(return_value=session_factory)
@@ -184,10 +181,11 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
     async def test_external_tool_without_description_is_not_synthesized(self) -> None:
         """
         A front-man spec with no description fails validation no matter what
-        parameters it has (e.g. a hocon with no "function" block at all, for
-        which the server reports {}). No synthesis message may be journaled
-        for it - the client would see a promise that the request will get
-        through, immediately followed by the tool being dropped.
+        parameters it has (e.g. a hocon whose front man has neither a "function"
+        block nor a top-level "description", for which the server reports {}).
+        No synthesis message may be journaled for it - the client would see a
+        promise that the request will get through, immediately followed by the
+        tool being dropped.
         """
         creator: ExternalAgentToolCreator = self.make_creator({})
 
@@ -223,39 +221,6 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         self.assertEqual(second_tool.parameters, ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETERS)
         second_creator.journal.write_message.assert_not_awaited()
 
-    async def test_synthesis_warning_rearms_when_agent_is_fixed(self) -> None:
-        """
-        Hocon files can be edited and hot-reloaded without a server restart.
-        Observing the agent with declared parameters must re-arm the warning,
-        so a later regression back to parameterless warns anew.
-        """
-        parameterless: Dict[str, Any] = {"description": "Answers music questions."}
-        declared: Dict[str, Any] = {
-            "description": "Answers music questions.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "The question to answer."
-                    }
-                },
-                "required": ["question"]
-            }
-        }
-
-        broken_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        await broken_creator.create_tool(self.EXTERNAL_AGENT_NAME)
-        broken_creator.journal.write_message.assert_awaited_once()
-
-        fixed_creator: ExternalAgentToolCreator = self.make_creator(declared)
-        await fixed_creator.create_tool(self.EXTERNAL_AGENT_NAME)
-        fixed_creator.journal.write_message.assert_not_awaited()
-
-        regressed_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        await regressed_creator.create_tool(self.EXTERNAL_AGENT_NAME)
-        regressed_creator.journal.write_message.assert_awaited_once()
-
     async def test_unsupported_schema_dialect_is_not_replaced(self) -> None:
         """
         A declared parameters schema in an unsupported JSON Schema dialect
@@ -289,8 +254,6 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         bad_parameters_cases: List[Any] = ["none", [], "", False, 0]
         for bad_parameters in bad_parameters_cases:
             with self.subTest(bad_parameters=bad_parameters):
-                # Each case gets a fresh warning set, so no case depends on an earlier one.
-                ExternalAgentToolCreator.synthesis_warned.clear()
                 creator: ExternalAgentToolCreator = self.make_creator({
                     "description": "Answers music questions.",
                     "parameters": bad_parameters
@@ -309,7 +272,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         is a connectivity problem and must keep the "unreachable" banner.
         """
         creator: ExternalAgentToolCreator = self.make_creator({})
-        session = creator.invocation_context.get_async_session_factory().create_session()
+        session = creator.invocation_context.get_async_session_factory().async_create_session.return_value
         session.function = AsyncMock(side_effect=ValueError("connection refused"))
 
         tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
@@ -343,5 +306,5 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
 
         self.assertIsNone(tool)
         session_factory = creator.invocation_context.get_async_session_factory()
-        session_factory.create_session.assert_not_called()
+        session_factory.async_create_session.assert_not_called()
         creator.journal.write_message.assert_not_awaited()

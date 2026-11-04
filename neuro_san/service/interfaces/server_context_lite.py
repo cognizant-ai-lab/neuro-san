@@ -22,7 +22,7 @@ from janus import Queue
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 
 
 class ServerContextLite:
@@ -54,7 +54,7 @@ class ServerContextLite:
         """
         raise NotImplementedError
 
-    def get_network_storage_dict(self) -> Dict[str, AgentNetworkStorage]:
+    def get_network_storage_dict(self) -> Dict[str, AgentStorageSource]:
         """
         :return: The Network Storage dictionary
         """

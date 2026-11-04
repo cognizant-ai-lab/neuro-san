@@ -17,16 +17,24 @@
 from logging import Logger
 from logging import getLogger
 from time import perf_counter
-from traceback import format_exc
+from traceback import format_exception
+from traceback import format_exception_only
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
+
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+# requests raises urllib3's ReadTimeoutError as the cause of its own error when no data comes within the
+# read timeout, while waiting for the response headers and while streaming the response.
+from urllib3.exceptions import ReadTimeoutError
 
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
+from tests.load_tests.traffic.output_parser import OutputParser
 from tests.load_tests.traffic.request_status_policy import RequestStatusPolicy
 from tests.load_tests.traffic.request_timeout_error import RequestTimeoutError
 from tests.load_tests.traffic.timed_streaming_chat import TimedStreamingChat
@@ -87,35 +95,83 @@ class AgentRequestExecutor:
 
         state: Dict[str, Any] = AgentRequestExecutor._initial_state(request_settings, prompt)
 
-        error_text: str = ""
+        raised_error: Optional[Exception] = None
         try:
             state = processor.process_once(state)
         except RequestTimeoutError:
             # Raised by TimedStreamingChat at or past the cap; the elapsed
-            # check below records it as TIMEOUT.
+            # check in _answer_result() records it as TIMEOUT.
             pass
         # Broad by design: process_once() drives the third-party
         # HTTP/streaming stack, whose failure surface (connection,
         # decode, gRPC/transport errors) is not enumerable here.  This
         # is a per-request isolation boundary — any single request must
         # be recorded as FAILED/TIMEOUT without aborting the load test.
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Include the full chained traceback so the root cause
-            # (ReadTimeout, ConnectionError, HTTPError, ...) survives
-            # the generic help text raised by the session client.
-            error_text = format_exc()
-            self.logger.debug("HTTP request failed:\n%s", error_text)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            raised_error = error
 
         elapsed_seconds: float = perf_counter() - start_seconds
-        answer_text: str = state.get("last_chat_response") or ""
-        status: str = policy.status_for(elapsed_seconds, answer_text, error_text)
+        if raised_error is not None:
+            return self._error_result(policy, elapsed_seconds, raised_error)
+        return AgentRequestExecutor._answer_result(policy, elapsed_seconds, processor, timed_chat, state)
+
+    def _error_result(self, policy: RequestStatusPolicy, elapsed_seconds: float,
+                      error: Exception) -> AgentRequestResult:
+        """
+        Build the result of a request that raised.
+
+        :param policy: Decides the status from the elapsed time and the error
+        :param elapsed_seconds: Seconds the request took
+        :param error: The exception the request raised
+        :return: The AgentRequestResult: TIMEOUT with no response past the cap, TIMEOUT with the reason
+            after a read timeout, else FAILED with the traceback as response text and the reason
+        """
+        # Include the full chained traceback so the root cause
+        # (ReadTimeout, ConnectionError, HTTPError, ...) survives
+        # the generic help text raised by the session client.
+        error_lines: List[str] = format_exception(error)
+        error_text: str = "".join(error_lines)
+        # The traceback holds the error message, so it goes through a SensitiveLogger; when LEAF_LOG_SENSITIVE is
+        # off, only the error type is logged.
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        sensitive_logger.debug("HTTP request failed:\n%s", error_text)
+        if not sensitive_logger.should_log():
+            self.logger.debug("HTTP request failed: %s", type(error).__name__)
+        failure_reason: str = AgentRequestExecutor._error_reason(error)
+        read_timed_out: bool = AgentRequestExecutor._is_read_timeout(error)
+        status: str = policy.status_for(elapsed_seconds, "", error_text, read_timed_out)
         response: Dict[str, Any] = {}
         if policy.is_timed_out(elapsed_seconds):
             return AgentRequestResult(status, response)
-        if error_text:
-            response = {"response_text": error_text}
+        if read_timed_out:
+            # RequestRecorder saves a traceback only for FAILED, so a read timeout keeps only the reason.
+            response = {"failure_reason": failure_reason}
             return AgentRequestResult(status, response)
+        response = {
+            "response_text": error_text,
+            "failure_reason": failure_reason,
+        }
+        return AgentRequestResult(status, response)
 
+    @staticmethod
+    def _answer_result(policy: RequestStatusPolicy, elapsed_seconds: float, processor: StreamingInputProcessor,
+                       timed_chat: TimedStreamingChat, state: Dict[str, Any]) -> AgentRequestResult:
+        """
+        Build the result of a request that did not raise.
+
+        :param policy: Decides the status from the elapsed time and the answer
+        :param elapsed_seconds: Seconds the request took
+        :param processor: The input processor that read the stream
+        :param timed_chat: The stream wrapper that timed the first response
+        :param state: The request state after process_once()
+        :return: The AgentRequestResult: TIMEOUT with no response past the cap, else FAILED or CREATED
+            with the answer response
+        """
+        answer_text: str = state.get("last_chat_response") or ""
+        status: str = policy.status_for(elapsed_seconds, answer_text)
+        response: Dict[str, Any] = {}
+        if policy.is_timed_out(elapsed_seconds):
+            return AgentRequestResult(status, response)
         response = AgentRequestExecutor._answer_response(processor, timed_chat, state, answer_text)
         return AgentRequestResult(status, response)
 
@@ -151,8 +207,11 @@ class AgentRequestExecutor:
         :param timed_chat: The stream wrapper that timed the first response
         :param state: The request state after process_once()
         :param answer_text: The agent's answer
-        :return: A dictionary with "processor", "response_text", "time_to_first_response_seconds" and
-            "token_accounting"
+        :return: A dict with the following keys:
+            "processor"                       The message processor that read the whole stream
+            "response_text"                   The agent's answer
+            "time_to_first_response_seconds"  Seconds until the first streamed message
+            "token_accounting"                Token accounting of the request, {} when none
         """
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
         message_processor: BasicMessageProcessor = processor.get_message_processor()
@@ -184,12 +243,55 @@ class AgentRequestExecutor:
         port_text: str = str(port)
         agent: str = request_settings.get("agent")
         idle_timeout_seconds: float = request_settings.get("idle_timeout_seconds")
+        timeout_seconds: float = request_settings.get("timeout_seconds")
+        # TimedStreamingChat checks --request-timeout only when a message arrives, so a silent stream
+        # is stopped by this read timeout: never wait longer than the cap on the whole request.
+        read_timeout_seconds: float = min(idle_timeout_seconds, timeout_seconds)
         session: HttpServiceAgentSession = HttpServiceAgentSession(
             host=host,
             port=port_text,
             agent_name=agent,
             security_cfg=security_cfg,
             timeout_in_seconds=CONNECT_TIMEOUT_SECONDS,
-            streaming_timeout_in_seconds=idle_timeout_seconds,
+            streaming_timeout_in_seconds=read_timeout_seconds,
         )
         return session
+
+    @staticmethod
+    def _error_reason(error: Exception) -> str:
+        """
+        Name the error a request raised in one line.
+
+        The session client raises a ValueError with its connectivity help text from the real
+        error, so the reason names that cause instead of the last line of the help text.
+
+        :param error: The exception the request raised
+        :return: The last line of "<type>: <message>" of the error's cause, or of the error itself when it has none
+        """
+        reported: BaseException = error
+        if error.__cause__ is not None:
+            reported = error.__cause__
+        error_lines: List[str] = format_exception_only(reported)
+        error_text: str = "".join(error_lines)
+        return OutputParser.last_stderr_line(error_text)
+
+    @staticmethod
+    def _is_read_timeout(error: Exception) -> bool:
+        """
+        Tell whether a request raised because no data came within the session's read timeout.
+
+        :param error: The exception the request raised
+        :return: True when a urllib3 ReadTimeoutError is in the error's cause or context chain
+        """
+        chained: Optional[BaseException] = error
+        seen_errors: List[BaseException] = []
+        # Walk down the chain of causes, stopping at its end or at a loop.
+        while chained is not None and chained not in seen_errors:
+            if isinstance(chained, ReadTimeoutError):
+                return True
+            seen_errors.append(chained)
+            next_error: Optional[BaseException] = chained.__cause__
+            if next_error is None:
+                next_error = chained.__context__
+            chained = next_error
+        return False

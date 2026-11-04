@@ -36,7 +36,7 @@ from leaf_common.utils.startable import Startable
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.listenable import Listenable
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.config.http_server_config import ENV_HEALTH_PROBE_PORT
@@ -134,9 +134,11 @@ class HttpServer(AgentStateListener):
 
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
-        network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+        network_storage_dict: Dict[str, AgentStorageSource] = self.server_context.get_network_storage_dict()
         for network_storage in network_storage_dict.values():
-            network_storage.add_listener(self)
+            # We assume each AgentStorageSource is also a Listenable[AgentStateListener]
+            listenable: Listenable[AgentStateListener] = network_storage
+            listenable.add_listener(self)
 
         self.server_context.set_agent_authorizer(self.authorization_policy)
 

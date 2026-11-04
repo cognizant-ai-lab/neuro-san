@@ -42,6 +42,14 @@ class TestRequestStatusPolicy(TestCase):
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
         self.assertEqual(policy.status_for(10.0, "answer"), LoadTestConstants.STATUS_TIMEOUT)
 
+    def test_status_for_read_timeout_is_timeout(self) -> None:
+        """
+        A request that raised because no message came within the read timeout is a TIMEOUT, even within the cap.
+        """
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout_seconds=10.0)
+        status: str = policy.status_for(1.0, "", "Traceback", read_timed_out=True)
+        self.assertEqual(LoadTestConstants.STATUS_TIMEOUT, status)
+
     def test_status_for_empty_answer_is_failed(self) -> None:
         """
         No answer text within the cap is FAILED.

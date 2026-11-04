@@ -42,8 +42,8 @@ class TestKernelMemory(TestCase):
         """
         Without kernel values there is nothing to break down.
         """
-        none_breakdown: Dict[str, float] = KernelMemory.kernel_breakdown(None, 100.0, log=False)
-        empty_breakdown: Dict[str, float] = KernelMemory.kernel_breakdown({}, 100.0, log=False)
+        none_breakdown: Dict[str, float] = KernelMemory().kernel_breakdown(None, 100.0, log=False)
+        empty_breakdown: Dict[str, float] = KernelMemory().kernel_breakdown({}, 100.0, log=False)
         self.assertEqual(none_breakdown, {})
         self.assertEqual(empty_breakdown, {})
 
@@ -55,7 +55,7 @@ class TestKernelMemory(TestCase):
             "KernelStack": 10.0, "PageTables": 20.0, "Slab": 30.0, "Cached": 40.0, "Buffers": 5.0,
             "TcpMem": 4.0, "MemTotal": 1000.0, "MemFree": 400.0,
         }
-        breakdown: Dict[str, float] = KernelMemory.kernel_breakdown(after_kernel, 100.0, log=False)
+        breakdown: Dict[str, float] = KernelMemory().kernel_breakdown(after_kernel, 100.0, log=False)
         expected_breakdown: Dict[str, float] = {
             "server_rss_mb": 100.0,
             "kernel_stacks_mb": 10.0,
@@ -74,7 +74,7 @@ class TestKernelMemory(TestCase):
         No server RSS counts as 0 MB, and unaccounted memory is never below 0.
         """
         after_kernel: Dict[str, float] = {"Slab": 50.0, "MemTotal": 100.0, "MemFree": 80.0}
-        breakdown: Dict[str, float] = KernelMemory.kernel_breakdown(after_kernel, None, log=False)
+        breakdown: Dict[str, float] = KernelMemory().kernel_breakdown(after_kernel, None, log=False)
         rss_megabytes: float = breakdown.get("server_rss_mb")
         unaccounted_megabytes: float = breakdown.get("unaccounted_mb")
         self.assertEqual(rss_megabytes, 0.0)

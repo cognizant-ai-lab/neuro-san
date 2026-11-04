@@ -24,8 +24,9 @@ class RequestStatusPolicy:
     recorded statuses count as failures or carry a traceback.
 
     TIMEOUT when the request took at least --request-timeout, whether or not
-    it raised; otherwise FAILED when it raised or produced no answer text,
-    and CREATED when it produced one.
+    it raised, or when no message came within the session's read timeout;
+    otherwise FAILED when it raised or produced no answer text, and CREATED
+    when it produced one.
     """
 
     def __init__(self, timeout_seconds: float) -> None:
@@ -45,17 +46,19 @@ class RequestStatusPolicy:
         """
         return elapsed_seconds >= self._timeout_seconds
 
-    def status_for(self, elapsed_seconds: float, answer_text: str, error_text: str = "") -> str:
+    def status_for(self, elapsed_seconds: float, answer_text: str, error_text: str = "",
+                   read_timed_out: bool = False) -> str:
         """
         Decide the status of one finished request.
 
         :param elapsed_seconds: Seconds the request took
         :param answer_text: The final chat response text, empty when none
         :param error_text: Traceback text when the request raised, empty otherwise
+        :param read_timed_out: True when the request raised because no message came within the read timeout
         :return: LoadTestConstants.STATUS_TIMEOUT, LoadTestConstants.STATUS_FAILED or
             LoadTestConstants.STATUS_CREATED
         """
-        if self.is_timed_out(elapsed_seconds):
+        if self.is_timed_out(elapsed_seconds) or read_timed_out:
             return LoadTestConstants.STATUS_TIMEOUT
         if error_text or not answer_text:
             return LoadTestConstants.STATUS_FAILED

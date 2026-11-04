@@ -14,12 +14,12 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-# re.compile stays module-qualified: a specific import would hide the builtin compile.
-import re
 from itertools import chain
 from itertools import repeat
-from argparse import Namespace
 from os.path import join
+from re import Pattern
+# Renamed so it does not hide the builtin compile().
+from re import compile as compile_regex
 from shutil import rmtree
 from tempfile import mkdtemp
 from typing import Any
@@ -154,13 +154,14 @@ class TestServerLogTailer(TestCase):
         :param stage_timeout_seconds: The --stage-timeout value
         :return: The tail result
         """
-        args: Namespace = Namespace(server_log=self._log_path, stage_timeout=stage_timeout_seconds)
-        server_log_tailer: ServerLogTailer = ServerLogTailer(args, None, None)
+        server_log_tailer: ServerLogTailer = ServerLogTailer(self._log_path, stage_timeout_seconds, None, None)
+        primary_start_regex: Pattern = compile_regex("primary Start")
+        primary_finish_regex: Pattern = compile_regex("primary Finish")
         round_values: Dict[str, Any] = {
             "expected": expected_count,
             "log_position": 0,
-            "primary_start_regex": re.compile("primary Start"),
-            "primary_finish_regex": re.compile("primary Finish"),
+            "primary_start_regex": primary_start_regex,
+            "primary_finish_regex": primary_finish_regex,
             "before_server": None,
             "before_system_memory_percent": 10.0,
         }
