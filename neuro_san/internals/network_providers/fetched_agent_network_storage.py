@@ -92,14 +92,13 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if agent_spec is None:
             return None
 
+        # DEF: Unclear how to get correct external_network_names and mcp_servers in here.
+        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding(agent_name, True)
+
         # Create the AgentNetwork and have it go through on-boarding.
         # A URL does not map to a package under AGENT_TOOL_PATH,
         # so CodedTool class references must be fully-qualified.
-        agent_network = AgentNetwork(agent_spec, agent_name)
-
-        # DEF: Unclear how to get correct external_network_names and mcp_servers in here.
-        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding(agent_name, True)
-        agent_network = on_boarding.on_board(agent_network)
+        agent_network = on_boarding.on_board(agent_spec)
         if agent_network is None:
             return None
 
