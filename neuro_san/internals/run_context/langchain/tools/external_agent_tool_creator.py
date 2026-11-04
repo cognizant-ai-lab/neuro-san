@@ -121,9 +121,10 @@ class ExternalAgentToolCreator(ToolCreator):
         which the LLM would invoke with an empty {} - and the external network
         would silently never receive the caller's request (issue #1228).
 
-        Note this is external-tools-only on purpose: internal tools without
-        parameters (e.g. no-argument coded tools) legitimately take no
-        arguments and are left alone.
+        Note this is external-tools-only on purpose: an internal LLM sub-agent
+        without parameters already gets a default "inquiry" parameter from
+        DefaultParametersConfigFilter, and an internal coded tool without
+        parameters legitimately takes no arguments.
 
         :param function_json: The function spec reported by the external agent.
                     Can be None when the agent was unreachable.
