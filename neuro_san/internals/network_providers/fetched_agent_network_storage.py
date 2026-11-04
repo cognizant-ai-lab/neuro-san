@@ -18,6 +18,8 @@ from typing import Dict
 from typing import List
 
 from io import BytesIO
+from logging import Logger
+from logging import getLogger
 from pathlib import Path
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
@@ -30,6 +32,7 @@ from typing_extensions import override
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.serialization.interface.serialization_format import SerializationFormat
+from leaf_common.utils.environment_util import EnvironmentUtil
 
 from neuro_san.internals.graph.persistence.agent_network_on_boarding import AgentNetworkOnBoarding
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -43,15 +46,29 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
     """
     AgentNetworkStorage implementation where AgentNetworks' names are full URLs
     and their contents are fetched from the network or a local file.
+    Only URLs whose scheme is listed in the AGENT_FETCHABLE_TOOL_SCHEMES
+    environment variable are fetched.
     """
 
-    def __init__(self):
+    # The url schemes that AGENT_FETCHABLE_TOOL_SCHEMES may enable.
+    # A bare path counts as "file".
+    SUPPORTED_SCHEMES: List[str] = ["http", "https", "file"]
+
+    def __init__(self, fetchable_schemes: List[str] = None):
         """
         Constructor
+
+        :param fetchable_schemes: The url schemes allowed for fetching.
+                    Default of None reads them from the AGENT_FETCHABLE_TOOL_SCHEMES environment variable.
         """
         super().__init__()
 
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+
+        self.fetchable_schemes: List[str] = fetchable_schemes
+        if self.fetchable_schemes is None:
+            self.fetchable_schemes = self.get_fetchable_schemes()
+
         self.extension_to_serialization_format: Dict[str, SerializationFormat] = {}
 
         # Populate the dictionary from the list of SerializationFormats.
@@ -68,7 +85,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
 
         :param agent_name: name of an agent which in this case is a full URL
         :return: an AgentNetworkProvider corresponding to the contents of the URL or
-                None if the file was not found or had the wrong suffix.
+                None if the scheme is not fetchable, or the file was not found or had the wrong suffix.
         """
         # Use the synchronous version on the super class to maybe return what was already cached.
         # The provider itself is never None, so check its network.
@@ -77,8 +94,8 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if agent_network is not None:
             return network_provider
 
-        # See if we support the serialization format
-        suffix: str = self.get_supported_suffix(agent_name)
+        # See if fetching is allowed for the scheme and we support the serialization format
+        suffix: str = self.get_fetchable_suffix(agent_name)
         if suffix is None:
             return None
 
@@ -140,6 +157,65 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
             return None
 
         return contents
+
+    def get_fetchable_suffix(self, agent_name: str) -> str:
+        """
+        Get the supported suffix of an agent network whose url scheme allows fetching
+
+        :param agent_name: name of an agent which in this case is a full URL
+        :return: the supported suffix, or None if the scheme is not in the fetchable schemes
+                or no supported suffix is found.
+        """
+        scheme: str = self.get_fetch_scheme(agent_name)
+        if scheme not in self.fetchable_schemes:
+            self.sensitive_logger.info("Not fetching %s: scheme '%s' is not in AGENT_FETCHABLE_TOOL_SCHEMES %s",
+                                       agent_name, scheme, self.fetchable_schemes)
+            return None
+
+        return self.get_supported_suffix(agent_name)
+
+    @staticmethod
+    def get_fetch_scheme(agent_name: str) -> str:
+        """
+        Get the url scheme that governs whether an agent network may be fetched
+
+        :param agent_name: name of an agent which in this case is a full URL
+        :return: the lower-cased url scheme, where a bare path counts as "file"
+        """
+        scheme: str = urlparse(agent_name).scheme.lower()
+
+        # No scheme is a plain path, and a one-letter scheme is a Windows drive letter.
+        # Both are read from the local filesystem, as fetch_contents() does.
+        if len(scheme) <= 1:
+            scheme = "file"
+
+        return scheme
+
+    @staticmethod
+    def get_fetchable_schemes() -> List[str]:
+        """
+        Get the url schemes allowed for fetching from the AGENT_FETCHABLE_TOOL_SCHEMES environment variable.
+        Schemes are separated by commas and/or whitespace. Unsupported schemes are logged and ignored.
+
+        :return: the list of lower-cased url schemes allowed for fetching.
+                An empty list means that nothing is fetched.
+        """
+        value: str = EnvironmentUtil.getenv("AGENT_FETCHABLE_TOOL_SCHEMES", "")
+
+        fetchable_schemes: List[str] = []
+        one_scheme: str = None
+        # Commas and whitespace both separate entries.
+        for one_scheme in value.replace(",", " ").split():
+            lower_scheme: str = one_scheme.lower()
+            if lower_scheme not in FetchedAgentNetworkStorage.SUPPORTED_SCHEMES:
+                logger: Logger = getLogger(FetchedAgentNetworkStorage.__name__)
+                logger.warning("Ignoring unsupported scheme '%s' in AGENT_FETCHABLE_TOOL_SCHEMES. Supported: %s",
+                               one_scheme, FetchedAgentNetworkStorage.SUPPORTED_SCHEMES)
+                continue
+            if lower_scheme not in fetchable_schemes:
+                fetchable_schemes.append(lower_scheme)
+
+        return fetchable_schemes
 
     def get_supported_suffix(self, agent_name: str) -> str:
         """

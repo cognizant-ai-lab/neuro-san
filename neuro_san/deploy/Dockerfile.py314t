@@ -615,6 +615,12 @@ ENV LEAF_LOG_SENSITIVE="false"
 # To use fetched agent networks with CodedTools, set this to "false".
 ENV AGENT_TOOL_PATH_ONLY="true"
 
+# Url schemes for which an agent network file named by a tool reference may be fetched,
+# separated by commas or whitespace.  Supported schemes are "http", "https" and "file"
+# (a bare path counts as "file").  Empty (the default) turns fetching off entirely.  See
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/external_agents.md#agent-network-file-references
+ENV AGENT_FETCHABLE_TOOL_SCHEMES=""
+
 # Limits the number of agents considered from external servers' listings
 # to avoid exorbitantly long loops in handling them.  Negative values or
 # 0 (the default) means the number of agents listed is unlimited.
