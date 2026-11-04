@@ -21,7 +21,7 @@ from unittest import TestCase
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
 
-class TestExternalAgentParsing(TestCase):
+class TestExternalAgentParsing(TestCase):  # pylint: disable=too-many-public-methods
     """
     Unit tests for ExternalAgentParsing class.
     """
@@ -36,6 +36,7 @@ class TestExternalAgentParsing(TestCase):
         self.assertEqual(agent_location.get("host"), "myhost")
         self.assertEqual(agent_location.get("port"), "8080")
         self.assertEqual(agent_location.get("agent_name"), "my_agent")
+        self.assertEqual(agent_location.get("agent_url"), "http://myhost:8080/my_agent")
 
     def test_parse_external_agent_unparseable_url_returns_none(self) -> None:
         """
@@ -224,3 +225,51 @@ class TestExternalAgentParsing(TestCase):
         self.assertIsNone(ExternalAgentParsing.parse_external_agent("https://agents.example.com:/math_guy"))
         self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://[::1]:/math_guy"))
         self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://user@agents.example.com:/math_guy"))
+
+    def test_get_safe_agent_name_agent_reference(self) -> None:
+        """
+        Tests that a reference to an agent becomes "__" plus its agent name with "/" mapped to "__".
+        """
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("/deep/math_guy"), "__deep__math_guy")
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("http://localhost:8080/math_guy"), "__math_guy")
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("math_guy"), "math_guy")
+
+    def test_get_safe_agent_name_network_file_with_hostname(self) -> None:
+        """
+        Tests that a URL to an agent network file keeps its hostname and file name,
+        with each character that a tool name does not allow replaced by "_",
+        followed by a digest of the full URL.
+        """
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("http://myhost:8080/networks/my_net.json"),
+                         "myhost-my_net_json-a7f90575d73d")
+
+    def test_get_safe_agent_name_network_file_without_hostname(self) -> None:
+        """
+        Tests that a reference to an agent network file without a hostname
+        gets the "__" prefix of other external agents, followed by a digest of the full reference.
+        """
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("file:///tmp/networks/my_net.hocon"),
+                         "__my_net_hocon-1e196b0d0b63")
+        self.assertEqual(ExternalAgentParsing.get_safe_agent_name("/tmp/networks/my_net.json"),
+                         "__my_net_json-f3610aea3179")
+
+    def test_get_safe_agent_name_network_file_distinct_paths(self) -> None:
+        """
+        Tests that network files with the same hostname and file name in different directories
+        get different names.
+        """
+        team_a_name: str = ExternalAgentParsing.get_safe_agent_name("https://example.com/team_a/math_guy.hocon")
+        team_b_name: str = ExternalAgentParsing.get_safe_agent_name("https://example.com/team_b/math_guy.hocon")
+        self.assertEqual(team_a_name, "example_com-math_guy_hocon-7d82bc378d80")
+        self.assertEqual(team_b_name, "example_com-math_guy_hocon-10f313c18a0a")
+
+    def test_get_safe_agent_name_network_file_long_url_is_bounded(self) -> None:
+        """
+        Tests that a long network file URL has its readable part truncated
+        to fit MAX_TOOL_NAME_LENGTH while its digest is kept whole.
+        """
+        agent_url: str = "https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main" \
+                         "/neuro_san/registries/math_guy_fully_qualified.hocon"
+        safe_name: str = ExternalAgentParsing.get_safe_agent_name(agent_url)
+        self.assertEqual(safe_name, "raw_githubusercontent_com-math_guy_fully_qualified_-de3c45106d4e")
+        self.assertEqual(len(safe_name), ExternalAgentParsing.MAX_TOOL_NAME_LENGTH)

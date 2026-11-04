@@ -17,6 +17,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from http import HTTPStatus
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import ParseResult
@@ -30,12 +31,12 @@ from typing_extensions import override
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.serialization.interface.serialization_format import SerializationFormat
-from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
-from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
 
+from neuro_san.internals.graph.persistence.agent_network_on_boarding import AgentNetworkOnBoarding
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.message.utils.decode_utils import DecodeUtils
 
 
@@ -54,14 +55,9 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
         self.extension_to_serialization_format: Dict[str, SerializationFormat] = {}
 
-        format_list: List[SerializationFormat] = [
-            JsonSerializationFormat(),
-            HoconSerializationFormat(),
-        ]
-
         # Populate the dictionary from the list of SerializationFormats.
         one_format: SerializationFormat = None
-        for one_format in format_list:
+        for one_format in ExternalAgentParsing.AGENT_NETWORK_SERIALIZATION_FORMATS:
             # The file extension already includes the leading dot.
             file_extension: str = one_format.get_file_extension()
             self.extension_to_serialization_format[file_extension] = one_format
@@ -97,9 +93,15 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if agent_spec is None:
             return None
 
-        # DEF: Apply filters
-        # DEF: Validate spec
-        agent_network = AgentNetwork(agent_spec, agent_name)
+        # DEF: Unclear how to get correct external_network_names and mcp_servers in here.
+        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding(agent_name, True)
+
+        # Create the AgentNetwork and have it go through on-boarding.
+        # A URL does not map to a package under AGENT_TOOL_PATH,
+        # so CodedTool class references must be fully-qualified.
+        agent_network = on_boarding.on_board(agent_spec)
+        if agent_network is None:
+            return None
 
         # Add the AgentNetwork to the cache
         # Note: Synchronous lock inside
@@ -182,11 +184,16 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
 
         :param url: The location of an agent network description
         :return: the contents of the agent network file
+        :raises ValueError: if the server responds with a redirect
         """
         # Collect raw bytes and decode once, so multibyte characters split across chunks stay intact.
         stream: BytesIO = BytesIO()
         async with ClientSession() as session:
-            async with session.get(url) as response:
+            # Do not follow redirects, so a server cannot steer the fetch to a location other than the one requested.
+            async with session.get(url, allow_redirects=False) as response:
+                if HTTPStatus.MULTIPLE_CHOICES <= response.status < HTTPStatus.BAD_REQUEST:
+                    location: str = response.headers.get("Location")
+                    raise ValueError(f"Refusing redirect ({response.status}) from {url} to {location}")
                 response.raise_for_status()
                 chunk: bytes = None
                 async for chunk in response.content.iter_chunked(1024):

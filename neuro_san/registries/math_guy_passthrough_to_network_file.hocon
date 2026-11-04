@@ -1,0 +1,125 @@
+
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+# The schema specifications for this file are documented here:
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
+
+{
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": "Simple agent network using external agent calls with sly_data"
+        "tags": ["example"],
+    },
+    "llm_config": {
+        "model_name": "gpt-5.2"
+    },
+    "tools": [
+        # This first agent definition is regarded as the "Front Man", which
+        # does all the talking to the outside world/client.
+        #
+        # Some disqualifications from being a front man:
+        #   1) Cannot use a CodedTool "class" definition
+        #   2) Cannot use a Tool "toolbox" definition
+        #
+        # Besides the first agent being the front man, these tool definitions
+        # do not have to be in any particular order. How they are linked and
+        # call each other is defined within their own specs.
+        # This could be a graph, potentially even with cycles.
+        {
+            "name": "passthrough",
+
+            # Note that there are no parameters defined for this guy's "function" key.
+            # This is fine for a front-man that only takes direct user input, but a
+            # network that is to be referenced as an external tool by another network
+            # should declare at least one parameter so the calling agent knows what
+            # to pass. (The front-man is simply the first agent in the "tools" list.)
+
+            "function": {
+
+                # The description acts as an initial prompt.
+                "description": """
+I am a test agent network that can do math with values in sly_data.
+Just give me the name of an arithmetic operator and I will do the work
+on the secret numbers.
+""",
+                # You can also optionally specify the schema needed for any sly_data input.
+                # This is to allow generic clients to prompt for private-data inputs
+                # that do not belong in the chat stream.
+                "sly_data_schema": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "float",
+                            "description": "The first operand for the arithmetic operation"
+                        },
+                        "y": {
+                            "type": "float",
+                            "description": "The second operand for the arithmetic operation"
+                        }
+                    },
+                    "required": ["x", "y"]
+                },
+                # You can also optionally specify the schema needed for any sly_data output.
+                # This is to allow generic clients to know what to expect for private-data outputs
+                # that do not belong in the chat stream.
+                "sly_data_output_schema": {
+                    "type": "object",
+                    "properties": { 
+                        "equals": { 
+                            "type": "float",
+                            "description": "The numeric answer of the calculation"
+                        }
+                    },
+                    "required": ["equals"]
+                }
+            },
+
+            "instructions": """
+Always call the math_guy tool to populate the return sly_data correctly.
+Return verbatim whatever it returns.
+""",
+            # Call the math_guy as an "external tool" which is an http hocon reference. Tools that are prefixed
+            # with a slash "/" are expected to reside as agents on the same server.
+            "tools": ["https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main/neuro_san/registries/math_guy_fully_qualified.hocon"],
+
+            # The allow block below lets us deviate from the standard security policy.
+            # This policy is one of securtiy-by-default, whereby no sly_data gets out
+            # of the agent network at all unless otherwise specified (as below).
+            "allow": {
+                "to_downstream": {
+                    # Specifying this allows specific sly_data keys from this agent network
+                    # to be sent to downstream agents
+                    "sly_data": ["x", "y"]
+                },
+                "from_downstream": {
+                    # Specifying this allows sly_data keys to be ingested from downstream agents
+                    # as sly_data for this agent network
+                    "sly_data": ["equals"],
+
+                    # Allow all messages sent from specific downstream agents to be reported
+                    # as if they came back from this agent network
+                    "messages": ["https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main/neuro_san/registries/math_guy_fully_qualified.hocon"]
+                },
+                "to_upstream": {
+                    # Specifying this allows sly_data keys from this network to be passed back
+                    # to the calling client
+                    "sly_data": ["equals"]
+                }
+            }
+        }
+    ]
+}
