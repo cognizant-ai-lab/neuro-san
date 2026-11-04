@@ -237,8 +237,8 @@ to expose secrets by checking them in.
 If your favorite model, or new hotness is not listed in `default_llm_info.hocon`,
 you can still use it by specifying the [class](#class) key directly, or by extending the list in one of two ways:
 
-(1) Set the absolute path to your extension HOCON file using the or
-[llm_info_file](#llm_info_file) keys in the agent network HOCON file.
+(1) Set the absolute path to your extension HOCON file using the [llm_info_file](#llm_info_file)
+key in the agent network HOCON file.
 
 (2) Set the extension HOCON file to the environment variable
 [AGENT_LLM_INFO_FILE](./llm_info_hocon_reference.md#AGENT_LLM_INFO_FILE-environment-variable).
@@ -1156,7 +1156,7 @@ The fully-qualified class name of the langchain AgentMiddleware class to be inst
 
 AgentMiddleware allows for calling code to be executed in the following situations:
 - before the agent execution starts (abefore_agent())
-- after the agent execution starts (aafter_agent())
+- after the agent execution completes (aafter_agent())
 - before the LLM is called (abefore_model())
 - after the LLM is called (aafter_model())
 - intercept and control async model execution (awrap_model_call())
