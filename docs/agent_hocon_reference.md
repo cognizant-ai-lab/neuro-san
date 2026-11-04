@@ -574,8 +574,9 @@ the same as declaring these parameters:
 ```
 
 An LLM sub-agent with these default parameters gets only `inquiry`, so a [coded tool](#class-1) that calls one
-sends `inquiry`. Coded tools, [toolbox](#toolbox) agents and agents that put `parameters` outside their function
-get no default parameters.
+sends `inquiry`. Coded tools and [toolbox](#toolbox) agents get no default parameters. A `parameters` key outside
+the function dictionary is a misconfiguration: it is not used when the agent is called, and a sub-agent with one
+gets no default parameters.
 
 A front-man typically does not need parameters defined when its agent network is only
 ever talked to directly by a user.
