@@ -75,7 +75,7 @@ class HoconValidatorCli:
         restorer: AgentNetworkRestorer = AgentNetworkRestorer(registry_dir=self.args.registry_dir)
 
         try:
-            raw_config: Dict[str, Any] = self.parse_file(abs_file_path, restorer)
+            raw_config: Dict[str, Any] = self.parse_file(abs_file_path, self.args.registry_dir, restorer)
         except FileNotFoundError as exception:
             print(f"Error: File not found - {exception}", file=sys.stderr)
             return 2
@@ -135,46 +135,61 @@ class HoconValidatorCli:
         if self.args.strict:
             exit_errors.extend(unused_warnings)
 
+        # --strict only promotes unused-commondefs warnings, so the hint is useful
+        # only when such a warning is listed and --strict is not already set.
+        show_strict_hint: bool = bool(unused_warnings) and not self.args.strict
+
         if exit_errors:
             print(f"Validation failed with {len(exit_errors)} error(s):\n")
+            index: int = 0
+            error: str = None
+            # Print each error with a 1-based index
             for index, error in enumerate(exit_errors, 1):
                 print(f"  {index}. {error}")
             remaining: List[str] = list(placeholder_warnings)
             if not self.args.strict:
                 remaining = unused_warnings + remaining
             if remaining:
-                self._print_lint_warnings(remaining)
+                self._print_lint_warnings(remaining, show_strict_hint)
             return 1
 
         print("Validation passed: No errors found.")
         all_warnings: List[str] = unused_warnings + placeholder_warnings
         if all_warnings:
-            self._print_lint_warnings(all_warnings)
+            self._print_lint_warnings(all_warnings, show_strict_hint)
         if self.args.verbose:
             self.print_network_summary(resolved_config)
         return 0
 
     @staticmethod
-    def parse_file(file_path: str, restorer: AgentNetworkRestorer) -> Dict[str, Any]:
+    def parse_file(file_path: str, registry_dir: str, restorer: AgentNetworkRestorer) -> Dict[str, Any]:
         """
         Parse a HOCON file into its raw (pre-filter) config dictionary.
 
         To make HOCON 'include' statements inside the file resolve against
-        the registry layout, this chdirs into the restorer's registry_dir
-        for the duration of the parse and restores the previous cwd after.
+        the registry layout, this chdirs into registry_dir for the duration
+        of the parse and restores the previous cwd after.
 
         :param file_path: Absolute path to the HOCON file
+        :param registry_dir: Directory that 'include' statements resolve against, or None to parse in place
         :param restorer: An AgentNetworkRestorer (used only for its HOCON parser)
         :return: The raw parsed config dictionary
+        :raises ValueError: If registry_dir is set but is not an existing directory
+        :raises FileNotFoundError: If file_path does not exist or parses to nothing
         """
+        abs_registry_dir: str = None
+        if registry_dir:
+            abs_registry_dir = os.path.abspath(registry_dir)
+            if not os.path.isdir(abs_registry_dir):
+                raise ValueError(f"Registry directory does not exist: {abs_registry_dir}")
+
         with open(file_path, "rb") as file_obj:
             file_contents: bytes = file_obj.read()
 
-        registry_dir: str = restorer.registry_dir
         original_cwd: str = os.getcwd()
         # chdir only when a registry_dir is set, so includes resolve relative to it
-        if registry_dir and os.path.isdir(registry_dir):
-            os.chdir(registry_dir)
+        if abs_registry_dir:
+            os.chdir(abs_registry_dir)
         try:
             parsed: Dict[str, Any] = restorer.deserialize_file_contents(file_path, file_contents)
         finally:
@@ -220,9 +235,20 @@ class HoconValidatorCli:
         return ""
 
     @staticmethod
-    def _print_lint_warnings(lint_warnings: List[str]):
-        """Print lint warnings to stdout."""
-        print(f"\n{len(lint_warnings)} lint warning(s) (use --strict to treat these as errors):\n")
+    def _print_lint_warnings(lint_warnings: List[str], show_strict_hint: bool):
+        """
+        Print lint warnings to stdout.
+
+        :param lint_warnings: The warning messages to print
+        :param show_strict_hint: True to suggest --strict, which only applies to unused-commondefs warnings
+        """
+        hint: str = ""
+        if show_strict_hint:
+            hint = " (use --strict to treat unused-commondefs warnings as errors)"
+        print(f"\n{len(lint_warnings)} lint warning(s){hint}:\n")
+        index: int = 0
+        warning: str = None
+        # Print each warning with a 1-based index
         for index, warning in enumerate(lint_warnings, 1):
             print(f"  {index}. {warning}")
 
@@ -335,6 +361,7 @@ Examples:
 
         if tools:
             print("\nAgents:")
+            tool: Dict[str, Any] = None
             for tool in tools:
                 name: str = tool.get("name", "<unnamed>")
                 has_instructions: bool = tool.get("instructions") is not None

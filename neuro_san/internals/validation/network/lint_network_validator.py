@@ -23,6 +23,8 @@ from typing import Tuple
 
 import re
 
+from typing_extensions import override
+
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
@@ -55,10 +57,11 @@ class LintNetworkValidator(AbstractNetworkValidator):
 
     def __init__(self, raw_config: Dict[str, Any] = None):
         """
+        Constructor
+
         :param raw_config: The pre-commondefs-substitution config dictionary.
-                Required for find_unused_commondefs(). May be None if the
-                raw config could not be obtained, in which case that check
-                is silently skipped.
+                Required for find_unused_commondefs(), which returns no warnings
+                when this is None.
         """
         self.raw_config: Dict[str, Any] = raw_config
 
@@ -72,6 +75,7 @@ class LintNetworkValidator(AbstractNetworkValidator):
         :param value: Any nested combination of dict/list/scalar
         :param out: The list to append string leaves to; mutated here
         """
+        sub: Any = None
         if isinstance(value, str):
             out.append(value)
         elif isinstance(value, dict):
@@ -91,6 +95,7 @@ class LintNetworkValidator(AbstractNetworkValidator):
         :param value: Any nested combination of dict/list/scalar
         :param out: The list to append scalar leaves to; mutated here
         """
+        sub: Any = None
         if isinstance(value, dict):
             # Recurse into each dict value
             for sub in value.values():
@@ -104,6 +109,7 @@ class LintNetworkValidator(AbstractNetworkValidator):
 
     # --- AbstractNetworkValidator interface ---
 
+    @override
     def validate(self, candidate: Dict[str, Any]) -> List[str]:
         """
         Run all lint checks, returning every warning in a flat list.
@@ -116,10 +122,14 @@ class LintNetworkValidator(AbstractNetworkValidator):
         warnings.extend(self.find_unresolved_placeholders(candidate))
         return warnings
 
+    @override
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
-        Not used — lint checks operate on the full config, not the
-        name-to-spec dict. The validate() override handles dispatch.
+        Return no warnings: lint checks operate on the full config, not the
+        name-to-spec dict, so validate() is overridden to dispatch them instead.
+
+        :param name_to_spec: The name-to-spec dictionary (not used by lint checks)
+        :return: An empty list
         """
         return []
 
@@ -151,6 +161,8 @@ class LintNetworkValidator(AbstractNetworkValidator):
             "commondefs": commondefs,
         }
 
+        key: str = None
+
         # Check replacement_strings: look for {key} tokens in all text
         replacement_strings: Any = commondefs.get("replacement_strings")
         if isinstance(replacement_strings, dict) and replacement_strings:
@@ -171,6 +183,7 @@ class LintNetworkValidator(AbstractNetworkValidator):
         if isinstance(replacement_values, dict) and replacement_values:
             all_scalars: List[Any] = []
             self._collect_scalars(scan_root, all_scalars)
+            scalar: Any = None
             # Scan for each defined key as a bare string value
             for key in replacement_values:
                 used: bool = False
@@ -210,6 +223,8 @@ class LintNetworkValidator(AbstractNetworkValidator):
             return warnings
 
         seen_tokens: Set[str] = set()
+        tool: Any = None
+        path: Tuple[str, ...] = None
         # Scan each tool's instructions and function.description fields
         for tool in tools:
             if not isinstance(tool, dict):
@@ -234,6 +249,7 @@ class LintNetworkValidator(AbstractNetworkValidator):
         :return: The value at the end of the path, or None if unreachable
         """
         current: Any = start
+        key: str = None
         # Follow each key in order, bailing out if the next step is not a dict
         for key in path:
             if not isinstance(current, dict):
@@ -251,6 +267,7 @@ class LintNetworkValidator(AbstractNetworkValidator):
         :param seen_tokens: Set of tokens already warned about; mutated here
         :param warnings: The list to append new warnings to; mutated here
         """
+        match: re.Match = None
         # Find all {word}-shaped tokens in this field
         for match in LintNetworkValidator._REPLACEMENT_TOKEN_RE.finditer(text):
             start: int = match.start()

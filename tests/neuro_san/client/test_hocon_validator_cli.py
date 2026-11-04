@@ -69,28 +69,32 @@ class TestHoconValidatorCli(unittest.TestCase):
         :param args: Argv tail (everything after the program name)
         :return: (exit_code, captured_stdout)
         """
-        stdout = io.StringIO()
+        stdout: io.StringIO = io.StringIO()
         with patch("sys.argv", ["hocon_validator_cli"] + args):
             with contextlib.redirect_stdout(stdout):
-                cli = HoconValidatorCli()
-                exit_code = cli.main()
+                cli: HoconValidatorCli = HoconValidatorCli()
+                exit_code: int = cli.main()
         return exit_code, stdout.getvalue()
 
-    def _run_cli_on_hocon(self, hocon_content: str, extra_args: List[str] = None) -> Tuple[int, str]:
+    def _run_cli_on_hocon(
+        self, hocon_content: str, extra_args: List[str] = None, registry_dir: str = None
+    ) -> Tuple[int, str]:
         """
         Write hocon_content to a temp file, run the CLI against it with
-        --registry-dir set to the project root plus any extra args, and
-        clean up the temp file afterwards.
+        --registry-dir set plus any extra args, and clean up the temp file afterwards.
 
         :param hocon_content: Raw HOCON source to validate
         :param extra_args: Additional CLI args appended after --registry-dir
+        :param registry_dir: Value for --registry-dir; None uses the project root
         :return: (exit_code, captured_stdout)
         """
+        if registry_dir is None:
+            registry_dir = self.project_root
         with tempfile.NamedTemporaryFile(mode="w", suffix=".hocon", delete=False) as hocon_handle:
             hocon_handle.write(hocon_content)
             temp_path: str = hocon_handle.name
         try:
-            args: List[str] = [temp_path, "--registry-dir", self.project_root]
+            args: List[str] = [temp_path, "--registry-dir", registry_dir]
             if extra_args:
                 args.extend(extra_args)
             return self._run_cli(args)
@@ -164,11 +168,55 @@ class TestHoconValidatorCli(unittest.TestCase):
         }
         """
         # Duplicate names go to stderr; collect it alongside stdout
-        stderr = io.StringIO()
+        stderr: io.StringIO = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             exit_code, _ = self._run_cli_on_hocon(hocon_content)
         self.assertEqual(exit_code, 2)
         self.assertIn("duplicate entry", stderr.getvalue())
+
+    def test_missing_registry_dir_returns_two(self):
+        """A --registry-dir that does not exist is reported on stderr with exit code 2."""
+        hocon_file: str = os.path.join(self.registries_dir, "hello_world.hocon")
+        with tempfile.TemporaryDirectory() as parent_dir:
+            missing_dir: str = os.path.join(parent_dir, "no_such_dir")
+            stderr: io.StringIO = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                exit_code, _ = self._run_cli([hocon_file, "--registry-dir", missing_dir])
+        self.assertEqual(exit_code, 2)
+        self.assertIn("Registry directory does not exist", stderr.getvalue())
+
+    def test_include_resolves_against_registry_dir(self):
+        """An include statement resolves relative to --registry-dir, not the HOCON file's location."""
+        hocon_content: str = """
+        {
+            include "registries/shared_commondefs.hocon"
+            tools: [
+                {
+                    name: "front_man"
+                    instructions: "You are a {role}."
+                    tools: []
+                }
+            ]
+        }
+        """
+        shared_content: str = """
+        commondefs { replacement_strings { role: "assistant" } }
+        """
+        with tempfile.TemporaryDirectory() as registry_dir:
+            os.makedirs(os.path.join(registry_dir, "registries"))
+            shared_path: str = os.path.join(registry_dir, "registries", "shared_commondefs.hocon")
+            with open(shared_path, "w", encoding="utf-8") as shared_handle:
+                shared_handle.write(shared_content)
+            exit_code, output = self._run_cli_on_hocon(hocon_content, registry_dir=registry_dir)
+
+        # With the include resolved, {role} is substituted and nothing is flagged
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("lint warning", output)
+
+        # Control: a registry dir without the included file leaves {role} unresolved
+        with tempfile.TemporaryDirectory() as empty_dir:
+            _, output_without_include = self._run_cli_on_hocon(hocon_content, registry_dir=empty_dir)
+        self.assertIn("{role}", output_without_include)
 
     def test_external_agents_flag(self):
         """--external-agents allows references to external agents."""
@@ -199,6 +247,7 @@ class TestHoconValidatorCli(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("lint warning", output)
         self.assertIn("unused_key", output)
+        self.assertIn("use --strict", output)
 
     def test_lint_warning_fails_with_strict_flag(self):
         """An unused commondef fails validation with --strict."""
@@ -207,7 +256,7 @@ class TestHoconValidatorCli(unittest.TestCase):
         self.assertIn("unused_key", output)
 
     def test_unresolved_placeholder_is_advisory_only(self):
-        """A {word} placeholder is reported but never fails, even with --strict."""
+        """A {word} placeholder is reported but never fails, even with --strict, and never suggests --strict."""
         hocon_content: str = """
         {
             tools: [
@@ -222,10 +271,12 @@ class TestHoconValidatorCli(unittest.TestCase):
         exit_code, output = self._run_cli_on_hocon(hocon_content)
         self.assertEqual(exit_code, 0)
         self.assertIn("{operation}", output)
+        self.assertNotIn("use --strict", output)
 
         exit_code_strict, output_strict = self._run_cli_on_hocon(hocon_content, ["--strict"])
         self.assertEqual(exit_code_strict, 0)
         self.assertIn("{operation}", output_strict)
+        self.assertNotIn("use --strict", output_strict)
 
     def test_clean_hocon_has_no_lint_warnings(self):
         """A self-contained network with commondefs fully used produces zero warnings."""

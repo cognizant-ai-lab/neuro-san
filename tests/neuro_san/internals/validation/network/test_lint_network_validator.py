@@ -17,68 +17,75 @@
 
 import unittest
 
+from typing import Any
+from typing import Dict
+from typing import List
+
 from neuro_san.internals.validation.network.lint_network_validator import LintNetworkValidator
 
 
-class TestFindUnusedCommondefs(unittest.TestCase):
+class TestLintNetworkValidator(unittest.TestCase):
     """
-    Unit tests for the unused-commondefs lint check.
+    Unit tests for LintNetworkValidator: the unused-commondefs check,
+    the unresolved-placeholder check, and calling each check directly.
     """
+
+    # --- Unused commondefs ---
 
     def test_replacement_value_substring_does_not_count_as_used(self):
         """A replacement_values key embedded in a longer string is not used."""
-        raw_config = {
+        raw_config: Dict[str, Any] = {
             "commondefs": {"replacement_values": {"my_key": {"type": "string"}}},
             "tools": [{"name": "agent", "instructions": "my_key_extended is not the same"}],
         }
-        validator = LintNetworkValidator(raw_config=raw_config)
-        warnings = validator.validate({})
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
+        warnings: List[str] = validator.validate({})
         self.assertEqual(len(warnings), 1)
         self.assertIn("replacement_values.my_key", warnings[0])
 
     def test_used_replacement_string_is_clean(self):
         """A replacement_strings entry referenced via {key} is not flagged."""
-        raw_config = {
+        raw_config: Dict[str, Any] = {
             "commondefs": {"replacement_strings": {"operation": "addition"}},
             "tools": [{"name": "agent", "instructions": "Perform the {operation} operation."}],
         }
-        validator = LintNetworkValidator(raw_config=raw_config)
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
         self.assertEqual(validator.validate({}), [])
 
     def test_unused_replacement_string_is_flagged(self):
         """A replacement_strings entry never referenced as {key} is flagged."""
-        raw_config = {
+        raw_config: Dict[str, Any] = {
             "commondefs": {"replacement_strings": {"operation": "addition"}},
             "tools": [{"name": "agent", "instructions": "Nothing to see here."}],
         }
-        validator = LintNetworkValidator(raw_config=raw_config)
-        warnings = validator.validate({})
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
+        warnings: List[str] = validator.validate({})
         self.assertEqual(len(warnings), 1)
         self.assertIn("replacement_strings.operation", warnings[0])
 
     def test_used_replacement_value_is_clean(self):
         """A replacement_values entry referenced as a bare value is not flagged."""
-        raw_config = {
+        raw_config: Dict[str, Any] = {
             "commondefs": {"replacement_values": {"cao_item": {"type": "string"}}},
             "tools": [{"name": "agent", "function": {"parameters": "cao_item"}}],
         }
-        validator = LintNetworkValidator(raw_config=raw_config)
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
         self.assertEqual(validator.validate({}), [])
 
     def test_unused_replacement_value_is_flagged(self):
         """A replacement_values entry never used as a bare value is flagged."""
-        raw_config = {
+        raw_config: Dict[str, Any] = {
             "commondefs": {"replacement_values": {"cao_item": {"type": "string"}}},
             "tools": [{"name": "agent", "instructions": "Nothing to see here."}],
         }
-        validator = LintNetworkValidator(raw_config=raw_config)
-        warnings = validator.validate({})
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
+        warnings: List[str] = validator.validate({})
         self.assertEqual(len(warnings), 1)
         self.assertIn("replacement_values.cao_item", warnings[0])
 
     def test_cross_referenced_commondef_is_clean(self):
         """A replacement_strings entry used by another entry still counts as used."""
-        raw_config = {
+        raw_config: Dict[str, Any] = {
             "commondefs": {
                 "replacement_strings": {
                     "name": "Fred",
@@ -87,114 +94,106 @@ class TestFindUnusedCommondefs(unittest.TestCase):
             },
             "tools": [{"name": "agent", "instructions": "{greeting}"}],
         }
-        validator = LintNetworkValidator(raw_config=raw_config)
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
         self.assertEqual(validator.validate({}), [])
 
     def test_non_dict_raw_config_is_clean(self):
         """A malformed (non-dict) raw config produces no warnings."""
-        validator = LintNetworkValidator(raw_config=None)
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=None)
         self.assertEqual(validator.validate({}), [])
 
-
-class TestFindUnresolvedReplacementStrings(unittest.TestCase):
-    """
-    Unit tests for the unresolved-placeholder lint check.
-    """
+    # --- Unresolved placeholders ---
 
     def test_multiple_distinct_placeholders_each_reported(self):
         """Two different unresolved placeholders each get their own warning."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "instructions": "Use {foo} and {bar} together."}]
         }
-        validator = LintNetworkValidator()
-        warnings = validator.validate(resolved_config)
+        validator: LintNetworkValidator = LintNetworkValidator()
+        warnings: List[str] = validator.validate(resolved_config)
         self.assertEqual(len(warnings), 2)
-        combined = " ".join(warnings)
+        combined: str = " ".join(warnings)
         self.assertIn("{foo}", combined)
         self.assertIn("{bar}", combined)
 
     def test_leftover_placeholder_is_flagged(self):
         """A {word}-shaped token surviving substitution is flagged."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "instructions": "Perform the {operation} operation."}]
         }
-        validator = LintNetworkValidator()
-        warnings = validator.validate(resolved_config)
+        validator: LintNetworkValidator = LintNetworkValidator()
+        warnings: List[str] = validator.validate(resolved_config)
         self.assertEqual(len(warnings), 1)
         self.assertIn("{operation}", warnings[0])
 
     def test_duplicate_placeholder_reported_once(self):
         """The same leftover token appearing more than once is only reported once."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [
                 {"name": "agent1", "instructions": "Use {operation} here."},
                 {"name": "agent2", "instructions": "And {operation} here too."},
             ]
         }
-        validator = LintNetworkValidator()
-        warnings = validator.validate(resolved_config)
+        validator: LintNetworkValidator = LintNetworkValidator()
+        warnings: List[str] = validator.validate(resolved_config)
         self.assertEqual(len(warnings), 1)
 
     def test_regex_quantifier_is_not_flagged(self):
-        """A {3}-shaped regex quantifier should not be mistaken for a placeholder."""
-        resolved_config = {
+        """A {3}-shaped regex quantifier is not mistaken for a placeholder."""
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "instructions": "[a-zA-Z0-9]{3}-[a-zA-Z0-9]{4}"}]
         }
         self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
 
     def test_double_braces_are_not_flagged(self):
         """A {{word}} placeholder used by LangChain templates is not flagged."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "instructions": "Summarize: {{messages}}"}]
         }
         self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
 
     def test_only_scanned_fields_are_flagged(self):
         """A {word} token outside the scanned paths is not flagged."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "instructions": "OK", "args": {"url": "/{path}/api"}}]
         }
         self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
 
     def test_nested_function_description_is_scanned(self):
         """A {word} token inside function.description is flagged (agents keep description here)."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "function": {"description": "Perform {action}"}}]
         }
-        warnings = LintNetworkValidator().validate(resolved_config)
+        warnings: List[str] = LintNetworkValidator().validate(resolved_config)
         self.assertEqual(len(warnings), 1)
         self.assertIn("{action}", warnings[0])
 
     def test_top_level_description_is_not_scanned(self):
         """A {word} token in a tool's top-level 'description' field is not flagged (agents use function.description)."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "description": "Does the {action} thing"}]
         }
         self.assertEqual(LintNetworkValidator().validate(resolved_config), [])
 
-
-class TestIndividualCheckMethods(unittest.TestCase):
-    """
-    Tests for the individual check methods called directly.
-    """
+    # --- Calling each check directly ---
 
     def test_find_unused_commondefs_returns_warnings(self):
         """find_unused_commondefs() returns warnings independently of validate()."""
-        raw_config = {
+        raw_config: Dict[str, Any] = {
             "commondefs": {"replacement_strings": {"stale": "old"}},
             "tools": [{"name": "agent", "instructions": "Nothing."}],
         }
-        validator = LintNetworkValidator(raw_config=raw_config)
-        warnings = validator.find_unused_commondefs()
+        validator: LintNetworkValidator = LintNetworkValidator(raw_config=raw_config)
+        warnings: List[str] = validator.find_unused_commondefs()
         self.assertEqual(len(warnings), 1)
         self.assertIn("stale", warnings[0])
 
     def test_find_unresolved_placeholders_returns_warnings(self):
         """find_unresolved_placeholders() returns warnings independently of validate()."""
-        resolved_config = {
+        resolved_config: Dict[str, Any] = {
             "tools": [{"name": "agent", "instructions": "Do {something}."}]
         }
-        warnings = LintNetworkValidator.find_unresolved_placeholders(resolved_config)
+        warnings: List[str] = LintNetworkValidator.find_unresolved_placeholders(resolved_config)
         self.assertEqual(len(warnings), 1)
         self.assertIn("{something}", warnings[0])
 
