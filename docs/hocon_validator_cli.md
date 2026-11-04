@@ -13,6 +13,9 @@ checking for issues such as:
 - Invalid URL references
 - Malformed function.parameters blocks (nested keys, bad required refs, unrecognized types)
 
+It also runs a set of best-effort lint checks and prints anything they find as warnings
+(see [Lint Warnings](#lint-warnings) below): they don't fail validation unless you pass `--strict`.
+
 Usage:
 
 ```sh
@@ -50,11 +53,16 @@ This is useful when:
 
 ### How It Works
 
+The validator is read-only: it never writes to the filesystem.
+
 When a registry directory is specified (either by default or via `--registry-dir`):
 
-1. The validator temporarily copies your HOCON file to the registry directory
-2. It parses the file from that location, allowing includes to be resolved correctly
-3. After validation completes, the temporary file is automatically removed
+1. The validator chdirs into that directory for the duration of the HOCON parse,
+   so `include "registries/..."` statements inside your file resolve correctly.
+2. The previous working directory is restored before anything else runs.
+
+If the registry directory does not exist, the validator stops with `Registry directory does not exist` and exit
+code 2.
 
 ## Examples
 
@@ -126,4 +134,36 @@ Gmail API setup, and Selenium configuration.",
     "Build and visualize an agent network for university administration"
   ]
 }
+```
+
+## Lint Warnings
+
+Beyond the hard validation rules above, the validator runs two best-effort lint checks. Unlike the rest of
+validation, these can have legitimate explanations the hocon file alone can't rule out, so they are printed as
+warnings and do not affect the exit code by default:
+
+- **Unused commondefs** - a `commondefs.replacement_strings` or `commondefs.replacement_values` entry that is
+  never referenced (as `{key}` or as a bare value, respectively) anywhere else in the file. Usually a stale
+  definition left over from a refactor. Pass `--strict` to promote these to hard errors (exit code 1).
+- **Unresolved `{replacement}` strings** - a `{word}`-shaped placeholder in an agent's `instructions` or
+  `function.description` that survives commondefs substitution, almost always because of a typo in the token or a
+  missing `commondefs.replacement_strings` entry. Escaped `{{word}}` forms (used by LangChain prompt templates)
+  are not flagged. This check is always advisory — it is not promoted by `--strict`.
+
+Example output for a file with an unused commondef:
+
+```text
+Validation passed: No errors found.
+
+1 lint warning(s) (use --strict to treat unused-commondefs warnings as errors):
+
+  1. commondefs.replacement_strings.operation is defined but '{operation}' never appears anywhere else in the network.
+```
+
+The `--strict` hint is printed only when an unused-commondefs warning is listed and `--strict` is not already set.
+
+Pass `--strict` to make unused-commondefs warnings fail validation (exit code 1):
+
+```sh
+python -m neuro_san.client.hocon_validator_cli registries/my_agent.hocon --strict
 ```
