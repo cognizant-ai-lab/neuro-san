@@ -29,8 +29,8 @@ does **not** catch:
 - missing or wrong values for keys the schema does not model (today this includes `provider_tools` and
   `function.invocation`, among others).
 
-For those checks, use [`hocon_validator_cli`](./hocon_validator_cli.md), which runs the full neuro-san
-validation chain.
+Nothing in neuro-san checks the first two today: [`hocon_validator_cli`](./hocon_validator_cli.md) also accepts
+both a typo'd key and a `parameters` block with no `properties`.
 
 ## Validate the parsed config, not the raw text
 

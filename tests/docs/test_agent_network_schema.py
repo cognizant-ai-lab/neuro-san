@@ -24,6 +24,7 @@ from typing import Dict
 from typing import List
 
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
 
 from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
 
@@ -65,6 +66,27 @@ class TestAgentNetworkSchema(unittest.TestCase):
         # check_schema raises SchemaError on an invalid schema
         Draft202012Validator.check_schema(schema)
 
+    def test_schema_rejects_known_bad_configs(self):
+        """
+        Configs that break rules reached through $ref must fail validation.
+        This guards the sanitize_keys=True load: without it, the quoted $ref
+        keys are ignored and every rule behind a $ref (all agent and
+        llm_config checks) is skipped.
+        """
+        schema: Dict[str, Any] = self._load_hocon(self._SCHEMA_PATH)
+        validator: Draft202012Validator = Draft202012Validator(schema)
+        bad_configs: Dict[str, Dict[str, Any]] = {
+            "an agent with no name": {"tools": [{"instructions": "No name"}]},
+            "a disallowed character in an agent name": {"tools": [{"name": "bad name!", "instructions": "Hi"}]},
+            "a string temperature": {"llm_config": {"temperature": "0.5"}, "tools": [{"name": "front_man"}]},
+        }
+        description: str = None
+        bad_config: Dict[str, Any] = None
+        # Each known-bad config must produce at least one schema error
+        for description, bad_config in bad_configs.items():
+            with self.subTest(description):
+                self.assertFalse(validator.is_valid(bad_config), f"Schema accepted {description}")
+
     def test_every_registry_validates_against_schema(self):
         """
         Every HOCON file under neuro_san/registries/ (including nested
@@ -81,6 +103,7 @@ class TestAgentNetworkSchema(unittest.TestCase):
         self.assertGreater(len(registry_files), 0, "No registry HOCON files found")
 
         failures: List[str] = []
+        registry_file: str = None
         # Validate each registry; collect every file's error so the test reports them all at once
         for registry_file in registry_files:
             file_errors: List[str] = self._validate_one_registry(registry_file, validator, filter_chain)
@@ -99,8 +122,12 @@ class TestAgentNetworkSchema(unittest.TestCase):
         :return: Sorted list of absolute paths to every registry HOCON file
         """
         registry_files: List[str] = []
+        dirpath: str = None
+        filenames: List[str] = None
+        filename: str = None
         # Walk every sub-directory under the registries root
         for dirpath, _, filenames in os.walk(self._REGISTRIES_DIR):
+            # Keep every network HOCON file in this directory
             for filename in filenames:
                 if filename.endswith(".hocon") and filename != "manifest.hocon":
                     registry_files.append(os.path.join(dirpath, filename))
@@ -125,9 +152,15 @@ class TestAgentNetworkSchema(unittest.TestCase):
         raw_config: Dict[str, Any] = self._load_hocon(registry_file)
         resolved_config: Dict[str, Any] = filter_chain.filter_config(raw_config)
         errors: List[str] = []
+        error: ValidationError = None
+        piece: Any = None
         # Collect each schema violation for this file
         for error in validator.iter_errors(resolved_config):
-            path: str = "/".join(str(piece) for piece in error.absolute_path)
+            path_pieces: List[str] = []
+            # Render each step of the error's location as a string
+            for piece in error.absolute_path:
+                path_pieces.append(str(piece))
+            path: str = "/".join(path_pieces)
             errors.append(f"  at {path or '<root>'}: {error.message}")
         return errors
 
