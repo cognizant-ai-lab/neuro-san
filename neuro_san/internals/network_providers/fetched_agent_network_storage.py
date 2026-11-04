@@ -17,6 +17,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from http import HTTPStatus
 from io import BytesIO
 from logging import Logger
 from logging import getLogger
@@ -109,14 +110,13 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         if agent_spec is None:
             return None
 
+        # DEF: Unclear how to get correct external_network_names and mcp_servers in here.
+        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding(agent_name, True)
+
         # Create the AgentNetwork and have it go through on-boarding.
         # A URL does not map to a package under AGENT_TOOL_PATH,
         # so CodedTool class references must be fully-qualified.
-        agent_network = AgentNetwork(agent_spec, agent_name)
-
-        # DEF: Unclear how to get correct external_network_names and mcp_servers in here.
-        on_boarding: AgentNetworkOnBoarding = AgentNetworkOnBoarding(agent_name, True)
-        agent_network = on_boarding.on_board(agent_network)
+        agent_network = on_boarding.on_board(agent_spec)
         if agent_network is None:
             return None
 
@@ -262,11 +262,16 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
 
         :param url: The location of an agent network description
         :return: the contents of the agent network file
+        :raises ValueError: if the server responds with a redirect
         """
         # Collect raw bytes and decode once, so multibyte characters split across chunks stay intact.
         stream: BytesIO = BytesIO()
         async with ClientSession() as session:
-            async with session.get(url) as response:
+            # Do not follow redirects, so a server cannot steer the fetch to a location other than the one requested.
+            async with session.get(url, allow_redirects=False) as response:
+                if HTTPStatus.MULTIPLE_CHOICES <= response.status < HTTPStatus.BAD_REQUEST:
+                    location: str = response.headers.get("Location")
+                    raise ValueError(f"Refusing redirect ({response.status}) from {url} to {location}")
                 response.raise_for_status()
                 chunk: bytes = None
                 async for chunk in response.content.iter_chunked(1024):

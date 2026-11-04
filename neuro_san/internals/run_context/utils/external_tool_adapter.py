@@ -80,7 +80,7 @@ an agent network by that name. Try these hints:
        does not mean the server is serving that agent up separately.
     b. Every agent that is externally referenceable needs its own hocon file
        which must also have an entry in the manifest.hocon file for the server.
-    c. There is one and only one "front man" agent note in each network described
+    c. There is one and only one "front man" agent node in each network described
        by a hocon file that receives input on behalf of the network.
     d. In order to be called by external agents, that front man must have a
        description, either in its "function" definition or as a top-level

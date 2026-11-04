@@ -84,6 +84,7 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         app: web.Application = web.Application()
         app.router.add_get("/networks/announcer.hocon", self.serve_hocon)
         app.router.add_get("/networks/greeter.json", self.serve_json)
+        app.router.add_get("/networks/redirect.json", self.serve_redirect)
         self.server: TestServer = TestServer(app)
         await self.server.start_server()
 
@@ -114,6 +115,18 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         """
         _ = request
         return web.Response(text=TestFetchedAgentNetworkStorage.JSON_CONTENTS)
+
+    @staticmethod
+    async def serve_redirect(request: web.Request) -> web.Response:
+        """
+        Redirect to the JSON agent network.
+
+        :param request: The incoming http request
+        :return: Never returns; raises the redirect instead
+        :raises web.HTTPFound: always, pointing at the JSON agent network
+        """
+        _ = request
+        raise web.HTTPFound("/networks/greeter.json")
 
     def write_file(self, file_name: str, contents: str) -> str:
         """
@@ -313,6 +326,19 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         Tests that an http error status returns None rather than raising.
         """
         self.assertIsNone(await self.storage.fetch_contents(self.server_url("/networks/missing.hocon")))
+
+    async def test_fetch_over_network_redirect(self):
+        """
+        Tests that a redirect is refused rather than followed.
+        """
+        with self.assertRaises(ValueError):
+            await self.storage.fetch_over_network(self.server_url("/networks/redirect.json"))
+
+    async def test_fetch_contents_http_redirect(self):
+        """
+        Tests that a redirect returns None rather than the redirect target's contents.
+        """
+        self.assertIsNone(await self.storage.fetch_contents(self.server_url("/networks/redirect.json")))
 
     async def test_get_provider_local_hocon(self):
         """

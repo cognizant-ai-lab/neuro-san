@@ -62,6 +62,7 @@ class AgentNetworkOnBoarding(ConfigFilter, DictionaryValidator):
         if require_fully_qualified_classes:
             validators.append(FullyQualifiedClassNetworkValidator(network_name=network_name))
         self.validator: DictionaryValidator = CompositeDictionaryValidator(validators)
+        self.network_name: str = network_name
 
     def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -89,24 +90,22 @@ class AgentNetworkOnBoarding(ConfigFilter, DictionaryValidator):
         errors: List[str] = self.validator.validate(candidate)
         return errors
 
-    def on_board(self, agent_network: AgentNetwork) -> AgentNetwork:
+    def on_board(self, agent_spec: Dict[str, Any]) -> AgentNetwork:
         """
         Perform on-boarding tasks for the given agent network.
 
-        :param agent_network: The agent network to on-board
+        :param agent_spec: The agent spec dictionary of the network to on-board
         :return: The agent network, potentially modified as per the policy encapsulated by the implementation,
                  or None if there were validation errors.
         """
         # Filter first
-        existing_config: Dict[str, Any] = agent_network.get_config()
-        filtered_config: Dict[str, Any] = self.filter_config(existing_config)
+        filtered_config: Dict[str, Any] = self.filter_config(agent_spec)
 
         # Validate next
-        network_name: str = agent_network.get_network_name()
         errors: List[str] = self.validate(filtered_config)
         if len(errors) > 0:
-            self.logger.error("Agent network %s has validation errors. Errors: %s", network_name, errors)
+            self.logger.error("Agent network %s has validation errors. Errors: %s", self.network_name, errors)
             return None
 
-        vetted: AgentNetwork = AgentNetwork(filtered_config, network_name)
+        vetted: AgentNetwork = AgentNetwork(filtered_config, self.network_name)
         return vetted

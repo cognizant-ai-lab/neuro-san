@@ -122,7 +122,7 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         if not tool.startswith("file://") and not tool.startswith("/"):
             return False
 
-        split_path = urlsplit(tool).path
+        split_path: str = urlsplit(tool).path
         file_extension: str = Path(split_path).suffix
         acceptable: bool = file_extension in ExternalAgentParsing.get_agent_network_file_extensions()
         return acceptable

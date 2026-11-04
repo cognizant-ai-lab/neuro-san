@@ -270,6 +270,7 @@ class ExternalAgentParsing:
     @staticmethod
     def get_agent_network_file_extensions() -> List[str]:
         """
+        Get the file extensions of agent network files allowed.
         :return: The file extensions of agent network files, each with its leading dot,
                 from AGENT_NETWORK_SERIALIZATION_FORMATS.
         """
