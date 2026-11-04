@@ -52,7 +52,9 @@ class TestProxyIntegration(IsolatedAsyncioTestCase):
         Create a temporary directory for cassettes and an empty list of started servers.
         """
         self.servers: List[tornado.httpserver.HTTPServer] = []
-        # enterContext() removes the directory during cleanup, after asyncTearDown()
+        # enterContext() removes the directory during cleanup, after asyncTearDown(),
+        # so pylint's suggestion of a with-block does not apply.
+        # pylint: disable-next=consider-using-with
         self.tmp_path: Path = Path(self.enterContext(TemporaryDirectory()))
 
     async def asyncTearDown(self):
