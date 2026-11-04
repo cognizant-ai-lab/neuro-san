@@ -205,7 +205,9 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         fetchable_schemes: List[str] = []
         one_scheme: str = None
         # Commas and whitespace both separate entries.
-        for one_scheme in value.replace(",", " ").split():
+        space_delimited: str = value.replace(",", " ")
+        schemes: List[str] = space_delimited.split()
+        for one_scheme in schemes:
             lower_scheme: str = one_scheme.lower()
             if lower_scheme not in FetchedAgentNetworkStorage.SUPPORTED_SCHEMES:
                 logger: Logger = getLogger(FetchedAgentNetworkStorage.__name__)
