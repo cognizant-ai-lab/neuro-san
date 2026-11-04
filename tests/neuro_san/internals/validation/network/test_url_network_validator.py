@@ -59,6 +59,57 @@ class TestUrlNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         errors: List[str] = validator.validate(config)
         self.assertEqual(1, len(errors))
 
+    def test_file_url_accepted(self):
+        """
+        Tests that a file:// URL to an agent network file is accepted
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("math_guy_passthrough.hocon")
+        config["tools"][0]["tools"][0] = "file:///local_path/my.hocon"
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(0, len(errors), errors)
+
+    def test_agent_network_file_path_accepted(self):
+        """
+        Tests that a bare path to a .hocon or .json agent network file is accepted
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("math_guy_passthrough.hocon")
+        config["tools"][0]["tools"][0] = "/local_path/my.hocon"
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(0, len(errors), errors)
+
+        config["tools"][0]["tools"][0] = "/local_path/my.json"
+        errors = validator.validate(config)
+        self.assertEqual(0, len(errors), errors)
+
+    def test_file_url_to_other_file_rejected(self):
+        """
+        Tests that a file:// URL to a file that is not an agent network file is rejected
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("math_guy_passthrough.hocon")
+        config["tools"][0]["tools"][0] = "file:///local_path/my.txt"
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+
+    def test_path_to_other_file_rejected(self):
+        """
+        Tests that a bare path to a file that is not an agent network file is rejected
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("math_guy_passthrough.hocon")
+        config["tools"][0]["tools"][0] = "/local_path/my.txt"
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+
     def test_tools_as_string_does_not_iterate_chars(self):
         """
         Tests that a malformed `tools` field (string instead of list) does

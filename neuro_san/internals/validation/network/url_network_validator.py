@@ -21,7 +21,10 @@ from typing import List
 
 from logging import getLogger
 from logging import Logger
+from pathlib import Path
+from urllib.parse import urlsplit
 
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
@@ -79,8 +82,9 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         Validate that URL- or path-like tool references resolve to a known endpoint.
 
         A tool reference is considered valid if it matches one of the configured
-        external agents / MCP servers, is an http(s):// URL, or ends with "mcp"
-        or "mcp/". Any unrecognized URL- or path-like tool is appended to errors.
+        external agents / MCP servers, is an http(s):// URL, references an agent network
+        file by a file:// URL or a bare path, or ends with "mcp" or "mcp/".
+        Any unrecognized URL- or path-like tool is appended to errors.
 
         :param agent_name: Name of the agent that owns these tools
         :param safe_tools: Tool references to check (with dictionary-form tools removed)
@@ -94,12 +98,31 @@ class UrlNetworkValidator(AbstractNetworkValidator):
                     tool_string not in urls and \
                     not tool_string.startswith("http://") and \
                     not tool_string.startswith("https://") and \
+                    not self.is_agent_network_file(tool_string) and \
                     not tool_string.endswith("mcp") and \
                     not tool_string.endswith("mcp/"):
                 error_msg = (
                     f"Agent '{agent_name}' references an unrecognized URL or path tool '{tool_string}'."
                     " Expected an external agent or network name starting with '/'"
                     " (e.g. '/bank_ops'), an MCP server, an http(s):// URL,"
+                    " a file:// URL or path to a .hocon or .json agent network file,"
                     f" or an MCP endpoint. Available URLs: {urls}"
                 )
                 errors.append(error_msg)
+
+    @staticmethod
+    def is_agent_network_file(tool: str) -> bool:
+        """
+        Check if a tool string references a local agent network file.
+
+        :param tool: The tool string to check
+        :return: True if tool is a file:// URL or a bare path whose file extension
+                 is that of an agent network file, False otherwise
+        """
+        if not tool.startswith("file://") and not tool.startswith("/"):
+            return False
+
+        split_path: str = urlsplit(tool).path
+        file_extension: str = Path(split_path).suffix
+        acceptable: bool = file_extension in ExternalAgentParsing.get_agent_network_file_extensions()
+        return acceptable

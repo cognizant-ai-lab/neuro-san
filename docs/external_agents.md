@@ -13,6 +13,8 @@ To call tools on a Model Context Protocol server instead, see [MCP Servers as To
 - [Remote server references](#remote-server-references)
     - [Ports](#ports)
     - [HTTPS requirement](#https-requirement)
+- [Agent network file references](#agent-network-file-references)
+    - [Requirements for a fetched network](#requirements-for-a-fetched-network)
 
 <!--TOC-->
 
@@ -52,3 +54,44 @@ When a server runs with `AGENT_SESSION_REQUIRE_HTTPS=true` (the default in the s
 URL references to remote servers are accepted; a remote `http://` reference fails when the tool is called.
 Same-server references are unaffected, because they are resolved in-process without an http session: that is
 every `/name` reference, and an `http://localhost/...` reference to a network this same server serves.
+
+## Agent network file references
+
+A tool reference can also be a URL or path to an agent network file, rather than to an agent that a server serves.
+The file is fetched, checked and then run in-process, as if it were in the registries directory.
+
+Examples: `https://example.com/nets/math_guy.hocon`, `file:///opt/nets/math_guy.hocon` or
+`/opt/nets/math_guy.hocon`
+
+- The path must end in `.hocon` or `.json`, which selects how the file is parsed. A `file://` URL that ends in
+  anything else fails validation, and so does a bare path that is not a
+  [same-server reference](#same-server-references).
+- An `http://` or `https://` URL is downloaded. A `file://` URL or a bare path is read from the local filesystem of
+  the process that runs the referencing network, which for a deployment is the server.
+- A fetched network is cached by its URL, so the same reference is not fetched again on every call.
+- When the server runs with `AGENT_SESSION_REQUIRE_HTTPS=true`, an `http://` URL is not downloaded; only
+  `https://`, `file://` and bare-path references are fetched.
+- Files are fetched only by in-process sessions, which a server always uses. When fetching fails, or the file
+  does not pass the checks below, the reference is treated as a [remote server reference](#remote-server-references)
+  instead, which normally leaves the tool out as unreachable.
+
+See [math_guy_passthrough_to_network_file.hocon](../neuro_san/registries/math_guy_passthrough_to_network_file.hocon)
+for an example that fetches
+[math_guy_fully_qualified.hocon](../neuro_san/registries/math_guy_fully_qualified.hocon).
+
+### Requirements for a fetched network
+
+A fetched network goes through the same checks as a network in the registries directory, plus one more: every
+CodedTool [`class`](./agent_hocon_reference.md#class-1) must be a fully-qualified reference to a module on the
+server's `PYTHONPATH`, such as `neuro_san.coded_tools.math_guy.calculator.Calculator`. The short form that is
+relative to `AGENT_TOOL_PATH` depends on the agent network name, and a URL does not map to a directory under
+`AGENT_TOOL_PATH`.
+
+Fully-qualified references do not resolve when `AGENT_TOOL_PATH_ONLY` is `true`, which the shipped
+[Dockerfile](../neuro_san/deploy/Dockerfile) sets. On a server with that flag set, a fetched network that uses a
+CodedTool still passes these checks, but fails when the CodedTool is called.
+
+> [!IMPORTANT]
+> Like a hocon file in the registries directory, a fetched agent network file is code-equivalent: it can name any
+> class on the server's `PYTHONPATH` to load, and loading a class runs the top-level code of its module. Reference
+> only files from sources you trust as much as your own registries.

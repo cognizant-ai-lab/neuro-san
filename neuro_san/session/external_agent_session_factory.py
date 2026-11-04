@@ -20,6 +20,7 @@ from typing import Any
 from typing import Coroutine
 from typing import Dict
 from typing import List
+from urllib.parse import urlparse
 
 from logging import getLogger
 from logging import Logger
@@ -28,6 +29,7 @@ from typing_extensions import override
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.logging.log_once import LogOnce
+from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -136,8 +138,10 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         if storage_source_dict is None:
             return networks_order
 
+        # Fetched storage is keyed by the full URL, so create_fetched_session() consults it instead.
+        storage_name: str = None
         for storage_name in storage_source_dict.keys():
-            if storage_name != StorageClass.TEMP:
+            if storage_name not in (StorageClass.TEMP, StorageClass.FETCHED):
                 networks_order.append(storage_name)
 
         if StorageClass.TEMP in storage_source_dict.keys():
@@ -151,10 +155,15 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         """
         Creates the session for an external agent from its parsed location, in-process when possible.
 
+        With use_direct, a local agent network is tried first, then an agent network
+        file fetched from the full "agent_url". An http session is the last resort,
+        as its creation does not check that the agent is reachable.
+
         :param agent_location: An agent location dictionary returned by
                     ExternalAgentParsing.parse_external_agent().
                     When its "scheme" is "https", the http session built here
                     talks https; any other (or absent) scheme talks plain http.
+                    Without an "agent_url" key, no agent network file is fetched.
         :param invocation_context: The context policy container that pertains to the invocation
                     of the agent.
         :param invocation: String describing how the agent wants to be invoked.
@@ -179,27 +188,12 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
         session: AsyncAgentSession = None
         if self.is_use_direct() and (host is None or len(host) == 0 or host == "localhost"):
+            session = await self.create_local_session(agent_name, invocation_context, invocation, metadata)
 
-            # Optimization: We want to create a different kind of session to minimize socket usage
-            # and potentially relieve the direct user of the burden of having to start a server
-
-            agent_network_provider: AgentNetworkProvider = None
-            for storage_source_name in self.get_networks_order(self.storage_source_dict):
-
-                storage_source: AgentStorageSource = self.storage_source_dict.get(storage_source_name)
-                # Be sure we have something
-                agent_network_provider = await storage_source.async_get_agent_network_provider(agent_name)
-                if agent_network_provider is None:
-                    continue
-
-                if agent_network_provider.get_agent_network() is not None:
-                    break
-
-            if agent_network_provider is not None:
-                agent_network: AgentNetwork = agent_network_provider.get_agent_network()
-                if agent_network is not None:
-                    safe_invocation_context: SessionInvocationContext = invocation_context.safe_shallow_copy(invocation)
-                    session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
+        agent_url: str = agent_location.get("agent_url")
+        if session is None and agent_url is not None:
+            # The fetched storage is keyed by the full URL, not by the parsed agent name.
+            session = await self.create_fetched_session(agent_url, invocation_context, invocation)
 
         if session is None:
             # When creating a session for external agents, specifically use None for the
@@ -215,6 +209,49 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                                                    metadata=metadata, security_cfg=security_cfg,
                                                    streaming_timeout_in_seconds=None)
 
+        return session
+
+    async def create_local_session(self, agent_name: str,
+                                   invocation_context: InvocationContext,
+                                   invocation: str,
+                                   metadata: Dict[str, str]) -> AsyncAgentSession:
+        """
+        Creates a direct session for an agent network found in the storages of this process.
+
+        :param agent_name: The name of the agent network, as parsed from its reference
+        :param invocation_context: The context policy container that pertains to the invocation
+                    of the agent.
+        :param invocation: String describing how the agent wants to be invoked.
+        :param metadata: The request metadata to forward to the session
+        :return: An AsyncAgentSession for the agent network, or None when no storage has it
+        """
+        # Optimization: We want to create a different kind of session to minimize socket usage
+        # and potentially relieve the direct user of the burden of having to start a server
+
+        # Stop at the first storage that has the agent network
+        agent_network_provider: AgentNetworkProvider = None
+        storage_source_name: str = None
+        for storage_source_name in self.get_networks_order(self.storage_source_dict):
+
+            storage_source: AgentStorageSource = self.storage_source_dict.get(storage_source_name)
+            # Be sure we have something
+            agent_network_provider = await storage_source.async_get_agent_network_provider(agent_name)
+            if agent_network_provider is None:
+                continue
+
+            if agent_network_provider.get_agent_network() is not None:
+                break
+
+        if agent_network_provider is None:
+            return None
+
+        agent_network: AgentNetwork = agent_network_provider.get_agent_network()
+        if agent_network is None:
+            return None
+
+        safe_invocation_context: SessionInvocationContext = invocation_context.safe_shallow_copy(invocation)
+        session: AsyncAgentSession = AsyncDirectAgentSession(agent_network, safe_invocation_context,
+                                                             metadata=metadata)
         return session
 
     @staticmethod
@@ -247,3 +284,55 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         :return: When True, will use a Direct session for external agents that would reside on the same server.
         """
         return self.use_direct
+
+    async def create_fetched_session(self, agent_url: str,
+                                     invocation_context: InvocationContext,
+                                     invocation: str = None) -> AsyncAgentSession:
+        """
+        Creates a direct session for an agent network whose spec is fetched from the given URL.
+
+        :param agent_url: An url string pointing to an agent network file
+        :param invocation_context: The context policy container that pertains to the invocation
+                    of the agent.
+        :param invocation: String describing how the agent wants to be invoked.
+        :return: An AsyncAgentSession for the fetched agent network, or None when
+                 there is no fetched storage, the URL is plain http while
+                 AGENT_SESSION_REQUIRE_HTTPS is true, or the URL does not yield an agent network.
+        """
+        if not self.is_use_direct() or self.storage_source_dict is None:
+            return None
+
+        # Same default and parsing as AbstractHttpServiceAgentSession.get_request_path():
+        # permissive unless a server opts in.
+        require_https: bool = Env.getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
+        scheme: str = urlparse(agent_url).scheme
+        lower_scheme: str = scheme.lower()
+        if require_https and lower_scheme == "http":
+            logger: Logger = getLogger(ExternalAgentSessionFactory.__name__)
+            logger.warning("AGENT_SESSION_REQUIRE_HTTPS=true forbids fetching %s over plain http", agent_url)
+            return None
+
+        fetched_storage: AgentStorageSource = self.storage_source_dict.get(StorageClass.FETCHED)
+        if fetched_storage is None:
+            return None
+
+        agent_network_provider: AgentNetworkProvider = \
+            await fetched_storage.async_get_agent_network_provider(agent_url)
+        if agent_network_provider is None:
+            return None
+
+        agent_network: AgentNetwork = agent_network_provider.get_agent_network()
+        if agent_network is None:
+            return None
+
+        metadata: Dict[str, str] = invocation_context.get_metadata()
+
+        # DEF: The shallow copy retains the caller's factories, so the fetched network's llm_info_file
+        #      and toolbox_info_file are ignored. A toolbox defined only in the fetched network's info file
+        #      will then fail to resolve because ToolboxToolCreator uses the inherited factory.
+        #      Maybe?: initialize and load network-specific factories on the child context,
+        #      as DirectAgentSessionFactory does, while preserving shared execution and reporting state.
+        safe_invocation_context: SessionInvocationContext = invocation_context.safe_shallow_copy(invocation)
+        session: AsyncAgentSession = AsyncDirectAgentSession(agent_network, safe_invocation_context,
+                                                             metadata=metadata)
+        return session

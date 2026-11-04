@@ -32,6 +32,7 @@ from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSour
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.fetched_agent_network_storage import FetchedAgentNetworkStorage
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.service.utils.server_status import ServerStatus
@@ -75,6 +76,7 @@ class ServerContext(ServerContextLite):
         for storage_class in StorageClass.ALL_PERMANENT:
             self.network_storage_dict[storage_class] = AgentNetworkStorage()
         self.network_storage_dict[StorageClass.TEMP] = ExpiringAgentNetworkStorage()
+        self.network_storage_dict[StorageClass.FETCHED] = FetchedAgentNetworkStorage()
 
         self.periodic_configs: Dict[str, Dict[str, Any]] = {}
         self.agent_authorizer: AgentAuthorizer = None

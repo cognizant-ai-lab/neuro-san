@@ -99,7 +99,8 @@ class AbstractNetworkValidator(DictionaryValidator):
         """
         return (tool.startswith("/") or
                 tool.startswith("http://") or
-                tool.startswith("https://"))
+                tool.startswith("https://") or
+                tool.startswith("file://"))
 
     @staticmethod
     def remove_dictionary_tools(down_chains: List[Any]) -> List[str]:

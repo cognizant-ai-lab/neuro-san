@@ -31,6 +31,7 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.fetched_agent_network_storage import FetchedAgentNetworkStorage
 from neuro_san.internals.reservations.direct_agent_reservationist import DirectAgentReservationist
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
@@ -58,7 +59,8 @@ class DirectAgentSessionFactory:
         manifest_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
 
         self.network_storage_dict: Dict[str, AgentStorageSource] = {
-            StorageClass.TEMP: ExpiringAgentNetworkStorage()
+            StorageClass.TEMP: ExpiringAgentNetworkStorage(),
+            StorageClass.FETCHED: FetchedAgentNetworkStorage()
         }
 
         storage_class: str = None
