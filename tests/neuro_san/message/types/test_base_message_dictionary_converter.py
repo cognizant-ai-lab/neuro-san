@@ -31,6 +31,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
+from langchain_core.messages.tool import ToolMessage
 
 from neuro_san.message.content_blocks.langchain_v1_content_blocks_format import LangchainV1ContentBlocksFormat
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
@@ -144,9 +145,10 @@ class TestBaseMessageDictionaryConverter(TestCase):
 
     def test_from_dict_round_trips_agent_tool_result(self) -> None:
         """
-        AgentToolResultMessage round-trips content and tool_result_origin.
+        AgentToolResultMessage round-trips content and tool_result_origin when
+        not converting for a chat history.
         """
-        converter = BaseMessageDictionaryConverter()
+        converter = BaseMessageDictionaryConverter(langchain_only=False)
         original = AgentToolResultMessage(content="tool says", tool_result_origin=self.ORIGIN)
         wire_dict: Dict[str, Any] = converter.to_dict(original)
         restored: BaseMessage = converter.from_dict(wire_dict)
@@ -272,16 +274,23 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "text": "hi",
         })
 
-    def test_to_dict_anthropic_tool_use_stays_text_only(self) -> None:
+    def test_to_dict_anthropic_tool_use_emits_text_and_tool_calls(self) -> None:
         """
-        The most common list content in production, an Anthropic tool-calling
-        turn of text + tool_use, has the exact text-only wire shape: tool-call
-        blocks are not message content and the lone text block is trivial.
+        An Anthropic tool-calling turn of text + tool_use carries its text and
+        its tool calls, and no content_blocks: tool-call blocks are not message
+        content and the lone text block is trivial.
         """
         converter = BaseMessageDictionaryConverter()
         self.assertEqual(converter.to_dict(ContentFixtures.anthropic_tool_use()), {
             "type": ChatMessageType.AI,
             "text": "Let me look that up.",
+            "tool_calls": [
+                {
+                    "id": "toolu_1",
+                    "name": "lookup",
+                    "args": {"query": "q"},
+                },
+            ],
         })
 
     def test_to_dict_malformed_block_content_falls_back_to_text(self) -> None:
@@ -690,8 +699,9 @@ class TestBaseMessageDictionaryConverter(TestCase):
 
     def test_from_dict_restores_blocks_on_tool_result(self) -> None:
         """
-        An AGENT_TOOL_RESULT keeps its tool_result_origin and restores its
-        blocks like any other message.
+        An AGENT_TOOL_RESULT restores its blocks like any other message: as the
+        ToolMessage answering its call for a chat history, and as the stand-alone
+        AgentToolResultMessage, tool_result_origin kept, when not converting for one.
         """
         blocks: List[Dict[str, Any]] = [
             {
@@ -710,7 +720,17 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "tool_result_origin": self.ORIGIN,
             "content_blocks": ContentUtils.wrap_content_blocks(blocks),
         }
-        restored: AgentToolResultMessage = BaseMessageDictionaryConverter().from_dict(wire)
+        paired_wire: Dict[str, Any] = dict(wire)
+        paired_wire["tool_call_id"] = "toolu_1"
+
+        paired: ToolMessage = BaseMessageDictionaryConverter().from_dict(paired_wire)
+        restored: AgentToolResultMessage = BaseMessageDictionaryConverter(langchain_only=False).from_dict(wire)
+
+        self.assertIsInstance(paired, ToolMessage)
+        self.assertEqual(paired.content, blocks)
+        self.assertEqual(paired.tool_call_id, "toolu_1")
+        self.assertEqual(paired.response_metadata.get("output_version"),
+                         LangchainV1ContentBlocksFormat.OUTPUT_VERSION)
         self.assertIsInstance(restored, AgentToolResultMessage)
         self.assertEqual(restored.content, blocks)
         self.assertEqual(restored.tool_result_origin, self.ORIGIN)
