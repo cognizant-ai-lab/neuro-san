@@ -94,7 +94,9 @@ class DescriptionConfigFilter(ConfigFilter):
                 result_config = deepcopy(basis_config)
 
             result_tools: List[Any] = result_config.get("tools")
-            result_tools[index]["function"] = self.make_function(result_tools[index])
+            result_tool: Dict[str, Any] = result_tools[index]
+            new_function: Dict[str, Any] = self.make_function(result_tool)
+            result_tool["function"] = new_function
 
         return result_config
 
