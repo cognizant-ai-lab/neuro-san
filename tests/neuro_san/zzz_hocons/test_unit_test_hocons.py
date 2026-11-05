@@ -15,7 +15,9 @@
 #
 # END COPYRIGHT
 
+from os import environ
 from unittest import TestCase
+from unittest.mock import patch
 
 import pytest
 
@@ -43,7 +45,6 @@ class TestUnitTestHocons(TestCase):
         "math_guy/basic_sly_data.hocon",
         "math_guy/forwarded_sly_data.hocon",
         "math_guy/deep_forwarded_sly_data.hocon",
-        "math_guy/forwarded_sly_data_from_network_file.hocon",
         "music_nerd/beatles_with_history.hocon",
         "music_nerd_pro_sly_api_key/no_user_api_key.hocon",
         "music_nerd_pro_sly_api_key/with_user_api_key.hocon",
@@ -64,6 +65,26 @@ class TestUnitTestHocons(TestCase):
         # Call the guts of the dynamic test driver.
         # This will expand the test_hocon file name from the expanded list to
         # include the file basis implied by the __file__ and path_to_basis above.
+        self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
+
+    @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
+        # These can be in any order.
+        # Ideally more basic functionality will come first.
+        # Barring that, try to stick to alphabetical order.
+        "math_guy/forwarded_sly_data_from_network_file.hocon",
+
+        # List more hocon files as they become available here.
+    ]), skip_on_empty=True)
+    # The agent network file is fetched over https, which is off by default.
+    @patch.dict(environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https"})
+    def test_hocon_with_fetching(self, test_name: str, test_hocon: str):
+        """
+        Test method for a single parameterized test case specified by a hocon file
+        whose agent network fetches another agent network file by URL.
+
+        :param test_name: The name of a single test.
+        :param test_hocon: The hocon file of a single data-driven test case.
+        """
         self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
 
     @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([

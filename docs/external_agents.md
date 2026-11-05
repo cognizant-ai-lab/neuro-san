@@ -63,21 +63,28 @@ The file is fetched, checked and then run in-process, as if it were in the regis
 Examples: `https://example.com/nets/math_guy.hocon`, `file:///opt/nets/math_guy.hocon` or
 `/opt/nets/math_guy.hocon`
 
+- Fetching is off by default. The `AGENT_FETCHABLE_TOOL_SCHEMES` environment variable lists the url schemes that may
+  be fetched, separated by commas or whitespace, for example `AGENT_FETCHABLE_TOOL_SCHEMES="https,file"`. Only
+  `http`, `https` and `file` are supported; any other entry is logged as a warning and ignored. A bare url path
+  with no scheme counts as `file`. A reference whose scheme is not listed is not fetched, which is logged at info level.
+  When no scheme is listed, the default, no fetched-network storage is set up at all, in the server or in a direct
+  client.
 - The path must end in `.hocon` or `.json`, which selects how the file is parsed. A `file://` URL that ends in
   anything else fails validation, and so does a bare path that is not a
   [same-server reference](#same-server-references).
 - An `http://` or `https://` URL is downloaded. A `file://` URL or a bare path is read from the local filesystem of
   the process that runs the referencing network, which for a deployment is the server.
 - A fetched network is cached by its URL, so the same reference is not fetched again on every call.
-- When the server runs with `AGENT_SESSION_REQUIRE_HTTPS=true`, an `http://` URL is not downloaded; only
-  `https://`, `file://` and bare-path references are fetched.
+- When the server runs with `AGENT_SESSION_REQUIRE_HTTPS=true`, an `http://` URL is not downloaded even when
+  `AGENT_FETCHABLE_TOOL_SCHEMES` lists `http`.
 - Files are fetched only by in-process sessions, which a server always uses. When fetching fails, or the file
   does not pass the checks below, the reference is treated as a [remote server reference](#remote-server-references)
   instead, which normally leaves the tool out as unreachable.
 
 See [math_guy_passthrough_to_network_file.hocon](../neuro_san/registries/math_guy_passthrough_to_network_file.hocon)
 for an example that fetches
-[math_guy_fully_qualified.hocon](../neuro_san/registries/math_guy_fully_qualified.hocon).
+[math_guy_fully_qualified.hocon](../neuro_san/registries/math_guy_fully_qualified.hocon) over `https`, so it needs
+`AGENT_FETCHABLE_TOOL_SCHEMES` to include `https`.
 
 ### Requirements for a fetched network
 
