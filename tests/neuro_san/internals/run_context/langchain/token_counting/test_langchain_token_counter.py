@@ -30,7 +30,8 @@ from neuro_san.internals.run_context.langchain.token_counting.langchain_token_co
 class TestLangChainTokenCounter(TestCase):
     """
     Tests for LangChainTokenCounter: sum_all_tokens() and merge_dicts().
-    The count_tokens() timeout tests are in TestTokenCounterTimeout.
+    The count_tokens() timeout, report() and nested agent tests are in TestLangChainTokenCounterTimeout,
+    TestLangChainTokenCounterReport and TestLangChainTokenCounterNestedAgents.
     """
 
     @override

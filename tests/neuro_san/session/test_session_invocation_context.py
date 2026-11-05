@@ -35,6 +35,10 @@ class TestSessionInvocationContext(TestCase):
     DirectAgentSession that is reused across turns returns every executor it
     borrows. Real AsyncioExecutors from a pool that shuts each one down on return
     are used, so the executor threads themselves show whether an exchange closed.
+
+    The safe_shallow_copy() tests cover the copy that backs direct sessions to
+    external agent networks on the same server. They use a context that is never
+    started, over a mock executor pool.
     """
 
     @staticmethod
@@ -142,3 +146,55 @@ class TestSessionInvocationContext(TestCase):
         context.finish_request()
         self.assertEqual(resource.close_of_request.await_count, 1)
         self.assertEqual(resource.close_of_work.await_count, 1)
+
+    @staticmethod
+    def make_unstarted_context() -> SessionInvocationContext:
+        """
+        Builds a SessionInvocationContext over a mock executor pool, without starting it.
+
+        :return: The SessionInvocationContext, with mock factories that are never called.
+        """
+        pool: MagicMock = MagicMock()
+        pool.get_executor.return_value = MagicMock()
+        return SessionInvocationContext(
+            agent_name="test_agent",
+            async_session_factory=MagicMock(),
+            async_executors_pool=pool,
+            llm_factory=MagicMock(),
+        )
+
+    def test_clone_shares_request_reporting_and_origination(self) -> None:
+        """
+        The shallow copy intentionally shares request_reporting (so external
+        agents' token accounting contributes to the request-wide totals) and
+        origination (so instantiation indices stay consistent).
+        """
+        context: SessionInvocationContext = self.make_unstarted_context()
+        clone: SessionInvocationContext = context.safe_shallow_copy()
+
+        self.assertIs(clone.get_request_reporting(), context.get_request_reporting())
+        self.assertIs(clone.get_origination(), context.get_origination())
+
+    def test_clone_gets_its_own_queue_and_journal(self) -> None:
+        """
+        Message routing state must NOT be shared with the clone.
+        """
+        context: SessionInvocationContext = self.make_unstarted_context()
+        clone: SessionInvocationContext = context.safe_shallow_copy()
+
+        self.assertIsNot(clone.get_queue(), context.get_queue())
+        self.assertIsNot(clone.get_journal(), context.get_journal())
+        self.assertIsNot(clone.get_work_done_event(), context.get_work_done_event())
+
+    def test_clone_is_cloned(self) -> None:
+        """
+        Only the clone reports being cloned.  LangChainTokenCounter.report()
+        relies on this to let only the top-level front man (not front men of
+        external networks invoked via direct sessions) emit the request-level
+        token accounting message.
+        """
+        context: SessionInvocationContext = self.make_unstarted_context()
+        clone: SessionInvocationContext = context.safe_shallow_copy()
+
+        self.assertIs(clone.is_cloned(), True)
+        self.assertIs(context.is_cloned(), False)

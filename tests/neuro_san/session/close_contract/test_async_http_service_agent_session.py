@@ -23,26 +23,78 @@ import asyncio
 from threading import Event
 from threading import Thread
 
+import pytest
+
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
 
 
-class TestAsyncHttpServiceAgentSessionCloseIntegration:
+class TestAsyncHttpServiceAgentSession:
     """
-    close() unblocks pre-header and post-header async requests from another thread.
+    An AsyncHttpServiceAgentSession is single-use once close() has been called.
 
-    Transport-level tests that AsyncHttpServiceAgentSession.close() -- called
-    synchronously from another thread -- aborts an in-flight request in both the
-    pre-header and post-header windows.
+    These close()/is_closed() contract tests exercise the client-side contract only
+    and never contact a server: the closed-session guard raises before any network
+    call, so no LLM key or running service is required.
 
-    The client runs on its own event loop in a background thread while the main
-    thread calls the synchronous close(). This exercises the loop-scheduled aborts:
-    - post-header: close the tracked response (call_soon_threadsafe) to unblock an
-      iter_chunked() read;
-    - pre-header: close the tracked ClientSession (run_coroutine_threadsafe) to abort
-      a request still awaiting response headers (no total timeout).
-    Both must surface as AgentSessionClosedError.
+    The two test_close_aborts_* tests are the exception: they run the client on its
+    own event loop in a background thread against a real in-process server
+    (streaming_cancel_server fixture), and check that a synchronous close() from the
+    main thread makes the request fail with AgentSessionClosedError, both before and
+    after the response headers arrive.
     """
+
+    @staticmethod
+    def _make_session() -> AsyncHttpServiceAgentSession:
+        """Build a session pointed at a nominal host/port (no connection is made)."""
+        return AsyncHttpServiceAgentSession(host="127.0.0.1", port="8080", agent_name="unit_test_agent")
+
+    def test_not_closed_initially(self):
+        """A fresh session reports is_closed() False."""
+        assert self._make_session().is_closed() is False
+
+    def test_is_closed_after_close(self):
+        """close() flips is_closed() to True."""
+        session = self._make_session()
+        session.close()
+        assert session.is_closed() is True
+
+    def test_close_is_idempotent(self):
+        """close() can be called more than once without error."""
+        session = self._make_session()
+        session.close()
+        session.close()
+        assert session.is_closed() is True
+
+    @pytest.mark.asyncio
+    async def test_function_raises_after_close(self):
+        """function() on a closed session raises AgentSessionClosedError, not a connectivity ValueError."""
+        session = self._make_session()
+        session.close()
+        with pytest.raises(AgentSessionClosedError):
+            await session.function({})
+
+    @pytest.mark.asyncio
+    async def test_connectivity_raises_after_close(self):
+        """connectivity() on a closed session raises AgentSessionClosedError."""
+        session = self._make_session()
+        session.close()
+        with pytest.raises(AgentSessionClosedError):
+            await session.connectivity({})
+
+    @pytest.mark.asyncio
+    async def test_streaming_chat_raises_after_close(self):
+        """
+        streaming_chat() on a closed session raises AgentSessionClosedError when
+        iterated -- rather than yielding an empty stream that looks like the agent
+        returned no messages.
+        """
+        session = self._make_session()
+        session.close()
+        request: Dict[str, Any] = {"user_message": {"type": "HUMAN", "text": "hi"}}
+        with pytest.raises(AgentSessionClosedError):
+            async for _ in session.streaming_chat(request):
+                pass
 
     @staticmethod
     def _run_client(session: AsyncHttpServiceAgentSession, request: Dict[str, Any],

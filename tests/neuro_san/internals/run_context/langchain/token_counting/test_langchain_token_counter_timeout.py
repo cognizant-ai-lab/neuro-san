@@ -41,7 +41,7 @@ from neuro_san.internals.run_context.langchain.token_counting.langchain_token_co
 from neuro_san.message.types.agent_message import AgentMessage
 
 
-class TestTokenCounterTimeout(IsolatedAsyncioTestCase):
+class TestLangChainTokenCounterTimeout(IsolatedAsyncioTestCase):
     """
     Tests for the LangChainTokenCounter.count_tokens() timeout path: what the counter journals when
     the awaitable runs past max_execution_seconds.
@@ -74,7 +74,7 @@ class TestTokenCounterTimeout(IsolatedAsyncioTestCase):
                 "instantiation_index": 0
             }
         ]
-        counter: LangChainTokenCounter = TestTokenCounterTimeout._make_counter(origin, written_messages)
+        counter: LangChainTokenCounter = TestLangChainTokenCounterTimeout._make_counter(origin, written_messages)
         await self._count_tokens_until_timeout(counter)
 
         # 1) First journal write must be the synthesized timeout AIMessage.
@@ -109,7 +109,7 @@ class TestTokenCounterTimeout(IsolatedAsyncioTestCase):
                 "instantiation_index": 0
             }
         ]
-        counter: LangChainTokenCounter = TestTokenCounterTimeout._make_counter(origin, written_messages)
+        counter: LangChainTokenCounter = TestLangChainTokenCounterTimeout._make_counter(origin, written_messages)
         await self._count_tokens_until_timeout(counter)
 
         # Timeout AIMessage first, then exactly one per-agent AgentMessage.
@@ -128,9 +128,10 @@ class TestTokenCounterTimeout(IsolatedAsyncioTestCase):
 
         :param counter: The LangChainTokenCounter under test
         """
-        max_execution_seconds: float = TestTokenCounterTimeout.MAX_EXECUTION_SECONDS
-        slow_awaitable: Awaitable = TestTokenCounterTimeout._slow_awaitable()
-        with patch(TestTokenCounterTimeout.CALLBACK_PATH, TestTokenCounterTimeout._fake_token_callback):
+        max_execution_seconds: float = TestLangChainTokenCounterTimeout.MAX_EXECUTION_SECONDS
+        slow_awaitable: Awaitable = TestLangChainTokenCounterTimeout._slow_awaitable()
+        with patch(TestLangChainTokenCounterTimeout.CALLBACK_PATH,
+                   TestLangChainTokenCounterTimeout._fake_token_callback):
             with self.assertRaises(AsyncTimeout):
                 await counter.count_tokens(slow_awaitable, max_execution_seconds=max_execution_seconds)
 
@@ -145,7 +146,7 @@ class TestTokenCounterTimeout(IsolatedAsyncioTestCase):
         :return: The LangChainTokenCounter under test
         """
         mock_journal: MagicMock = MagicMock()
-        record_message: partial = partial(TestTokenCounterTimeout._record, written_messages)
+        record_message: partial = partial(TestLangChainTokenCounterTimeout._record, written_messages)
         mock_journal.write_message = AsyncMock(side_effect=record_message)
 
         # Mock the invocation_context dependencies that count_tokens / report touch.
@@ -158,7 +159,7 @@ class TestTokenCounterTimeout(IsolatedAsyncioTestCase):
         # The executor wraps the awaitable in a real asyncio.Task so
         # asyncio.wait_for() actually times out and cancels it.
         mock_executor: MagicMock = MagicMock()
-        mock_executor.create_task.side_effect = TestTokenCounterTimeout._create_real_task
+        mock_executor.create_task.side_effect = TestLangChainTokenCounterTimeout._create_real_task
         mock_invocation_context.get_asyncio_executor.return_value = mock_executor
 
         mock_llm: MagicMock = MagicMock()
@@ -201,7 +202,7 @@ class TestTokenCounterTimeout(IsolatedAsyncioTestCase):
         """
         Sleep long enough that every count_tokens() timeout in these tests fires first.
         """
-        await async_sleep(TestTokenCounterTimeout.SLOW_AWAITABLE_SECONDS)
+        await async_sleep(TestLangChainTokenCounterTimeout.SLOW_AWAITABLE_SECONDS)
 
     @staticmethod
     @contextmanager

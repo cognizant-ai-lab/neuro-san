@@ -21,7 +21,7 @@ from neuro_san.client.thinking_file_message_processor import ThinkingFileMessage
 from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
-class TestThinkingFileMessageProcessorHeartbeat:
+class TestThinkingFileMessageProcessor:
     """
     Verifies that the thinking-file logger silently drops empty-content
     AGENT_PROGRESS heartbeats and still writes real AGENT_PROGRESS messages.

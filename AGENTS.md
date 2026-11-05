@@ -88,9 +88,11 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
 - **Split by topic only past the size limit.** When all the tests of `SomeClass` together would go over the
   1000-line limit in §2, move any number of whole topics (one method or behavior each) to
   `test_some_module_<topic>.py`, each with the single class `TestSomeClass<Topic>` (for example
-  `test_some_module_timeout.py` with `TestSomeClassTimeout`), and keep the rest in `test_some_module.py`. Share
-  helpers through a helper class of their own, since importing or subclassing `TestSomeClass` makes pytest run its
-  tests again. When all the tests fit under the limit, use one module.
+  `test_some_module_timeout.py` with `TestSomeClassTimeout`), and keep the rest in `test_some_module.py`. Pick
+  topics so that `some_module_<topic>` is not the name of another module next to `some_module.py`. Share helpers
+  through a class such as `SomeClassTestHelpers` in `some_module_test_helpers.py`, names pytest does not collect,
+  since importing or subclassing `TestSomeClass` makes pytest run its tests again. When all the tests fit under the
+  limit, use one module.
 - Test classes derive from `unittest.TestCase`, or `unittest.IsolatedAsyncioTestCase` when the class has
   `async def` tests. `IsolatedAsyncioTestCase` runs its own async tests, so do not add `@pytest.mark.asyncio`.
 - Use `TestCase` assert methods (`assertEqual`, `assertIs`, `assertIsNone`, `assertIn`, `assertRaises`, and so

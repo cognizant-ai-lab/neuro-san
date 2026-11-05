@@ -92,7 +92,7 @@ def dummy_llm_key():
         os.environ.pop("OPENAI_API_KEY", None)
 
 
-class TestLangfuseTracingContextRegistration:
+class TestLangfuseTracingContext:
     """
     Test cases for the lazy, once-per-process registration of the Langfuse
     CallbackHandler (https://github.com/cognizant-ai-lab/neuro-san/issues/1191).
