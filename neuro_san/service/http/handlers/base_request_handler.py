@@ -42,6 +42,8 @@ from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.http.logging.http_logger import HttpLogger
 
 
+# pylint: disable=too-many-instance-attributes
+# One attribute per injected service setting, plus the request and worker ids.
 class BaseRequestHandler(RequestHandler):
     """
     Abstract handler class for neuro-san API calls.
@@ -72,6 +74,9 @@ class BaseRequestHandler(RequestHandler):
         self.logger = HttpLogger(self.forwarded_request_metadata, logging_config)
         self.show_absent: bool = os.environ.get("SHOW_ABSENT_METADATA") is not None
         self.request_id: int = 0
+        self.worker_id: int = -1
+        if self.server_context is not None:
+            self.worker_id = self.server_context.get_worker_id()
 
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
@@ -158,7 +163,8 @@ class BaseRequestHandler(RequestHandler):
             temp_storage: AgentStorageSource = storage_source_dict.get(StorageClass.TEMP, None)
             if temp_storage is None or not isinstance(temp_storage, ExpiringAgentNetworkStorage):
                 self.set_status(500)
-                self.logger.error(metadata, "error: Temporary network storage is not properly configured.")
+                self.logger.error(metadata, "[%d] error: Temporary network storage is not properly configured.",
+                                  self.worker_id)
                 self.do_finish()
                 return None
             # This call will trigger temp network lookup in external storage
@@ -181,7 +187,8 @@ class BaseRequestHandler(RequestHandler):
 
         # Nothing worked - so we report resource not found
         self.set_status(404)
-        self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
+        self.logger.error(metadata, "[%d] error: Invalid request path %s",
+                          self.worker_id, self.request.path)
         self.do_finish()
         return None
 
@@ -195,13 +202,14 @@ class BaseRequestHandler(RequestHandler):
             # Handle invalid JSON input
             self.set_status(HTTPStatus.BAD_REQUEST)
             self.write({"error": "Invalid JSON format"})
-            self.logger.error(self.get_metadata(), "error: Invalid JSON format")
+            self.logger.error(self.get_metadata(), "[%d] error: Invalid JSON format", self.worker_id)
             return
 
         # General exception case:
         self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
         self.write({"error": "Internal server error"})
-        self.logger.error(self.get_metadata(), "Internal server error: %s", str(exc))
+        self.logger.error(self.get_metadata(), "[%d] Internal server error: %s",
+                          self.worker_id, str(exc))
 
     def data_received(self, chunk):
         """
@@ -216,14 +224,15 @@ class BaseRequestHandler(RequestHandler):
         if not self.application.is_serving():
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write({"error": "Server is shutting down"})
-            self.logger.error(self.get_metadata(), "Server is shutting down")
+            self.logger.error(self.get_metadata(), "[%d] Server is shutting down", self.worker_id)
             self.do_finish()
             return
 
         # Get unique request id in case we will need it:
         self.request_id = await self.request_id_counter.increment()
 
-        self.logger.debug(self.get_metadata(), f"[REQUEST RECEIVED] {self.request.method} {self.request.uri}")
+        self.logger.debug(self.get_metadata(), "[%d] [REQUEST RECEIVED] %s %s",
+                          self.worker_id, self.request.method, self.request.uri)
 
     def do_finish(self, status_code: HTTPStatus = HTTPStatus.OK, err_message: Optional[str] = None):
         """
@@ -243,7 +252,8 @@ class BaseRequestHandler(RequestHandler):
         try:
             self.finish()
         except tornado.iostream.StreamClosedError:
-            self.logger.warning(self.get_metadata(), "Finish: client closed connection unexpectedly.")
+            self.logger.warning(self.get_metadata(), "[%d] Finish: client closed connection unexpectedly.",
+                                self.worker_id)
 
     async def do_flush(self) -> bool:
         """
@@ -254,7 +264,8 @@ class BaseRequestHandler(RequestHandler):
             await self.flush()
             return True
         except tornado.iostream.StreamClosedError:
-            self.logger.warning(self.get_metadata(), "Flush: client closed connection unexpectedly.")
+            self.logger.warning(self.get_metadata(), "[%d] Flush: client closed connection unexpectedly.",
+                                self.worker_id)
             return False
 
     async def options(self, *_args, **_kwargs):
