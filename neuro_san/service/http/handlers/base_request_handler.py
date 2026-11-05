@@ -98,6 +98,7 @@ class BaseRequestHandler(RequestHandler):
             BaseRequestHandler.get_request_metadata(
                 self.request,
                 self.forwarded_request_metadata,
+                self.worker_id,
                 self.show_absent,
                 self.logger)
         # Put in our own unique id so we have some way to track this request:
@@ -109,6 +110,7 @@ class BaseRequestHandler(RequestHandler):
     @classmethod
     def get_request_metadata(cls, request,
                              forwarded_request_metadata: List[str],
+                             worker_id: int = -1,
                              show_absent: bool = False,
                              logger: HttpLogger = None
                              ) -> Dict[str, Any]:
@@ -117,6 +119,7 @@ class BaseRequestHandler(RequestHandler):
         from incoming request.
         :param request: incoming http request
         :param forwarded_request_metadata: list of metadata keys
+        :param worker_id: worker id to use for logging; default is -1 (no worker id)
         :param show_absent: if True, will provide debug printout
                for all request metadata keys absent from incoming request headers;
                if False does nothing.
@@ -130,7 +133,8 @@ class BaseRequestHandler(RequestHandler):
                 result[item_name] = headers[item_name]
             else:
                 if show_absent and logger:
-                    logger.warning({}, "MISSING METADATA VALUE: %s request %s", item_name, request.uri)
+                    logger.warning({}, "[%d] MISSING METADATA VALUE: %s request %s",
+                                   worker_id, item_name, request.uri)
                 result[item_name] = "None"
         return result
 
