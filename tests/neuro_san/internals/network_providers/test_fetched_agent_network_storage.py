@@ -23,6 +23,7 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestServer
@@ -37,7 +38,7 @@ from tests.neuro_san.internals.network_providers.recording_listener import Recor
 # pylint: disable=too-many-public-methods
 class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
     """
-    Unit tests for FetchedAgentNetworkStorage: suffix detection, parsing,
+    Unit tests for FetchedAgentNetworkStorage: scheme allow-listing, suffix detection, parsing,
     fetching from local files and http, and provider caching.
     """
 
@@ -67,7 +68,8 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         Create a temporary directory and a fresh storage for each test.
         """
         self.temp_dir: str = mkdtemp()
-        self.storage: FetchedAgentNetworkStorage = FetchedAgentNetworkStorage()
+        self.storage: FetchedAgentNetworkStorage = \
+            FetchedAgentNetworkStorage(FetchedAgentNetworkStorage.SUPPORTED_SCHEMES)
 
     def tearDown(self):
         """
@@ -374,6 +376,84 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         agent_network: AgentNetwork = provider.get_agent_network()
         self.assertIsNotNone(agent_network)
         self.assertEqual("announcer", agent_network.get_config().get("tools")[0].get("name"))
+
+    def test_get_fetchable_schemes_default_empty(self):
+        """
+        Tests that no scheme is fetchable when AGENT_FETCHABLE_TOOL_SCHEMES is not set.
+        """
+        with patch.dict(os.environ, clear=True):
+            self.assertEqual([], FetchedAgentNetworkStorage.get_fetchable_schemes())
+
+    def test_get_fetchable_schemes_empty_string(self):
+        """
+        Tests that no scheme is fetchable when AGENT_FETCHABLE_TOOL_SCHEMES is empty.
+        """
+        with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": ""}):
+            self.assertEqual([], FetchedAgentNetworkStorage.get_fetchable_schemes())
+
+    def test_get_fetchable_schemes_separators(self):
+        """
+        Tests that commas and whitespace both separate schemes, and case and duplicates are normalized.
+        """
+        with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": " HTTPS, file  http,https "}):
+            self.assertEqual(["https", "file", "http"], FetchedAgentNetworkStorage.get_fetchable_schemes())
+
+    def test_get_fetchable_schemes_unsupported_ignored(self):
+        """
+        Tests that an unsupported scheme is logged and ignored.
+        """
+        with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "ftp,https,s3"}):
+            with self.assertLogs(FetchedAgentNetworkStorage.__name__, level="WARNING") as logs:
+                schemes: List[str] = FetchedAgentNetworkStorage.get_fetchable_schemes()
+        self.assertEqual(["https"], schemes)
+        self.assertEqual(2, len(logs.output))
+
+    def test_constructor_reads_environment(self):
+        """
+        Tests that the default constructor takes its schemes from AGENT_FETCHABLE_TOOL_SCHEMES.
+        """
+        with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https"}):
+            storage: FetchedAgentNetworkStorage = FetchedAgentNetworkStorage()
+        self.assertEqual(["https"], storage.fetchable_schemes)
+
+    def test_get_fetch_scheme(self):
+        """
+        Tests that the fetch scheme is lower-cased, and that bare paths count as "file".
+        """
+        self.assertEqual("https", FetchedAgentNetworkStorage.get_fetch_scheme("HTTPS://example.com/a.hocon"))
+        self.assertEqual("http", FetchedAgentNetworkStorage.get_fetch_scheme("http://example.com/a.hocon"))
+        self.assertEqual("file", FetchedAgentNetworkStorage.get_fetch_scheme("file:///opt/nets/a.hocon"))
+        self.assertEqual("file", FetchedAgentNetworkStorage.get_fetch_scheme("/opt/nets/a.hocon"))
+        self.assertEqual("file", FetchedAgentNetworkStorage.get_fetch_scheme(self.WINDOWS_PATH))
+        self.assertEqual("ftp", FetchedAgentNetworkStorage.get_fetch_scheme("ftp://example.com/a.hocon"))
+
+    async def test_get_provider_scheme_not_fetchable(self):
+        """
+        Tests that a scheme outside the fetchable list returns None without fetching.
+        """
+        storage: FetchedAgentNetworkStorage = FetchedAgentNetworkStorage(["https"])
+        storage.fetch_contents = AsyncMock(return_value=self.HOCON_CONTENTS)
+
+        # The local test server is plain http, and a bare path counts as "file".
+        url: str = self.server_url("/networks/announcer.hocon")
+        path: str = self.write_file("network.hocon", self.HOCON_CONTENTS)
+        with self.assertLogs(level="INFO"):
+            self.assertIsNone(await storage.async_get_agent_network_provider(url))
+            self.assertIsNone(await storage.async_get_agent_network_provider(path))
+        storage.fetch_contents.assert_not_awaited()
+        self.assertEqual([], storage.get_agent_names())
+
+    async def test_get_provider_remote_agent_not_logged(self):
+        """
+        Tests that a remote agent reference without a network file suffix returns None
+        without logging the scheme message.
+        """
+        storage: FetchedAgentNetworkStorage = FetchedAgentNetworkStorage(["https", "file"])
+        storage.fetch_contents = AsyncMock(return_value=self.HOCON_CONTENTS)
+
+        with self.assertNoLogs(level="INFO"):
+            self.assertIsNone(await storage.async_get_agent_network_provider("http://other-host:8080/math_guy"))
+        storage.fetch_contents.assert_not_awaited()
 
     async def test_get_provider_unsupported_suffix(self):
         """

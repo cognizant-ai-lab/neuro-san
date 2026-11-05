@@ -94,6 +94,7 @@ Return verbatim whatever it returns.
 """,
             # Call the math_guy as an "external tool" which is an http hocon reference. Tools that are prefixed
             # with a slash "/" are expected to reside as agents on the same server.
+            # Fetching the hocon file requires AGENT_FETCHABLE_TOOL_SCHEMES to include "https".
             "tools": ["https://raw.githubusercontent.com/cognizant-ai-lab/neuro-san/refs/heads/main/neuro_san/registries/math_guy_fully_qualified.hocon"],
 
             # The allow block below lets us deviate from the standard security policy.

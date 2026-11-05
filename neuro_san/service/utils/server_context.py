@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 
 from threading import Lock
@@ -76,7 +77,10 @@ class ServerContext(ServerContextLite):
         for storage_class in StorageClass.ALL_PERMANENT:
             self.network_storage_dict[storage_class] = AgentNetworkStorage()
         self.network_storage_dict[StorageClass.TEMP] = ExpiringAgentNetworkStorage()
-        self.network_storage_dict[StorageClass.FETCHED] = FetchedAgentNetworkStorage()
+        # Fetched storage is left out entirely when AGENT_FETCHABLE_TOOL_SCHEMES enables no scheme.
+        fetchable_schemes: List[str] = FetchedAgentNetworkStorage.get_fetchable_schemes()
+        if len(fetchable_schemes) > 0:
+            self.network_storage_dict[StorageClass.FETCHED] = FetchedAgentNetworkStorage(fetchable_schemes)
 
         self.periodic_configs: Dict[str, Dict[str, Any]] = {}
         self.agent_authorizer: AgentAuthorizer = None

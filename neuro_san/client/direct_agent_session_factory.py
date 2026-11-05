@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 from leaf_common.time.timeout import Timeout
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
@@ -60,8 +61,12 @@ class DirectAgentSessionFactory:
 
         self.network_storage_dict: Dict[str, AgentStorageSource] = {
             StorageClass.TEMP: ExpiringAgentNetworkStorage(),
-            StorageClass.FETCHED: FetchedAgentNetworkStorage()
         }
+
+        # Fetched storage is left out entirely when AGENT_FETCHABLE_TOOL_SCHEMES enables no scheme.
+        fetchable_schemes: List[str] = FetchedAgentNetworkStorage.get_fetchable_schemes()
+        if len(fetchable_schemes) > 0:
+            self.network_storage_dict[StorageClass.FETCHED] = FetchedAgentNetworkStorage(fetchable_schemes)
 
         storage_class: str = None
         for storage_class in StorageClass.ALL_PERMANENT:
