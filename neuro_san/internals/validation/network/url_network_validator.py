@@ -98,7 +98,7 @@ class UrlNetworkValidator(AbstractNetworkValidator):
                     tool_string not in urls and \
                     not tool_string.startswith("http://") and \
                     not tool_string.startswith("https://") and \
-                    not self.is_agent_network_file(tool_string) and \
+                    not UrlNetworkValidator.is_agent_network_file(tool_string) and \
                     not tool_string.endswith("mcp") and \
                     not tool_string.endswith("mcp/"):
                 error_msg = (
