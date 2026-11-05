@@ -113,9 +113,12 @@ class FullyQualifiedClassNetworkValidator(AbstractNetworkValidator):
         :param top_level_package: A module name without any dots
         :return: True if the package can be found, False otherwise
         """
+        spec: ModuleSpec = None
         try:
-            spec: ModuleSpec = find_spec(top_level_package)
+            spec = find_spec(top_level_package)
         except ValueError:
             # The module is already in sys.modules, but has no __spec__.
             return True
-        return spec is not None
+
+        is_findable: bool = spec is not None
+        return is_findable
