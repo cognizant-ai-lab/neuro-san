@@ -23,6 +23,7 @@ import pytest
 # Markers of the integration, smoke and non-default-provider suites, which run selectively.
 # Tests carrying none of these never have their provider keys checked, so a basic unit test
 # that needs a missing key fails rather than being skipped.
+# Note that this non-skipping behavior only applies only to test without any of the markers below.
 LLM_MARKERS: List[str] = ["integration", "smoke", "non_default_llm_provider"]
 
 
