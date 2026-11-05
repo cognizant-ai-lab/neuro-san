@@ -443,6 +443,18 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         storage.fetch_contents.assert_not_awaited()
         self.assertEqual([], storage.get_agent_names())
 
+    async def test_get_provider_remote_agent_not_logged(self):
+        """
+        Tests that a remote agent reference without a network file suffix returns None
+        without logging the scheme message.
+        """
+        storage: FetchedAgentNetworkStorage = FetchedAgentNetworkStorage(["https", "file"])
+        storage.fetch_contents = AsyncMock(return_value=self.HOCON_CONTENTS)
+
+        with self.assertNoLogs(level="INFO"):
+            self.assertIsNone(await storage.async_get_agent_network_provider("http://other-host:8080/math_guy"))
+        storage.fetch_contents.assert_not_awaited()
+
     async def test_get_provider_unsupported_suffix(self):
         """
         Tests that an unsupported suffix returns None without fetching.

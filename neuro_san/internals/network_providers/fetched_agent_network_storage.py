@@ -163,16 +163,22 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         Get the supported suffix of an agent network whose url scheme allows fetching
 
         :param agent_name: name of an agent which in this case is a full URL
-        :return: the supported suffix, or None if the scheme is not in the fetchable schemes
-                or no supported suffix is found.
+        :return: the supported suffix, or None if no supported suffix is found
+                or the scheme is not in the fetchable schemes.
         """
+        # Check the suffix first, so that references which are not network files,
+        # such as remote agents, do not log the scheme message below.
+        suffix: str = self.get_supported_suffix(agent_name)
+        if suffix is None:
+            return None
+
         scheme: str = self.get_fetch_scheme(agent_name)
         if scheme not in self.fetchable_schemes:
             self.sensitive_logger.info("Not fetching %s: scheme '%s' is not in AGENT_FETCHABLE_TOOL_SCHEMES %s",
                                        agent_name, scheme, self.fetchable_schemes)
             return None
 
-        return self.get_supported_suffix(agent_name)
+        return suffix
 
     @staticmethod
     def get_fetch_scheme(agent_name: str) -> str:
