@@ -15,12 +15,32 @@
 #
 # END COPYRIGHT
 import os
+from typing import List
+from typing import Set
+
 import pytest
+
+# Markers of the integration, smoke and non-default-provider suites, which run selectively.
+# Tests carrying none of these never have their provider keys checked, so a basic unit test
+# that needs a missing key fails rather than being skipped.
+# Note that this non-skipping behavior only applies only to test without any of the markers below.
+LLM_MARKERS: List[str] = ["integration", "smoke", "non_default_llm_provider"]
 
 
 @pytest.fixture(autouse=True)
 def configure_llm_provider_keys(request, monkeypatch):
-    """Ensure only the appropriate LLM provider keys are available for the test being run."""
+    """
+    Ensure only the appropriate LLM provider keys are available for a test marked as using an LLM.
+    Tests without any of the LLM_MARKERS are left alone.
+    """
+
+    marker_names: Set[str] = set()
+    marker: pytest.Mark
+    # Collect the names of all markers on the test, its class and its module
+    for marker in request.node.iter_markers():
+        marker_names.add(marker.name)
+    if marker_names.isdisjoint(LLM_MARKERS):
+        return
 
     is_non_default = request.node.get_closest_marker("non_default_llm_provider")
     is_anthropic = request.node.get_closest_marker("anthropic")

@@ -23,11 +23,15 @@ import asyncio
 from threading import Event
 from threading import Thread
 
+from unittest import TestCase
+
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
 
+from tests.neuro_san.session.close_contract.streaming_cancel_server import StreamingCancelServer
 
-class TestAsyncHttpServiceAgentSessionCloseIntegration:
+
+class TestAsyncHttpServiceAgentSessionCloseIntegration(TestCase):
     """
     close() unblocks pre-header and post-header async requests from another thread.
 
@@ -43,6 +47,20 @@ class TestAsyncHttpServiceAgentSessionCloseIntegration:
       a request still awaiting response headers (no total timeout).
     Both must surface as AgentSessionClosedError.
     """
+
+    def setUp(self):
+        """
+        Start an in-process StreamingCancelServer for a single test.
+        A real server drives the agent session into a blocked state before cancelling it.
+        """
+        self.streaming_cancel_server: StreamingCancelServer = StreamingCancelServer()
+        self.streaming_cancel_server.start()
+
+    def tearDown(self):
+        """
+        Stop the StreamingCancelServer started by setUp().
+        """
+        self.streaming_cancel_server.stop()
 
     @staticmethod
     def _run_client(session: AsyncHttpServiceAgentSession, request: Dict[str, Any],
@@ -70,11 +88,10 @@ class TestAsyncHttpServiceAgentSessionCloseIntegration:
                 loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.close()
 
-    # pylint: disable=redefined-outer-name
-    def test_close_aborts_blocked_post_header_read(self, streaming_cancel_server):
+    def test_close_aborts_blocked_post_header_read(self):
         """After headers arrive and the read blocks, close() raises AgentSessionClosedError."""
         session = AsyncHttpServiceAgentSession(
-            host="127.0.0.1", port=streaming_cancel_server.port, agent_name="posthang")
+            host="127.0.0.1", port=self.streaming_cancel_server.port, agent_name="posthang")
         request: Dict[str, Any] = {"user_message": {"type": "HUMAN", "text": "go"}}
 
         got_first: Event = Event()
@@ -92,14 +109,13 @@ class TestAsyncHttpServiceAgentSessionCloseIntegration:
         assert isinstance(result["error"], AgentSessionClosedError), \
             f"expected AgentSessionClosedError, got {result['error']!r}"
 
-    # pylint: disable=redefined-outer-name
-    def test_close_aborts_pre_header_request(self, streaming_cancel_server):
+    def test_close_aborts_pre_header_request(self):
         """
         While the request is still awaiting response headers, close() aborts it by
         closing the underlying ClientSession and raises AgentSessionClosedError.
         """
         session = AsyncHttpServiceAgentSession(
-            host="127.0.0.1", port=streaming_cancel_server.port, agent_name="prehang")
+            host="127.0.0.1", port=self.streaming_cancel_server.port, agent_name="prehang")
         request: Dict[str, Any] = {"user_message": {"type": "HUMAN", "text": "go"}}
 
         result: Dict[str, Any] = {"error": None, "items": 0}
@@ -110,7 +126,7 @@ class TestAsyncHttpServiceAgentSessionCloseIntegration:
 
         # Deterministic: the server signals once it has received the request, at
         # which point the client is awaiting headers with no response yet.
-        assert streaming_cancel_server.pre_request_received.wait(timeout=5.0), \
+        assert self.streaming_cancel_server.pre_request_received.wait(timeout=5.0), \
             "server never received the request"
         session.close()
 

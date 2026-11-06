@@ -17,15 +17,10 @@
 from unittest import TestCase
 from unittest.mock import MagicMock
 
-import pytest
-
 from neuro_san.internals.run_context.langchain.llms.anthropic_llm_policy import AnthropicLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
-
-
-pytestmark = [pytest.mark.non_default_llm_provider, pytest.mark.ollama]
 
 
 class TestDefaultLlmFactoryProviderTools(TestCase):
