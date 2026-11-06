@@ -310,26 +310,38 @@ Examples:
             help="Output validation results as JSON"
         )
 
-        # Determine default registry directory from AGENT_MANIFEST_FILE if set
-        agent_manifest_file: str = os.environ.get("AGENT_MANIFEST_FILE")
-        if agent_manifest_file:
-            default_registry_dir: str = os.path.dirname(
-                os.path.dirname(os.path.abspath(agent_manifest_file))
-            )
-        else:
-            default_registry_dir: str = os.getcwd()
-
         arg_parser.add_argument(
             "--registry-dir",
             type=str,
-            default=default_registry_dir,
+            default=self.get_default_registry_dir(),
             dest="registry_dir",
             help="Base directory containing the registries folder for resolving HOCON includes. "
-                 "Defaults to the parent directory of AGENT_MANIFEST_FILE. "
+                 "Defaults to the parent directory of AGENT_MANIFEST_FILE "
+                 "(its first entry when it is a list of manifest files). "
                  "Use this when your HOCON file has includes like 'include \"registries/...\"'"
         )
 
         self.args = arg_parser.parse_args()
+
+    @staticmethod
+    def get_default_registry_dir() -> str:
+        """
+        Determine the default registry directory from AGENT_MANIFEST_FILE.
+
+        Like the server, treats AGENT_MANIFEST_FILE as an os.pathsep-separated list
+        and derives the directory from the first non-empty entry.
+
+        :return: The parent directory of the first manifest file's directory,
+                 or the current working directory if AGENT_MANIFEST_FILE has no entries
+        """
+        agent_manifest_file: str = os.environ.get("AGENT_MANIFEST_FILE", "")
+
+        manifest_file: str = None
+        # Use the first non-empty entry of the list
+        for manifest_file in agent_manifest_file.split(os.pathsep):
+            if manifest_file:
+                return os.path.dirname(os.path.dirname(os.path.abspath(manifest_file)))
+        return os.getcwd()
 
     def create_validator(self) -> DictionaryValidator:
         """
