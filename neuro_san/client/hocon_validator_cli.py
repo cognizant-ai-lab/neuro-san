@@ -316,8 +316,8 @@ Examples:
             default=self.get_default_registry_dir(),
             dest="registry_dir",
             help="Base directory containing the registries folder for resolving HOCON includes. "
-                 "Defaults to the parent directory of AGENT_MANIFEST_FILE "
-                 "(its first entry when it is a list of manifest files). "
+                 "Defaults to the directory above the one holding AGENT_MANIFEST_FILE "
+                 "(its first entry when it lists several manifest files). "
                  "Use this when your HOCON file has includes like 'include \"registries/...\"'"
         )
 
