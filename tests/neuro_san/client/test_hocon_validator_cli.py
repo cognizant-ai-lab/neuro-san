@@ -323,6 +323,65 @@ class TestHoconValidatorCli(unittest.TestCase):
         exit_code, _ = self._run_cli_on_hocon(hocon_content)
         self.assertEqual(exit_code, 0)
 
+    def test_default_registry_dir_uses_first_manifest_entry(self):
+        """The default registry dir comes from the first entry of an os.pathsep-separated manifest list."""
+        first_manifest: str = os.path.join(os.sep, "base", "registries", "manifest.hocon")
+        second_manifest: str = os.path.join(os.sep, "other", "registries", "overlay.hocon")
+        manifest_list: str = os.pathsep.join([first_manifest, second_manifest])
+        with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": manifest_list}):
+            registry_dir: str = HoconValidatorCli.get_default_registry_dir()
+        self.assertEqual(registry_dir, os.path.abspath(os.path.join(os.sep, "base")))
+
+    def test_default_registry_dir_skips_empty_entries(self):
+        """Empty entries in the manifest list are skipped when choosing the default registry dir."""
+        manifest: str = os.path.join(os.sep, "base", "registries", "manifest.hocon")
+        manifest_list: str = os.pathsep + manifest
+        with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": manifest_list}):
+            registry_dir: str = HoconValidatorCli.get_default_registry_dir()
+        self.assertEqual(registry_dir, os.path.abspath(os.path.join(os.sep, "base")))
+
+    def test_default_registry_dir_without_manifest_is_cwd(self):
+        """The default registry dir is the current directory when AGENT_MANIFEST_FILE is unset or empty."""
+        with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": ""}):
+            self.assertEqual(HoconValidatorCli.get_default_registry_dir(), os.getcwd())
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_MANIFEST_FILE", None)
+            self.assertEqual(HoconValidatorCli.get_default_registry_dir(), os.getcwd())
+
+    def test_manifest_list_in_env_validates_without_registry_dir(self):
+        """A multi-entry AGENT_MANIFEST_FILE lets the CLI run with no explicit --registry-dir."""
+        hocon_content: str = """
+        {
+            tools: [
+                {
+                    name: "test_agent"
+                    instructions: "Test instructions"
+                    tools: []
+                }
+            ]
+        }
+        """
+        with tempfile.TemporaryDirectory() as base_dir:
+            registries_dir: str = os.path.join(base_dir, "registries")
+            os.makedirs(registries_dir)
+            manifest_files: List[str] = []
+            manifest_name: str = None
+            # Create two manifest files that the env variable lists together
+            for manifest_name in ("manifest.hocon", "overlay.hocon"):
+                manifest_path: str = os.path.join(registries_dir, manifest_name)
+                with open(manifest_path, "w", encoding="utf-8") as manifest_file:
+                    manifest_file.write("{}")
+                manifest_files.append(manifest_path)
+            hocon_path: str = os.path.join(registries_dir, "test_agent.hocon")
+            with open(hocon_path, "w", encoding="utf-8") as hocon_file:
+                hocon_file.write(hocon_content)
+
+            manifest_list: str = os.pathsep.join(manifest_files)
+            with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": manifest_list}):
+                exit_code, output = self._run_cli([hocon_path])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Validation passed", output)
+
 
 if __name__ == "__main__":
     unittest.main()
