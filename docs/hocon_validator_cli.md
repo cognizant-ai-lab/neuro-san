@@ -35,7 +35,8 @@ By default, the registry directory is determined as follows:
 
 1. If the `AGENT_MANIFEST_FILE` environment variable is set, the registry directory is the parent directory of
    that file's parent directory (e.g., if `AGENT_MANIFEST_FILE=/path/to/neuro_san/registries/manifest.hocon`,
-   then the registry directory is `/path/to/neuro_san`)
+   then the registry directory is `/path/to/neuro_san`). When `AGENT_MANIFEST_FILE` is a list of manifest files
+   separated by `os.pathsep` (`:` on Linux/macOS, `;` on Windows), the first entry is used
 2. If `AGENT_MANIFEST_FILE` is not set, the registry directory defaults to the current working directory
 
 ### Overriding the Registry Directory
