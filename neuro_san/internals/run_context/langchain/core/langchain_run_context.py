@@ -60,6 +60,7 @@ from neuro_san.internals.run_context.langchain.middleware.middleware_factory imp
 from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.utils.tool_pairing import ToolPairing
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -211,6 +212,10 @@ class LangChainRunContext(RunContext):
                 base_message: BaseMessage = converter.from_dict(chat_message)
                 if base_message is not None:
                     self.chat_history.append(base_message)
+
+            # A client can send the history back with a tool call or a tool result
+            # missing. Only complete pairs go to the model.
+            self.chat_history[:] = ToolPairing.complete_pairs(self.chat_history)
 
             # Nothing left to search for
             break
@@ -410,6 +415,7 @@ class LangChainRunContext(RunContext):
                                       primary_llm=self.llm_resources.get_model(),
                                       invocation_context=self.invocation_context,
                                       journal=self.journal,
+                                      chat_history=self.chat_history,
                                       interceptor=self.interceptor,
                                       origin=self.origin,
                                       tool_caller=self.tool_caller,
@@ -442,7 +448,8 @@ class LangChainRunContext(RunContext):
                     "origin"        A List of origin dictionaries indicating the origin of the run.
                     "output"        A string representing the output of the tool call
                     "sly_data"      Optional sly_data dictionary that might have returned from an external tool.
-                    "tool_call_id"  The string id of the tool_call being executed
+                    "tool_call_id"  neuro-san's own string id for the tool call, not the id the model
+                                    gave it. The chat history pairs calls and results by the model's id.
         :return: A potentially updated run handle
         """
         _ = run
@@ -453,8 +460,8 @@ class LangChainRunContext(RunContext):
                 tool_message = self.parse_tool_output(tool_output)
                 if tool_message is not None:
                     # Write the tool message to the journal.
-                    # Chat history should only contain user and AI messages.
-                    # It will not be updated in the write_message() call below.
+                    # The chat history is not updated here. After each step of the agent graph,
+                    # ToolExchangeRecorder.record_tool_exchange() adds the tool call and its result as a pair.
                     await self.journal.write_message(tool_message)
 
         # Create a run to return

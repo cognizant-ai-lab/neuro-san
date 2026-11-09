@@ -87,6 +87,10 @@ class TestDirectAgentSessionGoldenParity(TestCase):
     # external agents, so no provider key or network access is needed.
     AGENT_HOCON: str = "chat_mock_llm_echo.hocon"
 
+    # Registry hocon of the mock network whose front man calls the Accountant
+    # coded tool, for the tool-call round trip through chat_context.
+    TOOL_AGENT_HOCON: str = "chat_mock_llm_tool.hocon"
+
     # Locates the golden files relative to this module.
     GOLDEN_DIR: FileOfClass = FileOfClass(__file__, path_to_basis="golden")
 
@@ -102,15 +106,18 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         """
         self.maxDiff = None  # pylint: disable=invalid-name
 
-    def create_session(self) -> DirectAgentSession:
+    def create_session(self, agent_hocon: str = None) -> DirectAgentSession:
         """
-        Builds a DirectAgentSession for the mock network without reading the
+        Builds a DirectAgentSession for a mock network without reading the
         registry manifest. Reading the manifest parses every registry hocon in a
         thread pool, which is slow and is not what this test is about.
 
-        :return: A started DirectAgentSession for the chat_mock_llm_echo network.
+        :param agent_hocon: The registry hocon of the network; the echo network by default.
+        :return: A started DirectAgentSession for the network.
         """
-        file_reference: str = REGISTRIES_DIR.get_file_in_basis(self.AGENT_HOCON)
+        if agent_hocon is None:
+            agent_hocon = self.AGENT_HOCON
+        file_reference: str = REGISTRIES_DIR.get_file_in_basis(agent_hocon)
         agent_network: AgentNetwork = AgentNetworkRestorer().restore(file_reference=file_reference)
         config: Dict[str, Any] = agent_network.get_config()
 
@@ -132,7 +139,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         # reuse_mode=False: the pool then starts no garbage-collection thread and
         # shuts each executor down when the session returns it, so a conversation
         # leaves no threads behind for the rest of the suite.
-        invocation_context = SessionInvocationContext(self.AGENT_HOCON,
+        invocation_context = SessionInvocationContext(agent_hocon,
                                                       external_factory,
                                                       AsyncioExecutorPool(reuse_mode=False),
                                                       llm_factory,
@@ -141,7 +148,8 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         return DirectAgentSession(agent_network=agent_network, invocation_context=invocation_context)
 
     def run_conversation(self, turns: List[str],
-                         client_blocks: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+                         client_blocks: Optional[List[Dict[str, Any]]] = None,
+                         agent_hocon: str = None) -> List[Dict[str, Any]]:
         """
         Sends the turns through one session as a single conversation and
         collects every response dict the client would receive.
@@ -151,10 +159,11 @@ class TestDirectAgentSessionGoldenParity(TestCase):
                 turn-1 AI entry of the chat_context it carries into turn 2,
                 as a block-aware client would. None sends the chat_context
                 back as received.
+        :param agent_hocon: The registry hocon of the network; the echo network by default.
         :return: The normalized stream of response dicts across all turns.
         """
         threads_before: int = active_count()
-        session: DirectAgentSession = self.create_session()
+        session: DirectAgentSession = self.create_session(agent_hocon)
         stream: List[Dict[str, Any]] = []
         chat_context: Optional[Dict[str, Any]] = None
         try:
@@ -403,3 +412,65 @@ class TestDirectAgentSessionGoldenParity(TestCase):
 
         self.assert_wire_contract(actual)
         self.check_against_golden("echo_gemini_thinking_marker_maximal.json", actual)
+
+    def test_tool_call_two_turns_match_golden(self) -> None:
+        """
+        A two-turn conversation in which the mock calls the Accountant tool on
+        each turn produces exactly the golden stream. The chat_context after the
+        first turn carries the tool call and its result, and the second turn gets
+        them back: its call id counts the earlier result and its answer reports
+        two tool results in the history.
+        """
+        actual: List[Dict[str, Any]] = self.run_conversation(["call accountant: 0.0", "call accountant: 3.0"],
+                                                             agent_hocon=self.TOOL_AGENT_HOCON)
+
+        self.assert_wire_contract(actual)
+        self.assert_tool_round_trip(actual)
+        self.check_against_golden("tool_call_two_turns_maximal.json", actual)
+
+    def assert_tool_round_trip(self, stream: List[Dict[str, Any]]) -> None:
+        """
+        Asserts that the tool call and its result travel through chat_context
+        and come back on the next turn.
+
+        The first turn's chat_context must hold an AI message with the call
+        (id call_mock_1) and an AGENT_TOOL_RESULT answering it. The second
+        turn's answer must report two tool results in the history and the
+        updated running cost, which the mock can only produce when the first
+        turn's call and result were restored.
+
+        :param stream: The normalized response dicts.
+        """
+        answers: List[Dict[str, Any]] = []
+        # The answer frame of each turn is the AGENT_FRAMEWORK message that carries the chat_context.
+        response: Dict[str, Any] = None
+        for response in stream:
+            message: Dict[str, Any] = response.get("response")
+            if message.get("type") == ChatMessageType.AGENT_FRAMEWORK and message.get("chat_context") is not None:
+                answers.append(message)
+        self.assertEqual(len(answers), 2)
+
+        first_history: List[Dict[str, Any]] = answers[0].get("chat_context").get("chat_histories")[0].get("messages")
+        tool_calls: List[Dict[str, Any]] = []
+        tool_call_ids: List[str] = []
+        # Gather every tool call and every tool result id the first turn's history carries.
+        history_message: Dict[str, Any] = None
+        for history_message in first_history:
+            # An AI entry may carry several calls.
+            tool_call: Dict[str, Any] = None
+            for tool_call in history_message.get("tool_calls", []):
+                tool_calls.append(tool_call)
+            if history_message.get("tool_call_id") is not None:
+                tool_call_ids.append(history_message.get("tool_call_id"))
+        expected_calls: List[Dict[str, Any]] = [
+            {
+                "id": "call_mock_1",
+                "name": "Accountant",
+                "args": {"running_cost": 0.0},
+            },
+        ]
+        self.assertEqual(tool_calls, expected_calls)
+        self.assertEqual(tool_call_ids, ["call_mock_1"])
+
+        self.assertEqual(answers[1].get("text"),
+                         "tool result: {'running_cost': 6.0}; tool results in history: 2")
