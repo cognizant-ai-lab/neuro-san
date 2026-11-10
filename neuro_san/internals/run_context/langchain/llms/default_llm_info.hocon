@@ -1808,7 +1808,8 @@
                 "max_retries": 6,
                 "n": 1,         # Number of chat completions to generate for each prompt.
                 "streaming": false,
-                "temperature": 0.7,         # [0.0, 2.0],
+                "temperature": null,         # [0.0, 2.0],
+                # null sends no temperature, so the model uses its own default.
                 # Note that for Gemini 3.0+ models, it is recommended to keep the temperature parameter at 1.0 as setting it to 0.7 can cause infinite loops,
                 # degraded reasoning performance, and failure on complex tasks.
                 # See https://ai.google.dev/gemini-api/docs/gemini-3#temperature
@@ -1816,16 +1817,21 @@
                 "top_k": null,
                 "top_p": null,
 
+                "api_version": null, # null lets google-genai choose the version. Set "v1beta" for a model that returns 404 NOT_FOUND.
+                # See https://aistudio.google.com/api-reference/api-versions
+
                 # The following parameters are for reasoning models only.
 
                 "thinking_level": null, # Indicates the thinking level.
                 # Supported models
                 # - Gemini 3 Pro (gemini-3-pro-preview): supported values are "low", "high" (default)
                 # - Gemini 3 Flash (gemini-3-flash-preview): supported values are "minimal", "low", "medium", "high" (default)
+                # - Gemini 3.5 Flash-Lite (gemini-3.5-flash-lite): supported values are "minimal" (default), "low", "medium", "high"
                 # - Gemini 3.8 Flash (gemini-3.8-flash): supported values are "low", "medium" (default), "high".
                 #   "minimal" is not supported and the API returns an error.
                 #   See https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
                 # See https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level
+                # and https://aistudio.google.com/docs/thinking#thinking-levels for the levels each model supports.
 
                 "thinking_budget": null, # Indicates the thinking budget in tokens.
                 # Supported models

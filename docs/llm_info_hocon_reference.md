@@ -42,6 +42,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
         - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
         - [Anthropic Thinking Parameters](#anthropic-thinking-parameters)
         - [Anthropic Claude on Bedrock](#anthropic-claude-on-bedrock)
+        - [Gemini API Version](#gemini-api-version)
         - [Gemini Thinking Parameters](#gemini-thinking-parameters)
         - [Provider Tools](#provider-tools)
     - [Extending LLM Info Specifications](#extending-llm-info-specifications)
@@ -629,17 +630,25 @@ llm info file (see [Extending LLM Info Specifications](#extending-llm-info-speci
 }
 ```
 
+### Gemini API Version
+
+The `gemini` class accepts `api_version`. The default, `null`, lets the google-genai package choose. If a model
+such as `gemini-3-flash-preview` returns `404 NOT_FOUND`, set `"api_version": "v1beta"` in its llm_config. See
+[API versions](https://aistudio.google.com/api-reference/api-versions).
+
 ### Gemini Thinking Parameters
 
 The `gemini` class accepts a few parameters that only matter for Gemini thinking models. All of them default to
 `null`, which leaves the model's own defaults in place.
 
 - `thinking_level`: a string that constrains how much thinking the model does. The accepted values depend on the
-  model (see the [Gemini 3 developer guide](https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level) and
-  the per-model pages under [Gemini models](https://ai.google.dev/gemini-api/docs/models)), and the API rejects
-  a value the model does not support:
+  model (see the [Gemini 3 developer guide](https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level), the
+  [thinking levels table](https://aistudio.google.com/docs/thinking#thinking-levels) and the per-model pages
+  under [Gemini models](https://ai.google.dev/gemini-api/docs/models)), and the API rejects a value the model
+  does not support:
     - Gemini 3 Pro: `"low"` or `"high"` (default `"high"`).
     - Gemini 3 Flash: `"minimal"`, `"low"`, `"medium"` or `"high"` (default `"high"`).
+    - Gemini 3.5 Flash-Lite: `"minimal"`, `"low"`, `"medium"` or `"high"` (default `"minimal"`).
     - Gemini 3.8 Flash: `"low"`, `"medium"` or `"high"` (default `"medium"`). `"minimal"` is not supported and
       returns an error.
 - `thinking_budget`: an integer number of thinking tokens for Gemini 2.5 models. `0` disables thinking where the
@@ -651,15 +660,13 @@ The `gemini` class accepts a few parameters that only matter for Gemini thinking
   of this setting. See the [Gemini thinking guide](https://ai.google.dev/gemini-api/docs/thinking) and the
   [langchain Gemini page](https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai).
 
-**Temperature.** Google recommends keeping `temperature` at `1.0` for Gemini 3 and later: lower values can cause
-infinite loops, degraded reasoning and failures on complex tasks (see
-[Gemini 3 temperature](https://ai.google.dev/gemini-api/docs/gemini-3#temperature)). The `gemini` class default
-is `0.7`, so set `"temperature": 1.0` explicitly in the llm_config of any Gemini 3+ model.
+**Temperature.** The `gemini` class default is `null`, which sends no temperature, so the model uses its own
+default. Google recommends `1.0` for Gemini 3 and later (see
+[Gemini 3 temperature](https://ai.google.dev/gemini-api/docs/gemini-3#temperature)).
 
 ```hocon
 "llm_config": {
     "model_name": "gemini-3.8-flash",
-    "temperature": 1.0,
     "thinking_level": "low",
     "include_thoughts": true
 }
