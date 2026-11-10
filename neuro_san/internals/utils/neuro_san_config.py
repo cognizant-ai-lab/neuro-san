@@ -20,8 +20,6 @@ from typing import Dict
 from typing import Optional
 from typing import Union
 
-from copy import copy
-
 from leaf_common.config.config_filter_chain import ConfigFilterChain
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
@@ -257,7 +255,7 @@ class NeuroSanConfig(ConfigFilterChain):
         """
         Builds the configuration from DEFAULT_CONFIG, filtered through the registered filters.
         """
-        self.config = copy(DEFAULT_CONFIG)
+        self.config = DEFAULT_CONFIG
         self.config = self.filter_config(self.config)
         self.extractor = DictionaryExtractor(self.config)
 
