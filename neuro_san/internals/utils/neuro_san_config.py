@@ -102,6 +102,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_LOOP_TIMELINE": "false",
             "AGENT_LOOP_TIMELINE_DUMP_PATH": "",
             "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000"
+            # Neither of these have docs
             # ENABLE_RUN_TIME_STATISTICS - does not have AGENT_ prefix
             # SHOW_ABSENT_METADATA - does not have AGENT_ prefix
         },
@@ -172,6 +173,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "session": {
         "security": {
             "AGENT_SESSION_REQUIRE_HTTPS": "false"
+            # Documented in SAST_FALSE_POSITIVES.md
             # MAX_AGENTS_FROM_EXTERNAL_SERVER - does not have AGENT_ prefix
         }
     },
