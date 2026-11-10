@@ -18,8 +18,9 @@ from typing import Any
 from typing import Dict
 from typing import Union
 
+from os import environ
+
 from leaf_common.config.config_filter import ConfigFilter
-from leaf_common.utils.environment_util import EnvironmentUtil
 
 
 class EnvironmentConfigFilter(ConfigFilter):
@@ -35,7 +36,8 @@ class EnvironmentConfigFilter(ConfigFilter):
 
         If the value for any key is a dictionary, recurse with that value as the basis.
         Any other value is taken as the default for an environment variable lookup
-        against the key.
+        against the key. The default applies only when the variable is absent;
+        a variable that is set to an empty string keeps its empty value.
 
         :param basis_config: The config dictionary to act as the basis
                 for filtering
@@ -54,7 +56,9 @@ class EnvironmentConfigFilter(ConfigFilter):
                 return_dict[key] = value_dict
             else:
                 value_str: str = value
-                value_str = EnvironmentUtil.getenv(key, value_str) or value_str
+                # Not EnvironmentUtil.getenv(), which also replaces an empty value with the default.
+                # Some variables, like AGENT_ALLOW_CORS_HEADERS, mean something when set but empty.
+                value_str = environ.get(key, value_str)
                 return_dict[key] = value_str
 
         return return_dict
