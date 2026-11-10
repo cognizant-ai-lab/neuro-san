@@ -203,7 +203,8 @@ class NeuroSanConfig(ConfigFilterChain):
     from files.
 
     This is a singleton whose values are loaded/determined at first-mention, so if a rogue coded tool
-    decides to try to change one of these via env-var, it will fail (good!).
+    decides to try to change one of these via env-var, it will fail (good!). The exception here is when
+    get() is called with check_env_var=True, however those cases we would like to minimize/eliminate.
     """
 
     def __init__(self):
