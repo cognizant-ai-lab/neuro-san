@@ -31,8 +31,6 @@ from neuro_san.internals.utils.environment_config_filter import EnvironmentConfi
 # Defaults are strings because environment variables are strings.
 # A None default means there is no literal default: either the feature is off
 # when the variable is unset, or the code computes a fallback (described in the comment).
-
-
 DEFAULT_CONFIG: Dict[str, Any] = {
 
     # The agent runtime, which runs with or without a server.
