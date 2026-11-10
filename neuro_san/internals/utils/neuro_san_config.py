@@ -37,12 +37,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Anything read at least in neuro_san/internals lives here.
     "internals": {
 
-        # Loading networks.
-        "registry": {
-            # None falls back to registries/manifest.hocon
-            "AGENT_MANIFEST_FILE": None,
-            "AGENT_MANIFEST_CONCURRENCY_CONTEXT": "thread",
-            "AGENT_ACTIVATION_PREPPER_CLASSES": ""
+        # Chat sessions.
+        "chat": {
+            "AGENT_PROTECT_ORIGINAL_COPY": "true"
         },
 
         # Loading LLM info.
@@ -51,20 +48,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_LLM_INFO_FILE": None
         },
 
-        # Finding and running coded tools, and loading toolboxes.
-        "tools": {
-            # None falls back to neuro_san/coded_tools
-            "AGENT_TOOL_PATH": None,
-            "AGENT_TOOL_PATH_ONLY": "false",
-            "AGENT_FETCHABLE_TOOL_SCHEMES": "",
-            "AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS": "0",
-            # None defers to the network's toolbox_info_file, then built-in defaults
-            "AGENT_TOOLBOX_INFO_FILE": None
-        },
-
-        # Chat sessions.
-        "chat": {
-            "AGENT_PROTECT_ORIGINAL_COPY": "true"
+        # Loading networks.
+        "registry": {
+            "AGENT_ACTIVATION_PREPPER_CLASSES": "",
+            "AGENT_MANIFEST_CONCURRENCY_CONTEXT": "thread",
+            # None falls back to registries/manifest.hocon
+            "AGENT_MANIFEST_FILE": None
         },
 
         # How temporary networks are addressed.
@@ -72,41 +61,91 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_EXTERNAL_SERVER_URL": None
         },
 
+        # Finding and running coded tools, and loading toolboxes.
+        "tools": {
+            "AGENT_FETCHABLE_TOOL_SCHEMES": "",
+            # None defers to the network's toolbox_info_file, then built-in defaults
+            "AGENT_TOOLBOX_INFO_FILE": None,
+            "AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS": "0",
+            # None falls back to neuro_san/coded_tools
+            "AGENT_TOOL_PATH": None,
+            "AGENT_TOOL_PATH_ONLY": "false"
+        },
+
         # Metadata attached to LangChain traces.
         "tracing": {
+            # Also read by service/main_loop; both readers default to this value
+            "AGENT_FORWARDED_REQUEST_METADATA": "request_id user_id",
             "AGENT_TRACING_METADATA_ENV_VARS": "POD_NAME POD_NAMESPACE POD_IP NODE_NAME",
             # None falls back to AGENT_FORWARDED_REQUEST_METADATA
-            "AGENT_TRACING_METADATA_REQUEST_KEYS": None,
-            # Also read by service/main_loop; both readers default to this value
-            "AGENT_FORWARDED_REQUEST_METADATA": "request_id user_id"
+            "AGENT_TRACING_METADATA_REQUEST_KEYS": None
         }
     },
 
     # The neuro-san server process.
     "service": {
 
-        # Process identity and lifecycle.
-        "server": {
-            "AGENT_SERVER_NAME": "neuro-san.Agent",
-            "AGENT_VERSION_LIBS": None,
-            "AGENT_MANIFEST_UPDATE_PERIOD_SECONDS": "0"
+        # The pluggable authorizer.
+        "authorization": {
+            # None disables authorization
+            "AGENT_AUTHORIZER": None,
+            "AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY": "user_id",
+            "AGENT_AUTHORIZER_ACTOR_KEY": "User",
+            "AGENT_AUTHORIZER_ALLOW_RELATION": "read",
+            "AGENT_AUTHORIZER_RESOURCE_KEY": "AgentNetwork",
+            # "hard" also fails on unauthorized
+            "AGENT_DEBUG_AUTH": None
+        },
+
+        # Event-loop profiling and LLM traffic tracing.
+        "diagnostics": {
+            "AGENT_ASYNCIO_DEBUG": "false",
+            "AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS": "100",
+            "AGENT_HTTP_LLM_TRACE": "false",
+            "AGENT_HTTP_LLM_TRACE_CHUNKS": "false",
+            "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES": "false",
+            "AGENT_LOOP_TIMELINE": "false",
+            "AGENT_LOOP_TIMELINE_DUMP_PATH": "",
+            "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000"
+            # ENABLE_RUN_TIME_STATISTICS - does not have AGENT_ prefix
+            # SHOW_ABSENT_METADATA - does not have AGENT_ prefix
         },
 
         # The HTTP listener.
         "http": {
-            # None falls back to AGENT_PORT
-            "AGENT_HTTP_PORT": None,
-            # Old alias for AGENT_HTTP_PORT, which also holds the final default
-            "AGENT_PORT": "8080",
-            "AGENT_HEALTH_PROBE_PORT": "8081",
-            "AGENT_HTTP_SERVER_INSTANCES": "1",
-            "AGENT_HTTP_CONNECTIONS_BACKLOG": "128",
-            "AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT": "3600",
-            "AGENT_HTTP_RESOURCES_MONITOR_INTERVAL": "0",
             # Any value enables
             "AGENT_ALLOW_CORS_HEADERS": None,
+            "AGENT_HEALTH_PROBE_PORT": "8081",
+            "AGENT_HTTP_CONNECTIONS_BACKLOG": "128",
+            "AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT": "3600",
+            # None falls back to AGENT_PORT
+            "AGENT_HTTP_PORT": None,
+            "AGENT_HTTP_RESOURCES_MONITOR_INTERVAL": "0",
+            "AGENT_HTTP_SERVER_INSTANCES": "1",
             # None falls back to api/grpc/agent_service.json
-            "AGENT_OPENAPI_SPEC": None
+            "AGENT_OPENAPI_SPEC": None,
+            # Old alias for AGENT_HTTP_PORT, which also holds the final default
+            "AGENT_PORT": "8080"
+        },
+
+        # Concurrency and request lifetime.
+        "limits": {
+            "AGENT_MAX_CONCURRENT_REQUESTS": "0",
+            "AGENT_MAX_TEMP_NETWORKS": "0",
+            # None uses the ThreadPoolExecutor default
+            "AGENT_MAX_WORKERS_PER_REQUEST": None,
+            "AGENT_REQUEST_LIMIT": "1000000",
+            "AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS": "0"
+        },
+
+        # Service logs and redaction.
+        "logging": {
+            # None means no redaction
+            "AGENT_REQUEST_LOGGING_INPUT_SLICE": None,
+            "AGENT_SERVER_NAME_FOR_LOGS": "Agent Server",
+            # None falls back to deploy/logging.hocon
+            "AGENT_SERVICE_LOG_JSON": None,
+            "AGENT_SERVICE_LOG_LEVEL": "DEBUG"
         },
 
         # The MCP service.
@@ -115,59 +154,20 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_MCP_ONLY": "false"
         },
 
-        # Concurrency and request lifetime.
-        "limits": {
-            "AGENT_MAX_CONCURRENT_REQUESTS": "0",
-            # None uses the ThreadPoolExecutor default
-            "AGENT_MAX_WORKERS_PER_REQUEST": None,
-            "AGENT_REQUEST_LIMIT": "1000000",
-            "AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS": "0",
-            "AGENT_MAX_TEMP_NETWORKS": "0"
-        },
-
-        # The pluggable authorizer.
-        "authorization": {
-            # None disables authorization
-            "AGENT_AUTHORIZER": None,
-            "AGENT_AUTHORIZER_ACTOR_KEY": "User",
-            "AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY": "user_id",
-            "AGENT_AUTHORIZER_RESOURCE_KEY": "AgentNetwork",
-            "AGENT_AUTHORIZER_ALLOW_RELATION": "read",
-            # "hard" also fails on unauthorized
-            "AGENT_DEBUG_AUTH": None
-        },
-
         # Where temporary networks are stored.
         "reservations": {
             "AGENT_EXTERNAL_RESERVATIONS_STORAGE": "",
+            "AGENT_RESERVATIONS_AZURE_CONTAINER": "",
             "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS": "0",
             "AGENT_RESERVATIONS_LOCAL_PATH": "",
-            "AGENT_RESERVATIONS_S3_BUCKET": "",
-            "AGENT_RESERVATIONS_AZURE_CONTAINER": ""
+            "AGENT_RESERVATIONS_S3_BUCKET": ""
         },
 
-        # Service logs and redaction.
-        "logging": {
-            # None falls back to deploy/logging.hocon
-            "AGENT_SERVICE_LOG_JSON": None,
-            "AGENT_SERVICE_LOG_LEVEL": "DEBUG",
-            "AGENT_SERVER_NAME_FOR_LOGS": "Agent Server",
-            # None means no redaction
-            "AGENT_REQUEST_LOGGING_INPUT_SLICE": None
-        },
-
-        # Event-loop profiling and LLM traffic tracing.
-        "diagnostics": {
-            "AGENT_ASYNCIO_DEBUG": "false",
-            "AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS": "100",
-            "AGENT_LOOP_TIMELINE": "false",
-            "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000",
-            "AGENT_LOOP_TIMELINE_DUMP_PATH": "",
-            "AGENT_HTTP_LLM_TRACE": "false",
-            "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES": "false",
-            "AGENT_HTTP_LLM_TRACE_CHUNKS": "false"
-            # ENABLE_RUN_TIME_STATISTICS - does not have AGENT_ prefix
-            # SHOW_ABSENT_METADATA - does not have AGENT_ prefix
+        # Process identity and lifecycle.
+        "server": {
+            "AGENT_MANIFEST_UPDATE_PERIOD_SECONDS": "0",
+            "AGENT_SERVER_NAME": "neuro-san.Agent",
+            "AGENT_VERSION_LIBS": None
         }
     },
 
