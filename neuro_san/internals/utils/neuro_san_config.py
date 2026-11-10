@@ -17,11 +17,13 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 from typing import Union
 
 from leaf_common.config.config_filter_chain import ConfigFilterChain
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from leaf_common.utils.environment_util import EnvironmentUtil
 
 from neuro_san.internals.utils.environment_config_filter import EnvironmentConfigFilter
 
@@ -219,17 +221,24 @@ class NeuroSanConfig(ConfigFilterChain):
         self._load()
 
     @staticmethod
-    def get(key: str) -> Optional[Union[str, Dict[str, Any]]]:
+    def get(key: str, check_env_var: bool = False) -> Optional[Union[str, Dict[str, Any]]]:
         """
         Given the fully-qualified string key, return the value from the configuration
 
         :param key: The fully-qualified key from the config
+        :param check_env_var: True if we should check the env var value every time get() is called
+                              in case run-time mods changed it underneath us.
+                              False otherwise (the default).
         :return: The value in the config.  Most often this is a string or None, however
                     it is possible to return entire sections of the configuration dictionary
                     (much less common).
         """
         # pylint: disable=protected-access
         value: Optional[Union[str, Dict[str, Any]]] = _INSTANCE._get_fully_qualified(key)
+        if check_env_var:
+            key_split: List[str] = key.split(".")
+            env_key: str = key_split[-1]
+            value = EnvironmentUtil.getenv(env_key, value)
         return value
 
     @staticmethod
