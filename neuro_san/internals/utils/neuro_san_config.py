@@ -159,6 +159,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_EXTERNAL_RESERVATIONS_STORAGE": "",
             "AGENT_EXTERNAL_SERVER_URL": None,
             "AGENT_RESERVATIONS_AZURE_CONTAINER": "",
+            # The default here is merely for consolidated documentation at the moment.
+            # The code actually passes the env var name to another lower-level method which always
+            # reads the value from the env var. In this case there are writes as well (ick!).
             "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS": "0",
             "AGENT_RESERVATIONS_LOCAL_PATH": "",
             "AGENT_RESERVATIONS_S3_BUCKET": ""
