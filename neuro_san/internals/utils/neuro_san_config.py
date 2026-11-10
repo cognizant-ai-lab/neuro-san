@@ -227,7 +227,7 @@ class NeuroSanConfig(ConfigFilterChain):
 
         :param key: The fully-qualified key from the config
         :param check_env_var: True if we should check the env var value every time get() is called
-                              in case run-time mods changed it underneath us.
+                              in case run-time mods changed it underneath us for backwards compatibility.
                               False otherwise (the default).
         :return: The value in the config.  Most often this is a string or None, however
                     it is possible to return entire sections of the configuration dictionary
@@ -242,7 +242,7 @@ class NeuroSanConfig(ConfigFilterChain):
         return value
 
     @staticmethod
-    def get_non_empty(key: str) -> Optional[str]:
+    def get_non_empty(key: str, check_env_var: bool = False) -> Optional[str]:
         """
         Given the fully-qualified string key, return the value from the configuration,
         treating an empty value the same as an unset one.
@@ -252,11 +252,14 @@ class NeuroSanConfig(ConfigFilterChain):
         an empty value means "use the default".
 
         :param key: The fully-qualified key from the config
+        :param check_env_var: True if we should check the env var value every time get() is called
+                              in case run-time mods changed it underneath us for backwards compatibility.
+                              False otherwise (the default).
         :return: The value in the config, or the default from DEFAULT_CONFIG
                  when the value is empty.
         """
         # pylint: disable=protected-access
-        value: Optional[str] = _INSTANCE._get_fully_qualified(key)
+        value: Optional[str] = NeuroSanConfig.get(key, check_env_var)
         if value is not None and len(value) == 0:
             value = _INSTANCE._get_default(key)
         return value

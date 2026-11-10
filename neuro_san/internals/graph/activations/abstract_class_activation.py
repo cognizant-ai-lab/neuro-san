@@ -400,7 +400,12 @@ Check these things:
         # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
         # operator setting this security flag the way other flags are set gets the
         # behavior they expect rather than a silent fail-open.
-        return ConfigUtil.get_bool(NeuroSanConfig.get("internals.tools"), "AGENT_TOOL_PATH_ONLY", False)
+        key: str = "internals.tools.AGENT_TOOL_PATH_ONLY"
+        only_value: str = NeuroSanConfig.get(key, check_env_var=True)
+        compat: Dict[str, Any] = {
+            key: only_value
+        }
+        return ConfigUtil.get_bool(compat, key, False)
 
     def _log_unrestricted_resolution_notice_once(self):
         """
