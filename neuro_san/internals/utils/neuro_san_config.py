@@ -166,6 +166,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_HTTP_LLM_TRACE": "false",
             "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES": "false",
             "AGENT_HTTP_LLM_TRACE_CHUNKS": "false"
+            # ENABLE_RUN_TIME_STATISTICS - does not have AGENT_ prefix
+            # SHOW_ABSENT_METADATA - does not have AGENT_ prefix
         }
     },
 
@@ -173,6 +175,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "session": {
         "security": {
             "AGENT_SESSION_REQUIRE_HTTPS": "false"
+            # MAX_AGENTS_FROM_EXTERNAL_SERVER - does not have AGENT_ prefix
         }
     },
 
