@@ -188,8 +188,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 class NeuroSanConfig(ConfigFilterChain):
     """
     Class from which to get configuration.
-    This will allow us to get config from a dictionary, the environment and also
-    potentially do overlays.
+    This will allow us to get config from a dictionary, the environment and also potentially do overlays
+    from files.
+
+    This is a singleton whose values are loaded/determined at first-mention, so if a rogue coded tool
+    decides to try to change one of these via env-var, it will fail (good!).
     """
 
     def __init__(self):
