@@ -632,21 +632,9 @@ llm info file (see [Extending LLM Info Specifications](#extending-llm-info-speci
 
 ### Gemini API Version
 
-The `gemini` class accepts `api_version`, the Gemini API version in the request URL, such as `"v1"` or
-`"v1beta"`. The default, `null`, lets the google-genai package choose: version 3.0.0 and later use `"v1"`, and
-earlier versions use `"v1beta"`. When `api_version` is `null`, google-genai also reads the
-`GOOGLE_GENAI_API_VERSION` environment variable, where `beta` selects `"v1beta"`.
-
-Some models, such as `gemini-3-flash-preview`, are not served on `"v1"`, and a request for one returns
-`404 NOT_FOUND`. Set `"api_version": "v1beta"` in the llm_config of such a model. See
+The `gemini` class accepts `api_version`. The default, `null`, lets the google-genai package choose. If a model
+such as `gemini-3-flash-preview` returns `404 NOT_FOUND`, set `"api_version": "v1beta"` in its llm_config. See
 [API versions](https://aistudio.google.com/api-reference/api-versions).
-
-```hocon
-"llm_config": {
-    "model_name": "gemini-3-flash",
-    "api_version": "v1beta"
-}
-```
 
 ### Gemini Thinking Parameters
 
@@ -673,12 +661,8 @@ The `gemini` class accepts a few parameters that only matter for Gemini thinking
   [langchain Gemini page](https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai).
 
 **Temperature.** The `gemini` class default is `null`, which sends no temperature, so the model uses its own
-default. This needs langchain-google-genai 4.3.0 or later; older versions reject a `null` temperature. Google
-recommends keeping `temperature` at `1.0` for Gemini 3 and later: lower values can cause infinite loops,
-degraded reasoning and failures on complex tasks (see
-[Gemini 3 temperature](https://ai.google.dev/gemini-api/docs/gemini-3#temperature)). Some models, such as
-`gemini-3.5-flash-lite` and `gemini-3.6-flash`, use fixed sampling: langchain drops `temperature`, `top_k` and
-`top_p` for them and warns when one is set.
+default. Google recommends `1.0` for Gemini 3 and later (see
+[Gemini 3 temperature](https://ai.google.dev/gemini-api/docs/gemini-3#temperature)).
 
 ```hocon
 "llm_config": {
