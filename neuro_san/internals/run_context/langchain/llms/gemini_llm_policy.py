@@ -78,6 +78,10 @@ class GeminiLlmPolicy(LlmPolicy):
             # and https://ai.google.dev/gemini-api/docs/thinking
             include_thoughts=config.get("include_thoughts"),
 
+            # None lets google-genai choose the API version and read GOOGLE_GENAI_API_VERSION
+            # itself, so the variable is not read here.
+            api_version=config.get("api_version"),
+
             # Streaming is configurable via the "streaming" key in llm_config; defaults
             # to False so existing agents keep their long-standing non-streaming behavior.
             # We pass streaming explicitly (rather than relying on LangChain's default) so
@@ -124,9 +128,7 @@ class GeminiLlmPolicy(LlmPolicy):
 
         Note that requests with tools bound do not inherit bind() kwargs, so they
         do not carry the explicit disable.  They are banner-free regardless:
-        google-genai >= 1.48 skips its AFC path entirely for declaration-style
-        tools, and langchain-google-genai >= 4.1.2 (our floor) requires
-        google-genai >= 1.56.
+        google-genai skips its AFC path entirely for declaration-style tools.
 
         :param llm: The ChatGoogleGenerativeAI instance to disable AFC on.
         :return: llm.bind(...) with AFC disabled, which behaves like the original

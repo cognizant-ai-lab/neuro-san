@@ -248,6 +248,60 @@ class TestGeminiLlmPolicy(TestCase):
         self.assertEqual(full_config["class"], "gemini")
         self.assertIs(full_config["include_thoughts"], True)
 
+    def test_api_version_is_forwarded(self) -> None:
+        """
+        "api_version": "v1beta" in llm_config lands on the chat model.
+        """
+        llm: Any = self._build_llm({"api_version": "v1beta"})
+
+        self.assertEqual(llm.api_version, "v1beta")
+
+    def test_api_version_absent_stays_none(self) -> None:
+        """
+        Without "api_version" in llm_config the chat model keeps langchain's None default,
+        so google-genai picks the API version itself.
+        """
+        llm: Any = self._build_llm({})
+
+        self.assertIsNone(llm.api_version)
+
+    def test_temperature_absent_stays_none_for_gemini_3(self) -> None:
+        """
+        Without "temperature" in llm_config a Gemini 3+ model gets None from the null class
+        default, so no temperature is sent and the model uses its own default.
+        """
+        llm: Any = self._build_llm({})
+
+        self.assertIsNone(llm.temperature)
+
+    def test_temperature_absent_stays_none_before_gemini_3(self) -> None:
+        """
+        Without "temperature" in llm_config a model before Gemini 3 also gets None, not
+        langchain's 0.7 field default, so the model uses its own default.
+        """
+        llm: Any = self._build_llm({"model_name": "gemini-2.5-flash"})
+
+        self.assertIsNone(llm.temperature)
+
+    def test_temperature_is_forwarded(self) -> None:
+        """
+        "temperature": 0.3 in llm_config lands on the chat model.
+        """
+        llm: Any = self._build_llm({"temperature": 0.3})
+
+        self.assertEqual(llm.temperature, 0.3)
+
+    def test_factory_declares_api_version_default(self) -> None:
+        """
+        The gemini class args in default_llm_info.hocon declare api_version with a null default,
+        so a fully specified config carries the key as None unless llm_config sets it.
+        """
+        full_config: Dict[str, Any] = self.factory.create_full_llm_config({"model_name": self.MODEL_NAME}, {})
+
+        self.assertEqual(full_config.get("class"), "gemini")
+        self.assertIn("api_version", full_config)
+        self.assertIsNone(full_config.get("api_version"))
+
     def test_disable_afc_binds_afc_disable(self) -> None:
         """
         On a chat-model-aware langchain-core, the llm is bound with the AFC-disable setting.
