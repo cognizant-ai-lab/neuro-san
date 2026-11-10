@@ -171,6 +171,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_MANIFEST_UPDATE_PERIOD_SECONDS": "0",
             "AGENT_SERVER_NAME": "neuro-san.Agent",
             "AGENT_VERSION_LIBS": None
+            # Note: More constants exist in ServerMainLoop and HttpServerConfig.
         }
     },
 
