@@ -56,11 +56,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_MANIFEST_FILE": None
         },
 
-        # How temporary networks are addressed.
-        "reservations": {
-            "AGENT_EXTERNAL_SERVER_URL": None
-        },
-
         # Finding and running coded tools, and loading toolboxes.
         "tools": {
             "AGENT_FETCHABLE_TOOL_SCHEMES": "",
@@ -157,6 +152,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         # Where temporary networks are stored.
         "reservations": {
             "AGENT_EXTERNAL_RESERVATIONS_STORAGE": "",
+            "AGENT_EXTERNAL_SERVER_URL": None,
             "AGENT_RESERVATIONS_AZURE_CONTAINER": "",
             "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS": "0",
             "AGENT_RESERVATIONS_LOCAL_PATH": "",

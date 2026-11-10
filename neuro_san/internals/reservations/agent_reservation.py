@@ -84,7 +84,7 @@ class AgentReservation(Reservation):
         url: str = self.get_reservation_id()
 
         # See if we have an external agent name to tack on.
-        external_url: str = NeuroSanConfig.get("internals.reservations.AGENT_EXTERNAL_SERVER_URL")
+        external_url: str = NeuroSanConfig.get("service.reservations.AGENT_EXTERNAL_SERVER_URL")
         if external_url is not None:
 
             # Remove any ending slashes to standardize
