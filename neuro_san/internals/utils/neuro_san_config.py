@@ -142,6 +142,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_SERVER_NAME_FOR_LOGS": "Agent Server",
             # None falls back to deploy/logging.hocon
             "AGENT_SERVICE_LOG_JSON": None,
+            # The default here is merely for consolidated documentation at the moment.
+            # The code actually passes the env var name to another lower-level method which always
+            # reads the value from the env var.
             "AGENT_SERVICE_LOG_LEVEL": "DEBUG"
         },
 
