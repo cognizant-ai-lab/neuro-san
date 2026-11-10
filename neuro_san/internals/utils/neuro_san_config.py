@@ -222,7 +222,7 @@ class NeuroSanConfig(ConfigFilterChain):
     @staticmethod
     def get(key: str) -> Optional[Union[str, Dict[str, Any]]]:
         """
-        Given the fully-qualified string key, return the value from the configuation
+        Given the fully-qualified string key, return the value from the configuration
 
         :param key: The fully-qualified key from the config
         :return: The value in the config.  Most often this is a string or None, however
@@ -263,7 +263,7 @@ class NeuroSanConfig(ConfigFilterChain):
 
     def _get_fully_qualified(self, key: str) -> Optional[str]:
         """
-        Given the fully-qualified string key, return the value from the configuation
+        Given the fully-qualified string key, return the value from the configuration
 
         :param key: The fully-qualified key from the config
         :return: The value in the config.
