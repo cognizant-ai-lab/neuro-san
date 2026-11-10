@@ -197,7 +197,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
 
         # Add values for listed env vars if they have values.
         # Defaults are standard env vars for kubernetes deployments
-        env_vars_str: str = NeuroSanConfig.get("internals.tracing.AGENT_TRACING_METADATA_ENV_VARS")
+        env_vars_str: str = NeuroSanConfig.get_non_empty("internals.tracing.AGENT_TRACING_METADATA_ENV_VARS")
         to_add: Dict[str, Any] = MetadataUtil.minimize_metadata(os.environ, env_vars_str)
         runnable_metadata.update(to_add)
 

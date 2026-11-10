@@ -110,7 +110,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "http": {
             # Any value enables
             "AGENT_ALLOW_CORS_HEADERS": None,
-            "AGENT_HEALTH_PROBE_PORT": "8081",
+            # None falls back to HttpServerConfig.http_probe_port
+            "AGENT_HEALTH_PROBE_PORT": None,
             "AGENT_HTTP_CONNECTIONS_BACKLOG": "128",
             "AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT": "3600",
             # None falls back to AGENT_PORT
@@ -203,6 +204,7 @@ class NeuroSanConfig(ConfigFilterChain):
 
         self.config: Dict[str, Any] = None
         self.extractor: DictionaryExtractor = None
+        self.default_extractor: DictionaryExtractor = DictionaryExtractor(DEFAULT_CONFIG)
 
         self.register(EnvironmentConfigFilter())
 
@@ -218,6 +220,26 @@ class NeuroSanConfig(ConfigFilterChain):
         """
         # pylint: disable=protected-access
         value: Optional[str] = _INSTANCE._get_fully_qualified(key)
+        return value
+
+    @staticmethod
+    def get_non_empty(key: str) -> Optional[str]:
+        """
+        Given the fully-qualified string key, return the value from the configuration,
+        treating an empty value the same as an unset one.
+
+        get() keeps a variable that is set to an empty string, because some variables
+        mean something when set but empty. Use this method instead for variables where
+        an empty value means "use the default".
+
+        :param key: The fully-qualified key from the config
+        :return: The value in the config, or the default from DEFAULT_CONFIG
+                 when the value is empty.
+        """
+        # pylint: disable=protected-access
+        value: Optional[str] = _INSTANCE._get_fully_qualified(key)
+        if value is not None and len(value) == 0:
+            value = _INSTANCE._get_default(key)
         return value
 
     def _load(self):
@@ -236,6 +258,17 @@ class NeuroSanConfig(ConfigFilterChain):
         :return: The value in the config.
         """
         value: Optional[str] = self.extractor.get(key)
+        return value
+
+    def _get_default(self, key: str) -> Optional[str]:
+        """
+        Given the fully-qualified string key, return the default from DEFAULT_CONFIG,
+        ignoring the environment.
+
+        :param key: The fully-qualified key from the config
+        :return: The default value for the key
+        """
+        value: Optional[str] = self.default_extractor.get(key)
         return value
 
     @staticmethod

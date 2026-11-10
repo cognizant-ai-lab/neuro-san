@@ -84,7 +84,7 @@ class RegistryManifestRestorer(Restorer):
 
         if manifest_files is None:
             # We have no manifest list coming in, so check an env variable for a definition.
-            manifest_file: str = NeuroSanConfig.get("internals.registry.AGENT_MANIFEST_FILE")
+            manifest_file: str = NeuroSanConfig.get_non_empty("internals.registry.AGENT_MANIFEST_FILE")
             if manifest_file is None:
                 # No env var, so fallback to what is coded in this repo.
                 manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")

@@ -33,7 +33,7 @@ class MissingAgentCheck:
         """
 
         if agent_network is None:
-            manifest_file: str = NeuroSanConfig.get("internals.registry.AGENT_MANIFEST_FILE")
+            manifest_file: str = NeuroSanConfig.get_non_empty("internals.registry.AGENT_MANIFEST_FILE")
             message = f"""
 Agent named "{agent_name}" not found in manifest file: {manifest_file}.
 

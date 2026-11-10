@@ -411,14 +411,17 @@ class HttpServer(AgentStateListener):
         """
         Resolve the port for the isolated HealthProbeServer.
 
-        Reads the AGENT_HEALTH_PROBE_PORT env var. Non-numeric values fall
-        back to the default (8081), and a value of 0 (or negative) disables
-        the separate probe server, in which case k8s / LB probes should hit
-        the main port's registered health handlers.
+        Reads the AGENT_HEALTH_PROBE_PORT env var. When it is unset or non-numeric,
+        the port comes from the supplied HttpServerConfig.http_probe_port, and a
+        value of 0 (or negative) disables the separate probe server, in which case
+        k8s / LB probes should hit the main port's registered health handlers.
 
         :return: A non-negative int. 0 disables the probe server.
         """
         raw: str = NeuroSanConfig.get("service.http.AGENT_HEALTH_PROBE_PORT")
+        if raw is None:
+            # No override configured, so use the port from the supplied server config.
+            raw = str(self.server_config.http_probe_port)
         try:
             value: int = int(raw)
         except ValueError:
