@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Union
 
 from copy import copy
 
@@ -219,12 +220,14 @@ class NeuroSanConfig(ConfigFilterChain):
         self._load()
 
     @staticmethod
-    def get(key: str) -> Optional[str]:
+    def get(key: str) -> Optional[Union[str, Dict[str, Any]]]:
         """
         Given the fully-qualified string key, return the value from the configuation
 
         :param key: The fully-qualified key from the config
-        :return: The value in the config.
+        :return: The value in the config.  Most often this is a string or None, however
+                    it is possible to return entire sections of the configuration dictionary
+                    (much less common).
         """
         # pylint: disable=protected-access
         value: Optional[str] = _INSTANCE._get_fully_qualified(key)
