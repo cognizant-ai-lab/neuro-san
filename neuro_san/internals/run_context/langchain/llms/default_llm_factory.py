@@ -102,10 +102,10 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         if config:
             raw_llm_info_file: str = (
                 config.get("llm_info_file")
-                or NeuroSanConfig.get("internals.registry.AGENT_LLM_INFO_FILE")
+                or NeuroSanConfig.get("internals.llms.AGENT_LLM_INFO_FILE")
             )
         else:
-            raw_llm_info_file = NeuroSanConfig.get("internals.registry.AGENT_LLM_INFO_FILE")
+            raw_llm_info_file = NeuroSanConfig.get("internals.llms.AGENT_LLM_INFO_FILE")
 
         if raw_llm_info_file is not None and not isinstance(raw_llm_info_file, str):
             raise TypeError(

@@ -37,25 +37,29 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Anything read at least in neuro_san/internals lives here.
     "internals": {
 
-        # Loading networks, LLM info and toolboxes.
+        # Loading networks.
         "registry": {
             # None falls back to registries/manifest.hocon
             "AGENT_MANIFEST_FILE": None,
             "AGENT_MANIFEST_CONCURRENCY_CONTEXT": "thread",
-            # None defers to the network's llm_info_file, then built-in defaults
-            "AGENT_LLM_INFO_FILE": None,
-            # None defers to the network's toolbox_info_file, then built-in defaults
-            "AGENT_TOOLBOX_INFO_FILE": None,
             "AGENT_ACTIVATION_PREPPER_CLASSES": ""
         },
 
-        # Finding and running coded tools.
+        # Loading LLM info.
+        "llms": {
+            # None defers to the network's llm_info_file, then built-in defaults
+            "AGENT_LLM_INFO_FILE": None
+        },
+
+        # Finding and running coded tools, and loading toolboxes.
         "tools": {
             # None falls back to neuro_san/coded_tools
             "AGENT_TOOL_PATH": None,
             "AGENT_TOOL_PATH_ONLY": "false",
             "AGENT_FETCHABLE_TOOL_SCHEMES": "",
-            "AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS": "0"
+            "AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS": "0",
+            # None defers to the network's toolbox_info_file, then built-in defaults
+            "AGENT_TOOLBOX_INFO_FILE": None
         },
 
         # Chat sessions.

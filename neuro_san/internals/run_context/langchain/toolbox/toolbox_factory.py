@@ -110,10 +110,10 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if config:
             raw_toolbox_info_file: str = (
                 config.get("toolbox_info_file")
-                or NeuroSanConfig.get("internals.registry.AGENT_TOOLBOX_INFO_FILE")
+                or NeuroSanConfig.get("internals.tools.AGENT_TOOLBOX_INFO_FILE")
             )
         else:
-            raw_toolbox_info_file = NeuroSanConfig.get("internals.registry.AGENT_TOOLBOX_INFO_FILE")
+            raw_toolbox_info_file = NeuroSanConfig.get("internals.tools.AGENT_TOOLBOX_INFO_FILE")
 
         if raw_toolbox_info_file is not None and not isinstance(raw_toolbox_info_file, str):
             raise TypeError(
