@@ -29,8 +29,6 @@ from inspect import iscoroutinefunction
 
 from langchain_core.messages.base import BaseMessage
 
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
-
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -46,6 +44,7 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.factory.master_tracing_context_factory import MasterTracingContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.processors.answer_message_processor import AnswerMessageProcessor
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
@@ -69,7 +68,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         # We make a copy of the AgentNetwork at this level to allow for interactions
         # within this scope to modify the network topology.
-        protect_original_copy: bool = Env.getenv("AGENT_PROTECT_ORIGINAL_COPY", "true").lower() == "true"
+        protect_original_copy: bool = NeuroSanConfig.get("internals.chat.AGENT_PROTECT_ORIGINAL_COPY").lower() == "true"
         if protect_original_copy:
             agent_network_copy = deepcopy(agent_network)
 

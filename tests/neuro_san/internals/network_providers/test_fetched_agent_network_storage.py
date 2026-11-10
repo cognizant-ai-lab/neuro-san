@@ -31,6 +31,7 @@ from aiohttp.test_utils import TestServer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.fetched_agent_network_storage import FetchedAgentNetworkStorage
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 from tests.neuro_san.internals.network_providers.recording_listener import RecordingListener
 
@@ -65,8 +66,10 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
 
     def setUp(self):
         """
-        Create a temporary directory and a fresh storage for each test.
+        Create a temporary directory and a fresh storage for each test,
+        and reload NeuroSanConfig after each test once its environment is restored.
         """
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         self.temp_dir: str = mkdtemp()
         self.storage: FetchedAgentNetworkStorage = \
             FetchedAgentNetworkStorage(FetchedAgentNetworkStorage.SUPPORTED_SCHEMES)
@@ -382,6 +385,7 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         Tests that no scheme is fetchable when AGENT_FETCHABLE_TOOL_SCHEMES is not set.
         """
         with patch.dict(os.environ, clear=True):
+            NeuroSanConfig.reset_for_testing()
             self.assertEqual([], FetchedAgentNetworkStorage.get_fetchable_schemes())
 
     def test_get_fetchable_schemes_empty_string(self):
@@ -389,6 +393,7 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         Tests that no scheme is fetchable when AGENT_FETCHABLE_TOOL_SCHEMES is empty.
         """
         with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": ""}):
+            NeuroSanConfig.reset_for_testing()
             self.assertEqual([], FetchedAgentNetworkStorage.get_fetchable_schemes())
 
     def test_get_fetchable_schemes_separators(self):
@@ -396,6 +401,7 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         Tests that commas and whitespace both separate schemes, and case and duplicates are normalized.
         """
         with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": " HTTPS, file  http,https "}):
+            NeuroSanConfig.reset_for_testing()
             self.assertEqual(["https", "file", "http"], FetchedAgentNetworkStorage.get_fetchable_schemes())
 
     def test_get_fetchable_schemes_unsupported_ignored(self):
@@ -403,6 +409,7 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         Tests that an unsupported scheme is logged and ignored.
         """
         with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "ftp,https,s3"}):
+            NeuroSanConfig.reset_for_testing()
             with self.assertLogs(FetchedAgentNetworkStorage.__name__, level="WARNING") as logs:
                 schemes: List[str] = FetchedAgentNetworkStorage.get_fetchable_schemes()
         self.assertEqual(["https"], schemes)
@@ -413,6 +420,7 @@ class TestFetchedAgentNetworkStorage(IsolatedAsyncioTestCase):
         Tests that the default constructor takes its schemes from AGENT_FETCHABLE_TOOL_SCHEMES.
         """
         with patch.dict(os.environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https"}):
+            NeuroSanConfig.reset_for_testing()
             storage: FetchedAgentNetworkStorage = FetchedAgentNetworkStorage()
         self.assertEqual(["https"], storage.fetchable_schemes)
 

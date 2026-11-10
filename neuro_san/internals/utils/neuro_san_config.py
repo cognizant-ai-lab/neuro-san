@@ -239,13 +239,12 @@ class NeuroSanConfig(ConfigFilterChain):
         """
         super().__init__()
 
-        self.config: Dict[str, Any] = copy(DEFAULT_CONFIG)
+        self.config: Dict[str, Any] = None
         self.extractor: DictionaryExtractor = None
 
         self.register(EnvironmentConfigFilter())
 
-        self.config = self.filter_config(self.config)
-        self.extractor = DictionaryExtractor(self.config)
+        self._load()
 
     @staticmethod
     def get(key: str) -> Optional[str]:
@@ -255,10 +254,19 @@ class NeuroSanConfig(ConfigFilterChain):
         :param key: The fully-qualified key from the config
         :return: The value in the config.
         """
-        value: Optional[str] = _INSTANCE.get_fully_qualified(key)
+        # pylint: disable=protected-access
+        value: Optional[str] = _INSTANCE._get_fully_qualified(key)
         return value
 
-    def get_fully_qualified(self, key: str) -> Optional[str]:
+    def _load(self):
+        """
+        Builds the configuration from DEFAULT_CONFIG, filtered through the registered filters.
+        """
+        self.config = copy(DEFAULT_CONFIG)
+        self.config = self.filter_config(self.config)
+        self.extractor = DictionaryExtractor(self.config)
+
+    def _get_fully_qualified(self, key: str) -> Optional[str]:
         """
         Given the fully-qualified string key, return the value from the configuation
 
@@ -267,6 +275,16 @@ class NeuroSanConfig(ConfigFilterChain):
         """
         value: Optional[str] = self.extractor.get(key)
         return value
+
+    @staticmethod
+    def reset_for_testing():
+        """
+        Reloads the singleton configuration so that it reflects the current environment.
+        The configuration is read once at import time, so tests that change environment
+        variables call this after making the change and again after undoing it.
+        """
+        # pylint: disable=protected-access
+        _INSTANCE._load()
 
 
 # Singleton. Access via NeuroSanConfig.get()

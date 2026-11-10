@@ -40,6 +40,7 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class ActivationFactory(AgentToolFactory):
@@ -84,7 +85,7 @@ class ActivationFactory(AgentToolFactory):
                             root is not under the PYTHONPATH.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = Env.getenv("AGENT_TOOL_PATH")
+        agent_tool_path: str = NeuroSanConfig.get("internals.tools.AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
@@ -187,7 +188,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         external_preppers: List[ActivationPrepper] = []
 
         prepper_class_name: str = None
-        agent_prepper_classes: str = Env.getenv("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        agent_prepper_classes: str = NeuroSanConfig.get("internals.registry.AGENT_ACTIVATION_PREPPER_CLASSES")
         for prepper_class_name in agent_prepper_classes.split():
             use_prepper_class_name = prepper_class_name.strip()
             prepper: ActivationPrepper = ResolverUtil.create_instance(use_prepper_class_name,

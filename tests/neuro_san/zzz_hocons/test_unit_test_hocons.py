@@ -23,6 +23,7 @@ import pytest
 
 from parameterized import parameterized
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.test.unittest.dynamic_hocon_unit_tests import DynamicHoconUnitTests
 
 
@@ -75,8 +76,6 @@ class TestUnitTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
-    # The agent network file is fetched over https, which is off by default.
-    @patch.dict(environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https"})
     def test_hocon_with_fetching(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file
@@ -85,7 +84,12 @@ class TestUnitTestHocons(TestCase):
         :param test_name: The name of a single test.
         :param test_hocon: The hocon file of a single data-driven test case.
         """
-        self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
+        # Reload NeuroSanConfig once the environment is restored.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
+        # The agent network file is fetched over https, which is off by default.
+        with patch.dict(environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https"}):
+            NeuroSanConfig.reset_for_testing()
+            self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
 
     @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
         # These can be in any order.

@@ -40,7 +40,6 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver import Resolver
 from leaf_common.resolution.resolver_util import ResolverUtil
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist
@@ -56,6 +55,7 @@ from neuro_san.internals.reservations.accumulating_agent_reservationist import A
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.types.agent_message import AgentMessage
 
 
@@ -186,7 +186,7 @@ class AbstractClassActivation(AbstractCallableActivation):
         stop: float = perf_counter()
         duration: float = stop - start
 
-        threshold_str: str = Env.getenv("AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS", "0")
+        threshold_str: str = NeuroSanConfig.get("internals.tools.AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS")
         threshold: float = 0.0
         try:
             threshold = float(threshold_str)

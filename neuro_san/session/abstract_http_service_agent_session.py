@@ -19,9 +19,9 @@ from typing import Any
 from typing import Dict
 
 from leaf_common.time.timeout import Timeout
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class AbstractHttpServiceAgentSession(AgentSessionConstants):
@@ -96,7 +96,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
 
         # By default, be permissive so developers can get work done.
         # Servers can turn this on to be more strict within their systems.
-        require_https: bool = Env.getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
+        require_https: bool = NeuroSanConfig.get("session.security.AGENT_SESSION_REQUIRE_HTTPS").lower() == "true"
         if require_https and scheme != "https":
             raise ValueError(
                 f"AGENT_SESSION_REQUIRE_HTTPS=true requires https. Configure the {self.__class__.__name__} accordingly"
