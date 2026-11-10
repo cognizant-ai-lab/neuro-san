@@ -34,6 +34,7 @@ from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSour
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
@@ -78,7 +79,7 @@ class BaseRequestHandler(RequestHandler):
         if self.server_context is not None:
             self.worker_id = self.server_context.get_worker_id()
 
-        if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
+        if NeuroSanConfig.get("service.http.AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             headers: str = "Content-Type, Transfer-Encoding"

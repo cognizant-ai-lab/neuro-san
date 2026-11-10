@@ -31,6 +31,7 @@ from leaf_common.utils.map import Map
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
@@ -54,7 +55,7 @@ class AzureBlobReservationsWriter:
         self.name: str = name
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-        env_container: str = getenv("AGENT_RESERVATIONS_AZURE_CONTAINER", "")
+        env_container: str = NeuroSanConfig.get("service.reservations.AGENT_RESERVATIONS_AZURE_CONTAINER")
         self.container_name: str = container_name or env_container
         if not self.container_name:
             raise ValueError(

@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -26,7 +25,6 @@ from typing import Type
 from typing import Union
 
 import logging
-import os
 
 from threading import Lock
 
@@ -40,6 +38,7 @@ from leaf_common.resolution.resolver import Resolver
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_info_restorer import ToolboxInfoRestorer
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class ToolboxFactory(ContextTypeToolboxFactory):
@@ -111,10 +110,10 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if config:
             raw_toolbox_info_file: str = (
                 config.get("toolbox_info_file")
-                or os.getenv("AGENT_TOOLBOX_INFO_FILE")
+                or NeuroSanConfig.get("internals.registry.AGENT_TOOLBOX_INFO_FILE")
             )
         else:
-            raw_toolbox_info_file = os.getenv("AGENT_TOOLBOX_INFO_FILE")
+            raw_toolbox_info_file = NeuroSanConfig.get("internals.registry.AGENT_TOOLBOX_INFO_FILE")
 
         if raw_toolbox_info_file is not None and not isinstance(raw_toolbox_info_file, str):
             raise TypeError(

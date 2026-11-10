@@ -19,8 +19,7 @@ from typing import Dict
 from typing import List
 from types import ModuleType
 
-from os import environ
-
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.authorization.interfaces.abstract_authorizer import AbstractAuthorizer
 from neuro_san.service.authorization.interfaces.authorizer import Authorizer
 from neuro_san.service.authorization.openfga.open_fga_store_cache import OpenFgaStoreCache
@@ -44,9 +43,9 @@ class OpenFgaAuthorizer(AbstractAuthorizer):
                                                                              module_name="openfga_sdk",
                                                                              install_if_missing="openfga-sdk")
 
-        debug_auth: str = environ.get("AGENT_DEBUG_AUTH")
+        debug_auth: str = NeuroSanConfig.get("service.authorization.AGENT_DEBUG_AUTH")
         self.debug: bool = debug_auth is not None and len(debug_auth) > 0 and debug_auth != "false"
-        self.fail_on_unauthorized: bool = environ.get("AGENT_DEBUG_AUTH") == "hard"
+        self.fail_on_unauthorized: bool = debug_auth == "hard"
 
         # Note: we don't initialize the client because constructors cannot be async
         # This is what we use aenter() and aexit() for.

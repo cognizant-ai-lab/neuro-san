@@ -35,6 +35,7 @@ from typing_extensions import override
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.watcher.temp_networks.local.local_reservations_storage import LocalReservationsStorage
 
 from tests.neuro_san.internals.network_providers.byok_agent_spec_builder import ByokAgentSpecBuilder
@@ -85,6 +86,8 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
         # addCleanup runs even if the test fails or raises.
         tmp_dir: str = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp_dir)
+        # Reloads NeuroSanConfig after each test, once the environment the test changed is restored.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         # LocalReservationsStorage stores os.path.abspath(base_path), which does
         # not resolve symlinks, and the constructor tests compare against the
         # resolved path. On macOS the temp dir lives under a symlink
@@ -111,6 +114,7 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
         # can only add or override keys, not delete one, hence the explicit pop.
         with patch.dict(os.environ):
             os.environ.pop("AGENT_RESERVATIONS_LOCAL_PATH", None)
+            NeuroSanConfig.reset_for_testing()
             with self.assertRaisesRegex(ValueError, "Local path for reservations"):
                 LocalReservationsStorage()
 
@@ -118,6 +122,7 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
         """base_path defaults from the env var when the arg is empty."""
         with patch.dict(os.environ):
             os.environ["AGENT_RESERVATIONS_LOCAL_PATH"] = str(self.tmp_path)
+            NeuroSanConfig.reset_for_testing()
             storage: LocalReservationsStorage = LocalReservationsStorage()
         self.assertEqual(str(self.tmp_path.resolve()), storage.base_path)
 
@@ -125,6 +130,7 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
         """A non-empty base_path arg is used even when the env var is set."""
         with patch.dict(os.environ):
             os.environ["AGENT_RESERVATIONS_LOCAL_PATH"] = "/some/env/path"
+            NeuroSanConfig.reset_for_testing()
             storage: LocalReservationsStorage = LocalReservationsStorage(base_path=str(self.tmp_path))
         self.assertEqual(str(self.tmp_path.resolve()), storage.base_path)
 

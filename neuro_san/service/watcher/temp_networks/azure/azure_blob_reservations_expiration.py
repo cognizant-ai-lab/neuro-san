@@ -36,6 +36,7 @@ DefaultAzureCredential: Type[Any] = ResolverUtil.create_type("azure.identity.Def
 ContainerClient: Type[Any] = ResolverUtil.create_type("azure.storage.blob.ContainerClient",
                                                       install_if_missing="azure-storage-blob")
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig                      # noqa: E402
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil     # noqa: E402
 
 
@@ -54,7 +55,7 @@ class AzureBlobReservationsExpiration:
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-        env_container: str = getenv("AGENT_RESERVATIONS_AZURE_CONTAINER", "")
+        env_container: str = NeuroSanConfig.get("service.reservations.AGENT_RESERVATIONS_AZURE_CONTAINER")
         self.container_name: str = container_name or env_container
         if not self.container_name:
             raise ValueError(

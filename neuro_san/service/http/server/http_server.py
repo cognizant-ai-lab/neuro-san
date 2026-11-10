@@ -37,6 +37,7 @@ from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkPr
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.listenable import Listenable
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.config.http_server_config import ENV_HEALTH_PROBE_PORT
@@ -296,10 +297,10 @@ class HttpServer(AgentStateListener):
         Must be called after server.start() (i.e. after fork) so each
         worker process configures its own loop.
         """
-        if not ConfigUtil.get_bool(os.environ, "AGENT_ASYNCIO_DEBUG"):
+        if not ConfigUtil.get_bool(NeuroSanConfig.get("service.diagnostics"), "AGENT_ASYNCIO_DEBUG"):
             return
 
-        raw_threshold: str = os.environ.get("AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS", "100")
+        raw_threshold: str = NeuroSanConfig.get("service.diagnostics.AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS")
         try:
             threshold_ms: int = int(raw_threshold)
         except ValueError:
@@ -341,12 +342,11 @@ class HttpServer(AgentStateListener):
         The tracer adds ~5-10% loop overhead; keep off in production unless
         actively diagnosing.
         """
-        if not ConfigUtil.get_bool(os.environ, "AGENT_LOOP_TIMELINE"):
+        if not ConfigUtil.get_bool(NeuroSanConfig.get("service.diagnostics"), "AGENT_LOOP_TIMELINE"):
             return
 
         try:
-            max_events: int = int(os.environ.get(
-                "AGENT_LOOP_TIMELINE_MAX_EVENTS", str(LoopTimelineTracer.DEFAULT_MAX_EVENTS)))
+            max_events: int = int(NeuroSanConfig.get("service.diagnostics.AGENT_LOOP_TIMELINE_MAX_EVENTS"))
         except ValueError:
             max_events = LoopTimelineTracer.DEFAULT_MAX_EVENTS
         if max_events <= 0:
@@ -354,7 +354,7 @@ class HttpServer(AgentStateListener):
 
         self._loop_timeline_tracer = LoopTimelineTracer(max_events=max_events)
 
-        dump_path: str = os.environ.get("AGENT_LOOP_TIMELINE_DUMP_PATH", "").strip()
+        dump_path: str = NeuroSanConfig.get("service.diagnostics.AGENT_LOOP_TIMELINE_DUMP_PATH").strip()
         if dump_path:
             self._loop_timeline_tracer.register_atexit_dump(dump_path)
             self.logger.info(
@@ -388,13 +388,14 @@ class HttpServer(AgentStateListener):
         call). Route the "neuro_san.diagnostics.http_llm_trace" logger
         to a separate file in logging.hocon for clean offline analysis.
         """
-        if not ConfigUtil.get_bool(os.environ, "AGENT_HTTP_LLM_TRACE"):
+        diagnostics: Dict[str, Any] = NeuroSanConfig.get("service.diagnostics")
+        if not ConfigUtil.get_bool(diagnostics, "AGENT_HTTP_LLM_TRACE"):
             return
 
         include_bodies: bool = ConfigUtil.get_bool(
-            os.environ, "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
+            diagnostics, "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
         include_chunks: bool = ConfigUtil.get_bool(
-            os.environ, "AGENT_HTTP_LLM_TRACE_CHUNKS")
+            diagnostics, "AGENT_HTTP_LLM_TRACE_CHUNKS")
 
         HttpxLlmTracer.install(
             include_bodies=include_bodies,
@@ -417,7 +418,7 @@ class HttpServer(AgentStateListener):
 
         :return: A non-negative int. 0 disables the probe server.
         """
-        raw: str = os.environ.get(ENV_HEALTH_PROBE_PORT, str(self.server_config.http_probe_port))
+        raw: str = NeuroSanConfig.get("service.http.AGENT_HEALTH_PROBE_PORT")
         try:
             value: int = int(raw)
         except ValueError:

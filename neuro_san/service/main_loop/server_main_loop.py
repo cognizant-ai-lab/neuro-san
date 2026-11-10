@@ -27,16 +27,11 @@ from leaf_common.logging.logging_setup import LoggingSetup
 from leaf_common.utils.startable import Startable
 
 from neuro_san import TOP_LEVEL_DIR
-from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.storage_class import StorageClass
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_CONNECTIONS_BACKLOG
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
-from neuro_san.service.http.config.http_server_config import DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.logging.logging_config_restorer import LoggingConfigRestorer
 from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME
@@ -92,71 +87,65 @@ class ServerMainLoop:
         arg_parser = ArgumentParser()
 
         # AGENT_PORT is a fallback for AGENT_HTTP_PORT for backward compatibility
-        default_http_port = os.environ.get("AGENT_HTTP_PORT",
-                                           os.environ.get("AGENT_PORT", AgentSession.DEFAULT_HTTP_PORT))
+        default_http_port: str = NeuroSanConfig.get("service.http.AGENT_HTTP_PORT") \
+            or NeuroSanConfig.get("service.http.AGENT_PORT")
         arg_parser.add_argument("--http_port", type=int,
                                 default=int(default_http_port),
                                 help="Port number for http service endpoint")
         arg_parser.add_argument("--server_name", type=str,
-                                default=str(os.environ.get("AGENT_SERVER_NAME", self.server_name)),
+                                default=NeuroSanConfig.get("service.server.AGENT_SERVER_NAME"),
                                 help="Name of the service for health reporting purposes.")
         arg_parser.add_argument("--server_name_for_logs", type=str,
-                                default=str(os.environ.get("AGENT_SERVER_NAME_FOR_LOGS", self.server_name_for_logs)),
+                                default=NeuroSanConfig.get("service.logging.AGENT_SERVER_NAME_FOR_LOGS"),
                                 help="Name of the service as seen in logs")
         arg_parser.add_argument("--max_concurrent_requests", type=int,
-                                default=int(os.environ.get("AGENT_MAX_CONCURRENT_REQUESTS",
-                                                           self.max_concurrent_requests)),
+                                default=int(NeuroSanConfig.get("service.limits.AGENT_MAX_CONCURRENT_REQUESTS")),
                                 help="Maximum number of requests that can be served at the same time")
         arg_parser.add_argument("--request_limit", type=int,
-                                default=int(os.environ.get("AGENT_REQUEST_LIMIT", self.request_limit)),
+                                default=int(NeuroSanConfig.get("service.limits.AGENT_REQUEST_LIMIT")),
                                 help="Number of requests served before the server shuts down in an orderly fashion")
         arg_parser.add_argument("--forwarded_request_metadata", type=str,
-                                default=os.environ.get("AGENT_FORWARDED_REQUEST_METADATA",
-                                                       self.forwarded_request_metadata),
+                                default=NeuroSanConfig.get("internals.tracing.AGENT_FORWARDED_REQUEST_METADATA"),
                                 help="Space-delimited list of http request metadata keys to forward "
                                      "to logs/other requests")
         arg_parser.add_argument("--openapi_service_spec_path", type=str,
-                                default=os.environ.get("AGENT_OPENAPI_SPEC",
-                                                       self.service_openapi_spec_file),
+                                default=NeuroSanConfig.get("service.http.AGENT_OPENAPI_SPEC")
+                                or self.service_openapi_spec_file,
                                 help="File path to OpenAPI service specification document.")
         arg_parser.add_argument("--manifest_update_period_seconds", type=int,
-                                default=int(os.environ.get("AGENT_MANIFEST_UPDATE_PERIOD_SECONDS", "0")),
+                                default=int(NeuroSanConfig.get("service.server.AGENT_MANIFEST_UPDATE_PERIOD_SECONDS")),
                                 help="Periodic run-time update period for manifest in seconds."
                                      " Value <= 0 disables updates.")
         arg_parser.add_argument("--http_connections_backlog", type=int,
-                                default=int(os.environ.get("AGENT_HTTP_CONNECTIONS_BACKLOG",
-                                                           DEFAULT_HTTP_CONNECTIONS_BACKLOG)),
+                                default=int(NeuroSanConfig.get("service.http.AGENT_HTTP_CONNECTIONS_BACKLOG")),
                                 help="Size of backlog for TCP connections to http server.")
         arg_parser.add_argument("--http_idle_connections_timeout", type=int,
-                                default=int(os.environ.get("AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT",
-                                                           DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS)),
+                                default=int(NeuroSanConfig.get("service.http.AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT")),
                                 help="Timeout in seconds before idle and alive connection to http server"
                                      "will be closed")
         arg_parser.add_argument("--http_server_instances", type=int,
-                                default=int(os.environ.get("AGENT_HTTP_SERVER_INSTANCES",
-                                                           DEFAULT_HTTP_SERVER_INSTANCES)),
+                                default=int(NeuroSanConfig.get("service.http.AGENT_HTTP_SERVER_INSTANCES")),
                                 help="Number of http server instances to be created "
                                      "one instance per separate process")
         arg_parser.add_argument("--http_resources_monitor_interval_seconds", type=int,
-                                default=int(os.environ.get("AGENT_HTTP_RESOURCES_MONITOR_INTERVAL",
-                                                           DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
+                                default=int(NeuroSanConfig.get("service.http.AGENT_HTTP_RESOURCES_MONITOR_INTERVAL")),
                                 help="Http server resources monitoring/logging interval in seconds "
                                      "0 means no logging")
         arg_parser.add_argument("--stream_keep_alive_with_progress_interval_seconds", type=int,
-                                default=int(os.environ.get("AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS",
-                                                           DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS)),
+                                default=int(NeuroSanConfig.get(
+                                    "service.limits.AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS")),
                                 help="Http server heartbeat interval in seconds "
                                      "0 means no heartbeat")
         arg_parser.add_argument("--max_temp_networks", type=int,
-                                default=int(os.environ.get("AGENT_MAX_TEMP_NETWORKS", "0")),
+                                default=int(NeuroSanConfig.get("service.limits.AGENT_MAX_TEMP_NETWORKS")),
                                 help="Maximum number of temporary agent networks to keep in memory. "
                                      "When exceeded, least recently used networks are evicted. "
                                      "0 means unlimited.")
         arg_parser.add_argument("--mcp_enable", type=str,
-                                default=os.environ.get("AGENT_MCP_ENABLE", "true"),
+                                default=NeuroSanConfig.get("service.mcp.AGENT_MCP_ENABLE"),
                                 help="'true' if MCP protocol service should be enabled")
         arg_parser.add_argument("--mcp_only", type=str,
-                                default=os.environ.get("AGENT_MCP_ONLY", "false"),
+                                default=NeuroSanConfig.get("service.mcp.AGENT_MCP_ONLY"),
                                 help="'true' if only MCP protocol service will be run (no HTTP service)")
         return arg_parser
 

@@ -92,9 +92,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
         # The HTTP listener.
         "http": {
-            "AGENT_HTTP_PORT": "8080",
-            # Old alias for AGENT_HTTP_PORT
-            "AGENT_PORT": None,
+            # None falls back to AGENT_PORT
+            "AGENT_HTTP_PORT": None,
+            # Old alias for AGENT_HTTP_PORT, which also holds the final default
+            "AGENT_PORT": "8080",
             "AGENT_HEALTH_PROBE_PORT": "8081",
             "AGENT_HTTP_SERVER_INSTANCES": "1",
             "AGENT_HTTP_CONNECTIONS_BACKLOG": "128",

@@ -25,7 +25,6 @@ from asyncio import AbstractEventLoop
 from copy import deepcopy
 from logging import getLogger
 from logging import Logger
-from os import environ
 from os import pathsep
 from time import perf_counter
 import traceback
@@ -401,7 +400,7 @@ Check these things:
         # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
         # operator setting this security flag the way other flags are set gets the
         # behavior they expect rather than a silent fail-open.
-        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", False)
+        return ConfigUtil.get_bool(NeuroSanConfig.get("internals.tools"), "AGENT_TOOL_PATH_ONLY", False)
 
     def _log_unrestricted_resolution_notice_once(self):
         """
