@@ -42,6 +42,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
         - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
         - [Anthropic Thinking Parameters](#anthropic-thinking-parameters)
         - [Anthropic Claude on Bedrock](#anthropic-claude-on-bedrock)
+        - [Gemini API Version](#gemini-api-version)
         - [Gemini Thinking Parameters](#gemini-thinking-parameters)
         - [Provider Tools](#provider-tools)
     - [Extending LLM Info Specifications](#extending-llm-info-specifications)
@@ -629,17 +630,37 @@ llm info file (see [Extending LLM Info Specifications](#extending-llm-info-speci
 }
 ```
 
+### Gemini API Version
+
+The `gemini` class accepts `api_version`, the Gemini API version in the request URL, such as `"v1"` or
+`"v1beta"`. The default, `null`, lets the google-genai package choose: version 3.0.0 and later use `"v1"`, and
+earlier versions use `"v1beta"`. When `api_version` is `null`, google-genai also reads the
+`GOOGLE_GENAI_API_VERSION` environment variable, where `beta` selects `"v1beta"`.
+
+Some models, such as `gemini-3-flash-preview`, are not served on `"v1"`, and a request for one returns
+`404 NOT_FOUND`. Set `"api_version": "v1beta"` in the llm_config of such a model. See
+[API versions](https://aistudio.google.com/api-reference/api-versions).
+
+```hocon
+"llm_config": {
+    "model_name": "gemini-3-flash",
+    "api_version": "v1beta"
+}
+```
+
 ### Gemini Thinking Parameters
 
 The `gemini` class accepts a few parameters that only matter for Gemini thinking models. All of them default to
 `null`, which leaves the model's own defaults in place.
 
 - `thinking_level`: a string that constrains how much thinking the model does. The accepted values depend on the
-  model (see the [Gemini 3 developer guide](https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level) and
-  the per-model pages under [Gemini models](https://ai.google.dev/gemini-api/docs/models)), and the API rejects
-  a value the model does not support:
+  model (see the [Gemini 3 developer guide](https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level), the
+  [thinking levels table](https://aistudio.google.com/docs/thinking#thinking-levels) and the per-model pages
+  under [Gemini models](https://ai.google.dev/gemini-api/docs/models)), and the API rejects a value the model
+  does not support:
     - Gemini 3 Pro: `"low"` or `"high"` (default `"high"`).
     - Gemini 3 Flash: `"minimal"`, `"low"`, `"medium"` or `"high"` (default `"high"`).
+    - Gemini 3.5 Flash-Lite: `"minimal"`, `"low"`, `"medium"` or `"high"` (default `"minimal"`).
     - Gemini 3.8 Flash: `"low"`, `"medium"` or `"high"` (default `"medium"`). `"minimal"` is not supported and
       returns an error.
 - `thinking_budget`: an integer number of thinking tokens for Gemini 2.5 models. `0` disables thinking where the
@@ -651,15 +672,17 @@ The `gemini` class accepts a few parameters that only matter for Gemini thinking
   of this setting. See the [Gemini thinking guide](https://ai.google.dev/gemini-api/docs/thinking) and the
   [langchain Gemini page](https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai).
 
-**Temperature.** Google recommends keeping `temperature` at `1.0` for Gemini 3 and later: lower values can cause
-infinite loops, degraded reasoning and failures on complex tasks (see
-[Gemini 3 temperature](https://ai.google.dev/gemini-api/docs/gemini-3#temperature)). The `gemini` class default
-is `0.7`, so set `"temperature": 1.0` explicitly in the llm_config of any Gemini 3+ model.
+**Temperature.** The `gemini` class default is `null`, which sends no temperature, so the model uses its own
+default. This needs langchain-google-genai 4.3.0 or later; older versions reject a `null` temperature. Google
+recommends keeping `temperature` at `1.0` for Gemini 3 and later: lower values can cause infinite loops,
+degraded reasoning and failures on complex tasks (see
+[Gemini 3 temperature](https://ai.google.dev/gemini-api/docs/gemini-3#temperature)). Some models, such as
+`gemini-3.5-flash-lite` and `gemini-3.6-flash`, use fixed sampling: langchain drops `temperature`, `top_k` and
+`top_p` for them and warns when one is set.
 
 ```hocon
 "llm_config": {
     "model_name": "gemini-3.8-flash",
-    "temperature": 1.0,
     "thinking_level": "low",
     "include_thoughts": true
 }
