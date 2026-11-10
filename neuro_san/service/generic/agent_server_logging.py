@@ -24,6 +24,8 @@ import os
 
 from leaf_common.logging.logging_setup import LoggingSetup
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
+
 
 class AgentServerLogging:
     """
@@ -79,18 +81,18 @@ class AgentServerLogging:
         # This module within openai library can be quite chatty w/rt http requests
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    def redact_per_env_var(self, input_str: str, env_var_name: str) -> str:
+    def redact_per_env_var(self, input_str: str, config_key: str) -> str:
         """
         Redact a string using the value of an environment variable.
 
         :param input_str: The string to redact
-        :param env_var_name: The name of the environment variable
+        :param config_key: The fully-qualified NeuroSanConfig key of the environment variable
         :return: The redacted string
         """
         value: str = f"'{input_str}'"
 
         # Determine the value of the environment variable
-        slice_str: str = os.environ.get(env_var_name)
+        slice_str: str = NeuroSanConfig.get(config_key)
         if slice_str is not None and len(slice_str) > 0:
 
             # Deterimine the extent and direction of the slice
@@ -112,7 +114,8 @@ class AgentServerLogging:
                         suffix = "..."
                     value = f"'{one_slice}{suffix}'"
             except ValueError:
-                # Not an int
+                # Not an int. Report only the env var name, which is the last part of the config key.
+                env_var_name: str = config_key.split(".")[-1]
                 logging.getLogger(self.__class__.__name__).info(
                     "Value for %s: '%s' needs to be integer or empty string.",
                     env_var_name, slice_str)

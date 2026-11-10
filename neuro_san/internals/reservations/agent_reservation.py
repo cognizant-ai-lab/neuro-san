@@ -18,9 +18,8 @@
 from uuid import uuid4
 from uuid import UUID
 
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
-
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class AgentReservation(Reservation):
@@ -85,7 +84,7 @@ class AgentReservation(Reservation):
         url: str = self.get_reservation_id()
 
         # See if we have an external agent name to tack on.
-        external_url: str = Env.getenv("AGENT_EXTERNAL_SERVER_URL")
+        external_url: str = NeuroSanConfig.get("service.reservations.AGENT_EXTERNAL_SERVER_URL")
         if external_url is not None:
 
             # Remove any ending slashes to standardize

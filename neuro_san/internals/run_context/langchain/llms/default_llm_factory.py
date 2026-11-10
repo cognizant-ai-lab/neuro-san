@@ -28,8 +28,6 @@ from logging import Logger
 from logging import getLogger
 from random import shuffle
 
-import os
-
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
@@ -44,6 +42,7 @@ from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import Llm
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
 
@@ -103,10 +102,10 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         if config:
             raw_llm_info_file: str = (
                 config.get("llm_info_file")
-                or os.getenv("AGENT_LLM_INFO_FILE")
+                or NeuroSanConfig.get("internals.llms.AGENT_LLM_INFO_FILE")
             )
         else:
-            raw_llm_info_file = os.getenv("AGENT_LLM_INFO_FILE")
+            raw_llm_info_file = NeuroSanConfig.get("internals.llms.AGENT_LLM_INFO_FILE")
 
         if raw_llm_info_file is not None and not isinstance(raw_llm_info_file, str):
             raise TypeError(

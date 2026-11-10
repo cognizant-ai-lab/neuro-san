@@ -33,13 +33,13 @@ from typing_extensions import override
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.serialization.interface.serialization_format import SerializationFormat
-from leaf_common.utils.environment_util import EnvironmentUtil
 
 from neuro_san.internals.graph.persistence.agent_network_on_boarding import AgentNetworkOnBoarding
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.utils.decode_utils import DecodeUtils
 
 
@@ -206,7 +206,7 @@ class FetchedAgentNetworkStorage(AgentNetworkStorage):
         :return: the list of lower-cased url schemes allowed for fetching.
                 An empty list means that nothing is fetched.
         """
-        value: str = EnvironmentUtil.getenv("AGENT_FETCHABLE_TOOL_SCHEMES", "")
+        value: str = NeuroSanConfig.get("internals.tools.AGENT_FETCHABLE_TOOL_SCHEMES")
 
         fetchable_schemes: List[str] = []
         one_scheme: str = None

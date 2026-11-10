@@ -22,8 +22,11 @@ from typing import Dict
 from unittest import TestCase
 from unittest.mock import patch
 
+from typing_extensions import override
+
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class TestAgentToolRegistry(TestCase):
@@ -33,6 +36,13 @@ class TestAgentToolRegistry(TestCase):
     """
 
     NETWORK_NAME: str = "deep/math_guy"
+
+    @override
+    def setUp(self) -> None:
+        """
+        Reloads NeuroSanConfig after each test, once the environment the test changed is restored.
+        """
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
 
     def make_registry(self) -> AgentToolRegistry:
         """
@@ -62,6 +72,7 @@ class TestAgentToolRegistry(TestCase):
         so an activation asking the registry searches the roots the operator listed.
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH": "neuro_san.coded_tools"}):
+            NeuroSanConfig.reset_for_testing()
             registry: AgentToolRegistry = self.make_registry()
 
         self.assertEqual(registry.get_agent_tool_paths(), ["neuro_san.coded_tools.deep.math_guy"])

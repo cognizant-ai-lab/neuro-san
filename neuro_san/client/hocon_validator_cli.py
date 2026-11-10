@@ -34,6 +34,7 @@ from leaf_common.validation.dictionary_validator import DictionaryValidator
 
 from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.internals.validation.network.lint_network_validator import LintNetworkValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
@@ -334,7 +335,7 @@ Examples:
         :return: The parent directory of the first manifest file's directory,
                  or the current working directory if AGENT_MANIFEST_FILE has no entries
         """
-        agent_manifest_file: str = os.environ.get("AGENT_MANIFEST_FILE", "")
+        agent_manifest_file: str = NeuroSanConfig.get("internals.registry.AGENT_MANIFEST_FILE") or ""
 
         manifest_file: str = None
         # Use the first non-empty entry of the list

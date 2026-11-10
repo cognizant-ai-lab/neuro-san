@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -26,7 +25,6 @@ from typing import Type
 from typing import Union
 
 import logging
-import os
 
 from threading import Lock
 
@@ -40,6 +38,7 @@ from leaf_common.resolution.resolver import Resolver
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_info_restorer import ToolboxInfoRestorer
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class ToolboxFactory(ContextTypeToolboxFactory):
@@ -107,14 +106,10 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # Get user toolbox info file path with the following priority:
         # 1. "toolbox_info_file" from agent network hocon
         # 2. "AGENT_TOOLBOX_INFO_FILE" from environment variable
-        raw_toolbox_info_file: str = None
+        from_env: str = NeuroSanConfig.get("internals.tools.AGENT_TOOLBOX_INFO_FILE", check_env_var=True)
+        raw_toolbox_info_file: str = from_env
         if config:
-            raw_toolbox_info_file: str = (
-                config.get("toolbox_info_file")
-                or os.getenv("AGENT_TOOLBOX_INFO_FILE")
-            )
-        else:
-            raw_toolbox_info_file = os.getenv("AGENT_TOOLBOX_INFO_FILE")
+            raw_toolbox_info_file: str = config.get("toolbox_info_file") or from_env
 
         if raw_toolbox_info_file is not None and not isinstance(raw_toolbox_info_file, str):
             raise TypeError(

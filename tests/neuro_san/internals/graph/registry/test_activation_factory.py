@@ -26,11 +26,14 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+from typing_extensions import override
+
 import neuro_san
 
 from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.activation_factory import ActivationFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class TestActivationFactory(TestCase):
@@ -57,6 +60,13 @@ class TestActivationFactory(TestCase):
     BRANCH_ACTIVATION_PATH: str = "neuro_san.internals.graph.preppers.branch_activation_prepper.BranchActivation"
     FRONT_MAN_ACTIVATION_PATH: str = \
         "neuro_san.internals.graph.preppers.front_man_activation_prepper.FrontManActivation"
+
+    @override
+    def setUp(self) -> None:
+        """
+        Reloads NeuroSanConfig after each test, once the environment the test changed is restored.
+        """
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
 
     def make_factory(self, network_name: str, agent_tool_path: Optional[str],
                      pythonpath: str = None) -> ActivationFactory:
@@ -89,6 +99,7 @@ class TestActivationFactory(TestCase):
                 os.environ.pop("AGENT_TOOL_PATH", None)
             else:
                 os.environ["AGENT_TOOL_PATH"] = agent_tool_path
+            NeuroSanConfig.reset_for_testing()
             return ActivationFactory(agent_network)
 
     def test_module_path_root_is_used_as_is(self) -> None:
@@ -206,6 +217,7 @@ class TestActivationFactory(TestCase):
         filtered: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
         agent_network: AgentNetwork = AgentNetwork(filtered, TestActivationFactory.NETWORK_NAME)
         with patch.dict(os.environ, {"AGENT_TOOL_PATH": "neuro_san.coded_tools"}):
+            NeuroSanConfig.reset_for_testing()
             factory: ActivationFactory = ActivationFactory(agent_network)
 
         # Both activation classes are mocked, so no real RunContext or LLM is made.

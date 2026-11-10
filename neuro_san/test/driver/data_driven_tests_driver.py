@@ -43,6 +43,7 @@ from leaf_common.time.timeout import Timeout
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.test.driver.session_canceller import SessionCanceller
@@ -511,7 +512,7 @@ class DataDrivenTestsDriver:
 
         # A reasonable default here is basis_dir = "/tmp/agent_test", but we
         # don't want to write thinking files out if no one wants them.
-        basis_dir: str = os.environ.get("AGENT_TEST_THINKING_BASIS")
+        basis_dir: str = NeuroSanConfig.get("tests.driver.AGENT_TEST_THINKING_BASIS")
         if basis_dir is not None and len(basis_dir) > 0:
             now = datetime.now()
             datestr: str = now.strftime("%Y-%m-%d_%H-%M-%S_%f")

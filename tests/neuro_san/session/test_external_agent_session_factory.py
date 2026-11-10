@@ -33,6 +33,7 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.interfaces.storage_class import StorageClass
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
@@ -64,10 +65,13 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
         # who mirrors that in their shell would otherwise see the plain-http tests below raise
         # from get_request_path(). Snapshot the environment, drop the variable, and restore the
         # snapshot on cleanup so the two test_require_https_* cases can still opt in per-test.
+        # Cleanups run last-in first-out, so this reload sees the restored environment.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
         os.environ.pop("AGENT_SESSION_REQUIRE_HTTPS", None)
+        NeuroSanConfig.reset_for_testing()
 
         self.factory: ExternalAgentSessionFactory = ExternalAgentSessionFactory(use_direct=False)
         self.invocation_context: MagicMock = MagicMock()
@@ -170,6 +174,7 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
             await self.factory.async_create_session("https://neuro-san.decisionai.ml/deep/math_guy",
                                                     self.invocation_context)
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
+            NeuroSanConfig.reset_for_testing()
             path: str = session.get_request_path("function")
         self.assertEqual(path, "https://neuro-san.decisionai.ml:443/api/v1/deep/math_guy/function")
 
@@ -182,6 +187,7 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
             await self.factory.async_create_session("http://neuro-san.decisionai.ml/deep/math_guy",
                                                     self.invocation_context)
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
+            NeuroSanConfig.reset_for_testing()
             with self.assertRaises(ValueError):
                 session.get_request_path("function")
 
@@ -333,6 +339,7 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
         factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
 
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
+            NeuroSanConfig.reset_for_testing()
             session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
         self.assertIsInstance(session, AsyncHttpServiceAgentSession)
         self.fetched_storage.async_get_agent_network_provider.assert_not_awaited()
@@ -345,6 +352,7 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
         factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
 
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
+            NeuroSanConfig.reset_for_testing()
             session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
         self.assertIsInstance(session, AsyncDirectAgentSession)
         self.fetched_storage.async_get_agent_network_provider.assert_awaited_once_with(agent_url)

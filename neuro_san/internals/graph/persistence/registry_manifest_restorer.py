@@ -42,7 +42,6 @@ from leaf_common.config.dictionary_overlay import DictionaryOverlay
 from leaf_common.config.file_of_class import FileOfClass
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.interface.restorer import Restorer
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
@@ -55,6 +54,7 @@ from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.utils.mcp_tool_name_policy import McpToolNamePolicy
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -84,7 +84,8 @@ class RegistryManifestRestorer(Restorer):
 
         if manifest_files is None:
             # We have no manifest list coming in, so check an env variable for a definition.
-            manifest_file: str = Env.getenv("AGENT_MANIFEST_FILE")
+            manifest_file: str = NeuroSanConfig.get_non_empty("internals.registry.AGENT_MANIFEST_FILE",
+                                                              check_env_var=True)
             if manifest_file is None:
                 # No env var, so fallback to what is coded in this repo.
                 manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")
@@ -269,7 +270,8 @@ class RegistryManifestRestorer(Restorer):
 
         # The default of "thread" is the least heavyweight, but not necessarily the fastest
         # given the context of how/how often the manifest is read.
-        concurrency_context: str = Env.getenv("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread")
+        concurrency_context: str = NeuroSanConfig.get("internals.registry.AGENT_MANIFEST_CONCURRENCY_CONTEXT",
+                                                      check_env_var=True)
 
         try:
             executor_factory: Any = self.find_executory_factory(concurrency_context, max_workers)

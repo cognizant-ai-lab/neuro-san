@@ -20,11 +20,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import os
-
 from importlib.metadata import version as library_version
 from importlib.metadata import PackageNotFoundError
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.utils.service_status import ServiceStatus
 
 
@@ -107,7 +106,7 @@ class ServerStatus:
         versioned_libs: List[str] = ["neuro-san"]
 
         # AGENT_VERSION_LIBS can add libraries and/or pre-declared versions.
-        env_var_libs: str = os.environ.get("AGENT_VERSION_LIBS")
+        env_var_libs: str = NeuroSanConfig.get("service.server.AGENT_VERSION_LIBS", check_env_var=True)
         if env_var_libs is not None:
             for env_var_lib in env_var_libs.split(" "):
                 if env_var_lib is None:

@@ -20,11 +20,11 @@ from typing import Dict
 from typing import List
 
 import http
-import os
 
 from http import HTTPStatus
 
 from tornado.web import RequestHandler
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.utils.server_status import ServerStatus
 
@@ -65,7 +65,7 @@ class HealthCheckHandler(RequestHandler):
         self.server_name = server_status.get_server_name()
         self.versions = versions
 
-        if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
+        if NeuroSanConfig.get("service.http.AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding")

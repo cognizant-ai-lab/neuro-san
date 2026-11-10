@@ -19,7 +19,6 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 
-from os import getenv
 from functools import partial
 
 from json import loads
@@ -30,6 +29,7 @@ from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
@@ -56,7 +56,7 @@ class S3ReservationsRetriever:
         self.name: str = name
 
         # Configure bucket name from parameter or environment variable
-        env_bucket: str = getenv("AGENT_RESERVATIONS_S3_BUCKET", "")
+        env_bucket: str = NeuroSanConfig.get("service.reservations.AGENT_RESERVATIONS_S3_BUCKET")
         self.bucket_name: str = bucket_name or env_bucket
         if not self.bucket_name:
             raise ValueError(

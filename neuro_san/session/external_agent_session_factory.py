@@ -29,7 +29,6 @@ from typing_extensions import override
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.logging.log_once import LogOnce
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -39,6 +38,7 @@ from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.async_http_service_agent_session import AsyncHttpServiceAgentSession
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -304,7 +304,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
         # Same default and parsing as AbstractHttpServiceAgentSession.get_request_path():
         # permissive unless a server opts in.
-        require_https: bool = Env.getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
+        require_https: bool = NeuroSanConfig.get("session.security.AGENT_SESSION_REQUIRE_HTTPS").lower() == "true"
         scheme: str = urlparse(agent_url).scheme
         lower_scheme: str = scheme.lower()
         if require_https and lower_scheme == "http":

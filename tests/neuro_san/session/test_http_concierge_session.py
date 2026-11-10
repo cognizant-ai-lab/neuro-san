@@ -29,6 +29,7 @@ from unittest.mock import patch
 from requests import ConnectionError as RequestsConnectionError
 from typing_extensions import override
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.session.http_concierge_session import HttpConciergeSession
 from neuro_san.session.session_util import SessionUtil
 
@@ -63,11 +64,14 @@ class TestHttpConciergeSession(TestCase):
         """
         # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
         # removed or set freely here and in each test.
+        # Cleanups run last-in first-out, so this reload sees the restored environment.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
         os.environ.pop(SessionUtil.MAX_AGENTS_ENV_VAR, None)
         os.environ["AGENT_SESSION_REQUIRE_HTTPS"] = "false"
+        NeuroSanConfig.reset_for_testing()
 
     @staticmethod
     def fake_get(body_text: str, path: str, **kwargs: Any) -> MagicMock:

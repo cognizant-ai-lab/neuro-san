@@ -27,6 +27,7 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.blob import ContainerClient
 
 # pylint: disable=wrong-import-order
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
@@ -45,7 +46,7 @@ class AzureBlobReservationsRetriever:
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-        env_container: str = getenv("AGENT_RESERVATIONS_AZURE_CONTAINER", "")
+        env_container: str = NeuroSanConfig.get("service.reservations.AGENT_RESERVATIONS_AZURE_CONTAINER")
         self.container_name: str = container_name or env_container
         if not self.container_name:
             raise ValueError(

@@ -34,6 +34,7 @@ from leaf_common.resolution.resolver import Resolver
 
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.gemini_llm_policy import GeminiLlmPolicy
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class TestGeminiLlmPolicy(TestCase):
@@ -86,11 +87,14 @@ class TestGeminiLlmPolicy(TestCase):
         environment["GOOGLE_API_KEY"] = "test-key"
         environment["OPENAI_API_KEY"] = "sk-test"
 
+        # Cleanups run last-in first-out, so this reload sees the restored environment.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         env_patcher: Any = patch.dict(os.environ, environment, clear=True)
         env_patcher.start()
         # addCleanup runs even if the rest of setUp or the test itself raises, and stop()
         # restores os.environ exactly as it was before start().
         self.addCleanup(env_patcher.stop)
+        NeuroSanConfig.reset_for_testing()
 
         # Loaded after the environment is pinned so the stock hocon is what gets read.
         self.factory: DefaultLlmFactory = DefaultLlmFactory()
