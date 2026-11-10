@@ -28,11 +28,6 @@ from neuro_san.internals.run_context.langchain.core.langchain_run_context import
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 
 
-# Both markers needed so conftest.py skips the OPENAI_API_KEY requirement:
-# these tests fully mock the LLM factory, so no real provider key is required.
-pytestmark = [pytest.mark.non_default_llm_provider, pytest.mark.ollama]
-
-
 class TestLangChainRunContextLlmFallbacks(TestCase):
     """
     Tests covering the LLM-fallback slice of LangChainRunContext —
