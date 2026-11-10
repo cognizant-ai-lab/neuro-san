@@ -230,7 +230,7 @@ class NeuroSanConfig(ConfigFilterChain):
                     (much less common).
         """
         # pylint: disable=protected-access
-        value: Optional[str] = _INSTANCE._get_fully_qualified(key)
+        value: Optional[Union[str, Dict[str, Any]]] = _INSTANCE._get_fully_qualified(key)
         return value
 
     @staticmethod
