@@ -97,3 +97,16 @@ class TestNeuroSanConfig(TestCase):
         self.set_env("AGENT_TOOL_PATH", "")
         self.assertEqual("", NeuroSanConfig.get(TestNeuroSanConfig.NONE_DEFAULT_KEY))
         self.assertIsNone(NeuroSanConfig.get_non_empty(TestNeuroSanConfig.NONE_DEFAULT_KEY))
+
+    def test_get_bool(self) -> None:
+        """
+        get_bool() converts the value, and replaces an empty value with the default.
+        """
+        self.unset_env("AGENT_PROTECT_ORIGINAL_COPY")
+        self.assertTrue(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "false")
+        self.assertFalse(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "")
+        self.assertTrue(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))

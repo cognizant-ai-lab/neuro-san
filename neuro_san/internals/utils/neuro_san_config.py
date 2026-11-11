@@ -255,9 +255,7 @@ class NeuroSanConfig(ConfigFilterChain):
                  when the value is empty.
         """
         # pylint: disable=protected-access
-        value: Optional[str] = NeuroSanConfig.get(key)
-        if value is not None and len(value) == 0:
-            value = _INSTANCE._get_default(key)
+        value: Optional[str] = _INSTANCE._internal_get_non_empty(key)
         return value
 
     @staticmethod
@@ -298,13 +296,27 @@ class NeuroSanConfig(ConfigFilterChain):
             value = environ.get(env_key, value)
         return value
 
+    def _internal_get_non_empty(self, key: str) -> Optional[str]:
+        """
+        Given the fully-qualified string key, return the value from the configuration,
+        treating an empty value the same as an unset one.
+
+        :param key: The fully-qualified key from the config
+        :return: The value in the config, or the default from DEFAULT_CONFIG
+                 when the value is empty.
+        """
+        value: Optional[str] = self._internal_get(key)
+        if value is not None and len(value) == 0:
+            value = self._get_default(key)
+        return value
+
     def _internal_get_bool(self, key: str) -> bool:
         """
         :param key: The fully-qualified key from the config
         :return: True the value for the key is to be considered True.
-                 False otherwise.
+                 False otherwise. An empty value uses the default from DEFAULT_CONFIG.
         """
-        value: Optional[str] = self._internal_get(key)
+        value: Optional[str] = self._internal_get_non_empty(key)
         bool_value: bool = ConfigUtil.is_true(value)
         return bool_value
 
