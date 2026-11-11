@@ -57,7 +57,6 @@ class EnvironmentConfigFilter(ConfigFilter):
             else:
                 value_str: str = value
                 # Not EnvironmentUtil.getenv(), which also replaces an empty value with the default.
-                # Some variables, like AGENT_ALLOW_CORS_HEADERS, mean something when set but empty.
                 value_str = environ.get(key, value_str)
                 return_dict[key] = value_str
 
