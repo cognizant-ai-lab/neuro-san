@@ -14,11 +14,11 @@
 #
 # END COPYRIGHT
 
-from os import environ
-
 from typing import Any
 from typing import Dict
 from typing import Union
+
+from os import environ
 
 from leaf_common.config.config_filter import ConfigFilter
 
