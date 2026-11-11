@@ -471,7 +471,7 @@ ENV AGENT_FETCHABLE_TOOL_SCHEMES=""
 # Limits the number of agents considered from external servers' listings
 # to avoid exorbitantly long loops in handling them.  Negative values or
 # 0 (the default) means the number of agents listed is unlimited.
-ENV MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
+ENV AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
 
 # With the default value of "false", any AGENT_* configuration can be read as an override
 # to default policy at runtime from the environment.  When this is "true", the environment

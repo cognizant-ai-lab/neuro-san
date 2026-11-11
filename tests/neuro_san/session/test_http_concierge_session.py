@@ -36,7 +36,7 @@ from neuro_san.session.session_util import SessionUtil
 
 class TestHttpConciergeSession(TestCase):
     """
-    Unit tests for HttpConciergeSession.list(): the MAX_AGENTS_FROM_EXTERNAL_SERVER cap,
+    Unit tests for HttpConciergeSession.list(): the AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER cap,
     the "agents" key always being present in the result, and failures raised as ValueError.
     """
 
@@ -59,7 +59,7 @@ class TestHttpConciergeSession(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Unsets MAX_AGENTS_FROM_EXTERNAL_SERVER so the shell cannot change the listing, and sets
+        Unsets AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER so the shell cannot change the listing, and sets
         AGENT_SESSION_REQUIRE_HTTPS=false so the http URL built here is accepted.
         """
         # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
@@ -118,7 +118,7 @@ class TestHttpConciergeSession(TestCase):
 
     def test_list_applies_max_agents_limit(self) -> None:
         """
-        With MAX_AGENTS_FROM_EXTERNAL_SERVER set, only the first N agents the server listed come back.
+        With AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER set, only the first N agents the server listed come back.
         """
         os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "2"
         session: HttpConciergeSession = self.make_session()
