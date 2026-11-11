@@ -353,8 +353,9 @@ class NeuroSanConfig(ConfigFilterChain):
     def reset_for_testing():
         """
         Reloads the singleton configuration so that it reflects the current environment.
-        The configuration is read once at import time, so tests that change environment
-        variables call this after making the change and again after undoing it.
+        The configuration is read at least once at import time, so tests that change environment
+        variables call this after making the change and again after undoing it
+        if AGENT_LOCKDOWN_ENV is enabled.
         """
         # pylint: disable=protected-access
         _INSTANCE._load()
