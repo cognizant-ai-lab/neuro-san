@@ -23,7 +23,6 @@ from typing import Optional
 from http import HTTPStatus
 
 import json
-import os
 import asyncio
 
 import tornado

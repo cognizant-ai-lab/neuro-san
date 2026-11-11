@@ -20,12 +20,12 @@ from typing import Dict
 
 import json
 import logging
-import os
 import asyncio
 from http import HTTPStatus
 
 from tornado.web import RequestHandler
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.utils.server_context import ServerContext
 
 
@@ -55,7 +55,7 @@ class DebugTasksHandler(RequestHandler):
         """
         self.server_context: ServerContext = kwargs.pop("server_context")
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.is_enabled: bool = os.getenv("ENABLE_RUN_TIME_STATISTICS", "false").lower() == "true"
+        self.is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.ENABLE_RUN_TIME_STATISTICS")
 
     async def get(self):
         """

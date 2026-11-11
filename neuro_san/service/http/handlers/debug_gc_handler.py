@@ -30,6 +30,7 @@ import psutil
 
 from tornado.web import RequestHandler
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.utils.request_util import RequestUtil
 
 
@@ -74,7 +75,7 @@ class DebugGcHandler(RequestHandler):
         own process.
         """
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.is_enabled: bool = os.getenv("ENABLE_RUN_TIME_STATISTICS", "false").lower() == "true"
+        self.is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.ENABLE_RUN_TIME_STATISTICS")
 
     async def get(self):
         """
