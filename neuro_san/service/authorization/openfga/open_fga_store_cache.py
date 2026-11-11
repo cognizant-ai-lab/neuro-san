@@ -23,6 +23,7 @@ from os import environ
 from threading import Lock
 
 from leaf_common.resolution.resolver_util import ResolverUtil
+from leaf_common.utils.environment_util import EnvironmentUtil
 
 # Lazy loading of optional openfga_sdk types.
 OpenFgaClient: Type[Any] = ResolverUtil.create_type("openfga_sdk.client.client.OpenFgaClient",
@@ -58,7 +59,7 @@ class OpenFgaStoreCache:
     lock = Lock()
 
     # Store name to use when none is specified by the caller.
-    DEFAULT_STORE_NAME: str = environ.get("FGA_STORE_NAME", "default")
+    DEFAULT_STORE_NAME: str = EnvironmentUtil.getenv("FGA_STORE_NAME", "default")
 
     @classmethod
     async def get_client(cls, store_name: str = None) -> OpenFgaClient:
