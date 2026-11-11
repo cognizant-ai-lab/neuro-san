@@ -524,7 +524,7 @@
         "use_model_name": "claude-opus-5-5"
     },
     "claude-fable": {
-        "use_model_name": "claude-fable-5-1"
+        "use_model_name": "claude-fable-5-2"
     },
 
     "claude-haiku-4-5": {
@@ -793,10 +793,29 @@
         "model_launch_date": "2026-09-01",
         "model_retirement_date": null,
     },
-    # Note on claude-mythos-5 and claude-mythos-5-1:
-    # As of 2026-09-01, this model is only available via the Project Glasswing,
-    # which is invitation-only. Thus, we are not including it in the default LLM info at this time.
-    # If it becomes generally available, we will add it to the registry with the appropriate details.
+    "claude-fable-5-2": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/models/fable-5-2/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.008,
+        "price_per_1k_output_tokens": 0.040,
+        "model_launch_date": "2026-11-09",
+        "model_retirement_date": null,
+    },
+    # Note on claude-mythos-5, claude-mythos-5-1 and claude-mythos-5-2:
+    # Mythos 5 and 5.1 are only available via the Project Glasswing, which is invitation-only.
+    # Mythos 5.2 is only available to organizations verified through Anthropic's verification programs.
+    # Thus, we are not including them in the default LLM info at this time.
+    # If they become generally available, we will add them to the registry with the appropriate details.
 
 
     # Anthropic Claude via AWS Bedrock (class: "anthropic-bedrock")
@@ -828,7 +847,19 @@
     #     global.anthropic.claude-opus-4-8  ->  us.anthropic.claude-opus-4-8
 
     "bedrock-claude-fable": {
-        "use_model_name": "global.anthropic.claude-fable-5-1"
+        "use_model_name": "global.anthropic.claude-fable-5-2"
+    },
+    "global.anthropic.claude-fable-5-2": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-2.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
     },
     "global.anthropic.claude-fable-5-1": {
         "class": "anthropic-bedrock",

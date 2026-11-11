@@ -302,7 +302,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         Looks up the llm_info entry for a model name, following at most one alias hop.
 
         An alias is an entry with at most two keys whose "use_model_name" points at the
-        real entry (e.g. "claude-fable" -> "claude-fable-5-1"). Entries with more keys
+        real entry (e.g. "claude-fable" -> "claude-fable-5-2"). Entries with more keys
         keep their own details even when they carry a "use_model_name" of their own
         (e.g. the azure-* entries, whose "class" must win over their target's).
         This method never raises; callers decide how to treat a missing entry.
