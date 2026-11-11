@@ -38,9 +38,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Anything read at least in neuro_san/internals lives here.
     "internals": {
 
-        # Chat sessions.
-        "chat": {
-            "AGENT_PROTECT_ORIGINAL_COPY": "true"
+        "hardening": {
+            # A little bit faster to run with this false
+            "AGENT_PROTECT_ORIGINAL_COPY": "true",
+            "AGENT_LOCKDOWN_ENV": "false"
         },
 
         # Loading LLM info.
