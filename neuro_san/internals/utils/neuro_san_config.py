@@ -21,7 +21,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Union
 
 from leaf_common.config.config_filter_chain import ConfigFilterChain
 from leaf_common.config.config_util import ConfigUtil
@@ -230,17 +229,15 @@ class NeuroSanConfig(ConfigFilterChain):
         self._load()
 
     @staticmethod
-    def get(key: str) -> Optional[Union[str, Dict[str, Any]]]:
+    def get(key: str) -> Optional[str]:
         """
         Given the fully-qualified string key, return the value from the configuration
 
         :param key: The fully-qualified key from the config
-        :return: The value in the config.  Most often this is a string or None, however
-                    it is possible to return entire sections of the configuration dictionary
-                    (much less common).
+        :return: The string value in the config.
         """
         # pylint: disable=protected-access
-        value: Optional[Union[str, Dict[str, Any]]] = _INSTANCE._internal_get(key)
+        value: Optional[str] = _INSTANCE._internal_get(key)
         return value
 
     @staticmethod
@@ -283,7 +280,7 @@ class NeuroSanConfig(ConfigFilterChain):
         self.extractor = DictionaryExtractor(self.config)
         self.lockdown = self._internal_get_bool("internals.hardening.AGENT_LOCKDOWN_ENV")
 
-    def _internal_get(self, key: str) -> Optional[Union[str, Dict[str, Any]]]:
+    def _internal_get(self, key: str) -> Optional[str]:
         """
         Given the fully-qualified string key, return the value from the configuration
 
@@ -293,7 +290,7 @@ class NeuroSanConfig(ConfigFilterChain):
                     (much less common).
         """
         # pylint: disable=protected-access
-        value: Optional[Union[str, Dict[str, Any]]] = self._get_fully_qualified(key)
+        value: Optional[str] = self._get_fully_qualified(key)
         if not self._is_lockdown():
             key_split: List[str] = key.split(".")
             env_key: str = key_split[-1]
