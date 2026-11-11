@@ -245,7 +245,7 @@ class HttpServer(AgentStateListener):
         main_loop = tornado.ioloop.IOLoop.current()
 
         # Enable event loop lag monitor if requested by environment variable.
-        if NeuroSanConfig.get_bool("service.diagnostics.ENABLE_EVENT_LOOP_STATISTICS"):
+        if NeuroSanConfig.get_bool("service.diagnostics.AGENT_ENABLE_EVENT_LOOP_STATISTICS"):
             event_loop_monitor = \
                 EventLoopLagMonitor(
                     sample_interval_seconds=1.0,
