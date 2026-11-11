@@ -31,7 +31,6 @@ class SessionUtil:
     """
 
     MAX_AGENTS_ENV_VAR: str = "AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER"
-    MAX_AGENTS_CONFIG_KEY: str = f"session.security.{MAX_AGENTS_ENV_VAR}"
 
     @staticmethod
     def get_max_agents() -> int:
@@ -41,7 +40,7 @@ class SessionUtil:
 
         :return: The limit, or 0 for no limit
         """
-        max_agents_str: Optional[str] = NeuroSanConfig.get(SessionUtil.MAX_AGENTS_CONFIG_KEY)
+        max_agents_str: Optional[str] = NeuroSanConfig.get("session.security.AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER")
         if max_agents_str is None or max_agents_str.strip() == "":
             return 0
 
