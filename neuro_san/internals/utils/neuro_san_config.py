@@ -206,10 +206,12 @@ class NeuroSanConfig(ConfigFilterChain):
     from files.
 
     This is a singleton whose values can be loaded/determined at first-mention.
-    By default, any value can be overridden by its corresponding environment variable value.
-    However with "AGENT_LOCKDOWN_ENV" set to "true" (not the defaul), the environment is only
-    ever read once at startup.  With this one, if a rogue coded tool decides to try to change
-    one of these via env var, it will fail (good!).
+    By default, any value can be overridden by its corresponding environment variable value
+    at run-time evaluation.
+
+    However with "AGENT_LOCKDOWN_ENV" set to "true" (not the default), the environment is only
+    ever read once at startup.  With this on, if a rogue coded tool decides to try to change one
+    of these via env var, it will fail (good!).
     """
 
     def __init__(self):
