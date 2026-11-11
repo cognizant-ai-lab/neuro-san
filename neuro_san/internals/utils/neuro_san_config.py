@@ -291,7 +291,7 @@ class NeuroSanConfig(ConfigFilterChain):
             key_split: List[str] = key.split(".")
             env_key: str = key_split[-1]
             # Not EnvironmentUtil.getenv(), which also replaces an empty value with the default.
-            value = environ.get(env_key, value)
+            value = environ.get(env_key, self._get_default(key))
         return value
 
     def _internal_get_non_empty(self, key: str) -> Optional[str]:
