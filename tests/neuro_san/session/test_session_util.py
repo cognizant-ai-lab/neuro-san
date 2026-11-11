@@ -30,7 +30,7 @@ from neuro_san.session.session_util import SessionUtil
 
 class TestSessionUtil(TestCase):
     """
-    Unit tests for SessionUtil: how MAX_AGENTS_FROM_EXTERNAL_SERVER is read and applied to a listing.
+    Unit tests for SessionUtil: how AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER is read and applied to a listing.
     """
 
     AGENTS: List[str] = ["a", "b", "c", "d", "e"]
@@ -39,7 +39,7 @@ class TestSessionUtil(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Starts each test with MAX_AGENTS_FROM_EXTERNAL_SERVER unset, whatever the shell exports.
+        Starts each test with AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER unset, whatever the shell exports.
         """
         # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
         # removed or set freely here and in each test.
@@ -51,7 +51,7 @@ class TestSessionUtil(TestCase):
     @staticmethod
     def set_limit(value: Optional[str]) -> None:
         """
-        Sets or removes MAX_AGENTS_FROM_EXTERNAL_SERVER for the current test.
+        Sets or removes AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER for the current test.
 
         :param value: The value to set, or None to remove the variable
         """

@@ -41,7 +41,7 @@ In the vast majority of deployments, the agents from other servers and the refer
 those agents are static and well-known to the deployers of neuro-san systems and are not abusers of these agent lists.
 However, security considerations require us to allow deployments to be more careful when they need to be.
 
-For production: set MAX_AGENTS_FROM_EXTERNAL_SERVER to an integer limit comfortable for your deployment.
+For production: set AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER to an integer limit comfortable for your deployment.
 
 * A positive integer keeps at most that many agents from a listing and logs a warning if any are dropped.
 * Unset, 0 (the default) or a negative value means unlimited.

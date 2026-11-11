@@ -182,9 +182,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Client-side connections to a server.
     "session": {
         "security": {
+            # Documented in SAST_FALSE_POSITIVES.md. 0 means no limit.
+            "AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER": "0",
             "AGENT_SESSION_REQUIRE_HTTPS": "false"
-            # Documented in SAST_FALSE_POSITIVES.md
-            # MAX_AGENTS_FROM_EXTERNAL_SERVER - does not have AGENT_ prefix
         }
     },
 

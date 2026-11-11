@@ -60,7 +60,7 @@ class TestMcpServiceAgentSession(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Clears MAX_AGENTS_FROM_EXTERNAL_SERVER so a value set in the shell cannot affect these tests.
+        Clears AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER so a value set in the shell cannot affect these tests.
         """
         # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
         # removed or set freely here and in each test.
@@ -310,7 +310,7 @@ class TestMcpServiceAgentSession(TestCase):
 
     def test_function_applies_max_agents_limit_before_searching(self) -> None:
         """
-        The limit is applied before the search: with MAX_AGENTS_FROM_EXTERNAL_SERVER=1 a network
+        The limit is applied before the search: with AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER=1 a network
         listed second is not found, and the truncation is logged as a warning.
         """
         os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "1"
