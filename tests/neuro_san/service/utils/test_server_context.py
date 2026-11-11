@@ -52,7 +52,6 @@ class TestServerContext(TestCase):
         Tests that there is no fetched storage when AGENT_FETCHABLE_TOOL_SCHEMES has no supported scheme.
         """
         with patch.dict(environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "ftp"}):
-            NeuroSanConfig.reset_for_testing()
             server_context: ServerContext = ServerContext()
         self.assertNotIn(StorageClass.FETCHED, server_context.get_network_storage_dict())
 
@@ -61,7 +60,6 @@ class TestServerContext(TestCase):
         Tests that there is a fetched storage when AGENT_FETCHABLE_TOOL_SCHEMES enables a scheme.
         """
         with patch.dict(environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https,file"}):
-            NeuroSanConfig.reset_for_testing()
             server_context: ServerContext = ServerContext()
         fetched_storage: AgentStorageSource = server_context.get_network_storage_dict().get(StorageClass.FETCHED)
         self.assertIsNotNone(fetched_storage)

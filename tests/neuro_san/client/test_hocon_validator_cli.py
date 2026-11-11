@@ -332,7 +332,6 @@ class TestHoconValidatorCli(unittest.TestCase):
         second_manifest: str = os.path.join(os.sep, "other", "registries", "overlay.hocon")
         manifest_list: str = os.pathsep.join([first_manifest, second_manifest])
         with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": manifest_list}):
-            NeuroSanConfig.reset_for_testing()
             registry_dir: str = HoconValidatorCli.get_default_registry_dir()
         self.assertEqual(registry_dir, os.path.abspath(os.path.join(os.sep, "base")))
 
@@ -341,14 +340,12 @@ class TestHoconValidatorCli(unittest.TestCase):
         manifest: str = os.path.join(os.sep, "base", "registries", "manifest.hocon")
         manifest_list: str = os.pathsep + manifest
         with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": manifest_list}):
-            NeuroSanConfig.reset_for_testing()
             registry_dir: str = HoconValidatorCli.get_default_registry_dir()
         self.assertEqual(registry_dir, os.path.abspath(os.path.join(os.sep, "base")))
 
     def test_default_registry_dir_without_manifest_is_cwd(self):
         """The default registry dir is the current directory when AGENT_MANIFEST_FILE is unset or empty."""
         with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": ""}):
-            NeuroSanConfig.reset_for_testing()
             self.assertEqual(HoconValidatorCli.get_default_registry_dir(), os.getcwd())
         with patch.dict(os.environ):
             os.environ.pop("AGENT_MANIFEST_FILE", None)
@@ -385,7 +382,6 @@ class TestHoconValidatorCli(unittest.TestCase):
 
             manifest_list: str = os.pathsep.join(manifest_files)
             with patch.dict(os.environ, {"AGENT_MANIFEST_FILE": manifest_list}):
-                NeuroSanConfig.reset_for_testing()
                 exit_code, output = self._run_cli([hocon_path])
         self.assertEqual(exit_code, 0)
         self.assertIn("Validation passed", output)

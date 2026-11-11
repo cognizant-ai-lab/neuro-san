@@ -77,11 +77,9 @@ class TestHttpServer(TestCase):
         A numeric AGENT_HEALTH_PROBE_PORT wins over HttpServerConfig, and a negative value disables.
         """
         os.environ["AGENT_HEALTH_PROBE_PORT"] = "7071"
-        NeuroSanConfig.reset_for_testing()
         self.assertEqual(7071, self.make_server(9091).resolve_health_probe_port())
 
         os.environ["AGENT_HEALTH_PROBE_PORT"] = "-1"
-        NeuroSanConfig.reset_for_testing()
         self.assertEqual(0, self.make_server(9091).resolve_health_probe_port())
 
     def test_probe_port_invalid_env_uses_server_config(self) -> None:
@@ -89,9 +87,7 @@ class TestHttpServer(TestCase):
         A non-numeric or empty AGENT_HEALTH_PROBE_PORT falls back to HttpServerConfig.
         """
         os.environ["AGENT_HEALTH_PROBE_PORT"] = "not_a_port"
-        NeuroSanConfig.reset_for_testing()
         self.assertEqual(9091, self.make_server(9091).resolve_health_probe_port())
 
         os.environ["AGENT_HEALTH_PROBE_PORT"] = ""
-        NeuroSanConfig.reset_for_testing()
         self.assertEqual(9091, self.make_server(9091).resolve_health_probe_port())

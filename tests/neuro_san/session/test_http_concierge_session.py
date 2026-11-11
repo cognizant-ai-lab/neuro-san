@@ -71,7 +71,6 @@ class TestHttpConciergeSession(TestCase):
         self.addCleanup(env_patcher.stop)
         os.environ.pop(SessionUtil.MAX_AGENTS_ENV_VAR, None)
         os.environ["AGENT_SESSION_REQUIRE_HTTPS"] = "false"
-        NeuroSanConfig.reset_for_testing()
 
     @staticmethod
     def fake_get(body_text: str, path: str, **kwargs: Any) -> MagicMock:

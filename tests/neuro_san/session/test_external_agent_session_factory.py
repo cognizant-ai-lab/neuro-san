@@ -174,7 +174,6 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
             await self.factory.async_create_session("https://neuro-san.decisionai.ml/deep/math_guy",
                                                     self.invocation_context)
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
-            NeuroSanConfig.reset_for_testing()
             path: str = session.get_request_path("function")
         self.assertEqual(path, "https://neuro-san.decisionai.ml:443/api/v1/deep/math_guy/function")
 
@@ -187,7 +186,6 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
             await self.factory.async_create_session("http://neuro-san.decisionai.ml/deep/math_guy",
                                                     self.invocation_context)
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
-            NeuroSanConfig.reset_for_testing()
             with self.assertRaises(ValueError):
                 session.get_request_path("function")
 
@@ -339,7 +337,6 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
         factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
 
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
-            NeuroSanConfig.reset_for_testing()
             session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
         self.assertIsInstance(session, AsyncHttpServiceAgentSession)
         self.fetched_storage.async_get_agent_network_provider.assert_not_awaited()
@@ -352,7 +349,6 @@ class TestExternalAgentSessionFactory(IsolatedAsyncioTestCase):  # pylint: disab
         factory: ExternalAgentSessionFactory = self.create_direct_factory(None, MagicMock())
 
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
-            NeuroSanConfig.reset_for_testing()
             session: AsyncAgentSession = await factory.async_create_session(agent_url, self.invocation_context)
         self.assertIsInstance(session, AsyncDirectAgentSession)
         self.fetched_storage.async_get_agent_network_provider.assert_awaited_once_with(agent_url)

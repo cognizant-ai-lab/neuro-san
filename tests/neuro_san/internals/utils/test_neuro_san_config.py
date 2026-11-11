@@ -48,13 +48,12 @@ class TestNeuroSanConfig(TestCase):
     @staticmethod
     def set_env(name: str, value: str) -> None:
         """
-        Sets an environment variable and reloads NeuroSanConfig to see it.
+        Sets an environment variable, which NeuroSanConfig reads on each lookup.
 
         :param name: The environment variable name
         :param value: The value to set
         """
         os.environ[name] = value
-        NeuroSanConfig.reset_for_testing()
 
     @staticmethod
     def unset_env(name: str) -> None:

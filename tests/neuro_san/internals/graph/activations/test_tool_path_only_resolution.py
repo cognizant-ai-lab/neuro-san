@@ -112,7 +112,6 @@ class TestToolPathOnlyResolution(TestCase):
         sys.modules.pop(CANARY_MODULE, None)
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             with self.assertRaises(ValueError) as raised_error:
                 self.fixture_activation.resolve_class("CanaryTool", CANARY_MODULE)
 
@@ -124,7 +123,6 @@ class TestToolPathOnlyResolution(TestCase):
         Test that strict mode still resolves a tool at the network-specific level.
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             resolved_class: Type[Any] = self.fixture_activation.resolve_class("NetworkTool", "network_tool")
             self.assertEqual(resolved_class.__name__, "NetworkTool")
 
@@ -133,7 +131,6 @@ class TestToolPathOnlyResolution(TestCase):
         Test that strict mode still resolves a shared tool one level up the hierarchy.
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             resolved_class: Type[Any] = self.fixture_activation.resolve_class("SharedTool", "shared_tool")
             self.assertEqual(resolved_class.__name__, "SharedTool")
 
@@ -145,7 +142,6 @@ class TestToolPathOnlyResolution(TestCase):
         sys.modules.pop(CANARY_MODULE, None)
         for truthy_value in ("true", "True", "TRUE", "yes", " true "):
             with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": truthy_value}):
-                NeuroSanConfig.reset_for_testing()
                 with self.assertRaises(ValueError):
                     self.fixture_activation.resolve_class("CanaryTool", CANARY_MODULE)
                 self.assertNotIn(CANARY_MODULE, sys.modules.keys())
@@ -159,7 +155,6 @@ class TestToolPathOnlyResolution(TestCase):
             ["neuro_san.coded_tools.date_time_timezone"], "date_time_timezone", agent_name="current_date_time")
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             resolved_class: Type[Any] = activation.resolve_class("GetCurrentDateTime", "get_current_date_time")
             self.assertEqual(resolved_class.__name__, "GetCurrentDateTime")
 
@@ -168,7 +163,6 @@ class TestToolPathOnlyResolution(TestCase):
         Test that strict mode resolves a network-specific tool that only the later root has.
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             resolved_class: Type[Any] = self.two_root_activation.resolve_class(
                 "SecondNetworkTool", "second_network_tool")
             self.assertEqual(resolved_class.__name__, "SecondNetworkTool")
@@ -178,7 +172,6 @@ class TestToolPathOnlyResolution(TestCase):
         Test that strict mode resolves a shared tool that only the later root has.
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             resolved_class: Type[Any] = self.two_root_activation.resolve_class(
                 "SecondSharedTool", "second_shared_tool")
             self.assertEqual(resolved_class.__name__, "SecondSharedTool")
@@ -195,7 +188,6 @@ class TestToolPathOnlyResolution(TestCase):
             [second_tool_path, first_tool_path], "my_network")
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             first_wins: Type[Any] = self.two_root_activation.resolve_class("SharedTool", "shared_tool")
             self.assertEqual(first_wins.__module__, f"{FIRST_AGENT_TOOL_PATH_PACKAGE}.shared_tool")
 
@@ -210,7 +202,6 @@ class TestToolPathOnlyResolution(TestCase):
         sys.modules.pop(CANARY_MODULE, None)
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             with self.assertRaises(ValueError) as raised_error:
                 self.two_root_activation.resolve_class("CanaryTool", CANARY_MODULE)
 
@@ -224,7 +215,6 @@ class TestToolPathOnlyResolution(TestCase):
         Tools that summarize the error keep these first lines only.
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             with self.assertRaises(ValueError) as raised_error:
                 self.two_root_activation.resolve_class("MissingTool", "missing_tool")
 
@@ -245,7 +235,6 @@ class TestToolPathOnlyResolution(TestCase):
             "deep/math_guy")
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             with self.assertRaises(ValueError) as raised_error:
                 activation.resolve_class("MissingTool", "missing_tool")
 
@@ -262,7 +251,6 @@ class TestToolPathOnlyResolution(TestCase):
             "my_network", agent_name="current_date_time")
 
         with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
-            NeuroSanConfig.reset_for_testing()
             resolved_class: Type[Any] = activation.resolve_class("GetCurrentDateTime", "get_current_date_time")
             self.assertEqual(resolved_class.__name__, "GetCurrentDateTime")
 
