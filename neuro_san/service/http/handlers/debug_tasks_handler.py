@@ -37,7 +37,7 @@ class DebugTasksHandler(RequestHandler):
     ServerContext.dump_tasks_in_used_executors() for the underlying probe.
 
     Intended for on-demand diagnostics when the service appears wedged.
-    Gated behind ENABLE_RUN_TIME_STATISTICS -- same env var that gates
+    Gated behind AGENT_ENABLE_RUN_TIME_STATISTICS -- same env var that gates
     /profiler and /resources_utilization -- so it is NOT reachable in
     production by default.
 
@@ -55,7 +55,7 @@ class DebugTasksHandler(RequestHandler):
         """
         self.server_context: ServerContext = kwargs.pop("server_context")
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.ENABLE_RUN_TIME_STATISTICS")
+        self.is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_ENABLE_RUN_TIME_STATISTICS")
 
     async def get(self):
         """
@@ -73,7 +73,7 @@ class DebugTasksHandler(RequestHandler):
         if not self.is_enabled:
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write("Run-time statistics collection is disabled. "
-                       "To enable it, set environment variable ENABLE_RUN_TIME_STATISTICS to 'true'.")
+                       "To enable it, set environment variable AGENT_ENABLE_RUN_TIME_STATISTICS to 'true'.")
             self.logger.info("Run-time statistics collection is disabled.")
             return
 

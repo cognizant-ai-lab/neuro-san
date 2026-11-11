@@ -105,7 +105,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_LOOP_TIMELINE": "false",
             "AGENT_LOOP_TIMELINE_DUMP_PATH": "",
             "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000",
-            "ENABLE_RUN_TIME_STATISTICS": "false",          # No AGENT_ prefix
+            "AGENT_ENABLE_RUN_TIME_STATISTICS": "false",
             "AGENT_ENABLE_EVENT_LOOP_STATISTICS": "false",
             "AGENT_SHOW_ABSENT_METADATA": "false"
         },

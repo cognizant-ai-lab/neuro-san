@@ -467,7 +467,7 @@ class HttpServer(AgentStateListener):
         handlers.append(("/resources_utilization", SnapshotHandler, {"http_port": self.http_port}))
 
         # Setup handler for on-demand asyncio-task dump across used AsyncioExecutors.
-        # Gated behind ENABLE_RUN_TIME_STATISTICS (same as /profiler and /resources_utilization).
+        # Gated behind AGENT_ENABLE_RUN_TIME_STATISTICS (same as /profiler and /resources_utilization).
         handlers.append(("/debug/tasks", DebugTasksHandler, {"server_context": self.server_context}))
 
         # Setup handler for on-demand full Python garbage collection.

@@ -47,13 +47,13 @@ class ProfilerControlHandler(RequestHandler):
         """
         Implementation of POST request handler for profiler control.
         """
-        is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.ENABLE_RUN_TIME_STATISTICS")
+        is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_ENABLE_RUN_TIME_STATISTICS")
         logger = logging.getLogger(self.__class__.__name__)
 
         if not is_enabled:
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write("Run-time profiler is disabled. "
-                       "To enable it, set environment variable ENABLE_RUN_TIME_STATISTICS to 'true'.")
+                       "To enable it, set environment variable AGENT_ENABLE_RUN_TIME_STATISTICS to 'true'.")
             logger.info("Run-time profiler is disabled.")
             return
 
