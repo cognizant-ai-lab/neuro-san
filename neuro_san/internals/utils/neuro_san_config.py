@@ -316,6 +316,7 @@ class NeuroSanConfig(ConfigFilterChain):
         :return: True the value for the key is to be considered True.
                  False otherwise. An empty value uses the default from DEFAULT_CONFIG.
         """
+        # Use _internal_get_non_empty() so that unset/empty values use the defaults.
         value: Optional[str] = self._internal_get_non_empty(key)
         bool_value: bool = ConfigUtil.is_true(value)
         return bool_value
