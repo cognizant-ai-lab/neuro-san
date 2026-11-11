@@ -113,8 +113,7 @@ class ServerMainLoop:
                                 or self.service_openapi_spec_file,
                                 help="File path to OpenAPI service specification document.")
         arg_parser.add_argument("--manifest_update_period_seconds", type=int,
-                                default=int(NeuroSanConfig.get("service.server.AGENT_MANIFEST_UPDATE_PERIOD_SECONDS",
-                                                               check_env_var=True)),
+                                default=int(NeuroSanConfig.get("service.server.AGENT_MANIFEST_UPDATE_PERIOD_SECONDS")),
                                 help="Periodic run-time update period for manifest in seconds."
                                      " Value <= 0 disables updates.")
         arg_parser.add_argument("--http_connections_backlog", type=int,

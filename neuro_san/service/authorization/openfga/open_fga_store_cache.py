@@ -19,7 +19,6 @@ from typing import Any
 from typing import Dict
 from typing import Type
 
-from os import environ
 from threading import Lock
 
 from leaf_common.resolution.resolver_util import ResolverUtil
