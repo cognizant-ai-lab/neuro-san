@@ -33,7 +33,6 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
-from leaf_common.config.config_util import ConfigUtil
 from leaf_common.logging.log_once import LogOnce
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
@@ -396,16 +395,8 @@ Check these things:
                 Defaults to False for backwards compatibility, where fully-qualified
                 references can resolve to any class on the server's PYTHONPATH.
         """
-        # ConfigUtil.get_bool accepts the boolean-like spellings used elsewhere for
-        # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
-        # operator setting this security flag the way other flags are set gets the
-        # behavior they expect rather than a silent fail-open.
-        key: str = "internals.tools.AGENT_TOOL_PATH_ONLY"
-        only_value: str = NeuroSanConfig.get(key, check_env_var=True)
-        compat: Dict[str, Any] = {
-            key: only_value
-        }
-        return ConfigUtil.get_bool(compat, key, False)
+        only_value: str = NeuroSanConfig.get_bool("internals.tools.AGENT_TOOL_PATH_ONLY")
+        return only_value
 
     def _log_unrestricted_resolution_notice_once(self):
         """
