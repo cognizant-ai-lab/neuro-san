@@ -217,7 +217,6 @@ class TestActivationFactory(TestCase):
         filtered: Dict[str, Any] = NetworkConfigFilterChain().filter_config(config)
         agent_network: AgentNetwork = AgentNetwork(filtered, TestActivationFactory.NETWORK_NAME)
         with patch.dict(os.environ, {"AGENT_TOOL_PATH": "neuro_san.coded_tools"}):
-            NeuroSanConfig.reset_for_testing()
             factory: ActivationFactory = ActivationFactory(agent_network)
 
         # Both activation classes are mocked, so no real RunContext or LLM is made.

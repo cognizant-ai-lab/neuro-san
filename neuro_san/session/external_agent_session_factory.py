@@ -304,7 +304,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
         # Same default and parsing as AbstractHttpServiceAgentSession.get_request_path():
         # permissive unless a server opts in.
-        require_https: bool = NeuroSanConfig.get("session.security.AGENT_SESSION_REQUIRE_HTTPS").lower() == "true"
+        require_https: bool = NeuroSanConfig.get_bool("session.security.AGENT_SESSION_REQUIRE_HTTPS")
         scheme: str = urlparse(agent_url).scheme
         lower_scheme: str = scheme.lower()
         if require_https and lower_scheme == "http":

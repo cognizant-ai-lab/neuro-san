@@ -96,7 +96,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
 
         # By default, be permissive so developers can get work done.
         # Servers can turn this on to be more strict within their systems.
-        require_https: bool = NeuroSanConfig.get("session.security.AGENT_SESSION_REQUIRE_HTTPS").lower() == "true"
+        require_https: bool = NeuroSanConfig.get_bool("session.security.AGENT_SESSION_REQUIRE_HTTPS")
         if require_https and scheme != "https":
             raise ValueError(
                 f"AGENT_SESSION_REQUIRE_HTTPS=true requires https. Configure the {self.__class__.__name__} accordingly"

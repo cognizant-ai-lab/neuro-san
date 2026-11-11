@@ -106,7 +106,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # Get user toolbox info file path with the following priority:
         # 1. "toolbox_info_file" from agent network hocon
         # 2. "AGENT_TOOLBOX_INFO_FILE" from environment variable
-        from_env: str = NeuroSanConfig.get("internals.tools.AGENT_TOOLBOX_INFO_FILE", check_env_var=True)
+        from_env: str = NeuroSanConfig.get("internals.tools.AGENT_TOOLBOX_INFO_FILE")
         raw_toolbox_info_file: str = from_env
         if config:
             raw_toolbox_info_file: str = config.get("toolbox_info_file") or from_env

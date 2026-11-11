@@ -19,6 +19,8 @@ from typing import Dict
 from typing import List
 from types import ModuleType
 
+from leaf_common.config.config_util import ConfigUtil
+
 from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.authorization.interfaces.abstract_authorizer import AbstractAuthorizer
 from neuro_san.service.authorization.interfaces.authorizer import Authorizer
@@ -44,8 +46,8 @@ class OpenFgaAuthorizer(AbstractAuthorizer):
                                                                              install_if_missing="openfga-sdk")
 
         debug_auth: str = NeuroSanConfig.get("service.authorization.AGENT_DEBUG_AUTH")
-        self.debug: bool = debug_auth is not None and len(debug_auth) > 0 and debug_auth != "false"
         self.fail_on_unauthorized: bool = debug_auth == "hard"
+        self.debug: bool = ConfigUtil.is_true(debug_auth) or self.fail_on_unauthorized
 
         # Note: we don't initialize the client because constructors cannot be async
         # This is what we use aenter() and aexit() for.

@@ -15,15 +15,16 @@
 # END COPYRIGHT
 from __future__ import annotations
 
+from os import environ
+
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Union
 
 from leaf_common.config.config_filter_chain import ConfigFilterChain
+from leaf_common.config.config_util import ConfigUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-from leaf_common.utils.environment_util import EnvironmentUtil
 
 from neuro_san.internals.utils.environment_config_filter import EnvironmentConfigFilter
 
@@ -38,9 +39,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Anything read at least in neuro_san/internals lives here.
     "internals": {
 
-        # Chat sessions.
-        "chat": {
-            "AGENT_PROTECT_ORIGINAL_COPY": "true"
+        "hardening": {
+            # A little bit faster to run with this false
+            "AGENT_PROTECT_ORIGINAL_COPY": "true",
+            "AGENT_LOCKDOWN_ENV": "false"
         },
 
         # Loading LLM info.
@@ -102,10 +104,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES": "false",
             "AGENT_LOOP_TIMELINE": "false",
             "AGENT_LOOP_TIMELINE_DUMP_PATH": "",
-            "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000"
-            # Neither of these have docs
-            # ENABLE_RUN_TIME_STATISTICS - does not have AGENT_ prefix
-            # SHOW_ABSENT_METADATA - does not have AGENT_ prefix
+            "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000",
+            "AGENT_ENABLE_RUN_TIME_STATISTICS": "false",
+            "AGENT_ENABLE_EVENT_LOOP_STATISTICS": "false",
+            "AGENT_SHOW_ABSENT_METADATA": "false"
         },
 
         # The HTTP listener.
@@ -202,9 +204,13 @@ class NeuroSanConfig(ConfigFilterChain):
     This will allow us to get config from a dictionary, the environment and also potentially do overlays
     from files.
 
-    This is a singleton whose values are loaded/determined at first-mention, so if a rogue coded tool
-    decides to try to change one of these via env-var, it will fail (good!). The exception here is when
-    get() is called with check_env_var=True, however those cases we would like to minimize/eliminate.
+    This is a singleton whose values can be loaded/determined at first-mention.
+    By default, any value can be overridden by its corresponding environment variable value
+    at run-time evaluation.
+
+    However with "AGENT_LOCKDOWN_ENV" set to "true" (not the default), the environment is only
+    ever read once at startup.  With this on, if a rogue coded tool decides to try to change one
+    of these via env var, it will fail (good!).
     """
 
     def __init__(self):
@@ -216,34 +222,26 @@ class NeuroSanConfig(ConfigFilterChain):
         self.config: Dict[str, Any] = None
         self.extractor: DictionaryExtractor = None
         self.default_extractor: DictionaryExtractor = DictionaryExtractor(DEFAULT_CONFIG)
+        self.lockdown: bool = False
 
         self.register(EnvironmentConfigFilter())
 
         self._load()
 
     @staticmethod
-    def get(key: str, check_env_var: bool = False) -> Optional[Union[str, Dict[str, Any]]]:
+    def get(key: str) -> Optional[str]:
         """
         Given the fully-qualified string key, return the value from the configuration
 
         :param key: The fully-qualified key from the config
-        :param check_env_var: True if we should check the env var value every time get() is called
-                              in case run-time mods changed it underneath us for backwards compatibility.
-                              False otherwise (the default).
-        :return: The value in the config.  Most often this is a string or None, however
-                    it is possible to return entire sections of the configuration dictionary
-                    (much less common).
+        :return: The string value in the config.
         """
         # pylint: disable=protected-access
-        value: Optional[Union[str, Dict[str, Any]]] = _INSTANCE._get_fully_qualified(key)
-        if check_env_var:
-            key_split: List[str] = key.split(".")
-            env_key: str = key_split[-1]
-            value = EnvironmentUtil.getenv(env_key, value)
+        value: Optional[str] = _INSTANCE._internal_get(key)
         return value
 
     @staticmethod
-    def get_non_empty(key: str, check_env_var: bool = False) -> Optional[str]:
+    def get_non_empty(key: str) -> Optional[str]:
         """
         Given the fully-qualified string key, return the value from the configuration,
         treating an empty value the same as an unset one.
@@ -253,17 +251,23 @@ class NeuroSanConfig(ConfigFilterChain):
         an empty value means "use the default".
 
         :param key: The fully-qualified key from the config
-        :param check_env_var: True if we should check the env var value every time get() is called
-                              in case run-time mods changed it underneath us for backwards compatibility.
-                              False otherwise (the default).
         :return: The value in the config, or the default from DEFAULT_CONFIG
                  when the value is empty.
         """
         # pylint: disable=protected-access
-        value: Optional[str] = NeuroSanConfig.get(key, check_env_var)
-        if value is not None and len(value) == 0:
-            value = _INSTANCE._get_default(key)
+        value: Optional[str] = _INSTANCE._internal_get_non_empty(key)
         return value
+
+    @staticmethod
+    def get_bool(key: str) -> bool:
+        """
+        :param key: The fully-qualified key from the config
+        :return: True if the value for the key is to be considered True.
+                 False otherwise.
+        """
+        # pylint: disable=protected-access
+        bool_value: bool = _INSTANCE._internal_get_bool(key)
+        return bool_value
 
     def _load(self):
         """
@@ -272,6 +276,48 @@ class NeuroSanConfig(ConfigFilterChain):
         self.config = DEFAULT_CONFIG
         self.config = self.filter_config(self.config)
         self.extractor = DictionaryExtractor(self.config)
+        self.lockdown = self._internal_get_bool("internals.hardening.AGENT_LOCKDOWN_ENV")
+
+    def _internal_get(self, key: str) -> Optional[str]:
+        """
+        Given the fully-qualified string key, return the value from the configuration
+
+        :param key: The fully-qualified key from the config
+        :return: The string value in the config.
+        """
+        # pylint: disable=protected-access
+        value: Optional[str] = self._get_fully_qualified(key)
+        if not self._is_lockdown():
+            key_split: List[str] = key.split(".")
+            env_key: str = key_split[-1]
+            # Not EnvironmentUtil.getenv(), which also replaces an empty value with the default.
+            value = environ.get(env_key, self._get_default(key))
+        return value
+
+    def _internal_get_non_empty(self, key: str) -> Optional[str]:
+        """
+        Given the fully-qualified string key, return the value from the configuration,
+        treating an empty value the same as an unset one.
+
+        :param key: The fully-qualified key from the config
+        :return: The value in the config, or the default from DEFAULT_CONFIG
+                 when the value is empty.
+        """
+        value: Optional[str] = self._internal_get(key)
+        if value is not None and len(value) == 0:
+            value = self._get_default(key)
+        return value
+
+    def _internal_get_bool(self, key: str) -> bool:
+        """
+        :param key: The fully-qualified key from the config
+        :return: True if the value for the key is to be considered True.
+                 False otherwise. An empty value uses the default from DEFAULT_CONFIG.
+        """
+        # Use _internal_get_non_empty() so that unset/empty values use the defaults.
+        value: Optional[str] = self._internal_get_non_empty(key)
+        bool_value: bool = ConfigUtil.is_true(value)
+        return bool_value
 
     def _get_fully_qualified(self, key: str) -> Optional[str]:
         """
@@ -294,15 +340,24 @@ class NeuroSanConfig(ConfigFilterChain):
         value: Optional[str] = self.default_extractor.get(key)
         return value
 
+    def _is_lockdown(self) -> bool:
+        """
+        :return: True if the environment is locked down/forbidden from further env lookups.
+                 False otherwise
+        """
+        return self.lockdown
+
     @staticmethod
     def reset_for_testing():
         """
         Reloads the singleton configuration so that it reflects the current environment.
-        The configuration is read once at import time, so tests that change environment
-        variables call this after making the change and again after undoing it.
+        The configuration is read at least once at import time, so tests that change environment
+        variables call this after making the change and again after undoing it
+        if AGENT_LOCKDOWN_ENV is enabled.
         """
         # pylint: disable=protected-access
-        _INSTANCE._load()
+        if not _INSTANCE._is_lockdown():
+            _INSTANCE._load()
 
 
 # Singleton. Access via NeuroSanConfig.get()

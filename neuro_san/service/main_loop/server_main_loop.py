@@ -23,6 +23,7 @@ import sys
 
 from argparse import ArgumentParser
 
+from leaf_common.config.config_util import ConfigUtil
 from leaf_common.logging.logging_setup import LoggingSetup
 from leaf_common.utils.startable import Startable
 
@@ -113,8 +114,7 @@ class ServerMainLoop:
                                 or self.service_openapi_spec_file,
                                 help="File path to OpenAPI service specification document.")
         arg_parser.add_argument("--manifest_update_period_seconds", type=int,
-                                default=int(NeuroSanConfig.get("service.server.AGENT_MANIFEST_UPDATE_PERIOD_SECONDS",
-                                                               check_env_var=True)),
+                                default=int(NeuroSanConfig.get("service.server.AGENT_MANIFEST_UPDATE_PERIOD_SECONDS")),
                                 help="Periodic run-time update period for manifest in seconds."
                                      " Value <= 0 disables updates.")
         arg_parser.add_argument("--http_connections_backlog", type=int,
@@ -142,11 +142,11 @@ class ServerMainLoop:
                                 help="Maximum number of temporary agent networks to keep in memory. "
                                      "When exceeded, least recently used networks are evicted. "
                                      "0 means unlimited.")
-        arg_parser.add_argument("--mcp_enable", type=str,
-                                default=NeuroSanConfig.get("service.mcp.AGENT_MCP_ENABLE"),
+        arg_parser.add_argument("--mcp_enable", type=ConfigUtil.is_true,
+                                default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ENABLE"),
                                 help="'true' if MCP protocol service should be enabled")
-        arg_parser.add_argument("--mcp_only", type=str,
-                                default=NeuroSanConfig.get("service.mcp.AGENT_MCP_ONLY"),
+        arg_parser.add_argument("--mcp_only", type=ConfigUtil.is_true,
+                                default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ONLY"),
                                 help="'true' if only MCP protocol service will be run (no HTTP service)")
         return arg_parser
 
@@ -183,9 +183,9 @@ class ServerMainLoop:
             # StorageWatcher is disabled:
             server_status.updater.set_requested(False)
         # Do we to enable MCP service?
-        if args.mcp_enable.lower() != "true":
+        if not args.mcp_enable:
             server_status.mcp_service.set_requested(False)
-        if args.mcp_only.lower() == "true":
+        if args.mcp_only:
             server_status.mcp_service.set_requested(True)
             # Disable HTTP service if MCP only is requested
             server_status.http_service.set_requested(False)

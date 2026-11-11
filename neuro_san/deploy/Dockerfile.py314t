@@ -626,6 +626,12 @@ ENV AGENT_FETCHABLE_TOOL_SCHEMES=""
 # 0 (the default) means the number of agents listed is unlimited.
 ENV MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
 
+# With the default value of "false", any AGENT_* configuration can be read as an override
+# to default policy at runtime from the environment.  When this is "true", the environment
+# is only read once at startup, and AGENT_* configuration values will not
+# be read from the environment henceforth.
+ENV AGENT_LOCKDOWN_ENV="false"
+
 #
 # Authorization
 #
@@ -668,7 +674,7 @@ ENV AGENT_AUTHORIZER_ALLOW_RELATION="read"
 # Whether to enable run-time statistics endpoints for neuro-san server as a whole.
 # These endpoints can be used to get information about the server's current resource usage
 # and also to control run-time service profiler.
-ENV ENABLE_RUN_TIME_STATISTICS="false"
+ENV AGENT_ENABLE_RUN_TIME_STATISTICS="false"
 
 # Below: Env vars specific to OpenFgaAuthorizer
 

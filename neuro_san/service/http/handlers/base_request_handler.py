@@ -23,7 +23,6 @@ from typing import Optional
 from http import HTTPStatus
 
 import json
-import os
 import asyncio
 
 import tornado
@@ -73,13 +72,13 @@ class BaseRequestHandler(RequestHandler):
         logging_config: Dict[str, Any] = kwargs.pop("logging_config", None)
 
         self.logger = HttpLogger(self.forwarded_request_metadata, logging_config)
-        self.show_absent: bool = os.environ.get("SHOW_ABSENT_METADATA") is not None
+        self.show_absent: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_SHOW_ABSENT_METADATA")
         self.request_id: int = 0
         self.worker_id: int = -1
         if self.server_context is not None:
             self.worker_id = self.server_context.get_worker_id()
 
-        if NeuroSanConfig.get("service.http.AGENT_ALLOW_CORS_HEADERS") is not None:
+        if NeuroSanConfig.get_bool("service.http.AGENT_ALLOW_CORS_HEADERS"):
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             headers: str = "Content-Type, Transfer-Encoding"

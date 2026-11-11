@@ -88,7 +88,6 @@ class TestUnitTestHocons(TestCase):
         self.addCleanup(NeuroSanConfig.reset_for_testing)
         # The agent network file is fetched over https, which is off by default.
         with patch.dict(environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https"}):
-            NeuroSanConfig.reset_for_testing()
             self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
 
     @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([

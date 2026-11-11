@@ -15,14 +15,16 @@
 #
 # END COPYRIGHT
 
-from typing import Any, Dict
-import os
+from typing import Any
+from typing import Dict
+
 import json
 import logging
 from http import HTTPStatus
 
 from tornado.web import RequestHandler
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.utils.service_resources import ServiceResources
 
 
@@ -42,7 +44,7 @@ class SnapshotHandler(RequestHandler):
         # Set up local members from kwargs dictionary passed in:
         self.http_port: int = int(kwargs.pop("http_port"))
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.is_enabled: bool = os.getenv("ENABLE_RUN_TIME_STATISTICS", "false").lower() == "true"
+        self.is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_ENABLE_RUN_TIME_STATISTICS")
 
     async def get(self):
         """
@@ -55,7 +57,7 @@ class SnapshotHandler(RequestHandler):
         else:
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write("Run-time statistics collection is disabled. "
-                       "To enable it, set environment variable ENABLE_RUN_TIME_STATISTICS to 'true'.")
+                       "To enable it, set environment variable AGENT_ENABLE_RUN_TIME_STATISTICS to 'true'.")
             self.logger.info("Run-time statistics collection is disabled.")
 
     def data_received(self, chunk):

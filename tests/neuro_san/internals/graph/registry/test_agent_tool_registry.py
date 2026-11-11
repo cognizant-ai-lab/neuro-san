@@ -72,7 +72,6 @@ class TestAgentToolRegistry(TestCase):
         so an activation asking the registry searches the roots the operator listed.
         """
         with patch.dict(os.environ, {"AGENT_TOOL_PATH": "neuro_san.coded_tools"}):
-            NeuroSanConfig.reset_for_testing()
             registry: AgentToolRegistry = self.make_registry()
 
         self.assertEqual(registry.get_agent_tool_paths(), ["neuro_san.coded_tools.deep.math_guy"])

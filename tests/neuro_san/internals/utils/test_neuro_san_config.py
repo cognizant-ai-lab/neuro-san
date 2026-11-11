@@ -31,8 +31,11 @@ class TestNeuroSanConfig(TestCase):
     """
 
     # A key with a non-None default, and one with a None default
-    DEFAULTED_KEY: str = "internals.chat.AGENT_PROTECT_ORIGINAL_COPY"
+    DEFAULTED_KEY: str = "internals.hardening.AGENT_PROTECT_ORIGINAL_COPY"
     NONE_DEFAULT_KEY: str = "internals.tools.AGENT_TOOL_PATH"
+
+    # The module-level singleton that NeuroSanConfig's static methods read
+    INSTANCE_TARGET: str = "neuro_san.internals.utils.neuro_san_config._INSTANCE"
 
     @override
     def setUp(self) -> None:
@@ -48,13 +51,12 @@ class TestNeuroSanConfig(TestCase):
     @staticmethod
     def set_env(name: str, value: str) -> None:
         """
-        Sets an environment variable and reloads NeuroSanConfig to see it.
+        Sets an environment variable, which NeuroSanConfig reads on each lookup.
 
         :param name: The environment variable name
         :param value: The value to set
         """
         os.environ[name] = value
-        NeuroSanConfig.reset_for_testing()
 
     @staticmethod
     def unset_env(name: str) -> None:
@@ -65,6 +67,15 @@ class TestNeuroSanConfig(TestCase):
         """
         os.environ.pop(name, None)
         NeuroSanConfig.reset_for_testing()
+
+    def use_fresh_instance(self) -> None:
+        """
+        Replaces the NeuroSanConfig singleton for this test with one built from the current environment.
+        Lockdown cannot be undone on the real singleton, so tests that enable it use this instead.
+        """
+        instance_patcher: Any = patch(TestNeuroSanConfig.INSTANCE_TARGET, NeuroSanConfig())
+        instance_patcher.start()
+        self.addCleanup(instance_patcher.stop)
 
     def test_unset_variable_uses_default(self) -> None:
         """
@@ -97,3 +108,58 @@ class TestNeuroSanConfig(TestCase):
         self.set_env("AGENT_TOOL_PATH", "")
         self.assertEqual("", NeuroSanConfig.get(TestNeuroSanConfig.NONE_DEFAULT_KEY))
         self.assertIsNone(NeuroSanConfig.get_non_empty(TestNeuroSanConfig.NONE_DEFAULT_KEY))
+
+    def test_get_bool(self) -> None:
+        """
+        get_bool() converts the value, and replaces an empty value with the default.
+        """
+        self.unset_env("AGENT_PROTECT_ORIGINAL_COPY")
+        self.assertTrue(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "false")
+        self.assertFalse(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "")
+        self.assertTrue(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))
+
+    def test_lockdown_ignores_later_environment_changes(self) -> None:
+        """
+        With AGENT_LOCKDOWN_ENV on, values come from the environment at load time only.
+        Later changes, removals and reset_for_testing() calls have no effect.
+        """
+        self.set_env("AGENT_LOCKDOWN_ENV", "true")
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "false")
+        os.environ.pop("AGENT_TOOL_PATH", None)
+        self.use_fresh_instance()
+
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "true")
+        self.assertEqual("false", NeuroSanConfig.get(TestNeuroSanConfig.DEFAULTED_KEY))
+        self.assertFalse(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        self.set_env("AGENT_TOOL_PATH", "some.tool.path")
+        self.assertIsNone(NeuroSanConfig.get(TestNeuroSanConfig.NONE_DEFAULT_KEY))
+
+        self.unset_env("AGENT_PROTECT_ORIGINAL_COPY")
+        self.assertEqual("false", NeuroSanConfig.get(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        # The lockdown flag itself is locked as well.
+        self.unset_env("AGENT_LOCKDOWN_ENV")
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "true")
+        self.assertEqual("false", NeuroSanConfig.get(TestNeuroSanConfig.DEFAULTED_KEY))
+
+    def test_lockdown_off_reads_later_environment_changes(self) -> None:
+        """
+        With AGENT_LOCKDOWN_ENV off, each lookup sees the current environment, without a reload.
+        """
+        self.set_env("AGENT_LOCKDOWN_ENV", "false")
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "false")
+        self.use_fresh_instance()
+
+        self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "true")
+        self.assertEqual("true", NeuroSanConfig.get(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        os.environ.pop("AGENT_PROTECT_ORIGINAL_COPY")
+        self.assertEqual("true", NeuroSanConfig.get(TestNeuroSanConfig.DEFAULTED_KEY))
+
+        self.set_env("AGENT_TOOL_PATH", "some.tool.path")
+        self.assertEqual("some.tool.path", NeuroSanConfig.get(TestNeuroSanConfig.NONE_DEFAULT_KEY))

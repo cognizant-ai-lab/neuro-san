@@ -65,7 +65,7 @@ class HealthCheckHandler(RequestHandler):
         self.server_name = server_status.get_server_name()
         self.versions = versions
 
-        if NeuroSanConfig.get("service.http.AGENT_ALLOW_CORS_HEADERS") is not None:
+        if NeuroSanConfig.get_bool("service.http.AGENT_ALLOW_CORS_HEADERS"):
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding")

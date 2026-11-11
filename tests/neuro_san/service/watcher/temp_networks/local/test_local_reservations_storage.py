@@ -122,7 +122,6 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
         """base_path defaults from the env var when the arg is empty."""
         with patch.dict(os.environ):
             os.environ["AGENT_RESERVATIONS_LOCAL_PATH"] = str(self.tmp_path)
-            NeuroSanConfig.reset_for_testing()
             storage: LocalReservationsStorage = LocalReservationsStorage()
         self.assertEqual(str(self.tmp_path.resolve()), storage.base_path)
 
@@ -130,7 +129,6 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
         """A non-empty base_path arg is used even when the env var is set."""
         with patch.dict(os.environ):
             os.environ["AGENT_RESERVATIONS_LOCAL_PATH"] = "/some/env/path"
-            NeuroSanConfig.reset_for_testing()
             storage: LocalReservationsStorage = LocalReservationsStorage(base_path=str(self.tmp_path))
         self.assertEqual(str(self.tmp_path.resolve()), storage.base_path)
 

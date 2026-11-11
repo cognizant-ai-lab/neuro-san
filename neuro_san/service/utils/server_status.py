@@ -106,7 +106,7 @@ class ServerStatus:
         versioned_libs: List[str] = ["neuro-san"]
 
         # AGENT_VERSION_LIBS can add libraries and/or pre-declared versions.
-        env_var_libs: str = NeuroSanConfig.get("service.server.AGENT_VERSION_LIBS", check_env_var=True)
+        env_var_libs: str = NeuroSanConfig.get("service.server.AGENT_VERSION_LIBS")
         if env_var_libs is not None:
             for env_var_lib in env_var_libs.split(" "):
                 if env_var_lib is None:

@@ -29,7 +29,6 @@ from typing import Union
 
 from copy import copy
 from datetime import datetime
-from os import environ
 from time import monotonic
 
 from concurrent.futures import Future
@@ -39,6 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.time.timeout import Timeout
+from leaf_common.utils.environment_util import EnvironmentUtil
 
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
@@ -275,7 +275,7 @@ class DataDrivenTestsDriver:
             # Use a default from the user's environment to at least let
             # a server know who is doing the querying.
             metadata = {
-                "user_id": environ.get("USER")
+                "user_id": EnvironmentUtil.getenv("USER")
             }
 
         for connection in connections:
