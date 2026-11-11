@@ -262,7 +262,7 @@ class NeuroSanConfig(ConfigFilterChain):
     def get_bool(key: str) -> bool:
         """
         :param key: The fully-qualified key from the config
-        :return: True the value for the key is to be considered True.
+        :return: True if the value for the key is to be considered True.
                  False otherwise.
         """
         # pylint: disable=protected-access
@@ -311,7 +311,7 @@ class NeuroSanConfig(ConfigFilterChain):
     def _internal_get_bool(self, key: str) -> bool:
         """
         :param key: The fully-qualified key from the config
-        :return: True the value for the key is to be considered True.
+        :return: True if the value for the key is to be considered True.
                  False otherwise. An empty value uses the default from DEFAULT_CONFIG.
         """
         # Use _internal_get_non_empty() so that unset/empty values use the defaults.
