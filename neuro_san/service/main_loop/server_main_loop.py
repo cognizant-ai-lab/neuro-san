@@ -143,10 +143,10 @@ class ServerMainLoop:
                                      "When exceeded, least recently used networks are evicted. "
                                      "0 means unlimited.")
         arg_parser.add_argument("--mcp_enable", type=str,
-                                default=NeuroSanConfig.get("service.mcp.AGENT_MCP_ENABLE"),
+                                default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ENABLE"),
                                 help="'true' if MCP protocol service should be enabled")
         arg_parser.add_argument("--mcp_only", type=str,
-                                default=NeuroSanConfig.get("service.mcp.AGENT_MCP_ONLY"),
+                                default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ONLY"),
                                 help="'true' if only MCP protocol service will be run (no HTTP service)")
         return arg_parser
 

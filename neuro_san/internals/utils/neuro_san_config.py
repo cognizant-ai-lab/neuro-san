@@ -104,10 +104,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES": "false",
             "AGENT_LOOP_TIMELINE": "false",
             "AGENT_LOOP_TIMELINE_DUMP_PATH": "",
-            "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000"
-            # Neither of these have docs
-            # ENABLE_RUN_TIME_STATISTICS - does not have AGENT_ prefix
-            # SHOW_ABSENT_METADATA - does not have AGENT_ prefix
+            "AGENT_LOOP_TIMELINE_MAX_EVENTS": "100000",
+            "ENABLE_RUN_TIME_STATISTICS": "false",          # No AGENT_ prefix
+            "AGENT_ENABLE_EVENT_LOOP_STATISTICS": "false",
+            "AGENT_SHOW_ABSENT_METADATA": "false"
         },
 
         # The HTTP listener.

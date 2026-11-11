@@ -68,8 +68,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         # We make a copy of the AgentNetwork at this level to allow for interactions
         # within this scope to modify the network topology.
-        protect_str: str = NeuroSanConfig.get_non_empty("internals.hardening.AGENT_PROTECT_ORIGINAL_COPY")
-        protect_original_copy: bool = protect_str.lower() == "true"
+        protect_original_copy: bool = NeuroSanConfig.get_bool("internals.hardening.AGENT_PROTECT_ORIGINAL_COPY")
         if protect_original_copy:
             agent_network_copy = deepcopy(agent_network)
 

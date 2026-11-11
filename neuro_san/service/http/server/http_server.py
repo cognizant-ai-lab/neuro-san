@@ -29,7 +29,6 @@ import tornado
 import tornado.netutil
 
 from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
-from leaf_common.config.config_util import ConfigUtil
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 from leaf_common.utils.startable import Startable
 
@@ -246,7 +245,7 @@ class HttpServer(AgentStateListener):
         main_loop = tornado.ioloop.IOLoop.current()
 
         # Enable event loop lag monitor if requested by environment variable.
-        if ConfigUtil.get_bool(os.environ, "ENABLE_EVENT_LOOP_STATISTICS"):
+        if NeuroSanConfig.get_bool("service.diagnostics.ENABLE_EVENT_LOOP_STATISTICS"):
             event_loop_monitor = \
                 EventLoopLagMonitor(
                     sample_interval_seconds=1.0,
@@ -297,7 +296,7 @@ class HttpServer(AgentStateListener):
         Must be called after server.start() (i.e. after fork) so each
         worker process configures its own loop.
         """
-        if not ConfigUtil.get_bool(NeuroSanConfig.get("service.diagnostics"), "AGENT_ASYNCIO_DEBUG"):
+        if not NeuroSanConfig.get_bool("service.diagnostics.AGENT_ASYNCIO_DEBUG"):
             return
 
         raw_threshold: str = NeuroSanConfig.get("service.diagnostics.AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS")
@@ -342,7 +341,7 @@ class HttpServer(AgentStateListener):
         The tracer adds ~5-10% loop overhead; keep off in production unless
         actively diagnosing.
         """
-        if not ConfigUtil.get_bool(NeuroSanConfig.get("service.diagnostics"), "AGENT_LOOP_TIMELINE"):
+        if not NeuroSanConfig.get_bool("service.diagnostics.AGENT_LOOP_TIMELINE"):
             return
 
         try:
@@ -388,14 +387,11 @@ class HttpServer(AgentStateListener):
         call). Route the "neuro_san.diagnostics.http_llm_trace" logger
         to a separate file in logging.hocon for clean offline analysis.
         """
-        diagnostics: Dict[str, Any] = NeuroSanConfig.get("service.diagnostics")
-        if not ConfigUtil.get_bool(diagnostics, "AGENT_HTTP_LLM_TRACE"):
+        if not NeuroSanConfig.get_bool("service.diagnostics.AGENT_HTTP_LLM_TRACE"):
             return
 
-        include_bodies: bool = ConfigUtil.get_bool(
-            diagnostics, "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
-        include_chunks: bool = ConfigUtil.get_bool(
-            diagnostics, "AGENT_HTTP_LLM_TRACE_CHUNKS")
+        include_bodies: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
+        include_chunks: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_HTTP_LLM_TRACE_CHUNKS")
 
         HttpxLlmTracer.install(
             include_bodies=include_bodies,

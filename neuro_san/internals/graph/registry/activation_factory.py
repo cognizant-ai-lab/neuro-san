@@ -85,7 +85,7 @@ class ActivationFactory(AgentToolFactory):
                             root is not under the PYTHONPATH.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = NeuroSanConfig.get_non_empty("internals.tools.AGENT_TOOL_PATH", check_env_var=True)
+        agent_tool_path: str = NeuroSanConfig.get_non_empty("internals.tools.AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
