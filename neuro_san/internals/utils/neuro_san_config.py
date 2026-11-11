@@ -15,6 +15,8 @@
 # END COPYRIGHT
 from __future__ import annotations
 
+from os import environ
+
 from typing import Any
 from typing import Dict
 from typing import List
@@ -24,7 +26,6 @@ from typing import Union
 from leaf_common.config.config_filter_chain import ConfigFilterChain
 from leaf_common.config.config_util import ConfigUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-from leaf_common.utils.environment_util import EnvironmentUtil
 
 from neuro_san.internals.utils.environment_config_filter import EnvironmentConfigFilter
 
@@ -294,7 +295,8 @@ class NeuroSanConfig(ConfigFilterChain):
         if not self._is_lockdown():
             key_split: List[str] = key.split(".")
             env_key: str = key_split[-1]
-            value = EnvironmentUtil.getenv(env_key, value)
+            # Not EnvironmentUtil.getenv(), which also replaces an empty value with the default.
+            value = environ.get(env_key, value)
         return value
 
     def _internal_get_bool(self, key: str) -> bool:
