@@ -358,7 +358,8 @@ class NeuroSanConfig(ConfigFilterChain):
         if AGENT_LOCKDOWN_ENV is enabled.
         """
         # pylint: disable=protected-access
-        _INSTANCE._load()
+        if not _INSTANCE._is_lockdown():
+            _INSTANCE._load()
 
 
 # Singleton. Access via NeuroSanConfig.get()
