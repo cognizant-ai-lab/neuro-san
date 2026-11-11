@@ -23,6 +23,7 @@ import sys
 
 from argparse import ArgumentParser
 
+from leaf_common.config.config_util import ConfigUtil
 from leaf_common.logging.logging_setup import LoggingSetup
 from leaf_common.utils.startable import Startable
 
@@ -141,10 +142,10 @@ class ServerMainLoop:
                                 help="Maximum number of temporary agent networks to keep in memory. "
                                      "When exceeded, least recently used networks are evicted. "
                                      "0 means unlimited.")
-        arg_parser.add_argument("--mcp_enable", type=bool,
+        arg_parser.add_argument("--mcp_enable", type=ConfigUtil.is_true,
                                 default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ENABLE"),
                                 help="'true' if MCP protocol service should be enabled")
-        arg_parser.add_argument("--mcp_only", type=bool,
+        arg_parser.add_argument("--mcp_only", type=ConfigUtil.is_true,
                                 default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ONLY"),
                                 help="'true' if only MCP protocol service will be run (no HTTP service)")
         return arg_parser
