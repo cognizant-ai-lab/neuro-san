@@ -141,10 +141,10 @@ class ServerMainLoop:
                                 help="Maximum number of temporary agent networks to keep in memory. "
                                      "When exceeded, least recently used networks are evicted. "
                                      "0 means unlimited.")
-        arg_parser.add_argument("--mcp_enable", type=str,
+        arg_parser.add_argument("--mcp_enable", type=bool,
                                 default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ENABLE"),
                                 help="'true' if MCP protocol service should be enabled")
-        arg_parser.add_argument("--mcp_only", type=str,
+        arg_parser.add_argument("--mcp_only", type=bool,
                                 default=NeuroSanConfig.get_bool("service.mcp.AGENT_MCP_ONLY"),
                                 help="'true' if only MCP protocol service will be run (no HTTP service)")
         return arg_parser
@@ -182,9 +182,9 @@ class ServerMainLoop:
             # StorageWatcher is disabled:
             server_status.updater.set_requested(False)
         # Do we to enable MCP service?
-        if args.mcp_enable.lower() != "true":
+        if not args.mcp_enable:
             server_status.mcp_service.set_requested(False)
-        if args.mcp_only.lower() == "true":
+        if args.mcp_only:
             server_status.mcp_service.set_requested(True)
             # Disable HTTP service if MCP only is requested
             server_status.http_service.set_requested(False)

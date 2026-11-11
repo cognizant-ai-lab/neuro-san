@@ -237,11 +237,7 @@ class NeuroSanConfig(ConfigFilterChain):
                     (much less common).
         """
         # pylint: disable=protected-access
-        value: Optional[Union[str, Dict[str, Any]]] = _INSTANCE._get_fully_qualified(key)
-        if not _INSTANCE._is_lockdown():
-            key_split: List[str] = key.split(".")
-            env_key: str = key_split[-1]
-            value = EnvironmentUtil.getenv(env_key, value)
+        value: Optional[Union[str, Dict[str, Any]]] = _INSTANCE._internal_get(key)
         return value
 
     @staticmethod
@@ -271,8 +267,8 @@ class NeuroSanConfig(ConfigFilterChain):
         :return: True the value for the key is to be considered True.
                  False otherwise.
         """
-        value: Optional[str] = NeuroSanConfig.get(key)
-        bool_value: bool = ConfigUtil.is_true(value)
+        # pylint: disable=protected-access
+        bool_value: bool = _INSTANCE._internal_get_bool(key)
         return bool_value
 
     def _load(self):
@@ -282,7 +278,34 @@ class NeuroSanConfig(ConfigFilterChain):
         self.config = DEFAULT_CONFIG
         self.config = self.filter_config(self.config)
         self.extractor = DictionaryExtractor(self.config)
-        self.lockdown = self.get_bool("internals.hardening.AGENT_LOCKDOWN_ENV")
+        self.lockdown = self._internal_get_bool("internals.hardening.AGENT_LOCKDOWN_ENV")
+
+    def _internal_get(self, key: str) -> Optional[Union[str, Dict[str, Any]]]:
+        """
+        Given the fully-qualified string key, return the value from the configuration
+
+        :param key: The fully-qualified key from the config
+        :return: The value in the config.  Most often this is a string or None, however
+                    it is possible to return entire sections of the configuration dictionary
+                    (much less common).
+        """
+        # pylint: disable=protected-access
+        value: Optional[Union[str, Dict[str, Any]]] = self._get_fully_qualified(key)
+        if not self._is_lockdown():
+            key_split: List[str] = key.split(".")
+            env_key: str = key_split[-1]
+            value = EnvironmentUtil.getenv(env_key, value)
+        return value
+
+    def _internal_get_bool(self, key: str) -> bool:
+        """
+        :param key: The fully-qualified key from the config
+        :return: True the value for the key is to be considered True.
+                 False otherwise.
+        """
+        value: Optional[str] = self._internal_get(key)
+        bool_value: bool = ConfigUtil.is_true(value)
+        return bool_value
 
     def _get_fully_qualified(self, key: str) -> Optional[str]:
         """
