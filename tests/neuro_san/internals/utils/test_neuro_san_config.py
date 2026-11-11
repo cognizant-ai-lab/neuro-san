@@ -31,7 +31,7 @@ class TestNeuroSanConfig(TestCase):
     """
 
     # A key with a non-None default, and one with a None default
-    DEFAULTED_KEY: str = "internals.chat.AGENT_PROTECT_ORIGINAL_COPY"
+    DEFAULTED_KEY: str = "internals.hardening.AGENT_PROTECT_ORIGINAL_COPY"
     NONE_DEFAULT_KEY: str = "internals.tools.AGENT_TOOL_PATH"
 
     @override
