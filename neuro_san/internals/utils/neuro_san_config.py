@@ -283,9 +283,7 @@ class NeuroSanConfig(ConfigFilterChain):
         Given the fully-qualified string key, return the value from the configuration
 
         :param key: The fully-qualified key from the config
-        :return: The value in the config.  Most often this is a string or None, however
-                    it is possible to return entire sections of the configuration dictionary
-                    (much less common).
+        :return: The string value in the config.
         """
         # pylint: disable=protected-access
         value: Optional[str] = self._get_fully_qualified(key)
