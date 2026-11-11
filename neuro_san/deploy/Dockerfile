@@ -475,7 +475,7 @@ ENV MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
 
 # With the default value of "false", any AGENT_* configuration can be read as an override
 # to default policy at runtime from the environment.  When this is "true", the environment
-# is only read once at startup, and configuration AGENT_* configuration values will not
+# is only read once at startup, and AGENT_* configuration values will not
 # be read from the environment henceforth.
 ENV AGENT_LOCKDOWN_ENV="false"
 
