@@ -395,7 +395,7 @@ Check these things:
                 Defaults to False for backwards compatibility, where fully-qualified
                 references can resolve to any class on the server's PYTHONPATH.
         """
-        only_value: str = NeuroSanConfig.get_bool("internals.tools.AGENT_TOOL_PATH_ONLY")
+        only_value: bool = NeuroSanConfig.get_bool("internals.tools.AGENT_TOOL_PATH_ONLY")
         return only_value
 
     def _log_unrestricted_resolution_notice_once(self):
