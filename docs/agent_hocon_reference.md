@@ -912,8 +912,8 @@ and called in multiple contexts. It can also be used to supply or override argum
 
 #### tools (args)
 
-CodedTools are allowed to call out to other tools programmatically via the ActivationCapsule instance
-passed to them in the `activation_capsule` key of their args, using its `use_tool()` method
+CodedTools are allowed to call out to other tools/agents in the graph programmatically via the ActivationCapsule
+instance passed to them in the `activation_capsule` key of their args, using its `use_tool()` method
 (see [copyist.py](../neuro_san/coded_tools/copy_cat/copyist.py) for an example).
 In order to allow for discovery of these connections to other agents by validation processes
 and Connectivity() calls, by convention we expect a tools dictionary to be specified in the args for the tool that
