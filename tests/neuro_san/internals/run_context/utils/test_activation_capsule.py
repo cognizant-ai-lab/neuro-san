@@ -15,6 +15,9 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
+
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -39,7 +42,7 @@ class TestActivationCapsule(IsolatedAsyncioTestCase):
     the projection is an identity; once native block content is preserved
     through that message, the projection is what keeps the str contract.
     These tests lock it and confirm that plain-string content is returned
-    untouched.
+    untouched. They also check that use_reservation delegates to use_tool.
     """
 
     @staticmethod
@@ -87,3 +90,21 @@ class TestActivationCapsule(IsolatedAsyncioTestCase):
         capsule: ActivationCapsule = ActivationCapsule(parent_run_context=MagicMock())
         with raises(ValueError):
             await capsule.use_tool("sub_agent", {}, {})
+
+    async def test_use_reservation_calls_use_tool_with_reservation_id(self) -> None:
+        """
+        use_reservation() delegates to use_tool() with "/<reservation_id>" as the tool name,
+        passes args and sly_data through, and returns use_tool()'s result.
+        """
+        reservation: MagicMock = MagicMock()
+        reservation.get_reservation_id = MagicMock(return_value="copy_cat-1234")
+
+        capsule: ActivationCapsule = self.make_capsule(AIMessage(content="unused"))
+        capsule.use_tool = AsyncMock(return_value="the answer")
+
+        args: Dict[str, Any] = {"arg": "value"}
+        sly_data: Dict[str, Any] = {"secret": "shh"}
+        result: str = await capsule.use_reservation(reservation, args, sly_data)
+
+        capsule.use_tool.assert_awaited_once_with("/copy_cat-1234", args, sly_data)
+        self.assertEqual(result, "the answer")
