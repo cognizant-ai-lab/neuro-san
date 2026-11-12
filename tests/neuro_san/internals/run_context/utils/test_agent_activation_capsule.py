@@ -22,8 +22,6 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-from pytest import raises
-
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
@@ -36,13 +34,12 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
     """
     Tests for the return contract of AgentActivationCapsule.use_tool.
 
-    use_tool is documented to return a str, but it used to return the
-    sub-agent's raw message content. Today that content is always a str
-    (the sub-agent's chain output is flattened before it is journaled), so
-    the projection is an identity; once native block content is preserved
-    through that message, the projection is what keeps the str contract.
-    These tests lock it and confirm that plain-string content is returned
-    untouched. They also check that use_tool releases each sub-agent as soon
+    use_tool returns a str projected from the sub-agent's message content.
+    That content is currently always a str (the sub-agent's chain output is
+    flattened before it is journaled), so the projection is an identity; when
+    native block content is preserved through that message, the projection
+    keeps the str contract. These tests lock it and confirm that plain-string
+    content is returned untouched. They also check that use_tool releases each sub-agent as soon
     as its call is done, that close_of_work releases every lingering resource
     exactly once, and that use_reservation delegates to use_tool.
     """
@@ -73,7 +70,7 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
         """
         capsule: AgentActivationCapsule = self.make_capsule(AIMessage(content="  the answer  "))
         result: str = await capsule.use_tool("sub_agent", {"arg": "value"}, {})
-        assert result == "  the answer  "
+        self.assertEqual(result, "  the answer  ")
 
     async def test_use_tool_projects_block_content_to_text(self) -> None:
         """
@@ -82,8 +79,8 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
         """
         capsule: AgentActivationCapsule = self.make_capsule(ContentFixtures.anthropic_thinking_first())
         result: str = await capsule.use_tool("sub_agent", {"arg": "value"}, {})
-        assert isinstance(result, str)
-        assert result == "the answer"
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "the answer")
 
     async def test_use_tool_requires_factory_and_spec(self) -> None:
         """
@@ -91,7 +88,7 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
         and says so, rather than failing deep inside the call.
         """
         capsule: AgentActivationCapsule = AgentActivationCapsule(parent_run_context=MagicMock())
-        with raises(ValueError):
+        with self.assertRaises(ValueError):
             await capsule.use_tool("sub_agent", {}, {})
 
     async def test_use_tool_closes_sub_agent_after_call(self) -> None:

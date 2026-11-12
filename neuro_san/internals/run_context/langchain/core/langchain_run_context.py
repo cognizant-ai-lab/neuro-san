@@ -568,7 +568,7 @@ class LangChainRunContext(RunContext):
 
         :param parent_resource: parent resource, if any
         """
-        # Do nothing by default for easier implementation inheritance
+        # Nothing to release here: everything this context owns is released in close_of_work().
 
     async def close_of_work(self, parent_resource: RunContext = None):
         """

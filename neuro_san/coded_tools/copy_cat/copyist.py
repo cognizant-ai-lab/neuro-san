@@ -14,6 +14,8 @@
 #
 # END COPYRIGHT
 
+from logging import getLogger
+from logging import Logger
 from typing import Any
 from typing import Dict
 
@@ -73,6 +75,13 @@ class Copyist(CodedTool):
         if copy_agent is None or len(copy_agent) == 0:
             return "Need a non-empty value for copy_agent"
 
+        # Check for the capsule before creating a Reservation that could not be called.
+        activation_capsule: ActivationCapsule = args.get("activation_capsule")
+        if args.get("call_text") is not None and activation_capsule is None:
+            logger: Logger = getLogger(self.__class__.__name__)
+            logger.error("No activation_capsule in args; cannot call a temporary agent for %s", copy_agent)
+            return "No activation_capsule available to call the temporary agent."
+
         # Make sure we have a hocon file reference
         if not copy_agent.endswith(".hocon"):
             copy_agent = f"{copy_agent}.hocon"
@@ -119,10 +128,6 @@ class Copyist(CodedTool):
             )
 
         # Call the agent we just created for our reservation
-        activation_capsule: ActivationCapsule = args.get("activation_capsule")
-        if activation_capsule is None:
-            return "No activation_capsule available to call the temporary agent."
-
         res_args: Dict[str, Any] = {"input": args.get("call_text")}
         res_return: str = await activation_capsule.use_reservation(reservation, res_args, sly_data)
         return res_return
