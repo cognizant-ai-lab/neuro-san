@@ -18,12 +18,12 @@ from typing import Any
 from typing import Dict
 
 from neuro_san import REGISTRIES_DIR
+from neuro_san.interfaces.activation_capsule import ActivationCapsule
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_util import ReservationUtil
-from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 
 class Copyist(CodedTool):

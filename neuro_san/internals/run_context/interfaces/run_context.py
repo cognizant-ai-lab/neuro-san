@@ -24,6 +24,9 @@ from typing import List
 
 from langchain_core.messages.base import BaseMessage
 
+from leaf_common.utils.interface import interface
+
+from neuro_san.interfaces.activation_capsule import ActivationCapsule
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.interfaces.tracing_context import TracingContext
@@ -32,6 +35,7 @@ from neuro_san.internals.run_context.interfaces.agent_spec_provider import Agent
 from neuro_san.internals.run_context.interfaces.run import Run
 
 
+@interface
 class RunContext(AgentSpecProvider, LingeringResource):
     """
     Interface supporting high-level LLM usage.
@@ -96,7 +100,7 @@ class RunContext(AgentSpecProvider, LingeringResource):
 
         :param parent_resource: parent resource, if any
         """
-        # Do nothing by default for easier implementation inheritance
+        raise NotImplementedError
 
     async def close_of_work(self, parent_resource: RunContext = None):
         """
@@ -155,5 +159,11 @@ class RunContext(AgentSpecProvider, LingeringResource):
     def get_tracing_context(self) -> TracingContext:
         """
         :return: The TracingContext associated with the instance
+        """
+        raise NotImplementedError
+
+    def get_activation_capsule(self) -> ActivationCapsule:
+        """
+        :return: The ActivationCapsule associated with the instance
         """
         raise NotImplementedError
