@@ -21,6 +21,7 @@ from typing import Dict
 
 from leaf_common.utils.interface import interface
 
+from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.interfaces.reservation import Reservation
 
 
@@ -73,5 +74,27 @@ class ActivationCapsule:
         :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
         :return: The llm model to use given the context type (usually langchain)
         :raises ValueError: If the LLM cannot be created from the llm_config and sly_data.
+        """
+        raise NotImplementedError
+
+    async def create_session(self, agent_name: str) -> AsyncAgentSession:
+        """
+        Creates an AsyncAgentSession for an external agent network.
+
+        Note: Use use_tool() to invoke agents either internal or external to the graph.
+
+        The session provided here is to be used for agent metadata such as function() and connectivity().
+        Chatting through its streaming_chat() skips the framework's policies that use_tool() applies,
+        especially those surrounding sly_data and message journaling.
+
+        The session is owned by the capsule and closed by the agent framework,
+        so callers do not need to close it.
+
+        :param agent_name: A reference to an external agent network, either
+                    "/<agent_name>" for an agent network on the same server
+                    or a full url, as it would appear in an agent spec's tools list.
+        :return: An AsyncAgentSession for the agent network
+        :raises ValueError: If agent_name is not an external agent reference,
+                    or no session can be created for it.
         """
         raise NotImplementedError
