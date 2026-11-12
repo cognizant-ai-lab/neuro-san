@@ -16,14 +16,22 @@
 # END COPYRIGHT
 from __future__ import annotations
 
+from logging import getLogger
+from logging import Logger
+from traceback import format_exc
 from typing import Any
 from typing import Dict
 from typing import List
+
+from typing_extensions import override
 
 from aiohttp.client_exceptions import ClientConnectionError
 
 from langchain_core.messages.base import BaseMessage
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
+from neuro_san.interfaces.activation_capsule import ActivationCapsule
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
@@ -36,7 +44,7 @@ from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.utils.content_utils import ContentUtils
 
 
-class ActivationCapsule(LingeringResource):
+class AgentActivationCapsule(ActivationCapsule, LingeringResource):
     """
     A helper class that encapsulates bits needed for creating agent Activations,
     LLM model instances and other neuro-san-y resources.
@@ -54,6 +62,11 @@ class ActivationCapsule(LingeringResource):
         self.parent_agent_spec: Dict[str, Any] = parent_agent_spec
         self.factory: AgentToolFactory = agent_tool_factory
         self.lingerers: List[LingeringResource] = []
+        # Exception messages and tracebacks can carry sensitive request data,
+        # so route them through a SensitiveLogger, which respects the
+        # LEAF_LOG_SENSITIVE env var setting.
+        logger: Logger = getLogger(self.__class__.__name__)
+        self.sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
 
     async def close_of_request(self, parent_resource: LingeringResource = None):
         """
@@ -71,10 +84,24 @@ class ActivationCapsule(LingeringResource):
 
         :param parent_resource: parent resource, if any
         """
-        lingering_resource: LingeringResource = None
-        for lingering_resource in self.lingerers:
-            await lingering_resource.close_of_work(self)
+        # Swap out the list first so a second call does not close anything twice,
+        # and so resources added while closing are not lost.
+        lingerers: List[LingeringResource] = self.lingerers
+        self.lingerers = []
 
+        # Close every lingerer, even when an earlier one fails.
+        lingering_resource: LingeringResource = None
+        for lingering_resource in lingerers:
+            try:
+                await lingering_resource.close_of_work(self)
+            # pylint: disable=broad-exception-caught
+            except Exception as exception:
+                # Broad on purpose: one failed close must not leave the remaining resources open.
+                self.sensitive_logger.error("Failed to close %s: %s\n%s",
+                                            lingering_resource.__class__.__name__, str(exception),
+                                            format_exc())
+
+    @override
     async def use_tool(self, tool_name: str, tool_args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
         Experimental method to call a tool more directly from a subclass.
@@ -89,7 +116,7 @@ class ActivationCapsule(LingeringResource):
 
         if self.factory is None or self.parent_agent_spec is None:
             raise ValueError(
-                "ActivationCapsule.use_tool() requires an AgentToolFactory and parent_agent_spec; "
+                "AgentActivationCapsule.use_tool() requires an AgentToolFactory and parent_agent_spec; "
                 "this capsule was created without them."
             )
 
@@ -99,7 +126,6 @@ class ActivationCapsule(LingeringResource):
                                                     self.parent_run_context, self.parent_agent_spec,
                                                     tool_name, sly_data, tool_args,
                                                     self.factory, invocation)
-        self.lingerers.append(callable_activation)
 
         message: BaseMessage = None
         try:
@@ -120,6 +146,19 @@ flag to your invocation.
             # Nope. Just a regular http connection failure given the tool_name. Can't help ya.
             raise exception
 
+        finally:
+            # Release the sub-agent's resources (LLM clients, sockets) as soon as
+            # its call is done rather than lingering until close_of_work().
+            # A CodedTool that calls agents in a loop would otherwise hold
+            # every sub-agent's LLM client until the CodedTool itself returns.
+            try:
+                await callable_activation.close_of_work(self.parent_run_context)
+            except Exception as exception:  # pylint: disable=broad-exception-caught
+                # Cleanup failures must not replace the tool's result or exception.
+                self.sensitive_logger.error("Failed to close %s: %s\n%s",
+                                            callable_activation.__class__.__name__, str(exception),
+                                            format_exc())
+
         # We got a message back. This method's contract is a str. Today the
         # sub-agent's final message always carries str content (its chain
         # output is flattened before it is journaled), so this projection is
@@ -130,6 +169,7 @@ flag to your invocation.
         # block list.
         return ContentUtils.flatten_to_text(message)
 
+    @override
     async def use_reservation(self, reservation: Reservation, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
         Experimental method to call a reserved temporary network more directly from a CodedTool.
@@ -146,6 +186,7 @@ flag to your invocation.
         result: str = await self.use_tool(f"/{reservation_id}", args, sly_data)
         return result
 
+    @override
     def create_chat_model(self, llm_config: Dict[str, Any], sly_data: Dict[str, Any], num_fallbacks: int = None) -> Any:
         """
         :param llm_config: The llm config dictionary

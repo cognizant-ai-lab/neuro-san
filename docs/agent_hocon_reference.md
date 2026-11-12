@@ -100,6 +100,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [middleware](#middleware)
         - [class](#class-2)
         - [args](#args-1)
+            - [activation_capsule](#activation_capsule)
             - [chat_history](#chat_history)
             - [origin](#origin)
             - [origin_str](#origin_str)
@@ -912,9 +913,11 @@ and called in multiple contexts. It can also be used to supply or override argum
 
 #### tools (args)
 
-CodedTools are allowed to call out to other tools/agents in the graph programmatically via the ActivationCapsule
-instance passed to them in the `activation_capsule` key of their args, using its `use_tool()` method
-(see [copyist.py](../neuro_san/coded_tools/copy_cat/copyist.py) for an example).
+CodedTools are allowed to call out to other tools/agents in the graph programmatically via the
+[ActivationCapsule](../neuro_san/interfaces/activation_capsule.py) instance passed to them in the `activation_capsule` key
+of their args. Its `use_tool()` method calls a tool or agent by name, and its `use_reservation()` method calls a
+temporary agent network created through a Reservation
+(see [copyist.py](../neuro_san/coded_tools/copy_cat/copyist.py) for a `use_reservation()` example).
 In order to allow for discovery of these connections to other agents by validation processes
 and Connectivity() calls, by convention we expect a tools dictionary to be specified in the args for the tool that
 defines which agents _might_ be called.  The keys can be any string you want, and the values are tools that
@@ -1188,6 +1191,12 @@ These will depend on the constructor signature of the class you are trying to in
 
 There are some special args that will be populated with information provided by the agent framework
 if they are specified in both the middleware dictionary and the class constructor signature:
+
+##### activation_capsule
+
+An [ActivationCapsule](../neuro_san/interfaces/activation_capsule.py) instance that the middleware can use
+to call other tools/agents in the graph, call temporary agent networks created through Reservations,
+or create LLM model instances. See [tools (args)](#tools-args).
 
 ##### chat_history
 
