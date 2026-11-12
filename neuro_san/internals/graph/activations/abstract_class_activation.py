@@ -29,6 +29,8 @@ from os import pathsep
 from time import perf_counter
 import traceback
 
+from typing_extensions import override
+
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
@@ -53,10 +55,12 @@ from neuro_san.internals.reservations.accumulating_agent_reservationist import A
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.types.agent_message import AgentMessage
 
 
+# pylint: disable=too-many-instance-attributes
 class AbstractClassActivation(AbstractCallableActivation):
     """
     CallableActivation which can invoke a CodedTool by its class name.
@@ -111,6 +115,12 @@ class AbstractClassActivation(AbstractCallableActivation):
             if real_reservationist is not None:
                 self.reservationist = AccumulatingAgentReservationist(real_reservationist, self.full_name)
 
+        # One of these per CodedTool so it can call other agents and create LLMs.
+        # Resources it accumulates are released in close_of_work().
+        self.activation_capsule: ActivationCapsule = ActivationCapsule(self.run_context,
+                                                                       self.agent_tool_spec,
+                                                                       self.factory)
+
         # Put together the arguments to pass to the CodedTool
         self.arguments: Dict[str, Any] = {}
         if args is not None:
@@ -136,6 +146,8 @@ class AbstractClassActivation(AbstractCallableActivation):
             # We specifically give the CodedTools the accumulating version so they
             # do not have any access to service internals.
             self.arguments["reservationist"] = self.reservationist
+        if self.arguments.get("activation_capsule") is None:
+            self.arguments["activation_capsule"] = self.activation_capsule
 
     def get_full_class_ref(self) -> str:
         """
@@ -149,6 +161,22 @@ class AbstractClassActivation(AbstractCallableActivation):
         :return: A dot-separated string representing the full class path.
         """
         raise NotImplementedError
+
+    @override
+    async def close_of_work(self, parent_resource: RunContext = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any. Expected to be the
+                RunContext which contains the scope of operation of this CallableActivation
+        """
+        try:
+            if self.activation_capsule is not None:
+                await self.activation_capsule.close_of_work(self.run_context)
+                self.activation_capsule = None
+        finally:
+            await super().close_of_work(parent_resource)
 
     async def build(self) -> BaseMessage:
         """
