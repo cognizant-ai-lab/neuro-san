@@ -171,10 +171,12 @@ class AbstractClassActivation(AbstractCallableActivation):
         :param parent_resource: parent resource, if any. Expected to be the
                 RunContext which contains the scope of operation of this CallableActivation
         """
-        if self.activation_capsule is not None:
-            await self.activation_capsule.close_of_work(self.run_context)
-            self.activation_capsule = None
-        await super().close_of_work(parent_resource)
+        try:
+            if self.activation_capsule is not None:
+                await self.activation_capsule.close_of_work(self.run_context)
+                self.activation_capsule = None
+        finally:
+            await super().close_of_work(parent_resource)
 
     async def build(self) -> BaseMessage:
         """
