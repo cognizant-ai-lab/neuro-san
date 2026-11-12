@@ -124,5 +124,5 @@ class Copyist(CodedTool):
             return "No activation_capsule available to call the temporary agent."
 
         res_args: Dict[str, Any] = {"input": args.get("call_text")}
-        res_return: str = await activation_capsule.use_reservation(reservation_id, res_args, sly_data)
+        res_return: str = await activation_capsule.use_reservation(reservation, res_args, sly_data)
         return res_return

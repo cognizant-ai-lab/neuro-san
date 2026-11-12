@@ -24,6 +24,7 @@ from aiohttp.client_exceptions import ClientConnectionError
 
 from langchain_core.messages.base import BaseMessage
 
+from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
@@ -129,18 +130,19 @@ flag to your invocation.
         # block list.
         return ContentUtils.flatten_to_text(message)
 
-    async def use_reservation(self, reservation_id: str, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
+    async def use_reservation(self, reservation: Reservation, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
         Experimental method to call a reserved temporary network more directly from a CodedTool.
 
         NOTE: This method is not correctly reporting history or anything like that just yet.
 
-        :param reservation_id: The string id of the reservation to invoke
+        :param reservation: The Reservation to invoke
         :param args: A dictionary of arguments to send to the reserved temporary network.
         :param sly_data: private data dictionary to send to the reserved temporary network.
         :return: A string representing the last received content text of the last message.
         """
         # DEF - for now just assume a local copy
+        reservation_id: str = reservation.get_reservation_id()
         result: str = await self.use_tool(f"/{reservation_id}", args, sly_data)
         return result
 
