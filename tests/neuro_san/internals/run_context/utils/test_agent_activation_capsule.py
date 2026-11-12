@@ -140,6 +140,22 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
             await capsule.use_tool("sub_agent", {}, {})
         callable_activation.close_of_work.assert_awaited_once()
 
+    async def test_use_tool_returns_result_when_close_fails(self) -> None:
+        """
+        A sub-agent whose close_of_work() raises does not replace the tool's result;
+        the failure is logged once instead.
+        """
+        capsule: AgentActivationCapsule = self.make_capsule(AIMessage(content="the answer"))
+        callable_activation: MagicMock = capsule.factory.create_agent_activation.return_value
+        callable_activation.close_of_work = AsyncMock(side_effect=RuntimeError("boom"))
+
+        capsule.sensitive_logger = MagicMock()
+        result: str = await capsule.use_tool("sub_agent", {}, {})
+
+        self.assertEqual(result, "the answer")
+        callable_activation.close_of_work.assert_awaited_once()
+        capsule.sensitive_logger.error.assert_called_once()
+
     async def test_close_of_work_closes_remaining_lingerers_after_failure(self) -> None:
         """
         A lingerer whose close_of_work() raises does not keep the others from being closed.
