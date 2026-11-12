@@ -151,7 +151,13 @@ flag to your invocation.
             # its call is done rather than lingering until close_of_work().
             # A CodedTool that calls agents in a loop would otherwise hold
             # every sub-agent's LLM client until the CodedTool itself returns.
-            await callable_activation.close_of_work(self.parent_run_context)
+            try:
+                await callable_activation.close_of_work(self.parent_run_context)
+            except Exception as exception:  # pylint: disable=broad-exception-caught
+                # Cleanup failures must not replace the tool's result or exception.
+                self.sensitive_logger.error("Failed to close %s: %s\n%s",
+                                            callable_activation.__class__.__name__, str(exception),
+                                            format_exc())
 
         # We got a message back. This method's contract is a str. Today the
         # sub-agent's final message always carries str content (its chain
