@@ -134,8 +134,9 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
         capsule.lingerers.append(failing)
         capsule.lingerers.append(healthy)
 
-        with self.assertLogs("AgentActivationCapsule", level="ERROR"):
-            await capsule.close_of_work()
+        capsule.sensitive_logger = MagicMock()
+        await capsule.close_of_work()
+        capsule.sensitive_logger.error.assert_called_once()
 
         failing.close_of_work.assert_awaited_once()
         healthy.close_of_work.assert_awaited_once()
