@@ -32,6 +32,7 @@ from langchain_core.messages.base import BaseMessage
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.interfaces.activation_capsule import ActivationCapsule
+from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
@@ -41,6 +42,7 @@ from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.message.utils.content_utils import ContentUtils
 
 
@@ -62,6 +64,7 @@ class AgentActivationCapsule(ActivationCapsule, LingeringResource):
         self.parent_agent_spec: Dict[str, Any] = parent_agent_spec
         self.factory: AgentToolFactory = agent_tool_factory
         self.lingerers: List[LingeringResource] = []
+        self.sessions: List[AsyncAgentSession] = []
         # Exception messages and tracebacks can carry sensitive request data,
         # so route them through a SensitiveLogger, which respects the
         # LEAF_LOG_SENSITIVE env var setting.
@@ -94,17 +97,31 @@ class AgentActivationCapsule(ActivationCapsule, LingeringResource):
         for lingering_resource in lingerers:
             try:
                 await lingering_resource.close_of_work(self)
-            # pylint: disable=broad-exception-caught
-            except Exception as exception:
+            except Exception as exception:  # pylint: disable=broad-exception-caught
                 # Broad on purpose: one failed close must not leave the remaining resources open.
                 self.sensitive_logger.error("Failed to close %s: %s\n%s",
                                             lingering_resource.__class__.__name__, str(exception),
                                             format_exc())
 
+        # Same swap as above for the sessions handed out by create_session().
+        sessions: List[AsyncAgentSession] = self.sessions
+        self.sessions = []
+
+        # Close every session, even when an earlier one fails.
+        session: AsyncAgentSession = None
+        for session in sessions:
+            try:
+                session.close()
+            except Exception as exception:  # pylint: disable=broad-exception-caught
+                # Broad on purpose: one failed close must not leave the remaining sessions open.
+                self.sensitive_logger.error("Failed to close %s: %s\n%s",
+                                            session.__class__.__name__, str(exception),
+                                            format_exc())
+
     @override
     async def use_tool(self, tool_name: str, tool_args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
-        Experimental method to call a tool more directly from a subclass.
+        Calls a tool or agent by name.
 
         NOTE: This method is not correctly reporting history or anything like that just yet.
 
@@ -172,7 +189,8 @@ flag to your invocation.
     @override
     async def use_reservation(self, reservation: Reservation, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
-        Experimental method to call a reserved temporary network more directly from a CodedTool.
+        Calls a reserved temporary agent network.
+        For now this assumes a local copy and delegates to use_tool() with "/<reservation_id>".
 
         NOTE: This method is not correctly reporting history or anything like that just yet.
 
@@ -189,10 +207,14 @@ flag to your invocation.
     @override
     def create_chat_model(self, llm_config: Dict[str, Any], sly_data: Dict[str, Any], num_fallbacks: int = None) -> Any:
         """
+        Creates an LLM model instance.
+        The model's resources are released in close_of_work().
+
         :param llm_config: The llm config dictionary
         :param sly_data: The private sly_data dictionary. This is needed for bring-your-own-key scenarios.
         :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
         :return: The llm model to use given the context type (usually langchain)
+        :raises ValueError: If the LLM cannot be created from the llm_config and sly_data.
         """
 
         invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
@@ -218,3 +240,44 @@ flag to your invocation.
         model: Any = typed_llm_resources.get_model()
 
         return model
+
+    @override
+    async def create_session(self, agent_name: str) -> AsyncAgentSession:
+        """
+        Creates an AsyncAgentSession for an external agent network
+        through the invocation context's session factory.
+
+        Note: Use use_tool() to invoke agents either internal or external to the graph.
+
+        The session provided here is to be used for agent metadata such as function() and connectivity().
+        Chatting through its streaming_chat() skips the framework's policies that use_tool() applies,
+        especially those surrounding sly_data and message journaling.
+
+        The session is owned by the capsule and closed in close_of_work(),
+        so callers do not need to close it.
+
+        :param agent_name: A reference to an external agent network, either
+                    "/<agent_name>" for an agent network on the same server
+                    or a full url, as it would appear in an agent spec's tools list.
+        :return: An AsyncAgentSession for the agent network
+        :raises ValueError: If agent_name is not an external agent reference,
+                    or no session can be created for it.
+        """
+        # The session factory only knows about external agents,
+        # so catch a bare in-network name here with a clear message.
+        if not ExternalAgentParsing.is_external_agent(agent_name):
+            raise ValueError(
+                f"AgentActivationCapsule.create_session() requires an external agent reference "
+                f"such as \"/{agent_name}\" or a full url; got \"{agent_name}\"."
+            )
+
+        invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
+        invocation: str = invocation_context.get_effective_invocation()
+        async_factory: AsyncAgentSessionFactory = invocation_context.get_async_session_factory()
+        session: AsyncAgentSession = await async_factory.async_create_session(agent_name, invocation_context,
+                                                                              invocation)
+        if session is None:
+            raise ValueError(f"Unable to create a session for external agent {agent_name}.")
+
+        self.sessions.append(session)
+        return session

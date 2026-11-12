@@ -41,7 +41,8 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
     keeps the str contract. These tests lock it and confirm that plain-string
     content is returned untouched. They also check that use_tool releases each sub-agent as soon
     as its call is done, that close_of_work releases every lingering resource
-    exactly once, and that use_reservation delegates to use_tool.
+    exactly once, that use_reservation delegates to use_tool, and that
+    create_session hands out factory sessions that close_of_work closes.
     """
 
     @staticmethod
@@ -63,6 +64,26 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
         return AgentActivationCapsule(parent_run_context=MagicMock(),
                                       parent_agent_spec={"name": "caller"},
                                       agent_tool_factory=factory)
+
+    @staticmethod
+    def make_session_capsule(session: MagicMock) -> AgentActivationCapsule:
+        """
+        Build a capsule whose invocation context's session factory returns the given session.
+
+        :param session: The session the session factory will return
+        :return: An AgentActivationCapsule wired to that session factory
+        """
+        session_factory: MagicMock = MagicMock()
+        session_factory.async_create_session = AsyncMock(return_value=session)
+
+        invocation_context: MagicMock = MagicMock()
+        invocation_context.get_async_session_factory = MagicMock(return_value=session_factory)
+        invocation_context.get_effective_invocation = MagicMock(return_value="chatbot")
+
+        parent_run_context: MagicMock = MagicMock()
+        parent_run_context.get_invocation_context = MagicMock(return_value=invocation_context)
+
+        return AgentActivationCapsule(parent_run_context=parent_run_context)
 
     async def test_use_tool_returns_str_content_unchanged(self) -> None:
         """
@@ -169,3 +190,73 @@ class TestAgentActivationCapsule(IsolatedAsyncioTestCase):
 
         capsule.use_tool.assert_awaited_once_with("/copy_cat-1234", args, sly_data)
         self.assertEqual(result, "the answer")
+
+    async def test_create_session_returns_factory_session(self) -> None:
+        """
+        create_session() asks the invocation context's session factory for the agent
+        with the effective invocation and returns the session it creates.
+        """
+        session: MagicMock = MagicMock()
+        capsule: AgentActivationCapsule = self.make_session_capsule(session)
+        invocation_context: MagicMock = capsule.parent_run_context.get_invocation_context.return_value
+        session_factory: MagicMock = invocation_context.get_async_session_factory.return_value
+
+        result: Any = await capsule.create_session("/copy_cat")
+
+        self.assertIs(result, session)
+        session_factory.async_create_session.assert_awaited_once_with("/copy_cat", invocation_context, "chatbot")
+        session.close.assert_not_called()
+
+    async def test_close_of_work_closes_created_sessions_once(self) -> None:
+        """
+        Sessions from create_session() are owned by the capsule: close_of_work()
+        closes each one, and a second close_of_work() does not close them again.
+        """
+        session: MagicMock = MagicMock()
+        capsule: AgentActivationCapsule = self.make_session_capsule(session)
+        await capsule.create_session("/copy_cat")
+
+        await capsule.close_of_work()
+        await capsule.close_of_work()
+
+        session.close.assert_called_once()
+
+    async def test_close_of_work_closes_remaining_sessions_after_failure(self) -> None:
+        """
+        A session whose close() raises does not keep the others from being closed.
+        """
+        capsule: AgentActivationCapsule = AgentActivationCapsule(parent_run_context=MagicMock())
+        failing: MagicMock = MagicMock()
+        failing.close = MagicMock(side_effect=RuntimeError("boom"))
+        healthy: MagicMock = MagicMock()
+        capsule.sessions.append(failing)
+        capsule.sessions.append(healthy)
+
+        capsule.sensitive_logger = MagicMock()
+        await capsule.close_of_work()
+        capsule.sensitive_logger.error.assert_called_once()
+
+        failing.close.assert_called_once()
+        healthy.close.assert_called_once()
+
+    async def test_create_session_rejects_non_external_name(self) -> None:
+        """
+        A bare in-network agent name is rejected before the session factory is consulted.
+        """
+        capsule: AgentActivationCapsule = self.make_session_capsule(MagicMock())
+        invocation_context: MagicMock = capsule.parent_run_context.get_invocation_context.return_value
+        session_factory: MagicMock = invocation_context.get_async_session_factory.return_value
+
+        with self.assertRaises(ValueError):
+            await capsule.create_session("copy_cat")
+        session_factory.async_create_session.assert_not_awaited()
+
+    async def test_create_session_raises_when_factory_returns_none(self) -> None:
+        """
+        A factory that cannot create a session is reported, not returned as None.
+        """
+        capsule: AgentActivationCapsule = self.make_session_capsule(None)
+
+        with self.assertRaises(ValueError):
+            await capsule.create_session("/copy_cat")
+        self.assertEqual(capsule.sessions, [])
