@@ -60,6 +60,7 @@ from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.types.agent_message import AgentMessage
 
 
+# pylint: disable=too-many-instance-attributes
 class AbstractClassActivation(AbstractCallableActivation):
     """
     CallableActivation which can invoke a CodedTool by its class name.
