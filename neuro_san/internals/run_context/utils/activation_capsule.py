@@ -129,6 +129,21 @@ flag to your invocation.
         # block list.
         return ContentUtils.flatten_to_text(message)
 
+    async def use_reservation(self, reservation_id: str, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
+        """
+        Experimental method to call a reserved temporary network more directly from a CodedTool.
+
+        NOTE: This method is not correctly reporting history or anything like that just yet.
+
+        :param reservation_id: The string id of the reservation to invoke
+        :param args: A dictionary of arguments to send to the reserved temporary network.
+        :param sly_data: private data dictionary to send to the reserved temporary network.
+        :return: A string representing the last received content text of the last message.
+        """
+        # DEF - for now just assume a local copy
+        result: str = await self.use_tool(f"/{reservation_id}", args, sly_data)
+        return result
+
     def create_chat_model(self, llm_config: Dict[str, Any], sly_data: Dict[str, Any], num_fallbacks: int = None) -> Any:
         """
         :param llm_config: The llm config dictionary

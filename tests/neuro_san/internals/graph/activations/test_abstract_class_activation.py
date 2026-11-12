@@ -35,6 +35,7 @@ from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.journals.progress_journal import ProgressJournal
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import ConcreteClassActivation
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import CREATE_RUN_CONTEXT_PATH
@@ -92,6 +93,26 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         self.assertIsNotNone(origin)
         self.assertEqual(origin_str, "test_full_name")
         self.assertIsNotNone(progress_reporter)
+
+    def test_initialization_activation_capsule(self) -> None:
+        """
+        Test that the activation passes an ActivationCapsule to the CodedTool in its arguments.
+        """
+        activation_capsule: ActivationCapsule = self.activation_instance.arguments.get("activation_capsule")
+        self.assertIsInstance(activation_capsule, ActivationCapsule)
+
+    async def test_close_of_work_closes_activation_capsule(self) -> None:
+        """
+        Test that close_of_work() releases the ActivationCapsule and the RunContext.
+        """
+        self.mock_run_context.close_of_work = AsyncMock()
+        activation_capsule: ActivationCapsule = self.activation_instance.arguments.get("activation_capsule")
+        with patch.object(activation_capsule, "close_of_work", new_callable=AsyncMock) as mock_close:
+            await self.activation_instance.close_of_work()
+
+            mock_close.assert_awaited_once_with(self.mock_run_context)
+        self.assertIsNone(self.activation_instance.activation_capsule)
+        self.mock_run_context.close_of_work.assert_awaited_once()
 
     def test_get_full_class_ref(self) -> None:
         """

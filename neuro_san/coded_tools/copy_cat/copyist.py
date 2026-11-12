@@ -20,13 +20,13 @@ from typing import Dict
 from neuro_san import REGISTRIES_DIR
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservation import Reservation
-from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_util import ReservationUtil
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 
-class Copyist(BranchActivation, CodedTool):
+class Copyist(CodedTool):
     """
     CodedTool implementation of a copyist for the copy_cat reservations example.
 
@@ -119,6 +119,10 @@ class Copyist(BranchActivation, CodedTool):
             )
 
         # Call the agent we just created for our reservation
+        activation_capsule: ActivationCapsule = args.get("activation_capsule")
+        if activation_capsule is None:
+            return "No activation_capsule available to call the temporary agent."
+
         res_args: Dict[str, Any] = {"input": args.get("call_text")}
-        res_return: str = await self.use_reservation(reservation_id, res_args, sly_data)
+        res_return: str = await activation_capsule.use_reservation(reservation_id, res_args, sly_data)
         return res_return
