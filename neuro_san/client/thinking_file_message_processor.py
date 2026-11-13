@@ -83,7 +83,7 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         if message_type == ChatMessageType.AGENT_PROGRESS and not text and structure is None:
             return
 
-        origin: List[str] = chat_message_dict.get("origin")
+        origin: List[Dict[str, Any]] = chat_message_dict.get("origin")
         test_origin_str: str = Origination.get_full_name_from_origin(origin)
 
         origin_str: str = ""

@@ -349,7 +349,7 @@ class RegistryManifestRestorer(Restorer):
                 manifest_file: str = None,
                 manifest_dir: str = None,
                 external_network_names: List[str] = None,
-                agent_mapper: AgentFileTreeMapper = None
+                agent_mapper: AgentNameMapper = None
             ) -> Tuple[AgentNetwork, str, Dict[str, Any]]:
         """
         :param manifest_dir: The directory of the manifest file.
@@ -357,7 +357,7 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_key: The key in the manifest file.
         :param manifest_dict: The dictionary of the manifest file.
         :param external_network_names: The list of external network names
-        :param agent_mapper: The AgentFileTreeMapper to use
+        :param agent_mapper: The AgentNameMapper to use
         :return: A tuple of (agent_network, network_name, manifest_dict)
         """
         usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
@@ -429,7 +429,7 @@ class RegistryManifestRestorer(Restorer):
                 manifest_key: str,
                 manifest_dict: Dict[str, Any],
                 validator: ManifestNetworkValidator,
-                agent_mapper: AgentFileTreeMapper
+                agent_mapper: AgentNameMapper
             ) -> AgentNetwork:
         """
         :param agent_network: The agent network to process.
@@ -538,7 +538,7 @@ class RegistryManifestRestorer(Restorer):
 
     @staticmethod
     def restore_one_agent_network(manifest_dir: str, agent_filepath: str, manifest_key: str,
-                                  agent_mapper: AgentFileTreeMapper) -> AgentNetwork:
+                                  agent_mapper: AgentNameMapper) -> AgentNetwork:
         """
         :param manifest_dir: The directory of the manifest file
         :param agent_filepath: The file reference for the agent network description to restore
