@@ -69,7 +69,7 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         use_file: str = file_reference
         if self.registry_dir is not None:
             # This should be OS-agnostic operation, producing a valid local file path
-            use_file = str(Path(self.registry_dir) / file_reference)
+            use_file = str(Path(self.registry_dir).joinpath(file_reference))
 
         return use_file
 

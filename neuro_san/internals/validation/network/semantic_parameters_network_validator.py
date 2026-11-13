@@ -93,7 +93,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         if isinstance(properties, dict):
             for prop_name, prop_schema in properties.items():
                 if isinstance(prop_schema, dict):
-                    yield prop_schema, f"{path}.properties.{prop_name}"
+                    yield (prop_schema, f"{path}.properties.{prop_name}")
 
         # "items" is a standard JSON Schema keyword defining the element
         # schema of an "array" type.  We recurse into it the same way we
@@ -101,7 +101,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         # array elements are caught.
         items: Any = schema.get("items")
         if isinstance(items, dict):
-            yield items, f"{path}.items"
+            yield (items, f"{path}.items")
 
     @classmethod
     def _check_required_refs(cls, agent_name: str, params: Any,
