@@ -67,7 +67,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
             front_man_iter: Iterator[str] = iter(front_man_agents)
             front_man_agent: str = next(front_man_iter)
             unreachable_agents = self.find_unreachable_agents(name_to_spec, front_man_agent)
-            if unreachable_agents:
+            if len(unreachable_agents) > 0:
                 errors.append(f"Unreachable agents found: {sorted(unreachable_agents)}")
 
         if len(errors) > 0:
@@ -95,15 +95,15 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         :return: List of agent-name strings reachable from this spec.
         """
         raw_down_chains: List[Any] = []
-        coerced_tools: List[Any] = self.coerce_tools(agent_spec)
-        coerced_args_tools: List[Any] = self.coerce_args_tools(agent_spec)
+        coerced_tools: List[Any] = AbstractNetworkValidator.coerce_tools(agent_spec)
+        coerced_args_tools: List[Any] = AbstractNetworkValidator.coerce_args_tools(agent_spec)
         raw_down_chains.extend(coerced_tools)
         raw_down_chains.extend(coerced_args_tools)
-        safe_down_chains: List[str] = self.remove_dictionary_tools(raw_down_chains)
+        safe_down_chains: List[str] = AbstractNetworkValidator.remove_dictionary_tools(raw_down_chains)
 
         traversable_down_chains: List[str] = []
         for tool in safe_down_chains:
-            if not self.is_url_or_path(tool):
+            if not AbstractNetworkValidator.is_url_or_path(tool):
                 traversable_down_chains.append(tool)
         return traversable_down_chains
 
@@ -119,7 +119,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
 
         for agent_name, agent_config in name_to_spec.items():
             down_chains: List[str] = self.get_agent_down_chains(agent_config)
-            if down_chains:
+            if len(down_chains) > 0:
                 has_down_chains.add(agent_name)
                 all_down_chains.update(down_chains)
 

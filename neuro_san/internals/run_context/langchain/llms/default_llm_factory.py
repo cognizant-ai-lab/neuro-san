@@ -44,15 +44,6 @@ from neuro_san.internals.run_context.langchain.util.api_key_error_check import A
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
-KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
-
-# Lazily import specific errors from llm providers
-API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "google.auth.exceptions.DefaultCredentialsError",
-                                            "openai.OpenAIError",
-                                            "pydantic_core.ValidationError",
-                                        ])
-
 
 class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangChainLlmFactory):
     """
@@ -80,6 +71,15 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                                     get_max_prompt_tokens(). By default this comes from
                                     the model description in this class.
     """
+
+    KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
+
+    # Lazily import specific errors from llm providers
+    API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
+        "google.auth.exceptions.DefaultCredentialsError",
+        "openai.OpenAIError",
+        "pydantic_core.ValidationError",
+    ])
 
     def __init__(self, config: Dict[str, Any] = None):
         """
@@ -510,7 +510,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
 
             # Catch some common wrong or missing API key errors in a single place
             # with some verbose error messaging.
-            except API_KEY_ERRORS as exception:
+            except DefaultLlmFactory.API_KEY_ERRORS as exception:
                 # Will re-raise but with the right exception text it will
                 # also provide some more helpful failure text.
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)
@@ -623,7 +623,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         llm_config_key: str = None
         llm_config_value: Any = None
         for llm_config_key, llm_config_value in config.items():
-            if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
+            if llm_config_key not in DefaultLlmFactory.KEYS_TO_REMOVE_FOR_USER_CLASS:
                 user_config[llm_config_key] = llm_config_value
 
         # Check for invalid args and throw error if found

@@ -107,7 +107,7 @@ class McpToolCreator(ToolCreator):
         # with the exposed names here would report a tool that was found, so ask
         # the adapter which entries really matched nothing.
         invalid_names: List[str] = mcp_adapter.get_unmatched_allowed_tools()
-        if invalid_names:
+        if len(invalid_names) > 0:
             message = f"{self.agent_location}: the following tools cannot be found in {server_url}: {invalid_names}"
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)

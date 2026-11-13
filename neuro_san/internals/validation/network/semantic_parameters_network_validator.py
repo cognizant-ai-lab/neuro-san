@@ -64,7 +64,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s parameters semantics...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
-            params: Any = self._locate_parameters(agent_spec)
+            params: Any = AbstractNetworkValidator._locate_parameters(agent_spec)
 
             if not isinstance(params, dict):
                 # Null, missing, or non-dict parameters are reported by
@@ -133,7 +133,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
                 if one_required not in properties_dict.keys():
                     missing.append(one_required)
 
-            if missing:
+            if len(missing) > 0:
                 errors.append(
                     f"{agent_name}: {path}.required has undefined props {missing}"
                 )

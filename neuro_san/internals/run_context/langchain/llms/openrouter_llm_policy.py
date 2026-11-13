@@ -25,6 +25,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -60,10 +61,10 @@ class OpenRouterLlmPolicy(LlmPolicy):
 
         llm: BaseLanguageModel = ChatOpenRouter(
             model=model_name,
-            api_key=self.get_value_or_env(config, "openrouter_api_key",
-                                          "OPENROUTER_API_KEY"),
-            base_url=self.get_value_or_env(config, "openrouter_api_base",
-                                           "OPENROUTER_API_BASE"),
+            api_key=EnvironmentConfiguration.get_value_or_env(config, "openrouter_api_key",
+                                                              "OPENROUTER_API_KEY"),
+            base_url=EnvironmentConfiguration.get_value_or_env(config, "openrouter_api_base",
+                                                               "OPENROUTER_API_BASE"),
             timeout=config.get("request_timeout"),
             max_retries=config.get("max_retries"),
             temperature=config.get("temperature"),

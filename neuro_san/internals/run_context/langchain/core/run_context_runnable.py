@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from asyncio import TimeoutError as AsyncTimeout
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -54,34 +55,34 @@ from neuro_san.message.utils.content_utils import ContentUtils
 
 MINUTES: float = 60.0
 
-# Lazily import specific errors from llm providers
-RATE_LIMIT_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "openai.RateLimitError",
-                                            "anthropic.RateLimitError",
-                                            "google.genai._interactions.RateLimitError",
-                                            # OpenRouter SDK rate-limit error (HTTP 429)
-                                            "openrouter.errors.TooManyRequestsResponseError",
-                                         ])
-
-# Lazily import specific errors from llm providers
-API_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "openai.APIError",
-                                            "anthropic.APIError",
-                                            "langchain_google_genai.chat_models.ChatGoogleGenerativeAIError",
-                                            # Base class for all OpenRouter SDK HTTP errors (UnauthorizedResponseError,
-                                            # BadGatewayResponseError, ResponseValidationError, etc.). Routing these
-                                            # through this branch lets ApiKeyErrorCheck convert runtime 401s
-                                            # ("Missing Authentication header") into the friendly OPENROUTER_API_KEY
-                                            # message instead of letting them fall through to the generic
-                                            # `except Exception` retry.
-                                            "openrouter.errors.OpenRouterError",
-                                         ])
-
 
 class RunContextRunnable(NeuroSanRunnable):
     """
     RunnablePassthrough implementation that intercepts journal messages
     """
+
+    # Lazily import specific errors from llm providers
+    RATE_LIMIT_ERROR_TYPES: ClassVar[Tuple[Type[Any], ...]] = ResolverUtil.create_type_tuple([
+        "openai.RateLimitError",
+        "anthropic.RateLimitError",
+        "google.genai._interactions.RateLimitError",
+        # OpenRouter SDK rate-limit error (HTTP 429)
+        "openrouter.errors.TooManyRequestsResponseError",
+    ])
+
+    # Lazily import specific errors from llm providers
+    API_ERROR_TYPES: ClassVar[Tuple[Type[Any], ...]] = ResolverUtil.create_type_tuple([
+        "openai.APIError",
+        "anthropic.APIError",
+        "langchain_google_genai.chat_models.ChatGoogleGenerativeAIError",
+        # Base class for all OpenRouter SDK HTTP errors (UnauthorizedResponseError,
+        # BadGatewayResponseError, ResponseValidationError, etc.). Routing these
+        # through this branch lets ApiKeyErrorCheck convert runtime 401s
+        # ("Missing Authentication header") into the friendly OPENROUTER_API_KEY
+        # message instead of letting them fall through to the generic
+        # `except Exception` retry.
+        "openrouter.errors.OpenRouterError",
+    ])
 
     # Declarations of member variables here satisfy Pydantic style,
     # which is a type validator that langchain is based on which
@@ -233,11 +234,11 @@ class RunContextRunnable(NeuroSanRunnable):
             backtrace = None
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
-            except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
+            except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
                 exception = rate_limit_error
-            except API_ERROR_TYPES as api_error:
+            except RunContextRunnable.API_ERROR_TYPES as api_error:
                 backtrace = traceback.format_exc()
                 message: str = None
                 if not ApiKeyErrorCheck.check_for_internal_error(backtrace):

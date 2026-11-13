@@ -23,6 +23,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.anthropic_llm_policy import AnthropicLlmPolicy
 
 
@@ -78,13 +79,13 @@ class AnthropicBedrockLlmPolicy(AnthropicLlmPolicy):
 
             # AWS authentication. Each falls back to its standard AWS env var if
             # unset in the llm_config, matching ChatAnthropicBedrock's own defaults.
-            region_name=self.get_value_or_env(config, "region_name", "AWS_REGION"),
-            aws_access_key_id=self.get_value_or_env(config, "aws_access_key_id",
-                                                    "AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=self.get_value_or_env(config, "aws_secret_access_key",
-                                                        "AWS_SECRET_ACCESS_KEY"),
-            aws_session_token=self.get_value_or_env(config, "aws_session_token",
-                                                    "AWS_SESSION_TOKEN"),
+            region_name=EnvironmentConfiguration.get_value_or_env(config, "region_name", "AWS_REGION"),
+            aws_access_key_id=EnvironmentConfiguration.get_value_or_env(config, "aws_access_key_id",
+                                                                        "AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=EnvironmentConfiguration.get_value_or_env(config, "aws_secret_access_key",
+                                                                            "AWS_SECRET_ACCESS_KEY"),
+            aws_session_token=EnvironmentConfiguration.get_value_or_env(config, "aws_session_token",
+                                                                        "AWS_SESSION_TOKEN"),
 
             # Streaming is configurable via the "streaming" key in llm_config; defaults
             # to False so existing agents keep their long-standing non-streaming behavior.

@@ -25,6 +25,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.closeable_client import CloseableClient
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
@@ -54,8 +55,8 @@ class GeminiLlmPolicy(LlmPolicy):
 
         llm: BaseLanguageModel = ChatGoogleGenerativeAI(
             model=model_name,
-            google_api_key=self.get_value_or_env(config, "google_api_key",
-                                                 "GOOGLE_API_KEY"),
+            google_api_key=EnvironmentConfiguration.get_value_or_env(config, "google_api_key",
+                                                                     "GOOGLE_API_KEY"),
             max_retries=config.get("max_retries"),
             max_tokens=config.get("max_tokens"),  # This is always for output
             n=config.get("n"),

@@ -32,8 +32,6 @@ from langchain_core.outputs import ChatGeneration
 from langchain_core.outputs import LLMResult
 
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
-from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
-from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
 
 from tests.neuro_san.internals.run_context.langchain.token_counting.owning_agent_scope import owning_agent_scope
 
@@ -206,7 +204,8 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
         with owning_agent_scope(self.priced_handler):
             await self.priced_handler.on_chat_model_start(
                 self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id,
-                metadata={PROVIDER_METADATA_KEY: "azure-openai", PRICE_MODEL_METADATA_KEY: "gpt-4"})
+                metadata={LlmTokenCallbackHandler.PROVIDER_METADATA_KEY: "azure-openai",
+                          LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY: "gpt-4"})
             await self.priced_handler.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
 
         self.assertNotIn("openai", self.priced_handler.models_token_dict)
@@ -225,7 +224,8 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
         run_id: UUID = uuid4()
         with owning_agent_scope(self.priced_handler):
             await self.priced_handler.on_chat_model_start(
-                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id, metadata={})
+                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id,
+                metadata={})
             await self.priced_handler.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
 
         entry: Dict[str, Any] = self.priced_handler.models_token_dict.get("openai", {}).get("my-deployment", {})
@@ -256,7 +256,8 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
         # No owning_agent_scope: the events belong to a downstream agent's chat model.
         await self.priced_handler.on_chat_model_start(
             self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id,
-            metadata={PROVIDER_METADATA_KEY: "azure-openai", PRICE_MODEL_METADATA_KEY: "gpt-4"})
+            metadata={LlmTokenCallbackHandler.PROVIDER_METADATA_KEY: "azure-openai",
+                      LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY: "gpt-4"})
         await self.priced_handler.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
 
         self.assertEqual(self.priced_handler.models_token_dict, {})
@@ -269,7 +270,8 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
         run_id: UUID = uuid4()
         with owning_agent_scope(self.priced_handler):
             await self.priced_handler.on_chat_model_start(
-                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id, metadata={PRICE_MODEL_METADATA_KEY: "gpt-4"})
+                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id,
+                metadata={LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY: "gpt-4"})
             await self.priced_handler.on_llm_error(RuntimeError("boom"), run_id=run_id)
 
         self.assertEqual(self.priced_handler.price_model_names, {})

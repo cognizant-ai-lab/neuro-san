@@ -70,9 +70,9 @@ class UrlNetworkValidator(AbstractNetworkValidator):
             # coerce_tools treats a malformed `tools` (non-list) as empty so this
             # validator does not iterate the characters of a string. The shape
             # error itself is reported separately by ToolsShapeValidator.
-            tools: List[Any] = self.coerce_tools(agent)
+            tools: List[Any] = AbstractNetworkValidator.coerce_tools(agent)
             if tools:
-                safe_tools: List[str] = self.remove_dictionary_tools(tools)
+                safe_tools: List[str] = AbstractNetworkValidator.remove_dictionary_tools(tools)
                 self.check_safe_urls(agent_name, safe_tools, urls, errors)
 
         return errors
@@ -94,7 +94,7 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         for tool in safe_tools:
             tool_string: str = tool
             # pylint: disable=too-many-boolean-expressions
-            if self.is_url_or_path(tool_string) and \
+            if AbstractNetworkValidator.is_url_or_path(tool_string) and \
                     tool_string not in urls and \
                     not tool_string.startswith("http://") and \
                     not tool_string.startswith("https://") and \

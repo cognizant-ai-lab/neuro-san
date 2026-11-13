@@ -53,8 +53,6 @@ from neuro_san.internals.run_context.langchain.llms.azure_llm_policy import Azur
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
-from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
-from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 
 from tests.neuro_san.internals.run_context.langchain.token_counting.owning_agent_scope import owning_agent_scope
@@ -445,7 +443,7 @@ class TestAzureLlmPolicy(TestCase):
 
         self.assertEqual(llm.model_name, "my-deployment")
         self.assertEqual(self._request_payload(llm).get("model"), "my-deployment")
-        self.assertNotIn(PRICE_MODEL_METADATA_KEY, llm.metadata)
+        self.assertNotIn(LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY, llm.metadata)
 
     def test_no_deployment_name_at_all_raises(self) -> None:
         """
@@ -473,7 +471,7 @@ class TestAzureLlmPolicy(TestCase):
         self.assertEqual(llm.model_name, "prod-reasoning")
         self.assertEqual(payload.get("model"), "prod-reasoning")
         self.assertEqual(payload.get("temperature"), 0.7)
-        self.assertEqual(llm.metadata.get(PRICE_MODEL_METADATA_KEY), "gpt-5.4-2026-03-05")
+        self.assertEqual(llm.metadata.get(LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY), "gpt-5.4-2026-03-05")
 
     # ---- The payload ----------------------------------------------------------------------------
 
@@ -651,10 +649,10 @@ class TestAzureLlmPolicy(TestCase):
         self.assertIsInstance(llm, ToolStrictChatOpenAI)
         self.assertIsInstance(llm, ChatOpenAI)
         self.assertEqual(dumpd(llm).get("id")[-1], "ToolStrictChatOpenAI")
-        self.assertEqual(llm.metadata.get(PROVIDER_METADATA_KEY), "azure-openai")
-        self.assertEqual(llm.metadata.get(PRICE_MODEL_METADATA_KEY), self.MODEL_NAME)
-        self.assertEqual(deployment_only.metadata.get(PROVIDER_METADATA_KEY), "azure-openai")
-        self.assertNotIn(PRICE_MODEL_METADATA_KEY, deployment_only.metadata)
+        self.assertEqual(llm.metadata.get(LlmTokenCallbackHandler.PROVIDER_METADATA_KEY), "azure-openai")
+        self.assertEqual(llm.metadata.get(LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY), self.MODEL_NAME)
+        self.assertEqual(deployment_only.metadata.get(LlmTokenCallbackHandler.PROVIDER_METADATA_KEY), "azure-openai")
+        self.assertNotIn(LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY, deployment_only.metadata)
 
     def test_usage_is_booked_under_azure_openai_and_priced_by_the_openai_model(self) -> None:
         """
@@ -819,4 +817,4 @@ class TestAzureLlmPolicy(TestCase):
         self.assertEqual(llm.openai_api_base, self.V1_BASE_URL)
         self.assertEqual(str(llm.root_async_client.base_url), self.V1_BASE_URL)
         self.assertEqual(llm.model_name, self.DEPLOYMENT_NAME)
-        self.assertEqual(llm.metadata.get(PRICE_MODEL_METADATA_KEY), self.MODEL_NAME)
+        self.assertEqual(llm.metadata.get(LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY), self.MODEL_NAME)
