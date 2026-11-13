@@ -58,7 +58,7 @@ class MessageJournal(Journal):
         """
         self.message_processor = message_processor
 
-    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]]):
+    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]] = None):
         """
         Writes a BaseMessage entry into the journal
         :param message: The BaseMessage instance to write to the journal
