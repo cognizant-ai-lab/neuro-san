@@ -730,12 +730,6 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 }
                 one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data=sly_data, num_fallbacks=None,
                                                                    randomize_peers=True)
-                if isinstance(one_llm_resources, dict):
-                    # It was a bust. Update our own error sets
-                    api_key_errors.update(one_llm_resources.get("api_key_errors", []))
-                    construction_errors.update(one_llm_resources.get("construction_errors", []))
-                    required_sly_data.update(one_llm_resources.get("required_sly_data_errors", []))
-                    continue
 
             try:
                 if one_llm_resources is None:
@@ -766,6 +760,14 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 # Report later on which required llm_config are missing
                 # Skip for now, a fallback might still be fulfilled.
                 required_sly_data.update(one_llm_resources)
+                continue
+
+            if isinstance(one_llm_resources, dict):
+                # A peer group was a bust. Update our own error sets.
+                # Checked after the set case so every path narrows to LangChainLlmResources below.
+                api_key_errors.update(one_llm_resources.get("api_key_errors", []))
+                construction_errors.update(one_llm_resources.get("construction_errors", []))
+                required_sly_data.update(one_llm_resources.get("required_sly_data_errors", []))
                 continue
 
             if main_llm_resources is None:

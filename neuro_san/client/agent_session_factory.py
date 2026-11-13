@@ -69,9 +69,10 @@ class AgentSessionFactory:
         elif session_type in ("http", "https"):
 
             # If there is no port really specified, use the default port
-            use_port: int = port
-            if port is None:
-                use_port = AgentSession.DEFAULT_PORT
+            # Sessions take the port as a string.
+            use_port: str = str(AgentSession.DEFAULT_PORT)
+            if port is not None:
+                use_port = str(port)
 
             security_cfg: Dict[str, Any] = None
             if session_type == "https":
@@ -82,9 +83,10 @@ class AgentSessionFactory:
                                               timeout_in_seconds=connect_timeout_in_seconds)
         elif session_type == "mcp":
             # If there is no port really specified, use the default port
-            use_port: int = port
-            if port is None:
-                use_port = AgentSession.DEFAULT_PORT
+            # Sessions take the port as a string.
+            use_port: str = str(AgentSession.DEFAULT_PORT)
+            if port is not None:
+                use_port = str(port)
 
             security_cfg: Dict[str, Any] = None
             session = McpServiceAgentSession(host=hostname, port=use_port, agent_name=agent_name,

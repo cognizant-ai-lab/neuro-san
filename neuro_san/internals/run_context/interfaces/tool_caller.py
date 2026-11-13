@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 
+from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.run_context.interfaces.agent_spec_provider import AgentSpecProvider
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run import Run
@@ -40,6 +41,12 @@ class ToolCaller(AgentSpecProvider):
     def get_inspector(self) -> AgentNetworkInspector:
         """
         :return: The AgentNetworkInspector that contains the specs of all the tools
+        """
+        raise NotImplementedError
+
+    def get_tool_factory(self) -> AgentToolFactory:
+        """
+        :return: The AgentToolFactory that creates activations for the tools of the network
         """
         raise NotImplementedError
 

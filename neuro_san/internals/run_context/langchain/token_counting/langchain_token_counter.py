@@ -29,8 +29,8 @@ from contextvars import copy_context
 from copy import copy
 from time import time
 
-from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
+from langchain_core.runnables.base import Runnable
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -87,20 +87,21 @@ class LangChainTokenCounter:
     are in get_callback_for_llm()
     """
 
-    def __init__(self, llm: BaseLanguageModel,
+    def __init__(self, llm: Runnable,
                  invocation_context: InvocationContext,
                  journal: Journal,
                  origin: List[Dict[str, Any]]):
         """
         Constructor
 
-        :param llm: The Llm to monitor for tokens
+        :param llm: The Llm to monitor for tokens. This is a Runnable because the
+                    llm can be a BaseLanguageModel with fallbacks attached to it.
         :param invocation_context: The InvocationContext
         :param journal: The OriginatingJournal which through which this
                     will send token count AGENT messages
         :param origin: The origin that will be applied to all messages.
         """
-        self.llm: BaseLanguageModel = llm
+        self.llm: Runnable = llm
         self.invocation_context: InvocationContext = invocation_context
         self.journal: Journal = journal
         self.origin: List[Dict[str, Any]] = origin

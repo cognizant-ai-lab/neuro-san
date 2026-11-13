@@ -41,6 +41,7 @@ from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
+from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
@@ -49,7 +50,6 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.origination import Origination
-from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
@@ -144,8 +144,7 @@ class LangChainRunContext(RunContext):
         """
         if self.tool_caller is not None:
             agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
-            # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
-            factory: AgentNetworkInspector = self.tool_caller.get_inspector()
+            factory: AgentToolFactory = self.tool_caller.get_tool_factory()
             self.capsule = AgentActivationCapsule(self, agent_spec, factory)
         else:
             # DEF: It's likely that this current arrangement might impede middleware on the front-man
