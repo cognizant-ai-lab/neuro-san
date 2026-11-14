@@ -318,7 +318,7 @@ class LangChainRunContext(RunContext):
             raise ValueError(error)
 
         self.llm_resources = main_llm_resources
-        agent: Runnable = self.create_agent(instructions, main_llm_resources.get_model())
+        agent: Runnable = self.create_agent(instructions, self.llm_resources.get_model())
 
         return agent
 

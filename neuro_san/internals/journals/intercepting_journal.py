@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Type
 
 from langchain_core.messages.base import BaseMessage
 
@@ -41,7 +42,7 @@ class InterceptingJournal(Journal):
         self.origin: List[Dict[str, Any]] = origin
         self.messages: List[BaseMessage] = []
 
-    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]]):
+    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]] = None):
         """
         Writes a BaseMessage entry into the journal
         :param message: The BaseMessage instance to write to the journal
@@ -51,6 +52,8 @@ class InterceptingJournal(Journal):
                     "tool"                  The string name of the tool in the spec
                     "instantiation_index"   An integer indicating which incarnation
                                             of the tool is being dealt with.
+                Can be None, in which case the message is intercepted only
+                when this journal's own origin is also None.
         """
         # Let the wrapped guy do what he's gunna do
         await self.wrapped_journal.write_message(message, origin)
@@ -79,7 +82,8 @@ class InterceptingJournal(Journal):
             # for better display in tracing/observability applications like
             # LangSmith.
             if isinstance(message, TracedMessage):
-                new_message = message.__class__(trace_source=message)
+                traced_class: Type[TracedMessage] = type(message)
+                new_message = traced_class(trace_source=message)
 
             self.messages.append(new_message)
 

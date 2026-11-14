@@ -63,9 +63,9 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s parameters via pydantic...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
-            params: Any = self._locate_parameters(agent_spec)
+            params: Any = AbstractNetworkValidator._locate_parameters(agent_spec)
 
-            if params is self._PARAMS_NOT_FOUND:
+            if params is AbstractNetworkValidator._PARAMS_NOT_FOUND:
                 # No parameters block at all - nothing to validate.
                 continue
             if params is None:

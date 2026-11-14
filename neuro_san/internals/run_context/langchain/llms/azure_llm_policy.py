@@ -32,9 +32,9 @@ from langchain_core.language_models.base import BaseLanguageModel
 from leaf_common.config.config_util import ConfigUtil
 from leaf_common.logging.log_once import LogOnce
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
-from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
-from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
+from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
 
 
 class AzureLlmPolicy(OpenAILlmPolicy):
@@ -132,7 +132,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         client_args: Dict[str, Any] = {
             "api_key": api_key,
             "base_url": base_url,
-            "organization": self.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
+            "organization": EnvironmentConfiguration.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
             "timeout": config.get("request_timeout"),
             "default_headers": default_headers,
             "http_client": self.http_client,
@@ -189,12 +189,12 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             openai_api_base=self.resolve_base_url(config),
 
             # This next group of params should always be None when we have a client
-            openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                      "OPENAI_ORG_ID", client),
-            openai_proxy=self.get_value_or_env(config, "openai_proxy",
-                                               "OPENAI_PROXY", client),
-            request_timeout=self.get_value_or_env(config, "request_timeout", None, client),
-            max_retries=self.get_value_or_env(config, "max_retries", None, client),
+            openai_organization=EnvironmentConfiguration.get_value_or_env(config, "openai_organization",
+                                                                          "OPENAI_ORG_ID", client),
+            openai_proxy=EnvironmentConfiguration.get_value_or_env(config, "openai_proxy",
+                                                                   "OPENAI_PROXY", client),
+            request_timeout=EnvironmentConfiguration.get_value_or_env(config, "request_timeout", None, client),
+            max_retries=EnvironmentConfiguration.get_value_or_env(config, "max_retries", None, client),
 
             # Chat Completions only. langchain-openai rejects a Responses API request that carries
             # any of them, exactly as for the "openai" class; see docs/llm_info_hocon_reference.md.
@@ -265,9 +265,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :param model_name: The OpenAI model behind it, or None when the llm_config gives none
         :return: The metadata dict to pass to the chat model
         """
-        metadata: Dict[str, Any] = {PROVIDER_METADATA_KEY: "azure-openai"}
+        metadata: Dict[str, Any] = {LlmTokenCallbackHandler.PROVIDER_METADATA_KEY: "azure-openai"}
         if model_name and model_name != deployment_name:
-            metadata[PRICE_MODEL_METADATA_KEY] = model_name
+            metadata[LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY] = model_name
         return metadata
 
     def resolve_base_url(self, config: Dict[str, Any]) -> str:
@@ -332,16 +332,17 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :raises OpenAIError: When no credential is configured
         """
         # AD here means "ActiveDirectory", the former name of Microsoft Entra ID.
-        azure_ad_token: str = self.get_value_or_env(config, "azure_ad_token", "AZURE_OPENAI_AD_TOKEN")
+        azure_ad_token: str = EnvironmentConfiguration.get_value_or_env(config, "azure_ad_token",
+                                                                        "AZURE_OPENAI_AD_TOKEN")
         if azure_ad_token:
             return azure_ad_token
 
-        api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY")
+        api_key: str = EnvironmentConfiguration.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY")
         if api_key:
             return api_key
 
         # OPENAI_API_KEY is the documented last fallback (see the azure-openai class in default_llm_info.hocon).
-        fallback_key: str = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
+        fallback_key: str = EnvironmentConfiguration.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
         if fallback_key:
             return fallback_key
 
@@ -361,7 +362,8 @@ class AzureLlmPolicy(OpenAILlmPolicy):
                 environment, else that model id
         :raises OpenAIError: When none of the three is available
         """
-        deployment_name: str = self.get_value_or_env(config, "deployment_name", "AZURE_OPENAI_DEPLOYMENT_NAME")
+        deployment_name: str = EnvironmentConfiguration.get_value_or_env(config, "deployment_name",
+                                                                         "AZURE_OPENAI_DEPLOYMENT_NAME")
         if deployment_name:
             return deployment_name
 
@@ -428,7 +430,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             if config.get(key):
                 legacy_present.append(key)
 
-        if not legacy_present:
+        if len(legacy_present) == 0:
             return
 
         log_once: LogOnce = LogOnce(self.logger)

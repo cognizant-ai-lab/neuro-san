@@ -64,7 +64,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s parameters semantics...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
-            params: Any = self._locate_parameters(agent_spec)
+            params: Any = AbstractNetworkValidator._locate_parameters(agent_spec)
 
             if not isinstance(params, dict):
                 # Null, missing, or non-dict parameters are reported by
@@ -93,7 +93,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         if isinstance(properties, dict):
             for prop_name, prop_schema in properties.items():
                 if isinstance(prop_schema, dict):
-                    yield prop_schema, f"{path}.properties.{prop_name}"
+                    yield (prop_schema, f"{path}.properties.{prop_name}")
 
         # "items" is a standard JSON Schema keyword defining the element
         # schema of an "array" type.  We recurse into it the same way we
@@ -101,7 +101,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         # array elements are caught.
         items: Any = schema.get("items")
         if isinstance(items, dict):
-            yield items, f"{path}.items"
+            yield (items, f"{path}.items")
 
     @classmethod
     def _check_required_refs(cls, agent_name: str, params: Any,
@@ -133,7 +133,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
                 if one_required not in properties_dict.keys():
                     missing.append(one_required)
 
-            if missing:
+            if len(missing) > 0:
                 errors.append(
                     f"{agent_name}: {path}.required has undefined props {missing}"
                 )

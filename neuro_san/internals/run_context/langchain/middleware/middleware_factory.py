@@ -38,9 +38,6 @@ from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
 
-# We don't want to drag in langgraph as a dependency, but we will allow Checkpointers from there.
-Checkpointer: Type = Any
-
 
 class MiddlewareFactory:
     """
@@ -66,7 +63,7 @@ class MiddlewareFactory:
         self.logger: Logger = getLogger(self.__class__.__name__)
 
     def create_agent_middleware(self, config: List[Dict[str, Any]], sly_data: Dict[str, Any]) \
-            -> Tuple[List[AgentMiddleware], Checkpointer]:
+            -> Tuple[List[AgentMiddleware], Any]:
         """
         Create instances of AgentMiddleware based on the config.
         :param config: A list of dictionaries containing specific middleware configurations.
@@ -78,7 +75,7 @@ class MiddlewareFactory:
                 * A Checkpointer instance if required by the config. Can be None.
         """
         # Keep a running list of what we've created.
-        checkpointer: Checkpointer = None
+        checkpointer: Any = None
         all_middleware: List[AgentMiddleware] = []
 
         if config is None or len(config) == 0:
@@ -91,7 +88,7 @@ class MiddlewareFactory:
         for middleware_index, one_config in enumerate(config):
 
             middleware: AgentMiddleware = None
-            created_checkpointer: Checkpointer = None
+            created_checkpointer: Any = None
             middleware, created_checkpointer = self.create_middleware(one_config, sly_data, middleware_index)
             if middleware is not None:
                 all_middleware.append(middleware)
@@ -105,7 +102,7 @@ class MiddlewareFactory:
         return all_middleware, checkpointer
 
     def create_middleware(self, config: Dict[str, Any], sly_data: Dict[str, Any], index: int = 0) \
-            -> Tuple[AgentMiddleware, Checkpointer]:
+            -> Tuple[AgentMiddleware, Any]:
         """
         Create an instance of AgentMiddleware based on the config.
 
@@ -119,13 +116,14 @@ class MiddlewareFactory:
                   Can be None if there is no middleware to create.
                 * A Checkpointer instance if required by the config. Can be None.
         """
-        checkpointer: Checkpointer = None
+        checkpointer: Any = None
         middleware: AgentMiddleware = self.create_class("AgentMiddleware", AgentMiddleware, config, sly_data, index)
 
         # If needed, we could do some kind of kwargs dict here instead of a specific checkpointer arg for create_agent()
         checkpointer_config: Dict[str, Any] = config.get("checkpointer")
         if checkpointer_config is not None:
-            checkpointer = self.create_class("Checkpointer", Checkpointer, checkpointer_config, sly_data, index)
+            # Checkpointers come from langgraph, which is not a dependency, so any class is allowed.
+            checkpointer = self.create_class("Checkpointer", object, checkpointer_config, sly_data, index)
 
         return middleware, checkpointer
 

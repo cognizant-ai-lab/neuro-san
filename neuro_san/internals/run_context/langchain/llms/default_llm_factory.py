@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -44,15 +45,6 @@ from neuro_san.internals.run_context.langchain.util.api_key_error_check import A
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
-KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
-
-# Lazily import specific errors from llm providers
-API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "google.auth.exceptions.DefaultCredentialsError",
-                                            "openai.OpenAIError",
-                                            "pydantic_core.ValidationError",
-                                        ])
-
 
 class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangChainLlmFactory):
     """
@@ -80,6 +72,15 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                                     get_max_prompt_tokens(). By default this comes from
                                     the model description in this class.
     """
+
+    KEYS_TO_REMOVE_FOR_USER_CLASS: ClassVar[Set[str]] = {"class", "provider_tools", "verbose"}
+
+    # Lazily import specific errors from llm providers
+    API_KEY_ERRORS: ClassVar[Tuple[Type[Any], ...]] = ResolverUtil.create_type_tuple([
+        "google.auth.exceptions.DefaultCredentialsError",
+        "openai.OpenAIError",
+        "pydantic_core.ValidationError",
+    ])
 
     def __init__(self, config: Dict[str, Any] = None):
         """
@@ -510,7 +511,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
 
             # Catch some common wrong or missing API key errors in a single place
             # with some verbose error messaging.
-            except API_KEY_ERRORS as exception:
+            except DefaultLlmFactory.API_KEY_ERRORS as exception:
                 # Will re-raise but with the right exception text it will
                 # also provide some more helpful failure text.
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)
@@ -623,7 +624,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         llm_config_key: str = None
         llm_config_value: Any = None
         for llm_config_key, llm_config_value in config.items():
-            if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
+            if llm_config_key not in DefaultLlmFactory.KEYS_TO_REMOVE_FOR_USER_CLASS:
                 user_config[llm_config_key] = llm_config_value
 
         # Check for invalid args and throw error if found
@@ -770,12 +771,14 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 required_sly_data.update(one_llm_resources.get("required_sly_data_errors", []))
                 continue
 
+            # All other cases are handled above, so this is a LangChainLlmResources.
+            use_llm_resources: LangChainLlmResources = one_llm_resources
             if main_llm_resources is None:
                 # The first fully-specified llm is the one we want to be our main guy.
-                main_llm_resources = one_llm_resources
+                main_llm_resources = use_llm_resources
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
-                fallback_llm_resources.append(one_llm_resources)
+                fallback_llm_resources.append(use_llm_resources)
 
         if main_llm_resources is None:
             # Return all errors

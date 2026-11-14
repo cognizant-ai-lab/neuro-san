@@ -232,7 +232,7 @@ class LangChainMcpAdapter:
         """
         # An empty or absent allow list means "take everything".
         self.unmatched_allowed_tools = []
-        if not client_allowed_tools:
+        if client_allowed_tools is None or len(client_allowed_tools) == 0:
             return mcp_tools
 
         # The policy mangles each entry with a string filter, so anything that

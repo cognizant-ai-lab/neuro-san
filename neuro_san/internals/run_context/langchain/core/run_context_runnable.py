@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from asyncio import TimeoutError as AsyncTimeout
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -27,7 +28,6 @@ import traceback
 
 from pydantic import ConfigDict
 
-from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
@@ -54,34 +54,34 @@ from neuro_san.message.utils.content_utils import ContentUtils
 
 MINUTES: float = 60.0
 
-# Lazily import specific errors from llm providers
-RATE_LIMIT_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "openai.RateLimitError",
-                                            "anthropic.RateLimitError",
-                                            "google.genai._interactions.RateLimitError",
-                                            # OpenRouter SDK rate-limit error (HTTP 429)
-                                            "openrouter.errors.TooManyRequestsResponseError",
-                                         ])
-
-# Lazily import specific errors from llm providers
-API_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "openai.APIError",
-                                            "anthropic.APIError",
-                                            "langchain_google_genai.chat_models.ChatGoogleGenerativeAIError",
-                                            # Base class for all OpenRouter SDK HTTP errors (UnauthorizedResponseError,
-                                            # BadGatewayResponseError, ResponseValidationError, etc.). Routing these
-                                            # through this branch lets ApiKeyErrorCheck convert runtime 401s
-                                            # ("Missing Authentication header") into the friendly OPENROUTER_API_KEY
-                                            # message instead of letting them fall through to the generic
-                                            # `except Exception` retry.
-                                            "openrouter.errors.OpenRouterError",
-                                         ])
-
 
 class RunContextRunnable(NeuroSanRunnable):
     """
     RunnablePassthrough implementation that intercepts journal messages
     """
+
+    # Lazily import specific errors from llm providers
+    RATE_LIMIT_ERROR_TYPES: ClassVar[Tuple[Type[Any], ...]] = ResolverUtil.create_type_tuple([
+        "openai.RateLimitError",
+        "anthropic.RateLimitError",
+        "google.genai._interactions.RateLimitError",
+        # OpenRouter SDK rate-limit error (HTTP 429)
+        "openrouter.errors.TooManyRequestsResponseError",
+    ])
+
+    # Lazily import specific errors from llm providers
+    API_ERROR_TYPES: ClassVar[Tuple[Type[Any], ...]] = ResolverUtil.create_type_tuple([
+        "openai.APIError",
+        "anthropic.APIError",
+        "langchain_google_genai.chat_models.ChatGoogleGenerativeAIError",
+        # Base class for all OpenRouter SDK HTTP errors (UnauthorizedResponseError,
+        # BadGatewayResponseError, ResponseValidationError, etc.). Routing these
+        # through this branch lets ApiKeyErrorCheck convert runtime 401s
+        # ("Missing Authentication header") into the friendly OPENROUTER_API_KEY
+        # message instead of letting them fall through to the generic
+        # `except Exception` retry.
+        "openrouter.errors.OpenRouterError",
+    ])
 
     # Declarations of member variables here satisfy Pydantic style,
     # which is a type validator that langchain is based on which
@@ -222,7 +222,7 @@ class RunContextRunnable(NeuroSanRunnable):
         :param runnable_config: The runnable_config to send to the agent_executor
         :param max_attempts: The maximum number of attempts to make allowing for errors of any kind.
         """
-        chain_result: Union[Dict[str, Any], AgentFinish, AIMessage] = None
+        chain_result: Union[Dict[str, Any], AIMessage] = None
         attempts: int = max_attempts
         exception: Exception = None
         backtrace: str = None
@@ -233,11 +233,11 @@ class RunContextRunnable(NeuroSanRunnable):
             backtrace = None
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
-            except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
+            except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
                 exception = rate_limit_error
-            except API_ERROR_TYPES as api_error:
+            except RunContextRunnable.API_ERROR_TYPES as api_error:
                 backtrace = traceback.format_exc()
                 message: str = None
                 if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
@@ -330,7 +330,7 @@ class RunContextRunnable(NeuroSanRunnable):
             await self.journal.write_message(AgentFrameworkMessage(content=text))
 
     @staticmethod
-    def find_ai_message(chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) -> Optional[AIMessage]:
+    def find_ai_message(chain_result: Optional[Union[Dict[str, Any], AIMessage]]) -> Optional[AIMessage]:
         """
         Locate the provider-native AIMessage that carries the chain's answer.
 
@@ -341,15 +341,6 @@ class RunContextRunnable(NeuroSanRunnable):
                  no AIMessage at all (exception, API-key error text, bare "output")
         """
         use_result: Any = chain_result
-        if isinstance(use_result, AgentFinish):
-            # AgentFinish is the return type of langchain's legacy AgentExecutor,
-            # which neuro-san stopped using in commit 5c2a0e61. The create_agent
-            # graph used today returns a state dict and never an AgentFinish, so
-            # this unwrap is kept for backwards compatibility only. Its
-            # return_values carry the output in dict form.
-            use_result_agent_finish: AgentFinish = use_result
-            use_result = use_result_agent_finish.return_values
-
         if isinstance(use_result, AIMessage):
             # Sometimes we get an AIMessage from a tool call.
             return use_result
@@ -366,14 +357,13 @@ class RunContextRunnable(NeuroSanRunnable):
 
         return None
 
-    def parse_chain_result(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
+    def parse_chain_result(self, chain_result: Optional[Union[Dict[str, Any], AIMessage]],
                            exception: Optional[Exception]) -> str:
         """
         Parse the result from the langchain chain.
 
         :param chain_result: The result from invoking the agent chain.
                         Can be:
-                        * An AgentFinish instance whose return_values can be any one of the following
                         * A dictionary whose keys might be:
                             "output" - the actual output to use
                             "messages" - effectively a chat history
@@ -400,11 +390,8 @@ class RunContextRunnable(NeuroSanRunnable):
             else:
                 # We didn't find an AIMessage, so look for a straight-up "output" key:
                 # invoke_agent_chain builds {"output": text} on the API-key and
-                # output-parse error paths. Unwrap a legacy AgentFinish first (see
-                # find_ai_message) so its return_values get the same lookup.
+                # output-parse error paths.
                 use_result: Any = chain_result
-                if isinstance(use_result, AgentFinish):
-                    use_result = use_result.return_values
                 if isinstance(use_result, dict):
                     output = use_result.get("output")
 
@@ -424,7 +411,7 @@ class RunContextRunnable(NeuroSanRunnable):
         handled_output: str = self.error_detector.handle_error(output)
         return handled_output
 
-    def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
+    def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AIMessage]],
                              output: str) -> BaseMessage:
         """
         Build the AIMessage that is journaled as this agent's answer for the turn.
