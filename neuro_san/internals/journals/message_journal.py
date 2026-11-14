@@ -68,6 +68,7 @@ class MessageJournal(Journal):
                     "tool"                  The string name of the tool in the spec
                     "instantiation_index"   An integer indicating which incarnation
                                             of the tool is being dealt with.
+                Can be None, in which case the message dictionary has no "origin" key.
         """
         converter = BaseMessageDictionaryConverter(origin=origin)
         message_dict: Dict[str, Any] = converter.to_dict(message)

@@ -224,8 +224,7 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
         run_id: UUID = uuid4()
         with owning_agent_scope(self.priced_handler):
             await self.priced_handler.on_chat_model_start(
-                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id,
-                metadata={})
+                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id, metadata={})
             await self.priced_handler.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
 
         entry: Dict[str, Any] = self.priced_handler.models_token_dict.get("openai", {}).get("my-deployment", {})

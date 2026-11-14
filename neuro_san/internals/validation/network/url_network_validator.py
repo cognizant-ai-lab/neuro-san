@@ -71,7 +71,7 @@ class UrlNetworkValidator(AbstractNetworkValidator):
             # validator does not iterate the characters of a string. The shape
             # error itself is reported separately by ToolsShapeValidator.
             tools: List[Any] = AbstractNetworkValidator.coerce_tools(agent)
-            if tools:
+            if len(tools) > 0:
                 safe_tools: List[str] = AbstractNetworkValidator.remove_dictionary_tools(tools)
                 self.check_safe_urls(agent_name, safe_tools, urls, errors)
 

@@ -133,7 +133,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
                 if one_required not in properties_dict.keys():
                     missing.append(one_required)
 
-            if missing is not None and len(missing) > 0:
+            if len(missing) > 0:
                 errors.append(
                     f"{agent_name}: {path}.required has undefined props {missing}"
                 )

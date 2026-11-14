@@ -52,6 +52,8 @@ class InterceptingJournal(Journal):
                     "tool"                  The string name of the tool in the spec
                     "instantiation_index"   An integer indicating which incarnation
                                             of the tool is being dealt with.
+                Can be None, in which case the message is intercepted only
+                when this journal's own origin is also None.
         """
         # Let the wrapped guy do what he's gunna do
         await self.wrapped_journal.write_message(message, origin)

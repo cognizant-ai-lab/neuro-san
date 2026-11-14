@@ -36,6 +36,7 @@ class Journal:
                     "tool"                  The string name of the tool in the spec
                     "instantiation_index"   An integer indicating which incarnation
                                             of the tool is being dealt with.
+                Can be None.
         """
         raise NotImplementedError
 

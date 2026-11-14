@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Awaitable
+from typing import ClassVar
 from typing import Dict
 from typing import List
 
@@ -73,16 +74,16 @@ class LangChainTokenCounter:
     """
 
     # Caveats shared by every token accounting message.
-    COMMON_CAVEATS: List[str] = [
+    COMMON_CAVEATS: ClassVar[List[str]] = [
         "Token counts are approximate and estimated using tiktoken.",
         "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
     ]
 
     # Coverage statements for the two request-level accountings.
-    MAIN_NETWORK_CAVEAT: str = \
+    MAIN_NETWORK_CAVEAT: ClassVar[str] = \
         "Token usage from agents of the main agent network only. " \
         "Usage from external agents is not included."
-    TOTAL_CAVEAT: str = \
+    TOTAL_CAVEAT: ClassVar[str] = \
         "Request total: includes token usage from external agents invoked via direct " \
         "sessions on this server. Usage from external agents reached over the network " \
         "is not included."

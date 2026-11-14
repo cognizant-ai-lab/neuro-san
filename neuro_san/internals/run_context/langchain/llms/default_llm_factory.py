@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -72,10 +73,10 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                                     the model description in this class.
     """
 
-    KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
+    KEYS_TO_REMOVE_FOR_USER_CLASS: ClassVar[Set[str]] = {"class", "provider_tools", "verbose"}
 
     # Lazily import specific errors from llm providers
-    API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
+    API_KEY_ERRORS: ClassVar[Tuple[Type[Any], ...]] = ResolverUtil.create_type_tuple([
         "google.auth.exceptions.DefaultCredentialsError",
         "openai.OpenAIError",
         "pydantic_core.ValidationError",

@@ -21,6 +21,7 @@ from logging import getLogger
 from logging import Logger
 from time import time
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import Optional
 from typing import Tuple
@@ -112,8 +113,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     # langchain hands the metadata to on_chat_model_start(), so a policy can use a stock chat model class
     # for another provider and still say which bucket the usage belongs to and which llm_info entry prices
     # it. AzureLlmPolicy does this: Azure's response names the deployment, which has no price of its own.
-    PROVIDER_METADATA_KEY: str = "neuro_san_provider_class"
-    PRICE_MODEL_METADATA_KEY: str = "neuro_san_price_model_name"
+    PROVIDER_METADATA_KEY: ClassVar[str] = "neuro_san_provider_class"
+    PRICE_MODEL_METADATA_KEY: ClassVar[str] = "neuro_san_price_model_name"
 
     # Token stats
     total_tokens: int = 0
