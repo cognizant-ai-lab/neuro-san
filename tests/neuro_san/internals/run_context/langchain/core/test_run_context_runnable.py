@@ -30,7 +30,6 @@ from unittest.mock import patch
 
 import httpx
 
-from langchain_core.agents import AgentFinish
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
@@ -64,7 +63,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
     content became "".
 
     find_ai_message is the single place that locates the provider-native
-    AIMessage inside a chain result (dict, AgentFinish or bare AIMessage);
+    AIMessage inside a chain result (dict or bare AIMessage);
     parse_chain_result keeps its exact behavior on top of it.
 
     invoke_agent_chain journals the provider-native answer (normalized to
@@ -174,14 +173,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         message: AIMessage = AIMessage(content="the answer")
         self.assertIs(RunContextRunnable.find_ai_message(message), message)
 
-    def test_find_ai_message_unwraps_agent_finish(self) -> None:
-        """
-        An AgentFinish result is unwrapped to its return_values first.
-        """
-        native: AIMessage = ContentFixtures.anthropic_thinking_first()
-        finish: AgentFinish = AgentFinish(return_values={"messages": [HumanMessage(content="q"), native]}, log="")
-        self.assertIs(RunContextRunnable.find_ai_message(finish), native)
-
     def test_find_ai_message_returns_none_without_ai_message(self) -> None:
         """
         A dict with no AIMessage (the API-key and output-parse error paths
@@ -200,15 +191,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         runnable = self._make_runnable()
         output: str = runnable.parse_chain_result({"output": "Please set OPENAI_API_KEY"}, exception=None)
         self.assertEqual(output, "Please set OPENAI_API_KEY")
-
-    def test_parse_chain_result_agent_finish_with_output_key(self) -> None:
-        """
-        An AgentFinish whose return_values carry only an "output" key parses to
-        that text: the unwrap applies on the fallback path too.
-        """
-        runnable = self._make_runnable()
-        finish: AgentFinish = AgentFinish(return_values={"output": "done"}, log="")
-        self.assertEqual(runnable.parse_chain_result(finish, exception=None), "done")
 
     async def test_parse_chain_result_matches_on_llm_end_projection(self):
         """
@@ -544,21 +526,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         self.assertIsInstance(final, AIMessage)
         self.assertEqual(final.content, "Please set OPENAI_API_KEY")
         self.assertIsNone(final.id)
-
-    async def test_invoke_agent_chain_unwraps_agent_finish(self) -> None:
-        """
-        An AgentFinish result is unwrapped to its return_values, so a native
-        block-content answer inside it is preserved the same way.
-        """
-        finish: AgentFinish = AgentFinish(
-            return_values={"messages": [HumanMessage(content="q"), ContentFixtures.anthropic_thinking_first()]},
-            log="")
-        runnable, written = self._make_invoking_runnable(finish)
-        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
-
-        final: BaseMessage = written[-1]
-        self.assertEqual(self._block_types(final), ["reasoning", "text"])
-        self.assertEqual(ContentUtils.flatten_to_text(final), "the answer")
 
     async def test_invoke_agent_chain_mixed_content_falls_back_to_text(self) -> None:
         """

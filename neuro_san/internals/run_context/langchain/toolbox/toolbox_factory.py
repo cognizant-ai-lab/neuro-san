@@ -203,8 +203,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         final_args: Dict[str, Any] = self.overlayer.overlay(resolved_args, user_args) if user_args else resolved_args
 
         # Use the "from_{tool_name}_api_wrapper" method if available, otherwise the constructor
-        callable_obj: Union[Type[BaseTool], Type[BaseToolkit], Callable[..., Any]] = \
-            self._get_from_api_wrapper_method(tool_class) or tool_class
+        callable_obj: Callable[..., Any] = self._get_from_api_wrapper_method(tool_class) or tool_class
 
         # Validate and instantiate
         ArgumentValidator.check_invalid_args(callable_obj, final_args)
@@ -309,7 +308,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         for key, value in args.items():
             if isinstance(value, dict) and "class" in value:
                 # If the argument is a class definition, resolve and instantiate it
-                nested_class: BaseModel = self._resolve_class(value.get("class"))
+                nested_class: Type[BaseModel] = self._resolve_class(value.get("class"))
                 nested_args: Dict[str, Any] = self._resolve_args(value.get("args", empty))
                 ArgumentValidator.check_invalid_args(nested_class, nested_args)
                 resolved_args[key] = nested_class(**nested_args)

@@ -770,12 +770,14 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 required_sly_data.update(one_llm_resources.get("required_sly_data_errors", []))
                 continue
 
+            # All other cases are handled above, so this is a LangChainLlmResources.
+            use_llm_resources: LangChainLlmResources = one_llm_resources
             if main_llm_resources is None:
                 # The first fully-specified llm is the one we want to be our main guy.
-                main_llm_resources = one_llm_resources
+                main_llm_resources = use_llm_resources
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
-                fallback_llm_resources.append(one_llm_resources)
+                fallback_llm_resources.append(use_llm_resources)
 
         if main_llm_resources is None:
             # Return all errors

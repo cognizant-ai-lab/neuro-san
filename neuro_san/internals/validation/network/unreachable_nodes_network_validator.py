@@ -17,7 +17,6 @@
 
 from typing import Any
 from typing import Dict
-from typing import Iterator
 from typing import List
 from typing import Set
 
@@ -64,8 +63,8 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         # Find unreachable agents (only meaningful if we have exactly one front man agent)
         unreachable_agents: Set[str] = set()
         if len(front_man_agents) == 1:
-            front_man_iter: Iterator[str] = iter(front_man_agents)
-            front_man_agent: str = next(front_man_iter)
+            front_man_list: List[str] = list(front_man_agents)
+            front_man_agent: str = front_man_list[0]
             unreachable_agents = self.find_unreachable_agents(name_to_spec, front_man_agent)
             if len(unreachable_agents) > 0:
                 errors.append(f"Unreachable agents found: {sorted(unreachable_agents)}")

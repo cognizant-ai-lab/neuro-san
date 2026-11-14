@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Type
 
 from langchain_core.messages.base import BaseMessage
 
@@ -79,7 +80,8 @@ class InterceptingJournal(Journal):
             # for better display in tracing/observability applications like
             # LangSmith.
             if isinstance(message, TracedMessage):
-                new_message = message.__class__(trace_source=message)
+                traced_class: Type[TracedMessage] = type(message)
+                new_message = traced_class(trace_source=message)
 
             self.messages.append(new_message)
 

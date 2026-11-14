@@ -28,7 +28,6 @@ import traceback
 
 from pydantic import ConfigDict
 
-from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
@@ -223,7 +222,7 @@ class RunContextRunnable(NeuroSanRunnable):
         :param runnable_config: The runnable_config to send to the agent_executor
         :param max_attempts: The maximum number of attempts to make allowing for errors of any kind.
         """
-        chain_result: Union[Dict[str, Any], AgentFinish, AIMessage] = None
+        chain_result: Union[Dict[str, Any], AIMessage] = None
         attempts: int = max_attempts
         exception: Exception = None
         backtrace: str = None
@@ -331,7 +330,7 @@ class RunContextRunnable(NeuroSanRunnable):
             await self.journal.write_message(AgentFrameworkMessage(content=text))
 
     @staticmethod
-    def find_ai_message(chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) -> Optional[AIMessage]:
+    def find_ai_message(chain_result: Optional[Union[Dict[str, Any], AIMessage]]) -> Optional[AIMessage]:
         """
         Locate the provider-native AIMessage that carries the chain's answer.
 
@@ -342,15 +341,6 @@ class RunContextRunnable(NeuroSanRunnable):
                  no AIMessage at all (exception, API-key error text, bare "output")
         """
         use_result: Any = chain_result
-        if isinstance(use_result, AgentFinish):
-            # AgentFinish is the return type of langchain's legacy AgentExecutor,
-            # which neuro-san stopped using in commit 5c2a0e61. The create_agent
-            # graph used today returns a state dict and never an AgentFinish, so
-            # this unwrap is kept for backwards compatibility only. Its
-            # return_values carry the output in dict form.
-            use_result_agent_finish: AgentFinish = use_result
-            use_result = use_result_agent_finish.return_values
-
         if isinstance(use_result, AIMessage):
             # Sometimes we get an AIMessage from a tool call.
             return use_result
@@ -367,14 +357,13 @@ class RunContextRunnable(NeuroSanRunnable):
 
         return None
 
-    def parse_chain_result(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
+    def parse_chain_result(self, chain_result: Optional[Union[Dict[str, Any], AIMessage]],
                            exception: Optional[Exception]) -> str:
         """
         Parse the result from the langchain chain.
 
         :param chain_result: The result from invoking the agent chain.
                         Can be:
-                        * An AgentFinish instance whose return_values can be any one of the following
                         * A dictionary whose keys might be:
                             "output" - the actual output to use
                             "messages" - effectively a chat history
@@ -401,11 +390,8 @@ class RunContextRunnable(NeuroSanRunnable):
             else:
                 # We didn't find an AIMessage, so look for a straight-up "output" key:
                 # invoke_agent_chain builds {"output": text} on the API-key and
-                # output-parse error paths. Unwrap a legacy AgentFinish first (see
-                # find_ai_message) so its return_values get the same lookup.
+                # output-parse error paths.
                 use_result: Any = chain_result
-                if isinstance(use_result, AgentFinish):
-                    use_result = use_result.return_values
                 if isinstance(use_result, dict):
                     output = use_result.get("output")
 
@@ -425,7 +411,7 @@ class RunContextRunnable(NeuroSanRunnable):
         handled_output: str = self.error_detector.handle_error(output)
         return handled_output
 
-    def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
+    def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AIMessage]],
                              output: str) -> BaseMessage:
         """
         Build the AIMessage that is journaled as this agent's answer for the turn.
