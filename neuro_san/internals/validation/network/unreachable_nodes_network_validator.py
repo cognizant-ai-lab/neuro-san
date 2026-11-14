@@ -66,7 +66,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
             front_man_list: List[str] = list(front_man_agents)
             front_man_agent: str = front_man_list[0]
             unreachable_agents = self.find_unreachable_agents(name_to_spec, front_man_agent)
-            if len(unreachable_agents) > 0:
+            if unreachable_agents is not None and len(unreachable_agents) > 0:
                 errors.append(f"Unreachable agents found: {sorted(unreachable_agents)}")
 
         if len(errors) > 0:
@@ -118,7 +118,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
 
         for agent_name, agent_config in name_to_spec.items():
             down_chains: List[str] = self.get_agent_down_chains(agent_config)
-            if len(down_chains) > 0:
+            if down_chains is not None and len(down_chains) > 0:
                 has_down_chains.add(agent_name)
                 all_down_chains.update(down_chains)
 

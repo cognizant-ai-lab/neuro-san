@@ -430,7 +430,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             if config.get(key):
                 legacy_present.append(key)
 
-        if len(legacy_present) == 0:
+        if legacy_present is None or len(legacy_present) == 0:
             return
 
         log_once: LogOnce = LogOnce(self.logger)
