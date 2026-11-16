@@ -32,7 +32,6 @@ from langchain_core.callbacks.base import AsyncCallbackHandler
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import UsageMetadata
 from langchain_core.messages.base import BaseMessage
-from langchain_core.outputs.chat_generation import ChatGeneration
 from langchain_core.outputs.llm_result import LLMResult
 from langchain_core.tracers.context import register_configure_hook
 
@@ -230,7 +229,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         response_metadata: Dict[str, Any] = None
         model_name: str = EMPTY
         is_empty_response: bool = False
-        if isinstance(generation, ChatGeneration):
+        # Duck-type ChatGeneration: only it carries a message.
+        if hasattr(generation, "message"):
             try:
                 message: BaseMessage = generation.message
                 if isinstance(message, AIMessage):

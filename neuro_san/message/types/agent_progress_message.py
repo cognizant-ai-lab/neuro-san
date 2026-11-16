@@ -50,7 +50,7 @@ class AgentProgressMessage(TracedMessage):
         self.structure: Dict[str, Any] = structure
 
     @property
-    def lc_kwargs(self) -> Dict[str, Any]:
+    def trace_kwargs(self) -> Dict[str, Any]:
         """
         :return: the keyword arguments for serialization.
         """

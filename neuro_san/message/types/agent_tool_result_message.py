@@ -56,7 +56,7 @@ class AgentToolResultMessage(AIMessage, TracedMessage):
         self.tool_result_origin: List[Dict[str, Any]] = tool_result_origin
 
     @property
-    def lc_kwargs(self) -> Dict[str, Any]:
+    def trace_kwargs(self) -> Dict[str, Any]:
         """
         :return: the keyword arguments for serialization.
         """

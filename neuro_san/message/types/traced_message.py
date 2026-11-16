@@ -71,7 +71,7 @@ class TracedMessage(BaseMessage):
         return True
 
     @property
-    def lc_kwargs(self) -> Dict[str, Any]:
+    def trace_kwargs(self) -> Dict[str, Any]:
         """
         :return: the dictionary of keyword arguments for serialization.
         """
@@ -87,7 +87,7 @@ class TracedMessage(BaseMessage):
 
         key: str = None
         value: Any = None
-        for key, value in self.lc_kwargs.items():
+        for key, value in self.trace_kwargs.items():
             new_key: str = None
             new_value: Any = None
             new_key, new_value = self.translate_for_trace(key, value)

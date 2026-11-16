@@ -86,7 +86,7 @@ class AgentFrameworkMessage(TracedMessage):
         self.redactor: SlyDataRedactor = redactor
 
     @property
-    def lc_kwargs(self) -> Dict[str, Any]:
+    def trace_kwargs(self) -> Dict[str, Any]:
         """
         :return: the keyword arguments for serialization.
         """
