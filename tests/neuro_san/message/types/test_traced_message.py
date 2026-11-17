@@ -35,7 +35,7 @@ class TestTracedMessage(TestCase):
     which tracers such as LangChainTracer call on chat model input messages.
     """
 
-    def test_dumpd_all_subclasses(self):
+    def test_dumpd_all_subclasses(self) -> None:
         """
         Tests that dumpd() serializes every TracedMessage subclass as a LangChain constructor.
         """
@@ -53,7 +53,7 @@ class TestTracedMessage(TestCase):
             self.assertEqual(serialized.get("type"), "constructor")
             self.assertEqual(serialized.get("kwargs").get("content"), message.content)
 
-    def test_dumpd_trace_source_copy(self):
+    def test_dumpd_trace_source_copy(self) -> None:
         """
         Tests that dumpd() serializes a trace_source copy with its fields moved into additional_kwargs.
         """
