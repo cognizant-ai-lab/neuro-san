@@ -52,7 +52,8 @@ class TestTracedMessage(TestCase):
         for message in messages:
             serialized: Dict[str, Any] = dumpd(message)
             self.assertEqual(serialized.get("type"), "constructor")
-            self.assertEqual(serialized.get("kwargs").get("content"), message.content)
+            my_kwargs: Dict[str, Any] = serialized.get("kwargs")
+            self.assertEqual(my_kwargs.get("content"), message.content)
 
     def test_dumpd_trace_source_copy(self) -> None:
         """
@@ -62,7 +63,8 @@ class TestTracedMessage(TestCase):
         traced: AgentMessage = AgentMessage(trace_source=source)
 
         serialized: Dict[str, Any] = dumpd(traced)
-        additional_kwargs: Dict[str, Any] = serialized.get("kwargs").get("additional_kwargs")
+        my_kwargs: Dict[str, Any] = serialized.get("kwargs")
+        additional_kwargs: Dict[str, Any] = my_kwargs.get("additional_kwargs")
         self.assertEqual(additional_kwargs, {"content": "hello", "structure": {"key": "value"}})
 
     def test_dumpd_trace_source_redacts_sly_data(self) -> None:
@@ -84,7 +86,8 @@ class TestTracedMessage(TestCase):
         traced: AgentFrameworkMessage = AgentFrameworkMessage(trace_source=source)
 
         serialized: Dict[str, Any] = dumpd(traced)
-        additional_kwargs: Dict[str, Any] = serialized.get("kwargs").get("additional_kwargs")
+        my_kwargs: Dict[str, Any] = serialized.get("kwargs")
+        additional_kwargs: Dict[str, Any] = my_kwargs.get("additional_kwargs")
         self.assertEqual(additional_kwargs.get("sly_data"), {"visible": "shown", "secret": "<redacted>"})
         self.assertNotIn("api-key-value", str(serialized))
 
@@ -100,6 +103,7 @@ class TestTracedMessage(TestCase):
         traced: AgentFrameworkMessage = AgentFrameworkMessage(trace_source=source)
 
         serialized: Dict[str, Any] = dumpd(traced)
-        additional_kwargs: Dict[str, Any] = serialized.get("kwargs").get("additional_kwargs")
+        my_kwargs: Dict[str, Any] = serialized.get("kwargs")
+        additional_kwargs: Dict[str, Any] = my_kwargs.get("additional_kwargs")
         self.assertEqual(additional_kwargs.get("sly_data"), {"secret": "<redacted>"})
         self.assertNotIn("api-key-value", str(serialized))
