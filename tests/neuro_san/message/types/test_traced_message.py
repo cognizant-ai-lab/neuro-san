@@ -27,6 +27,7 @@ from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_progress_message import AgentProgressMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.traced_message import TracedMessage
+from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
 
 
 class TestTracedMessage(TestCase):
@@ -35,7 +36,7 @@ class TestTracedMessage(TestCase):
     which tracers such as LangChainTracer call on chat model input messages.
     """
 
-    def test_dumpd_all_subclasses(self):
+    def test_dumpd_all_subclasses(self) -> None:
         """
         Tests that dumpd() serializes every TracedMessage subclass as a LangChain constructor.
         """
@@ -53,13 +54,52 @@ class TestTracedMessage(TestCase):
             self.assertEqual(serialized.get("type"), "constructor")
             self.assertEqual(serialized.get("kwargs").get("content"), message.content)
 
-    def test_dumpd_trace_source_copy(self):
+    def test_dumpd_trace_source_copy(self) -> None:
         """
         Tests that dumpd() serializes a trace_source copy with its fields moved into additional_kwargs.
         """
-        source = AgentMessage(content="hello", structure={"key": "value"})
-        traced = AgentMessage(trace_source=source)
+        source: AgentMessage = AgentMessage(content="hello", structure={"key": "value"})
+        traced: AgentMessage = AgentMessage(trace_source=source)
 
         serialized: Dict[str, Any] = dumpd(traced)
         additional_kwargs: Dict[str, Any] = serialized.get("kwargs").get("additional_kwargs")
         self.assertEqual(additional_kwargs, {"content": "hello", "structure": {"key": "value"}})
+
+    def test_dumpd_trace_source_redacts_sly_data(self) -> None:
+        """
+        Tests that dumpd() of an AgentFrameworkMessage trace_source copy redacts sly_data values
+        except those the redactor allows, while keeping all sly_data keys.
+        """
+        spec: Dict[str, Any] = {
+            "allow": {
+                "to_tracing": {
+                    "sly_data": ["visible"]
+                }
+            }
+        }
+        redactor: SlyDataRedactor = SlyDataRedactor(spec, config_keys=["allow.to_tracing.sly_data"])
+        sly_data: Dict[str, Any] = {"visible": "shown", "secret": "api-key-value"}
+        source: AgentFrameworkMessage = AgentFrameworkMessage(content="done", sly_data=sly_data,
+                                                              redactor=redactor)
+        traced: AgentFrameworkMessage = AgentFrameworkMessage(trace_source=source)
+
+        serialized: Dict[str, Any] = dumpd(traced)
+        additional_kwargs: Dict[str, Any] = serialized.get("kwargs").get("additional_kwargs")
+        self.assertEqual(additional_kwargs.get("sly_data"), {"visible": "shown", "secret": "<redacted>"})
+        self.assertNotIn("api-key-value", str(serialized))
+
+        # The original sly_data must not be mutated by redaction.
+        self.assertEqual(sly_data, {"visible": "shown", "secret": "api-key-value"})
+
+    def test_dumpd_trace_source_redacts_sly_data_without_redactor(self) -> None:
+        """
+        Tests that dumpd() of an AgentFrameworkMessage trace_source copy redacts every
+        sly_data value when no redactor is given.
+        """
+        source: AgentFrameworkMessage = AgentFrameworkMessage(content="done", sly_data={"secret": "api-key-value"})
+        traced: AgentFrameworkMessage = AgentFrameworkMessage(trace_source=source)
+
+        serialized: Dict[str, Any] = dumpd(traced)
+        additional_kwargs: Dict[str, Any] = serialized.get("kwargs").get("additional_kwargs")
+        self.assertEqual(additional_kwargs.get("sly_data"), {"secret": "<redacted>"})
+        self.assertNotIn("api-key-value", str(serialized))
