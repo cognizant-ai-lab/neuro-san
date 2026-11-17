@@ -68,7 +68,7 @@ class TracedMessage(BaseMessage):
 
     def trace_kwargs(self) -> Dict[str, Any]:
         """
-        :return: the dictionary of keyword arguments for serialization.
+        :return: the dictionary of keyword arguments for minimal_additional_kwargs().
         """
         raise NotImplementedError
 

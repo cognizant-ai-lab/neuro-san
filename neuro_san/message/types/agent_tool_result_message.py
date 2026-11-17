@@ -59,7 +59,7 @@ class AgentToolResultMessage(AIMessage, TracedMessage):
     @override
     def trace_kwargs(self) -> Dict[str, Any]:
         """
-        :return: the keyword arguments for serialization.
+        :return: the keyword arguments for minimal_additional_kwargs().
         """
         return {
             "content": self.content,
