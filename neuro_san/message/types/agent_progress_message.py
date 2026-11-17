@@ -49,7 +49,6 @@ class AgentProgressMessage(TracedMessage):
         super().__init__(content=content, trace_source=trace_source, **kwargs)
         self.structure: Dict[str, Any] = structure
 
-    @property
     def trace_kwargs(self) -> Dict[str, Any]:
         """
         :return: the keyword arguments for serialization.

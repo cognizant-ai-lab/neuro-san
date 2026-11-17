@@ -55,7 +55,6 @@ class AgentToolResultMessage(AIMessage, TracedMessage):
         super().__init__(content=content, trace_source=trace_source, **kwargs)
         self.tool_result_origin: List[Dict[str, Any]] = tool_result_origin
 
-    @property
     def trace_kwargs(self) -> Dict[str, Any]:
         """
         :return: the keyword arguments for serialization.
