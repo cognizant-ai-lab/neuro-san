@@ -70,6 +70,8 @@ class TracedMessage(BaseMessage):
         """
         return True
 
+    # DEF - This used to be lc_kwargs(), but TypeScript didn't like that.
+    #       It's possible lc_kwargs needs to be reinstated, but if so only here, calling trace_kwargs().
     @property
     def trace_kwargs(self) -> Dict[str, Any]:
         """
