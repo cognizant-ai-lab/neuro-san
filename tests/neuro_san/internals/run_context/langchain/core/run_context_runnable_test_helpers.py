@@ -52,13 +52,14 @@ class RunContextRunnableTestHelpers:
     @staticmethod
     def make_runnable() -> RunContextRunnable:
         """
-        Builds a RunContextRunnable with a pass-through error detector.
+        Builds a RunContextRunnable with a pass-through error detector and no chat history.
 
         :return: A runnable whose error detector is a pass-through
         """
         error_detector: MagicMock = MagicMock()
         error_detector.handle_error = MagicMock(side_effect=RunContextRunnableTestHelpers.passthrough)
-        return RunContextRunnable.model_construct(error_detector=error_detector)
+        return RunContextRunnable.model_construct(error_detector=error_detector,
+                                                  chat_history=None)
 
     @staticmethod
     async def state_stream(*states: Any) -> AsyncIterator[Any]:

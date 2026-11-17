@@ -69,18 +69,20 @@ class TestLangChainRunContext(TestCase):
             {
                 "type": ChatMessageType.AI,
                 "text": "",
-                "tool_calls": [
-                    {
-                        "id": "c1",
-                        "name": "",
-                        "args": {},
-                    },
-                ],
+                "tool_call_info": {
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "name": "",
+                            "args": {},
+                        },
+                    ],
+                },
             },
             {
                 "type": ChatMessageType.AGENT_TOOL_RESULT,
                 "text": "orphan",
-                "tool_call_id": "c1",
+                "tool_call_info": {"tool_call_id": "c1"},
             },
             {
                 "type": ChatMessageType.AI,
@@ -97,7 +99,7 @@ class TestLangChainRunContext(TestCase):
         }
         run_context: LangChainRunContext = self.make_run_context()
 
-        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
+        with self.assertLogs("BaseMessageDictionaryConverter", level="INFO"):
             run_context.update_from_chat_context(chat_context)
 
         history: List[BaseMessage] = run_context.chat_history
@@ -119,28 +121,30 @@ class TestLangChainRunContext(TestCase):
             {
                 "type": ChatMessageType.AI,
                 "text": "",
-                "tool_calls": [
-                    {
-                        "id": "c1",
-                        "name": "",
-                        "args": {},
-                    },
-                    {
-                        "id": "c2",
-                        "name": "Accountant",
-                        "args": {"running_cost": 0.0},
-                    },
-                ],
+                "tool_call_info": {
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "name": "",
+                            "args": {},
+                        },
+                        {
+                            "id": "c2",
+                            "name": "Accountant",
+                            "args": {"running_cost": 0.0},
+                        },
+                    ],
+                },
             },
             {
                 "type": ChatMessageType.AGENT_TOOL_RESULT,
                 "text": "orphan",
-                "tool_call_id": "c1",
+                "tool_call_info": {"tool_call_id": "c1"},
             },
             {
                 "type": ChatMessageType.AGENT_TOOL_RESULT,
                 "text": "{'running_cost': 3.0}",
-                "tool_call_id": "c2",
+                "tool_call_info": {"tool_call_id": "c2"},
             },
             {
                 "type": ChatMessageType.AI,
@@ -157,7 +161,7 @@ class TestLangChainRunContext(TestCase):
         }
         run_context: LangChainRunContext = self.make_run_context()
 
-        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
+        with self.assertLogs("BaseMessageDictionaryConverter", level="INFO"):
             run_context.update_from_chat_context(chat_context)
 
         history: List[BaseMessage] = run_context.chat_history

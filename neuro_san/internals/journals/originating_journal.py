@@ -93,7 +93,9 @@ class OriginatingJournal(Journal):
             # keeps them out, and ToolExchangeRecorder appends each turn's tool
             # calls and results to the history as a pair instead.
             chat_history_message: BaseMessage = None
-            if isinstance(message, AIMessage) and not isinstance(message.content, str):
+            is_ai_message: bool = isinstance(message, AIMessage)
+            has_text_content: bool = isinstance(message.content, str)
+            if is_ai_message and not has_text_content:
                 safe_text: str = ContentUtils.history_safe_text(message)
                 chat_history_message = AIMessage(content=safe_text)
             else:

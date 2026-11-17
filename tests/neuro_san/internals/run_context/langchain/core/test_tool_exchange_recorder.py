@@ -121,6 +121,25 @@ class TestToolExchangeRecorder(TestCase):
         recorder = ToolExchangeRecorder([human])
         self.assertEqual(len(recorder.find_tool_exchange({"messages": [human]}, state)), 2)
 
+    def test_find_tool_exchange_skips_a_kept_round_when_the_user_message_was_summarized(self) -> None:
+        """
+        A summarization that cuts the turn's user message but keeps its tool round
+        puts the summary and the round in the history; the round is not appended again.
+        """
+        earlier: List[BaseMessage] = [
+            HumanMessage(content="earlier", id="h0"),
+            AIMessage(content="earlier answer", id="a0"),
+        ]
+        human: HumanMessage = HumanMessage(content="question", id="h1")
+        inputs: Dict[str, Any] = {"messages": earlier + [human]}
+        summary: HumanMessage = HumanMessage(content="Here is a summary of the conversation to date.", id="s1")
+        calling: AIMessage = AIMessage(content="", tool_calls=[RunContextRunnableTestHelpers.tool_call("toolu_1")])
+        result: ToolMessage = ToolMessage(content="{'running_cost': 3.0}", tool_call_id="toolu_1")
+        state: Dict[str, Any] = {"messages": [summary, calling, result]}
+        recorder: ToolExchangeRecorder = ToolExchangeRecorder([summary, calling, result])
+
+        self.assertEqual(recorder.find_tool_exchange(inputs, state), [])
+
     def test_record_tool_exchange_keeps_a_round_that_reuses_an_earlier_turn_call_id(self) -> None:
         """
         A round whose call id is the same as a call from an earlier turn is recorded,

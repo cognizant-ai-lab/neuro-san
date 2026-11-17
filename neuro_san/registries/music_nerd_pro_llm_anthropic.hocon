@@ -29,7 +29,7 @@
         ]
     },
     "llm_config": {
-        "model_name": "claude-sonnet",
+        "model_name": "claude-sonnet-5",
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which

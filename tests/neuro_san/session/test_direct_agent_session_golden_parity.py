@@ -456,12 +456,13 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         # Gather every tool call and every tool result id the first turn's history carries.
         history_message: Dict[str, Any] = None
         for history_message in first_history:
+            tool_call_info: Dict[str, Any] = history_message.get("tool_call_info", {})
             # An AI entry may carry several calls.
             tool_call: Dict[str, Any] = None
-            for tool_call in history_message.get("tool_calls", []):
+            for tool_call in tool_call_info.get("tool_calls", []):
                 tool_calls.append(tool_call)
-            if history_message.get("tool_call_id") is not None:
-                tool_call_ids.append(history_message.get("tool_call_id"))
+            if tool_call_info.get("tool_call_id") is not None:
+                tool_call_ids.append(tool_call_info.get("tool_call_id"))
         expected_calls: List[Dict[str, Any]] = [
             {
                 "id": "call_mock_1",

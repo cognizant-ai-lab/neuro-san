@@ -221,15 +221,17 @@
                   }
                 ],
                 "text": "",
-                "tool_calls": [
-                  {
-                    "args": {
-                      "running_cost": 0.0
-                    },
-                    "id": "call_mock_1",
-                    "name": "Accountant"
-                  }
-                ],
+                "tool_call_info": {
+                  "tool_calls": [
+                    {
+                      "args": {
+                        "running_cost": 0.0
+                      },
+                      "id": "call_mock_1",
+                      "name": "Accountant"
+                    }
+                  ]
+                },
                 "type": 4
               },
               {
@@ -240,7 +242,9 @@
                   }
                 ],
                 "text": "{'running_cost': 3.0}",
-                "tool_call_id": "call_mock_1",
+                "tool_call_info": {
+                  "tool_call_id": "call_mock_1"
+                },
                 "type": 103
               },
               {
@@ -477,15 +481,17 @@
                   }
                 ],
                 "text": "",
-                "tool_calls": [
-                  {
-                    "args": {
-                      "running_cost": 0.0
-                    },
-                    "id": "call_mock_1",
-                    "name": "Accountant"
-                  }
-                ],
+                "tool_call_info": {
+                  "tool_calls": [
+                    {
+                      "args": {
+                        "running_cost": 0.0
+                      },
+                      "id": "call_mock_1",
+                      "name": "Accountant"
+                    }
+                  ]
+                },
                 "type": 4
               },
               {
@@ -496,7 +502,9 @@
                   }
                 ],
                 "text": "{'running_cost': 3.0}",
-                "tool_call_id": "call_mock_1",
+                "tool_call_info": {
+                  "tool_call_id": "call_mock_1"
+                },
                 "type": 103
               },
               {
@@ -527,15 +535,17 @@
                   }
                 ],
                 "text": "",
-                "tool_calls": [
-                  {
-                    "args": {
-                      "running_cost": 3.0
-                    },
-                    "id": "call_mock_2",
-                    "name": "Accountant"
-                  }
-                ],
+                "tool_call_info": {
+                  "tool_calls": [
+                    {
+                      "args": {
+                        "running_cost": 3.0
+                      },
+                      "id": "call_mock_2",
+                      "name": "Accountant"
+                    }
+                  ]
+                },
                 "type": 4
               },
               {
@@ -546,7 +556,9 @@
                   }
                 ],
                 "text": "{'running_cost': 6.0}",
-                "tool_call_id": "call_mock_2",
+                "tool_call_info": {
+                  "tool_call_id": "call_mock_2"
+                },
                 "type": 103
               },
               {

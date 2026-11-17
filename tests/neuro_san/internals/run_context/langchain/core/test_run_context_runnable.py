@@ -281,6 +281,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
             agent_chain=agent_chain,
             error_detector=error_detector,
             logger=MagicMock(),
+            chat_history=None,
         )
 
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=2)
@@ -322,6 +323,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
             agent_chain=agent_chain,
             error_detector=error_detector,
             logger=MagicMock(),
+            chat_history=None,
         )
 
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
@@ -371,6 +373,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
             agent_chain=agent_chain,
             error_detector=error_detector,
             logger=MagicMock(),
+            chat_history=None,
         )
 
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=2)
@@ -409,6 +412,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
             agent_chain=agent_chain,
             error_detector=error_detector,
             logger=MagicMock(),
+            chat_history=None,
         )
         return runnable, written
 

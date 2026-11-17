@@ -142,21 +142,21 @@ class TestChatHistoryMessageProcessor(TestCase):
         """
         call: Dict[str, Any] = {
             "type": ChatMessageType.AI,
-            "tool_calls": self.TOOL_CALLS,
+            "tool_call_info": {"tool_calls": self.TOOL_CALLS},
         }
         result: Dict[str, Any] = {
             "type": ChatMessageType.AGENT_TOOL_RESULT,
-            "tool_call_id": "toolu_1",
+            "tool_call_info": {"tool_call_id": "toolu_1"},
         }
 
         kept_call: Optional[Dict[str, Any]] = ChatHistoryMessageProcessor.keep_message(call)
         kept_result: Optional[Dict[str, Any]] = ChatHistoryMessageProcessor.keep_message(result)
 
         self.assertEqual(kept_call.get("text"), "")
-        self.assertEqual(kept_call.get("tool_calls"), self.TOOL_CALLS)
+        self.assertEqual(kept_call.get("tool_call_info"), {"tool_calls": self.TOOL_CALLS})
         self.assertNotIn("text", call)
         self.assertEqual(kept_result.get("text"), "")
-        self.assertEqual(kept_result.get("tool_call_id"), "toolu_1")
+        self.assertEqual(kept_result.get("tool_call_info"), {"tool_call_id": "toolu_1"})
 
     def test_process_message_keeps_tool_calls_on_ai_message(self) -> None:
         """
@@ -166,7 +166,7 @@ class TestChatHistoryMessageProcessor(TestCase):
         message: Dict[str, Any] = {
             "type": ChatMessageType.AI,
             "text": "",
-            "tool_calls": self.TOOL_CALLS,
+            "tool_call_info": {"tool_calls": self.TOOL_CALLS},
         }
 
         processor.process_message(message, ChatMessageType.AI)
@@ -181,7 +181,7 @@ class TestChatHistoryMessageProcessor(TestCase):
         message: Dict[str, Any] = {
             "type": ChatMessageType.AGENT_TOOL_RESULT,
             "text": "{'running_cost': 3.0}",
-            "tool_call_id": "toolu_1",
+            "tool_call_info": {"tool_call_id": "toolu_1"},
         }
 
         processor.process_message(message, ChatMessageType.AGENT_TOOL_RESULT)
@@ -239,12 +239,12 @@ class TestChatHistoryMessageProcessor(TestCase):
             {
                 "type": ChatMessageType.AI,
                 "text": "",
-                "tool_calls": self.TOOL_CALLS,
+                "tool_call_info": {"tool_calls": self.TOOL_CALLS},
             },
             {
                 "type": ChatMessageType.AGENT_TOOL_RESULT,
                 "text": "{'running_cost': 3.0}",
-                "tool_call_id": "toolu_1",
+                "tool_call_info": {"tool_call_id": "toolu_1"},
             },
             {
                 "type": ChatMessageType.AI,
@@ -284,12 +284,12 @@ class TestChatHistoryMessageProcessor(TestCase):
             {
                 "type": ChatMessageType.AI,
                 "text": "",
-                "tool_calls": self.TOOL_CALLS,
+                "tool_call_info": {"tool_calls": self.TOOL_CALLS},
             },
             {
                 "type": ChatMessageType.AGENT_TOOL_RESULT,
                 "text": "{'running_cost': 3.0}",
-                "tool_call_id": "toolu_1",
+                "tool_call_info": {"tool_call_id": "toolu_1"},
             },
             {
                 "type": ChatMessageType.AI,
@@ -323,12 +323,12 @@ class TestChatHistoryMessageProcessor(TestCase):
             {
                 "type": ChatMessageType.AI,
                 "text": "",
-                "tool_calls": self.TOOL_CALLS,
+                "tool_call_info": {"tool_calls": self.TOOL_CALLS},
             },
             {
                 "type": ChatMessageType.AGENT_TOOL_RESULT,
                 "text": "{'running_cost': 3.0}",
-                "tool_call_id": "toolu_1",
+                "tool_call_info": {"tool_call_id": "toolu_1"},
             },
             {
                 "type": ChatMessageType.AI,
@@ -358,12 +358,12 @@ class TestChatHistoryMessageProcessor(TestCase):
             {
                 "type": ChatMessageType.AI,
                 "text": "",
-                "tool_calls": self.TOOL_CALLS,
+                "tool_call_info": {"tool_calls": self.TOOL_CALLS},
             },
             {
                 "type": ChatMessageType.AGENT_TOOL_RESULT,
                 "text": "{'running_cost': 3.0}",
-                "tool_call_id": "toolu_1",
+                "tool_call_info": {"tool_call_id": "toolu_1"},
             },
             {
                 "type": ChatMessageType.AI,

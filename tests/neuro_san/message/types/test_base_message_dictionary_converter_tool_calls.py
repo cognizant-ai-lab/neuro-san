@@ -35,8 +35,8 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
 
     An AI message sends its tool calls as id, name and args, and a ToolMessage
     sends the id of the call it answers, plus tool_status when the tool failed.
-    Coming back, a malformed call is left out with a warning, and a result
-    without a call id is not restored for a chat history.
+    Coming back, a malformed call is left out and logged, and so is a result
+    without a call id when it is bound for a chat history.
     """
 
     ORIGIN: List[Dict[str, Any]] = [
@@ -63,7 +63,7 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
     def test_from_dict_drops_a_stand_alone_tool_result_for_chat_history(self) -> None:
         """
         A tool result with no tool_call_id, or an empty one, has no call to pair
-        with and no model accepts it, so it is not restored for a chat history.
+        with, so it is left out of a chat history and logged.
         """
         converter = BaseMessageDictionaryConverter()
         without_id: Dict[str, Any] = {
@@ -73,11 +73,18 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
         empty_id: Dict[str, Any] = {
             "type": ChatMessageType.AGENT_TOOL_RESULT,
             "text": "tool says",
-            "tool_call_id": "",
+            "tool_call_info": {"tool_call_id": ""},
         }
 
-        self.assertIsNone(converter.from_dict(without_id))
-        self.assertIsNone(converter.from_dict(empty_id))
+        with self.assertLogs("BaseMessageDictionaryConverter", level="INFO") as logs:
+            restored_without_id: BaseMessage = converter.from_dict(without_id)
+            restored_empty_id: BaseMessage = converter.from_dict(empty_id)
+
+        self.assertIsNone(restored_without_id)
+        self.assertIsNone(restored_empty_id)
+        self.assertEqual(len(logs.output), 2)
+        # The log never carries the result's content, which can hold secrets.
+        self.assertNotIn("tool says", "".join(logs.output))
 
     def test_to_dict_ai_tool_calls_exact_shape(self) -> None:
         """
@@ -91,7 +98,7 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
             "type": ChatMessageType.AI,
             "origin": self.ORIGIN,
             "text": "",
-            "tool_calls": [self.ACCOUNTANT_CALL_WIRE],
+            "tool_call_info": {"tool_calls": [self.ACCOUNTANT_CALL_WIRE]},
         })
 
     def test_to_dict_tool_message_exact_shape(self) -> None:
@@ -105,7 +112,7 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
             "type": ChatMessageType.AGENT_TOOL_RESULT,
             "origin": self.ORIGIN,
             "text": "{'running_cost': 3.0}",
-            "tool_call_id": "toolu_1",
+            "tool_call_info": {"tool_call_id": "toolu_1"},
         })
 
     def test_from_dict_round_trips_a_tool_call_and_its_result(self) -> None:
@@ -143,8 +150,8 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
         succeeded_dict: Dict[str, Any] = converter.to_dict(succeeded)
         restored: ToolMessage = converter.from_dict(failed_dict)
 
-        self.assertEqual(failed_dict.get("tool_status"), "error")
-        self.assertNotIn("tool_status", succeeded_dict)
+        self.assertEqual(failed_dict.get("tool_call_info").get("tool_status"), "error")
+        self.assertNotIn("tool_status", succeeded_dict.get("tool_call_info"))
         self.assertEqual(restored.status, "error")
         self.assertEqual(converter.from_dict(succeeded_dict).status, "success")
 
@@ -157,16 +164,18 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
         chat_message: Dict[str, Any] = {
             "type": ChatMessageType.AI,
             "text": "",
-            "tool_calls": [
-                {
-                    "id": "toolu_1",
-                    "name": "",
-                    "args": {},
-                },
-            ],
+            "tool_call_info": {
+                "tool_calls": [
+                    {
+                        "id": "toolu_1",
+                        "name": "",
+                        "args": {},
+                    },
+                ],
+            },
         }
 
-        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
+        with self.assertLogs("BaseMessageDictionaryConverter", level="INFO"):
             restored: BaseMessage = converter.from_dict(chat_message)
 
         self.assertIsNone(restored)
@@ -174,37 +183,39 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
     def test_from_dict_skips_malformed_tool_calls(self) -> None:
         """
         A tool call without a string id and name, or with args that are not a
-        dictionary, is left out with a warning; well-formed calls are kept, and
+        dictionary, is left out and logged; well-formed calls are kept, and
         missing args become an empty dictionary.
         """
         converter = BaseMessageDictionaryConverter()
         chat_message: Dict[str, Any] = {
             "type": ChatMessageType.AI,
             "text": "",
-            "tool_calls": [
-                {
-                    "id": "",
-                    "name": "lookup",
-                    "args": {},
-                },
-                {
-                    "id": "toolu_1",
-                    "name": "lookup",
-                    "args": "not a dictionary",
-                },
-                "junk",
-                {
-                    "id": "toolu_2",
-                    "name": "lookup",
-                },
-            ],
+            "tool_call_info": {
+                "tool_calls": [
+                    {
+                        "id": "",
+                        "name": "lookup",
+                        "args": {},
+                    },
+                    {
+                        "id": "toolu_1",
+                        "name": "lookup",
+                        "args": "not a dictionary",
+                    },
+                    "junk",
+                    {
+                        "id": "toolu_2",
+                        "name": "lookup",
+                    },
+                ],
+            },
         }
 
-        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING") as logs:
+        with self.assertLogs("BaseMessageDictionaryConverter", level="INFO") as logs:
             restored: BaseMessage = converter.from_dict(chat_message)
 
         self.assertEqual(len(logs.output), 3)
-        # The warning names the call but never carries its arguments, which can hold secrets.
+        # The log names the call but never carries its arguments, which can hold secrets.
         self.assertIn("'toolu_1'", logs.output[1])
         self.assertNotIn("not a dictionary", logs.output[1])
         self.assertEqual(len(restored.tool_calls), 1)
@@ -227,7 +238,7 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
         chat_message: Dict[str, Any] = {
             "type": ChatMessageType.AI,
             "text": "",
-            "tool_calls": [self.ACCOUNTANT_CALL_WIRE],
+            "tool_call_info": {"tool_calls": [self.ACCOUNTANT_CALL_WIRE]},
         }
 
         restored: AIMessage = converter.ai_message_from_dict(blocks, chat_message)
@@ -239,7 +250,8 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
     def test_from_dict_ai_without_tool_calls_is_plain(self) -> None:
         """
         An AI dictionary with no tool_calls key, or an empty list, restores to a
-        plain AIMessage with no tool calls.
+        plain AIMessage with no tool calls, even without text: the wire does not
+        tell an empty list from a missing one.
         """
         converter = BaseMessageDictionaryConverter()
         without_key: Dict[str, Any] = {
@@ -249,11 +261,50 @@ class TestBaseMessageDictionaryConverterToolCalls(TestCase):
         with_empty_list: Dict[str, Any] = {
             "type": ChatMessageType.AI,
             "text": "the answer",
-            "tool_calls": [],
+            "tool_call_info": {"tool_calls": []},
+        }
+        empty_list_without_text: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "",
+            "tool_call_info": {"tool_calls": []},
         }
 
-        plain: BaseMessage = converter.from_dict(without_key)
-        empty: BaseMessage = converter.from_dict(with_empty_list)
+        with self.assertNoLogs("BaseMessageDictionaryConverter", level="INFO"):
+            plain: BaseMessage = converter.from_dict(without_key)
+            empty: BaseMessage = converter.from_dict(with_empty_list)
+            without_text: BaseMessage = converter.from_dict(empty_list_without_text)
 
         self.assertEqual(plain.tool_calls, [])
         self.assertEqual(empty.tool_calls, [])
+        self.assertIsInstance(without_text, AIMessage)
+        self.assertEqual(without_text.content, "")
+        self.assertEqual(without_text.tool_calls, [])
+
+    def test_from_dict_ignores_tool_calls_that_are_not_a_list(self) -> None:
+        """
+        tool_calls that are not a list are ignored and logged. The message keeps
+        its text, and without text it is left out, as when every call is malformed.
+        """
+        converter = BaseMessageDictionaryConverter()
+        with_text: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "the answer",
+            "tool_call_info": {"tool_calls": self.ACCOUNTANT_CALL_WIRE},
+        }
+        without_text: Dict[str, Any] = {
+            "type": ChatMessageType.AI,
+            "text": "",
+            "tool_call_info": {"tool_calls": "junk"},
+        }
+
+        with self.assertLogs("BaseMessageDictionaryConverter", level="INFO") as logs:
+            kept: BaseMessage = converter.from_dict(with_text)
+            dropped: BaseMessage = converter.from_dict(without_text)
+
+        self.assertEqual(kept.content, "the answer")
+        self.assertEqual(kept.tool_calls, [])
+        self.assertIsNone(dropped)
+        self.assertEqual(len(logs.output), 2)
+        # The log never carries the value, which the client sent.
+        self.assertNotIn("junk", "".join(logs.output))
+        self.assertNotIn("running_cost", "".join(logs.output))

@@ -284,13 +284,15 @@ class TestBaseMessageDictionaryConverter(TestCase):
         self.assertEqual(converter.to_dict(ContentFixtures.anthropic_tool_use()), {
             "type": ChatMessageType.AI,
             "text": "Let me look that up.",
-            "tool_calls": [
-                {
-                    "id": "toolu_1",
-                    "name": "lookup",
-                    "args": {"query": "q"},
-                },
-            ],
+            "tool_call_info": {
+                "tool_calls": [
+                    {
+                        "id": "toolu_1",
+                        "name": "lookup",
+                        "args": {"query": "q"},
+                    },
+                ],
+            },
         })
 
     def test_to_dict_malformed_block_content_falls_back_to_text(self) -> None:
@@ -721,7 +723,7 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "content_blocks": ContentUtils.wrap_content_blocks(blocks),
         }
         paired_wire: Dict[str, Any] = dict(wire)
-        paired_wire["tool_call_id"] = "toolu_1"
+        paired_wire["tool_call_info"] = {"tool_call_id": "toolu_1"}
 
         paired: ToolMessage = BaseMessageDictionaryConverter().from_dict(paired_wire)
         restored: AgentToolResultMessage = BaseMessageDictionaryConverter(langchain_only=False).from_dict(wire)

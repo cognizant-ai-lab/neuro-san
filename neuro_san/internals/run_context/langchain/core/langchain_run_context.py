@@ -215,7 +215,7 @@ class LangChainRunContext(RunContext):
 
             # A client can send the history back with a tool call or a tool result
             # missing. Only complete pairs go to the model.
-            self.chat_history[:] = ToolPairing.complete_pairs(self.chat_history)
+            self.chat_history = ToolPairing.complete_pairs(self.chat_history)
 
             # Nothing left to search for
             break

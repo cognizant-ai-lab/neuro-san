@@ -85,9 +85,7 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         # A history that starts with the redacted placeholder for the instructions
         # keeps it in front of whatever is trimmed. The server's own histories
         # carry no system message and start at the first user message.
-        instructions: Optional[Dict[str, Any]] = None
-        if len(self.message_history) > 0 and self.message_history[0].get("type") == ChatMessageType.SYSTEM:
-            instructions = self.message_history.pop(0)
+        instructions: Optional[Dict[str, Any]] = self.pop_instructions()
 
         # Preserve the most recent n elements in the message history
         self.message_history = self.message_history[-self.max_message_history:]
@@ -95,11 +93,30 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         # Start at a user message. A cut inside a turn would leave a tool result
         # without the call that asked for it, which providers reject, and some
         # models reject a history that starts with an AI message.
-        while len(self.message_history) > 0 and self.message_history[0].get("type") != ChatMessageType.HUMAN:
+        while len(self.message_history) > 0:
+            first_message: Dict[str, Any] = self.message_history[0]
+            first_type: ChatMessageType = first_message.get("type", None)
+            if first_type == ChatMessageType.HUMAN:
+                break
             self.message_history.pop(0)
 
         if instructions is not None:
             self.message_history.insert(0, instructions)
+
+    def pop_instructions(self) -> Optional[Dict[str, Any]]:
+        """
+        Takes the redacted instructions off the front of the history, when they are there.
+
+        :return: The redacted system message, or None when the history does not start with one
+        """
+        if len(self.message_history) == 0:
+            return None
+        first_message: Dict[str, Any] = self.message_history[0]
+        first_type: ChatMessageType = first_message.get("type", None)
+        if first_type != ChatMessageType.SYSTEM:
+            return None
+        instructions: Dict[str, Any] = self.message_history.pop(0)
+        return instructions
 
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):
         """
@@ -107,8 +124,9 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         :param chat_message_dict: The ChatMessage dictionary to process.
         :param message_type: The ChatMessageType of the chat_message_dictionary to process.
         """
-        if message_type not in (ChatMessageType.HUMAN, ChatMessageType.SYSTEM, ChatMessageType.AI) \
-                and not ChatHistoryMessageProcessor.is_tool_result(chat_message_dict, message_type):
+        is_chat_type: bool = message_type in (ChatMessageType.HUMAN, ChatMessageType.SYSTEM, ChatMessageType.AI)
+        answers_call: bool = ChatHistoryMessageProcessor.is_tool_result(chat_message_dict, message_type)
+        if not is_chat_type and not answers_call:
             # Don't send any messages over the wire that won't be re-ingestable.
             return
 
@@ -136,12 +154,18 @@ class ChatHistoryMessageProcessor(MessageProcessor):
 
         :param chat_message_dict: The ChatMessage dictionary to examine
         :param message_type: The ChatMessageType of the dictionary
-        :return: True if the message is an AGENT_TOOL_RESULT with a tool_call_id
+        :return: True if the message is an AGENT_TOOL_RESULT whose tool_call_info has a tool_call_id
         """
         if message_type != ChatMessageType.AGENT_TOOL_RESULT:
             return False
-        tool_call_id: Any = chat_message_dict.get("tool_call_id")
-        return isinstance(tool_call_id, str) and len(tool_call_id) > 0
+        tool_call_info: Any = chat_message_dict.get("tool_call_info")
+        if not isinstance(tool_call_info, dict):
+            return False
+        tool_call_id: Any = tool_call_info.get("tool_call_id")
+        if not isinstance(tool_call_id, str):
+            return False
+        has_id: bool = len(tool_call_id) > 0
+        return has_id
 
     def redact_instructions(self, chat_message_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -170,9 +194,12 @@ class ChatHistoryMessageProcessor(MessageProcessor):
                  and is neither a tool call nor a tool result
         """
         kept: Dict[str, Any] = copy(chat_message_dict)
-        if kept.get("text") is None:
-            if not kept.get("tool_calls") and not kept.get("tool_call_id"):
-                return None
-            # A call-only message from some providers has list content with no text.
-            kept["text"] = ""
+        text: Any = kept.get("text", None)
+        if text is not None:
+            return kept
+        tool_call_info: Any = kept.get("tool_call_info", None)
+        if tool_call_info is None:
+            return None
+        # A call-only message from some providers has list content with no text.
+        kept["text"] = ""
         return kept

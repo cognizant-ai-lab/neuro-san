@@ -33,15 +33,14 @@ from neuro_san.message.utils.content_utils import ContentUtils
 
 class ToolExchangeRecorder:
     """
-    Records each turn's tool calls and their results in an agent's chat history.
+    Records each turn's tool calls and their results in an agent's chat history,
+    so the next turn's model sees which values came from tools.
 
-    The agent chain's state is the only record of the tool calls the model made.
-    RunContextRunnable gives this class every state the chain streams, and this
-    class appends each complete tool round to the chat history, ahead of the
-    answer that is journaled next.
+    RunContextRunnable passes it every state the agent chain streams. The state
+    is the only record of the tool calls the model made.
 
-    This is a plain class, not a pydantic model: pydantic would store a copy of
-    the list, and the appends would never reach the RunContext.
+    A plain class, not a pydantic model, so it appends to the RunContext's own
+    list rather than a copy.
     """
 
     def __init__(self, chat_history: Optional[List[BaseMessage]]) -> None:
@@ -55,17 +54,11 @@ class ToolExchangeRecorder:
     def record_tool_exchange(self, inputs: Dict[str, Any],
                              chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) -> None:
         """
-        Appends this turn's tool calls and their results to the chat history,
+        Appends the new complete tool rounds of one chain state to the chat history,
         ahead of the answer that is journaled next.
 
-        The chain state is the only record of the tool calls the model made.
-        Each result is journaled as it arrives, but on its own, with no link to
-        the call that asked for it. Keeping the call and its result together in
-        the history lets the next turn's model see where a value came from,
-        instead of a bare number it might take for a guess.
-
         :param inputs: The inputs the agent chain was invoked with
-        :param chain_result: The result from invoking the agent chain
+        :param chain_result: A state streamed from the agent chain
         """
         if self.chat_history is None:
             return
@@ -79,28 +72,17 @@ class ToolExchangeRecorder:
                            chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) \
             -> List[BaseMessage]:
         """
-        Picks this turn's tool calls and their results out of the chain state.
+        Picks the new complete tool rounds out of one chain state.
 
-        Only complete pairs are kept: an AIMessage whose every tool call has a
-        ToolMessage answering it, followed by those ToolMessages. Providers
-        reject a tool call without its result, so a call cut short by an error
-        or a step limit is left out. The answer, the last AIMessage of the turn,
-        is not included; it is journaled separately. Contents are projected to
-        history-safe text so no provider-native blocks reach another provider
-        or the client.
-
-        Each round of tool calls is handled on its own: its results are the
-        ToolMessages between its AIMessage and the next one. A round this turn
-        already put in the history is skipped: every later state still holds it,
-        and a summarization that keeps the round in context copies it there first.
-        Rounds are told apart by message id, which LangGraph gives every message in
-        the state. So two rounds that share a call id are both kept, even when one
-        of them comes from a retry.
+        A round is a tool-calling AIMessage followed by the ToolMessage of each of its
+        calls. A round with a missing result is left out, since providers reject a call
+        without its result. Rounds this turn already recorded are skipped, and so is the
+        turn's answer, which is journaled separately.
 
         :param inputs: The inputs the agent chain was invoked with
-        :param chain_result: The result from invoking the agent chain
-        :return: The messages to append to the chat history, in order.
-                 Empty when the turn made no tool calls.
+        :param chain_result: A state streamed from the agent chain
+        :return: Copies of the new rounds' messages with history-safe text, in order.
+                 Empty when there is nothing new to record.
         """
         if not isinstance(chain_result, dict):
             return []
@@ -108,70 +90,102 @@ class ToolExchangeRecorder:
         start: int = ToolExchangeRecorder.find_turn_start(inputs, messages)
         if start < 0:
             return []
-
-        turn: List[BaseMessage] = ToolExchangeRecorder.before_answer(messages[start + 1:])
+        turn: List[BaseMessage] = ToolExchangeRecorder.turn_after(messages, start)
         recorded_keys: Set[str] = self.recorded_round_keys(inputs)
 
         exchange: List[BaseMessage] = []
-        # Each tool-calling AIMessage goes in followed by the results of its calls.
+        # Each new tool-calling AIMessage goes in followed by the results of its calls.
         index: int = 0
         message: BaseMessage = None
         for index, message in enumerate(turn):
-            if not isinstance(message, AIMessage) or not message.tool_calls:
+            if not isinstance(message, AIMessage):
+                continue
+            if len(message.tool_calls) == 0:
                 continue
             if ToolExchangeRecorder.is_recorded(message, recorded_keys):
                 continue
-            round_tool_messages: List[ToolMessage] = ToolExchangeRecorder.round_results(turn, index + 1)
+            next_index: int = index + 1
+            round_tool_messages: List[ToolMessage] = ToolExchangeRecorder.round_results(turn, next_index)
             results: Dict[str, ToolMessage] = ToolExchangeRecorder.results_by_call_id(round_tool_messages)
             paired: Optional[List[ToolMessage]] = ToolExchangeRecorder.paired_results(message, results)
             if paired is None:
                 # A call without its result would be rejected on replay.
                 continue
-            # The copy keeps the message id, which marks the round as recorded.
-            exchange.append(AIMessage(content=ContentUtils.history_safe_text(message),
-                                      tool_calls=message.tool_calls,
-                                      id=message.id))
-            # Results follow their call, in call order. The status is kept: LangChain sets
-            # "error" on a call it could not run, and some providers pass that on to the model.
-            result: ToolMessage = None
-            for result in paired:
-                exchange.append(ToolMessage(content=ContentUtils.history_safe_text(result),
-                                            tool_call_id=result.tool_call_id,
-                                            status=result.status))
+            round_copy: List[BaseMessage] = ToolExchangeRecorder.copy_round(message, paired)
+            exchange.extend(round_copy)
         return exchange
+
+    @staticmethod
+    def turn_after(messages: List[BaseMessage], start: int) -> List[BaseMessage]:
+        """
+        Gives the messages the turn added after the user's message, up to its answer.
+
+        :param messages: The messages of a chain state
+        :param start: The index of the turn's user message
+        :return: The messages after the user's message, without the answer
+        """
+        turn_start: int = start + 1
+        after_human: List[BaseMessage] = messages[turn_start:]
+        turn: List[BaseMessage] = ToolExchangeRecorder.before_answer(after_human)
+        return turn
+
+    @staticmethod
+    def copy_round(message: AIMessage, paired: List[ToolMessage]) -> List[BaseMessage]:
+        """
+        Copies a tool round for the chat history, with history-safe text.
+
+        :param message: The AIMessage that made the calls
+        :param paired: The results of its calls, in call order
+        :return: The copy of the AIMessage followed by the copies of its results
+        """
+        round_copy: List[BaseMessage] = []
+        # The copy keeps the message id, which marks the round as recorded.
+        call_text: str = ContentUtils.history_safe_text(message)
+        call_copy: AIMessage = AIMessage(content=call_text, tool_calls=message.tool_calls, id=message.id)
+        round_copy.append(call_copy)
+        # Each result keeps its status: some providers tell the model when a call failed.
+        result: ToolMessage = None
+        for result in paired:
+            result_text: str = ContentUtils.history_safe_text(result)
+            result_copy: ToolMessage = ToolMessage(content=result_text,
+                                                   tool_call_id=result.tool_call_id,
+                                                   status=result.status)
+            round_copy.append(result_copy)
+        return round_copy
 
     def recorded_round_keys(self, inputs: Dict[str, Any]) -> Set[str]:
         """
         Collects the keys of the tool rounds this turn has already put in the chat history.
 
-        Messages from earlier turns are left out. A model can give a new call the
-        same id as a call from an earlier turn, and that call still has to be recorded.
+        Only the messages after the turn's user message count. A model can give a new
+        call the same id as a call from an earlier turn, and that call still has to be recorded.
 
         :param inputs: The inputs the agent chain was invoked with
         :return: The round_keys() of every tool round this turn added to the chat history.
                  Empty when no history is kept.
         """
-        # wait_on_run() builds the inputs from a shallow copy of the history, so the
-        # messages of earlier turns are the same objects in both lists.
-        earlier: Set[int] = set()
-        input_messages: List[BaseMessage] = []
-        if isinstance(inputs, dict):
-            input_messages = inputs.get("messages") or []
-        message: BaseMessage = None
-        # Note each input message by its identity.
-        for message in input_messages:
-            earlier.add(id(message))
-
         keys: Set[str] = set()
-        # No history kept means nothing recorded.
-        history: List[BaseMessage] = self.chat_history or []
-        # Collect the keys of every tool round this turn added to the history.
-        for message in history:
-            if id(message) in earlier:
+        if self.chat_history is None:
+            # No history kept means nothing recorded.
+            return keys
+        history: List[BaseMessage] = self.chat_history
+        # The user's message goes into the history before the chain runs. A summarization
+        # that cuts it out cuts all earlier turns too, so then the whole history is this turn's.
+        start: int = ToolExchangeRecorder.find_turn_start(inputs, history)
+        index: int = start + 1
+        # Collect the keys of every tool round after the turn's user message.
+        while index < len(history):
+            message: BaseMessage = history[index]
+            index += 1
+            if not isinstance(message, AIMessage):
                 continue
-            if not isinstance(message, AIMessage) or not message.tool_calls:
+            if len(message.tool_calls) == 0:
                 continue
-            keys.update(ToolExchangeRecorder.round_keys(message))
+            message_keys: List[str] = ToolExchangeRecorder.round_keys(message)
+            key: str = None
+            # A round without a message id has one key per call.
+            for key in message_keys:
+                keys.add(key)
         return keys
 
     @staticmethod
@@ -179,22 +193,24 @@ class ToolExchangeRecorder:
         """
         Gives the keys that tell a tool round apart from the other rounds of a turn.
 
-        LangGraph gives every message in the chain state an id, and the history copy
-        of a round keeps it, so the message id is the key. Two rounds can share a call
-        id, even across a retry, but each has its own message id. A message without an
-        id is known by its call ids instead.
+        The key is the message id, since two rounds can share a call id. A message
+        without an id is known by its call ids instead.
 
         :param message: An AIMessage with tool calls
         :return: The message id, or the ids of its tool calls when it has none,
                  each with a prefix that says which kind of id it is
         """
-        if message.id:
-            return [f"message:{message.id}"]
         keys: List[str] = []
+        if message.id:
+            message_key: str = f"message:{message.id}"
+            keys.append(message_key)
+            return keys
         # Without a message id, the round is known by its calls.
         tool_call: Dict[str, Any] = None
         for tool_call in message.tool_calls:
-            keys.append(f"call:{tool_call.get('id')}")
+            call_id: Optional[str] = tool_call.get("id", None)
+            call_key: str = f"call:{call_id}"
+            keys.append(call_key)
         return keys
 
     @staticmethod
@@ -206,9 +222,10 @@ class ToolExchangeRecorder:
         :param recorded_keys: The round_keys() of the rounds the history already holds
         :return: True if any key of the message is among them
         """
+        message_keys: List[str] = ToolExchangeRecorder.round_keys(message)
         # One shared key is enough: the whole round was copied together.
         key: str = None
-        for key in ToolExchangeRecorder.round_keys(message):
+        for key in message_keys:
             if key in recorded_keys:
                 return True
         return False
@@ -229,9 +246,12 @@ class ToolExchangeRecorder:
         results: List[ToolMessage] = []
         index: int = start
         # The next AIMessage starts the next round.
-        while index < len(turn) and not isinstance(turn[index], AIMessage):
-            if isinstance(turn[index], ToolMessage):
-                results.append(turn[index])
+        while index < len(turn):
+            message: BaseMessage = turn[index]
+            if isinstance(message, AIMessage):
+                break
+            if isinstance(message, ToolMessage):
+                results.append(message)
             index += 1
         return results
 
@@ -240,15 +260,19 @@ class ToolExchangeRecorder:
         """
         Cuts a turn's messages off at its answer, a trailing AIMessage without tool calls.
 
-        A trailing AIMessage that made tool calls is not an answer: the turn is
-        still under way, and its results, when present, are paired like any other.
-
         :param turn: The messages the turn added after the user's message
         :return: The messages before the answer, or all of them while there is no answer yet
         """
-        if len(turn) > 0 and isinstance(turn[-1], AIMessage) and not turn[-1].tool_calls:
-            return turn[:-1]
-        return turn
+        if len(turn) == 0:
+            return turn
+        last: BaseMessage = turn[-1]
+        if not isinstance(last, AIMessage):
+            return turn
+        if len(last.tool_calls) > 0:
+            # A trailing AIMessage that made tool calls is not an answer: the turn is still under way.
+            return turn
+        before: List[BaseMessage] = turn[:-1]
+        return before
 
     @staticmethod
     def results_by_call_id(messages: List[BaseMessage]) -> Dict[str, ToolMessage]:
@@ -262,8 +286,11 @@ class ToolExchangeRecorder:
         # Index the results by the call they answer.
         message: BaseMessage = None
         for message in messages:
-            if isinstance(message, ToolMessage) and message.tool_call_id:
-                results[message.tool_call_id] = message
+            if not isinstance(message, ToolMessage):
+                continue
+            if not message.tool_call_id:
+                continue
+            results[message.tool_call_id] = message
         return results
 
     @staticmethod
@@ -284,11 +311,11 @@ class ToolExchangeRecorder:
         # Look up the result of each call, in call order.
         tool_call: Dict[str, Any] = None
         for tool_call in message.tool_calls:
-            call_id: Optional[str] = tool_call.get("id")
+            call_id: Optional[str] = tool_call.get("id", None)
             if call_id in seen_ids:
                 return None
             seen_ids.add(call_id)
-            result: Optional[ToolMessage] = results.get(call_id)
+            result: Optional[ToolMessage] = results.get(call_id, None)
             if result is None:
                 return None
             paired.append(result)
@@ -297,15 +324,14 @@ class ToolExchangeRecorder:
     @staticmethod
     def find_turn_start(inputs: Dict[str, Any], messages: List[BaseMessage]) -> int:
         """
-        Finds the user's message that started this turn in the chain state.
+        Finds the user's message that started this turn.
 
-        The state holds the input messages followed by what the turn added, and
-        the last input message is the user's. langgraph gives it an id in place,
-        so it is found by identity or by id. When neither matches, because a
-        middleware replaced the list, the last HumanMessage is used instead.
+        It is the last input message, found by identity or by id. When neither
+        matches, as after a middleware replaced the messages, the last HumanMessage
+        is used instead.
 
         :param inputs: The inputs the agent chain was invoked with
-        :param messages: The messages from the chain state
+        :param messages: The messages to search: a chain state's or the chat history
         :return: The index of the turn's user message, or -1 when there is none
         """
         human: Optional[BaseMessage] = None
@@ -314,16 +340,24 @@ class ToolExchangeRecorder:
             if len(input_messages) > 0:
                 human = input_messages[-1]
 
+        last_index: int = len(messages) - 1
         index: int = None
         if human is not None:
+            human_id: Optional[str] = human.id
             # Search from the end: the turn's user message is the last one of the inputs.
-            for index in range(len(messages) - 1, -1, -1):
+            for index in range(last_index, -1, -1):
                 message: BaseMessage = messages[index]
-                if message is human or (human.id is not None and message.id == human.id):
+                if message is human:
+                    return index
+                if human_id is None:
+                    # Without an id, only the identity check can match.
+                    continue
+                if message.id == human_id:
                     return index
 
-        # Fall back to the last HumanMessage in the state.
-        for index in range(len(messages) - 1, -1, -1):
-            if isinstance(messages[index], HumanMessage):
+        # Fall back to the last HumanMessage.
+        for index in range(last_index, -1, -1):
+            candidate: BaseMessage = messages[index]
+            if isinstance(candidate, HumanMessage):
                 return index
         return -1

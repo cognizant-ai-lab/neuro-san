@@ -130,6 +130,27 @@ class TestToolPairing(TestCase):
         self.assertEqual(kept[0].tool_calls, [self.tool_call("c1")])
         self.assertEqual(kept[1].tool_call_id, "c1")
 
+    def test_complete_pairs_keeps_the_later_of_two_results_for_one_call(self) -> None:
+        """
+        Two equal results for one call keep the later one, and the earlier one is
+        logged as dropped even though it compares equal to the kept one.
+        """
+        first: ToolMessage = ToolMessage(content="3.0", tool_call_id="c1")
+        second: ToolMessage = ToolMessage(content="3.0", tool_call_id="c1")
+        messages: List[BaseMessage] = [
+            AIMessage(content="", tool_calls=[self.tool_call("c1")]),
+            first,
+            second,
+        ]
+
+        with self.assertLogs("ToolPairing", level="INFO") as logs:
+            kept: List[BaseMessage] = ToolPairing.complete_pairs(messages)
+
+        self.assertEqual(len(kept), 2)
+        self.assertIs(kept[1], second)
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("'c1'", logs.output[0])
+
     def test_complete_pairs_drops_an_empty_message_whose_calls_are_all_unanswered(self) -> None:
         """
         A call-only message with no result left to pair is dropped altogether,
@@ -148,7 +169,7 @@ class TestToolPairing(TestCase):
         self.assertEqual(kept[0].tool_calls, [])
         self.assertEqual(kept[1].content, "answer")
 
-    def test_complete_pairs_warns_about_each_dropped_result(self) -> None:
+    def test_complete_pairs_logs_each_dropped_result(self) -> None:
         """
         A dropped result is logged by its tool_call_id, never by its content:
         one that comes first, and one that answers no call of the message before it.
@@ -161,7 +182,7 @@ class TestToolPairing(TestCase):
             ToolMessage(content="stray", tool_call_id="c9"),
         ]
 
-        with self.assertLogs("ToolPairing", level="WARNING") as logs:
+        with self.assertLogs("ToolPairing", level="INFO") as logs:
             ToolPairing.complete_pairs(messages)
 
         self.assertEqual(len(logs.output), 2)
@@ -170,7 +191,7 @@ class TestToolPairing(TestCase):
         self.assertNotIn("orphan", "".join(logs.output))
         self.assertNotIn("stray", "".join(logs.output))
 
-    def test_complete_pairs_warns_about_each_dropped_call(self) -> None:
+    def test_complete_pairs_logs_each_dropped_call(self) -> None:
         """
         An unanswered call is logged by its id and name, never by its arguments.
         """
@@ -179,7 +200,7 @@ class TestToolPairing(TestCase):
             ToolMessage(content="6.0", tool_call_id="c2"),
         ]
 
-        with self.assertLogs("ToolPairing", level="WARNING") as logs:
+        with self.assertLogs("ToolPairing", level="INFO") as logs:
             ToolPairing.complete_pairs(messages)
 
         self.assertEqual(len(logs.output), 1)
@@ -189,7 +210,7 @@ class TestToolPairing(TestCase):
 
     def test_complete_pairs_logs_nothing_for_complete_pairs(self) -> None:
         """
-        A history whose tool calls and results are all in complete pairs logs no warning.
+        A history whose tool calls and results are all in complete pairs logs nothing.
         """
         messages: List[BaseMessage] = [
             HumanMessage(content="question"),
@@ -198,5 +219,5 @@ class TestToolPairing(TestCase):
             AIMessage(content="answer"),
         ]
 
-        with self.assertNoLogs("ToolPairing", level="WARNING"):
+        with self.assertNoLogs("ToolPairing", level="INFO"):
             ToolPairing.complete_pairs(messages)

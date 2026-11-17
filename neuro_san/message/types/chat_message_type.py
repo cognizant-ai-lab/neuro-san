@@ -56,8 +56,8 @@ MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
     SystemMessage: ChatMessageType.SYSTEM,
     HumanMessage: ChatMessageType.HUMAN,
     AIMessage: ChatMessageType.AI,
-    # A tool's answer to a tool call made by an AI message. On the wire it carries
-    # the tool_call_id of that call, which is what tells it apart from an AgentToolResultMessage.
+    # A tool's answer to a tool call made by an AI message. On the wire its tool_call_info
+    # carries the id of that call, which is what tells it apart from an AgentToolResultMessage.
     ToolMessage: ChatMessageType.AGENT_TOOL_RESULT,
 
     AgentMessage: ChatMessageType.AGENT,

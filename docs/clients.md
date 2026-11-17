@@ -200,11 +200,12 @@ This response is telling you:
 * The "text" of what came back as the answer - "Hello, world!" with typical extra LLM elaborating text.
 * The chat_context that is returned is a structure that helps you continue the conversation.
   For the most part, you can think of this as semi-opaque chat history data. Besides the user
-  and agent messages, it holds the tool calls the agent made (`tool_calls` on an AI message) and
-  their results (AGENT_TOOL_RESULT messages whose `tool_call_id` names the call they answer), so
-  on the next turn the model can see which values came from tools rather than from its own text.
-  A result has `tool_status` set to `error` when the call could not run, such as a call to a tool
-  that does not exist. An error raised inside a tool comes back as the text of its result.
+  and agent messages, it holds the tool calls the agent made and their results, so on the next
+  turn the model can see which values came from tools rather than from its own text. Both kinds
+  of message carry a `tool_call_info`: on an AI message it lists the calls (`tool_calls`), and on
+  the AGENT_TOOL_RESULT message that answers a call it names that call (`tool_call_id`). A result's
+  `tool_call_info` also sets `tool_status` to `error` when the call could not run, such as a call
+  to a tool that does not exist. An error raised inside a tool comes back as the text of its result.
 
 For a single-shot conversation, this is all you really need to report back to your user.
 
