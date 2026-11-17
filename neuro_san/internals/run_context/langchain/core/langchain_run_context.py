@@ -32,11 +32,11 @@ from pydantic_core import ValidationError
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from langchain.agents.factory import create_agent
-from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
 from langchain_core.runnables.base import Runnable
+from langchain_core.runnables.base import RunnableSerializable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
 
@@ -322,11 +322,11 @@ class LangChainRunContext(RunContext):
 
         return agent
 
-    def create_agent(self, instructions: str, llm: BaseLanguageModel) -> Runnable:
+    def create_agent(self, instructions: str, llm: RunnableSerializable) -> Runnable:
         """
         Creates an agent.
         :param instructions: The instructions to use for the agent
-        :param llm: The BaseLanguageModel to use for the agent
+        :param llm: The RunnableSerializable model to use for the agent
         :return: An Agent (Runnable)
         """
 
@@ -479,7 +479,7 @@ class LangChainRunContext(RunContext):
             tool_chat_list_string = tool_chat_list_string[0]
 
         tool_message: BaseMessage = None
-        output_origin: str = tool_output.get("origin")
+        output_origin: List[Dict[str, Any]] = tool_output.get("origin")
         handled: bool = False
         if isinstance(tool_chat_list_string, str):
             # Sometimes output comes back as a list.
@@ -516,7 +516,7 @@ class LangChainRunContext(RunContext):
 
         return tool_message
 
-    def parse_tool_chat_list_string(self, tool_chat_list_string: str, origin: str) -> BaseMessage:
+    def parse_tool_chat_list_string(self, tool_chat_list_string: str, origin: List[Dict[str, Any]]) -> BaseMessage:
         """
         Parse a tool output string into a list of messages
         :param tool_chat_list_string: The string to parse

@@ -35,7 +35,6 @@ from langchain_core.documents import Document
 from langchain_core.messages.tool import ToolMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.outputs.llm_result import LLMResult
-from langchain_core.outputs.chat_generation import ChatGeneration
 from langchain_core.outputs.generation import Generation
 
 from neuro_san.internals.journals.journal import Journal
@@ -162,7 +161,8 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         # thinking in it.
         generations: List[Generation] = response.generations[0]
         first_generation: Generation = generations[0]
-        if isinstance(first_generation, ChatGeneration):
+        # Duck-type ChatGeneration: only it carries a message.
+        if hasattr(first_generation, "message"):
             # Project the message content to its full text through the single
             # projection policy ContentUtils defines: the dupe comparison
             # against the later AI message relies on both copies projecting to
