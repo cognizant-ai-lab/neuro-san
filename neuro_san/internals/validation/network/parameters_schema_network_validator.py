@@ -59,8 +59,8 @@ class ParametersSchemaNetworkValidator(CompositeDictionaryValidator):
         """
         Resolve the config once, then run both parameter phases on it.
 
-        The parameter validators need fully-resolved configs (commondefs
-        substitution, defaults injection, name correction). Filtering here -
+        The parameter validators need configs that NetworkConfigFilterChain
+        has fully resolved. Filtering here -
         rather than inside each leaf validator - means the filter chain runs
         a single time for both phases instead of once per validator, which
         matters when this composite is itself nested inside the larger

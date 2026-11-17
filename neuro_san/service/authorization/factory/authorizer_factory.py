@@ -17,11 +17,11 @@
 
 from logging import Logger
 from logging import getLogger
-from os import environ
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.resolution.resolver_util import ResolverUtil
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.authorization.interfaces.authorizer import Authorizer
 from neuro_san.service.authorization.null.always_yes_authorizer import AlwaysYesAuthorizer
 
@@ -38,7 +38,7 @@ class AuthorizerFactory:
         """
         authorizer: Authorizer = None
 
-        auth_classname: str = environ.get("AGENT_AUTHORIZER")
+        auth_classname: str = NeuroSanConfig.get("service.authorization.AGENT_AUTHORIZER")
         if auth_classname is not None and len(auth_classname) > 0:
             # Note that this will raise an exception if the class is not found
             authorizer = ResolverUtil.create_instance(auth_classname, "AGENT_AUTHORIZER env var", Authorizer)

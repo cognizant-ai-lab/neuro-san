@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -27,8 +28,6 @@ from copy import copy as shallow_copy
 from logging import Logger
 from logging import getLogger
 from random import shuffle
-
-import os
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -44,15 +43,7 @@ from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import Llm
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
-
-KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
-
-# Lazily import specific errors from llm providers
-API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "google.auth.exceptions.DefaultCredentialsError",
-                                            "openai.OpenAIError",
-                                            "pydantic_core.ValidationError",
-                                        ])
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangChainLlmFactory):
@@ -82,6 +73,15 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                                     the model description in this class.
     """
 
+    KEYS_TO_REMOVE_FOR_USER_CLASS: ClassVar[Set[str]] = {"class", "provider_tools", "verbose"}
+
+    # Lazily import specific errors from llm providers
+    API_KEY_ERRORS: ClassVar[Tuple[Type[Any], ...]] = ResolverUtil.create_type_tuple([
+        "google.auth.exceptions.DefaultCredentialsError",
+        "openai.OpenAIError",
+        "pydantic_core.ValidationError",
+    ])
+
     def __init__(self, config: Dict[str, Any] = None):
         """
         Constructor
@@ -103,10 +103,10 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         if config:
             raw_llm_info_file: str = (
                 config.get("llm_info_file")
-                or os.getenv("AGENT_LLM_INFO_FILE")
+                or NeuroSanConfig.get("internals.llms.AGENT_LLM_INFO_FILE")
             )
         else:
-            raw_llm_info_file = os.getenv("AGENT_LLM_INFO_FILE")
+            raw_llm_info_file = NeuroSanConfig.get("internals.llms.AGENT_LLM_INFO_FILE")
 
         if raw_llm_info_file is not None and not isinstance(raw_llm_info_file, str):
             raise TypeError(
@@ -303,7 +303,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         Looks up the llm_info entry for a model name, following at most one alias hop.
 
         An alias is an entry with at most two keys whose "use_model_name" points at the
-        real entry (e.g. "claude-fable" -> "claude-fable-5-1"). Entries with more keys
+        real entry (e.g. "claude-fable" -> "claude-fable-5-2"). Entries with more keys
         keep their own details even when they carry a "use_model_name" of their own
         (e.g. the azure-* entries, whose "class" must win over their target's).
         This method never raises; callers decide how to treat a missing entry.
@@ -511,7 +511,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
 
             # Catch some common wrong or missing API key errors in a single place
             # with some verbose error messaging.
-            except API_KEY_ERRORS as exception:
+            except DefaultLlmFactory.API_KEY_ERRORS as exception:
                 # Will re-raise but with the right exception text it will
                 # also provide some more helpful failure text.
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)
@@ -624,7 +624,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         llm_config_key: str = None
         llm_config_value: Any = None
         for llm_config_key, llm_config_value in config.items():
-            if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
+            if llm_config_key not in DefaultLlmFactory.KEYS_TO_REMOVE_FOR_USER_CLASS:
                 user_config[llm_config_key] = llm_config_value
 
         # Check for invalid args and throw error if found
@@ -731,12 +731,6 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 }
                 one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data=sly_data, num_fallbacks=None,
                                                                    randomize_peers=True)
-                if isinstance(one_llm_resources, dict):
-                    # It was a bust. Update our own error sets
-                    api_key_errors.update(one_llm_resources.get("api_key_errors", []))
-                    construction_errors.update(one_llm_resources.get("construction_errors", []))
-                    required_sly_data.update(one_llm_resources.get("required_sly_data_errors", []))
-                    continue
 
             try:
                 if one_llm_resources is None:
@@ -769,12 +763,22 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 required_sly_data.update(one_llm_resources)
                 continue
 
+            if isinstance(one_llm_resources, dict):
+                # A peer group was a bust. Update our own error sets.
+                # Checked after the set case so every path narrows to LangChainLlmResources below.
+                api_key_errors.update(one_llm_resources.get("api_key_errors", []))
+                construction_errors.update(one_llm_resources.get("construction_errors", []))
+                required_sly_data.update(one_llm_resources.get("required_sly_data_errors", []))
+                continue
+
+            # All other cases are handled above, so this is a LangChainLlmResources.
+            use_llm_resources: LangChainLlmResources = one_llm_resources
             if main_llm_resources is None:
                 # The first fully-specified llm is the one we want to be our main guy.
-                main_llm_resources = one_llm_resources
+                main_llm_resources = use_llm_resources
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
-                fallback_llm_resources.append(one_llm_resources)
+                fallback_llm_resources.append(use_llm_resources)
 
         if main_llm_resources is None:
             # Return all errors

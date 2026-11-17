@@ -34,6 +34,8 @@ from typing_extensions import override
 
 from leaf_common.logging.log_once import LogOnce
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
+
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import ConcreteClassActivation
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import CREATE_RUN_CONTEXT_PATH
 from tests.neuro_san.internals.graph.activations.concrete_class_activation import GET_FULL_NAME_FROM_ORIGIN_PATH
@@ -64,6 +66,8 @@ class TestToolPathOnlyResolution(TestCase):
         patcher: Any = patch.dict(LogOnce.SEEN_LOGGING_SIGNATURES, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # Reloads NeuroSanConfig after each test, once the environment the test changed is restored.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
 
         self.mock_run_context = MagicMock()
 
@@ -95,6 +99,7 @@ class TestToolPathOnlyResolution(TestCase):
         """
         with patch.dict(os.environ):
             os.environ.pop("AGENT_TOOL_PATH_ONLY", None)
+            NeuroSanConfig.reset_for_testing()
             resolved_class: Type[Any] = self.fixture_activation.resolve_class("CanaryTool", CANARY_MODULE)
             self.assertEqual(resolved_class.__name__, "CanaryTool")
 
@@ -255,6 +260,7 @@ class TestToolPathOnlyResolution(TestCase):
         """
         with patch.dict(os.environ):
             os.environ.pop("AGENT_TOOL_PATH_ONLY", None)
+            NeuroSanConfig.reset_for_testing()
             with self.assertLogs(level=INFO) as captured_logs:
                 self.fixture_activation.resolve_class("NetworkTool", "network_tool")
                 self.fixture_activation.resolve_class("SharedTool", "shared_tool")

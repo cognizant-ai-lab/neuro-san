@@ -174,20 +174,21 @@ class StreamingChatHandler(BaseRequestHandler):
                         # Otherwise swallow and continue
 
         except asyncio.CancelledError:
-            self.logger.info(metadata, "Request handler cancelled.")
+            self.logger.info(metadata, "[%d] Request handler cancelled.", self.worker_id)
             # Re-raise as recommended
             raise
 
         except tornado.iostream.StreamClosedError:
             if self._is_client_close_a_problem(is_event, flushed_first_result):
-                self.logger.info(metadata, "Request handler stream closed.")
+                self.logger.info(metadata, "[%d] Request handler stream closed.", self.worker_id)
                 # Re-raise as recommended
                 raise
 
             # Swallow. For event agents, it's ok if the client goes away before processing is done.
 
         except asyncio.TimeoutError:
-            self.logger.info(metadata, "Chat request timeout for %s in %f seconds.", agent_name, request_timeout)
+            self.logger.info(metadata, "[%d] Chat request timeout for %s in %f seconds.",
+                             self.worker_id, agent_name, request_timeout)
             # Recommended HTTP response code: Service Unavailable
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write({"error": "Request timeout"})
@@ -214,8 +215,8 @@ class StreamingChatHandler(BaseRequestHandler):
         Exits when the request finishes or the client disconnects.
         """
         metadata: Dict[str, Any] = self.get_metadata()
-        self.logger.info(metadata, "Starting heartbeat generator with interval %d seconds",
-                         self.keep_alive_interval_seconds)
+        self.logger.info(metadata, "[%d] Starting heartbeat generator with interval %d seconds",
+                         self.worker_id, self.keep_alive_interval_seconds)
         time_to_sleep: float = self.keep_alive_interval_seconds
         while True:
             await asyncio.sleep(time_to_sleep)

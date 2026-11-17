@@ -26,6 +26,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -85,9 +86,9 @@ class OpenAILlmPolicy(LlmPolicy):
         self.create_http_client(config)
 
         self.async_openai_client = AsyncOpenAI(
-            api_key=self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY"),
-            base_url=self.get_value_or_env(config, "openai_api_base", "OPENAI_API_BASE"),
-            organization=self.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
+            api_key=EnvironmentConfiguration.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY"),
+            base_url=EnvironmentConfiguration.get_value_or_env(config, "openai_api_base", "OPENAI_API_BASE"),
+            organization=EnvironmentConfiguration.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
             timeout=config.get("request_timeout"),
             max_retries=config.get("max_retries"),
             http_client=self.http_client
@@ -104,7 +105,7 @@ class OpenAILlmPolicy(LlmPolicy):
         :param config: The fully specified llm config
         """
         # Our run-time model resource here is httpx client which we need to control directly:
-        openai_proxy: str = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
+        openai_proxy: str = EnvironmentConfiguration.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
         request_timeout: int = config.get("request_timeout")
         self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout, limits=OpenAILlmPolicy.LIMITS)
 
@@ -133,16 +134,16 @@ class OpenAILlmPolicy(LlmPolicy):
             temperature=config.get("temperature"),
 
             # This next group of params should always be None when we have async_client
-            openai_api_key=self.get_value_or_env(config, "openai_api_key",
-                                                 "OPENAI_API_KEY", client),
-            openai_api_base=self.get_value_or_env(config, "openai_api_base",
-                                                  "OPENAI_API_BASE", client),
-            openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                      "OPENAI_ORG_ID", client),
-            openai_proxy=self.get_value_or_env(config, "openai_proxy",
-                                               "OPENAI_PROXY", client),
-            request_timeout=self.get_value_or_env(config, "request_timeout", None, client),
-            max_retries=self.get_value_or_env(config, "max_retries", None, client),
+            openai_api_key=EnvironmentConfiguration.get_value_or_env(config, "openai_api_key",
+                                                                     "OPENAI_API_KEY", client),
+            openai_api_base=EnvironmentConfiguration.get_value_or_env(config, "openai_api_base",
+                                                                      "OPENAI_API_BASE", client),
+            openai_organization=EnvironmentConfiguration.get_value_or_env(config, "openai_organization",
+                                                                          "OPENAI_ORG_ID", client),
+            openai_proxy=EnvironmentConfiguration.get_value_or_env(config, "openai_proxy",
+                                                                   "OPENAI_PROXY", client),
+            request_timeout=EnvironmentConfiguration.get_value_or_env(config, "request_timeout", None, client),
+            max_retries=EnvironmentConfiguration.get_value_or_env(config, "max_retries", None, client),
 
             presence_penalty=config.get("presence_penalty"),
             frequency_penalty=config.get("frequency_penalty"),

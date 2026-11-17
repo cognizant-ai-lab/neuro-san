@@ -21,13 +21,11 @@ from typing import List
 from typing import Set
 from typing import Tuple
 
-from os import environ
-
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.authorization.factory.authorizer_factory import AuthorizerFactory
 from neuro_san.service.authorization.interfaces.authorizer import Authorizer
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
-from neuro_san.service.interfaces.permission import Permission
 
 
 class AgentAuthorizationPolicy(AgentAuthorizer):
@@ -46,10 +44,11 @@ class AgentAuthorizationPolicy(AgentAuthorizer):
 
         # Only need to get these once
         self.authorizer: Authorizer = AuthorizerFactory.create_authorizer()
-        self.actor_key: str = environ.get("AGENT_AUTHORIZER_ACTOR_KEY", "User")
-        self.actor_id_metadata_key: str = environ.get("AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY", "user_id")
-        self.resource_key: str = environ.get("AGENT_AUTHORIZER_RESOURCE_KEY", "AgentNetwork")
-        self.allow_relation: str = environ.get("AGENT_AUTHORIZER_ALLOW_RELATION", Permission.READ.value)
+        self.actor_key: str = NeuroSanConfig.get("service.authorization.AGENT_AUTHORIZER_ACTOR_KEY")
+        self.actor_id_metadata_key: str = NeuroSanConfig.get(
+            "service.authorization.AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY")
+        self.resource_key: str = NeuroSanConfig.get("service.authorization.AGENT_AUTHORIZER_RESOURCE_KEY")
+        self.allow_relation: str = NeuroSanConfig.get("service.authorization.AGENT_AUTHORIZER_ALLOW_RELATION")
 
     async def allow_agent(self, agent_name: str, metadata: Dict[str, Any]) -> Tuple[bool, AsyncAgentServiceProvider]:
         """

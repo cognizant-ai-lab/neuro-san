@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Awaitable
+from typing import ClassVar
 from typing import Dict
 from typing import List
 
@@ -29,8 +30,8 @@ from contextvars import copy_context
 from copy import copy
 from time import time
 
-from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
+from langchain_core.runnables.base import Runnable
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -62,21 +63,6 @@ ZERO_TOKEN_STATS: Dict[str, Any] = {
     "total_cost": 0.0,
 }
 
-# Caveats shared by every token accounting message.
-COMMON_CAVEATS: List[str] = [
-    "Token counts are approximate and estimated using tiktoken.",
-    "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
-]
-
-# Coverage statements for the two request-level accountings.
-MAIN_NETWORK_CAVEAT: str = \
-    "Token usage from agents of the main agent network only. " \
-    "Usage from external agents is not included."
-TOTAL_CAVEAT: str = \
-    "Request total: includes token usage from external agents invoked via direct " \
-    "sessions on this server. Usage from external agents reached over the network " \
-    "is not included."
-
 
 class LangChainTokenCounter:
     """
@@ -87,20 +73,36 @@ class LangChainTokenCounter:
     are in get_callback_for_llm()
     """
 
-    def __init__(self, llm: BaseLanguageModel,
+    # Caveats shared by every token accounting message.
+    COMMON_CAVEATS: ClassVar[List[str]] = [
+        "Token counts are approximate and estimated using tiktoken.",
+        "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+    ]
+
+    # Coverage statements for the two request-level accountings.
+    MAIN_NETWORK_CAVEAT: ClassVar[str] = \
+        "Token usage from agents of the main agent network only. " \
+        "Usage from external agents is not included."
+    TOTAL_CAVEAT: ClassVar[str] = \
+        "Request total: includes token usage from external agents invoked via direct " \
+        "sessions on this server. Usage from external agents reached over the network " \
+        "is not included."
+
+    def __init__(self, llm: Runnable,
                  invocation_context: InvocationContext,
                  journal: Journal,
                  origin: List[Dict[str, Any]]):
         """
         Constructor
 
-        :param llm: The Llm to monitor for tokens
+        :param llm: The Llm to monitor for tokens. This is a Runnable because the
+                    llm can be a BaseLanguageModel with fallbacks attached to it.
         :param invocation_context: The InvocationContext
         :param journal: The OriginatingJournal which through which this
                     will send token count AGENT messages
         :param origin: The origin that will be applied to all messages.
         """
-        self.llm: BaseLanguageModel = llm
+        self.llm: Runnable = llm
         self.invocation_context: InvocationContext = invocation_context
         self.journal: Journal = journal
         self.origin: List[Dict[str, Any]] = origin
@@ -264,7 +266,7 @@ class LangChainTokenCounter:
 
         network_token_dict: Dict[str, Any] = self.sum_all_tokens(models_token_dict, total_time)
         # Provide slightly different "caveats" for the network token accounting.
-        network_token_dict["caveats"] = [TOTAL_CAVEAT] + COMMON_CAVEATS
+        network_token_dict["caveats"] = [LangChainTokenCounter.TOTAL_CAVEAT] + LangChainTokenCounter.COMMON_CAVEATS
 
         # Maintain the accounting covering only the main (top-level) agent network.
         # Agents of external networks invoked via direct sessions run on cloned
@@ -280,12 +282,14 @@ class LangChainTokenCounter:
                                                                time_taken_in_seconds)
             main_accounting = self.merge_dicts(main_accounting, contribution)
             main_accounting["time_taken_in_seconds"] = time_taken_in_seconds
-            main_accounting["caveats"] = [MAIN_NETWORK_CAVEAT] + COMMON_CAVEATS
+            main_accounting["caveats"] = [LangChainTokenCounter.MAIN_NETWORK_CAVEAT] + \
+                LangChainTokenCounter.COMMON_CAVEATS
         elif not main_accounting:
             # An external agent completed before any main-network agent reported.
             # Publish an explicit zero entry rather than an empty dictionary.
             main_accounting = self.sum_all_tokens({}, 0.0)
-            main_accounting["caveats"] = [MAIN_NETWORK_CAVEAT] + COMMON_CAVEATS
+            main_accounting["caveats"] = [LangChainTokenCounter.MAIN_NETWORK_CAVEAT] + \
+                LangChainTokenCounter.COMMON_CAVEATS
 
         # Assignment preserves key insertion order (main first, total last, as the
         # first reporter established) so the server log always prints them that way.
@@ -353,7 +357,7 @@ class LangChainTokenCounter:
             "Token usage is tracked at the agent level. "
             "Counts include usage from any downstream agents called on this agent's behalf."
         ]
-        caveats.extend(COMMON_CAVEATS)
+        caveats.extend(LangChainTokenCounter.COMMON_CAVEATS)
         agent_token_dict: Dict[str, Any] = {
             "total_tokens": callback.total_tokens,
             "prompt_tokens": callback.prompt_tokens,

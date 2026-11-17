@@ -80,6 +80,12 @@ class AbstractCallableActivation(CallableActivation):
         # For now, our inspector is an AgentToolFactory
         return self.factory
 
+    def get_tool_factory(self) -> AgentToolFactory:
+        """
+        :return: The AgentToolFactory that creates activations for the tools of the network
+        """
+        return self.factory
+
     def get_sly_data(self) -> Dict[str, Any]:
         """
         :return: A mapping whose keys might be referenceable by agents, but whose

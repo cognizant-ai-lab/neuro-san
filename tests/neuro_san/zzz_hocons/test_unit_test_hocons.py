@@ -15,12 +15,15 @@
 #
 # END COPYRIGHT
 
+from os import environ
 from unittest import TestCase
+from unittest.mock import patch
 
 import pytest
 
 from parameterized import parameterized
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.test.unittest.dynamic_hocon_unit_tests import DynamicHoconUnitTests
 
 
@@ -64,6 +67,28 @@ class TestUnitTestHocons(TestCase):
         # This will expand the test_hocon file name from the expanded list to
         # include the file basis implied by the __file__ and path_to_basis above.
         self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
+
+    @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
+        # These can be in any order.
+        # Ideally more basic functionality will come first.
+        # Barring that, try to stick to alphabetical order.
+        "math_guy/forwarded_sly_data_from_network_file.hocon",
+
+        # List more hocon files as they become available here.
+    ]), skip_on_empty=True)
+    def test_hocon_with_fetching(self, test_name: str, test_hocon: str):
+        """
+        Test method for a single parameterized test case specified by a hocon file
+        whose agent network fetches another agent network file by URL.
+
+        :param test_name: The name of a single test.
+        :param test_hocon: The hocon file of a single data-driven test case.
+        """
+        # Reload NeuroSanConfig once the environment is restored.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
+        # The agent network file is fetched over https, which is off by default.
+        with patch.dict(environ, {"AGENT_FETCHABLE_TOOL_SCHEMES": "https"}):
+            self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
 
     @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
         # These can be in any order.

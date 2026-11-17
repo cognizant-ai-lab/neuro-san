@@ -27,9 +27,9 @@ class ToolArgumentReporting:
     """
 
     # List of keys for policy objects that cannot be serialized in a message.
-    # The first two are set in AbstractClassActivation.
+    # The first three are set in AbstractClassActivation.
     # The last one is injected by Langgraph when using MCP tools with langchain-mcp-adapters>=0.1.14.
-    POLICY_OBJECT_KEYS: List[str] = ["reservationist", "progress_reporter", "runtime"]
+    POLICY_OBJECT_KEYS: List[str] = ["reservationist", "progress_reporter", "activation_capsule", "runtime"]
 
     @staticmethod
     def prepare_tool_start_dict(tool_args: Dict[str, Any],

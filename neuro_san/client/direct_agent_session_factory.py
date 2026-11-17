@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 from leaf_common.time.timeout import Timeout
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
@@ -30,7 +31,9 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
+from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.fetched_agent_network_storage import FetchedAgentNetworkStorage
 from neuro_san.internals.reservations.direct_agent_reservationist import DirectAgentReservationist
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
@@ -57,9 +60,18 @@ class DirectAgentSessionFactory:
         manifest_restorer: RegistryManifestRestorer = RegistryManifestRestorer()
         manifest_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
 
+        # The temp storage is both an AgentStorageSource and the ReservationsStorage
+        # that each session's reservationist writes to, so keep it under both types.
+        temp_storage: ExpiringAgentNetworkStorage = ExpiringAgentNetworkStorage()
+        self.reservations_storage: ReservationsStorage = temp_storage
         self.network_storage_dict: Dict[str, AgentStorageSource] = {
-            StorageClass.TEMP: ExpiringAgentNetworkStorage()
+            StorageClass.TEMP: temp_storage,
         }
+
+        # Fetched storage is left out entirely when AGENT_FETCHABLE_TOOL_SCHEMES enables no scheme.
+        fetchable_schemes: List[str] = FetchedAgentNetworkStorage.get_fetchable_schemes()
+        if len(fetchable_schemes) > 0:
+            self.network_storage_dict[StorageClass.FETCHED] = FetchedAgentNetworkStorage(fetchable_schemes)
 
         storage_class: str = None
         for storage_class in StorageClass.ALL_PERMANENT:
@@ -96,7 +108,7 @@ class DirectAgentSessionFactory:
 
         # DEF - We could do max_lifetime here, but waiting until that seems necessary.
         reservationist: DirectAgentReservationist = \
-            DirectAgentReservationist(set([self.network_storage_dict.get(StorageClass.TEMP)]))
+            DirectAgentReservationist(set([self.reservations_storage]))
         invocation_context: SessionInvocationContext = SessionInvocationContext(agent_name,
                                                                                 factory,
                                                                                 executors_pool,

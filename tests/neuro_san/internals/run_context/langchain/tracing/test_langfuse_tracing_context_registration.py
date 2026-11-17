@@ -77,21 +77,6 @@ def _install_fake_langfuse(monkeypatch) -> type:
     return FakeCallbackHandler
 
 
-@pytest.fixture(scope="module", autouse=True)
-def dummy_llm_key():
-    """
-    These tests never call an LLM, but the repo-wide conftest fixture skips
-    unmarked tests when OPENAI_API_KEY is unset. Scope a dummy value to this
-    module so the registration tests always run.
-    """
-    had_key = "OPENAI_API_KEY" in os.environ
-    if not had_key:
-        os.environ["OPENAI_API_KEY"] = "dummy-never-used-by-these-tests"
-    yield
-    if not had_key:
-        os.environ.pop("OPENAI_API_KEY", None)
-
-
 class TestLangfuseTracingContextRegistration:
     """
     Test cases for the lazy, once-per-process registration of the Langfuse

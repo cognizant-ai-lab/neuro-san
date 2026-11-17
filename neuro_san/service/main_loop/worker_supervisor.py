@@ -27,7 +27,7 @@ import time
 from argparse import ArgumentParser
 from threading import Thread
 
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class WorkerSupervisor:
@@ -134,7 +134,7 @@ class WorkerSupervisor:
         arg_parser.add_argument(
             "--http_server_instances",
             type=int,
-            default=int(os.environ.get("AGENT_HTTP_SERVER_INSTANCES", DEFAULT_HTTP_SERVER_INSTANCES)),
+            default=int(NeuroSanConfig.get("service.http.AGENT_HTTP_SERVER_INSTANCES")),
         )
         args, _ = arg_parser.parse_known_args()
 

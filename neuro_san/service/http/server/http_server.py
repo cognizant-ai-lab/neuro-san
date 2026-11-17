@@ -29,7 +29,6 @@ import tornado
 import tornado.netutil
 
 from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
-from leaf_common.config.config_util import ConfigUtil
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 from leaf_common.utils.startable import Startable
 
@@ -37,6 +36,7 @@ from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkPr
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.interfaces.listenable import Listenable
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.config.http_server_config import ENV_HEALTH_PROBE_PORT
@@ -245,7 +245,7 @@ class HttpServer(AgentStateListener):
         main_loop = tornado.ioloop.IOLoop.current()
 
         # Enable event loop lag monitor if requested by environment variable.
-        if ConfigUtil.get_bool(os.environ, "ENABLE_EVENT_LOOP_STATISTICS"):
+        if NeuroSanConfig.get_bool("service.diagnostics.AGENT_ENABLE_EVENT_LOOP_STATISTICS"):
             event_loop_monitor = \
                 EventLoopLagMonitor(
                     sample_interval_seconds=1.0,
@@ -296,10 +296,10 @@ class HttpServer(AgentStateListener):
         Must be called after server.start() (i.e. after fork) so each
         worker process configures its own loop.
         """
-        if not ConfigUtil.get_bool(os.environ, "AGENT_ASYNCIO_DEBUG"):
+        if not NeuroSanConfig.get_bool("service.diagnostics.AGENT_ASYNCIO_DEBUG"):
             return
 
-        raw_threshold: str = os.environ.get("AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS", "100")
+        raw_threshold: str = NeuroSanConfig.get("service.diagnostics.AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS")
         try:
             threshold_ms: int = int(raw_threshold)
         except ValueError:
@@ -341,12 +341,11 @@ class HttpServer(AgentStateListener):
         The tracer adds ~5-10% loop overhead; keep off in production unless
         actively diagnosing.
         """
-        if not ConfigUtil.get_bool(os.environ, "AGENT_LOOP_TIMELINE"):
+        if not NeuroSanConfig.get_bool("service.diagnostics.AGENT_LOOP_TIMELINE"):
             return
 
         try:
-            max_events: int = int(os.environ.get(
-                "AGENT_LOOP_TIMELINE_MAX_EVENTS", str(LoopTimelineTracer.DEFAULT_MAX_EVENTS)))
+            max_events: int = int(NeuroSanConfig.get("service.diagnostics.AGENT_LOOP_TIMELINE_MAX_EVENTS"))
         except ValueError:
             max_events = LoopTimelineTracer.DEFAULT_MAX_EVENTS
         if max_events <= 0:
@@ -354,7 +353,7 @@ class HttpServer(AgentStateListener):
 
         self._loop_timeline_tracer = LoopTimelineTracer(max_events=max_events)
 
-        dump_path: str = os.environ.get("AGENT_LOOP_TIMELINE_DUMP_PATH", "").strip()
+        dump_path: str = NeuroSanConfig.get("service.diagnostics.AGENT_LOOP_TIMELINE_DUMP_PATH").strip()
         if dump_path:
             self._loop_timeline_tracer.register_atexit_dump(dump_path)
             self.logger.info(
@@ -388,13 +387,11 @@ class HttpServer(AgentStateListener):
         call). Route the "neuro_san.diagnostics.http_llm_trace" logger
         to a separate file in logging.hocon for clean offline analysis.
         """
-        if not ConfigUtil.get_bool(os.environ, "AGENT_HTTP_LLM_TRACE"):
+        if not NeuroSanConfig.get_bool("service.diagnostics.AGENT_HTTP_LLM_TRACE"):
             return
 
-        include_bodies: bool = ConfigUtil.get_bool(
-            os.environ, "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
-        include_chunks: bool = ConfigUtil.get_bool(
-            os.environ, "AGENT_HTTP_LLM_TRACE_CHUNKS")
+        include_bodies: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
+        include_chunks: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_HTTP_LLM_TRACE_CHUNKS")
 
         HttpxLlmTracer.install(
             include_bodies=include_bodies,
@@ -410,14 +407,17 @@ class HttpServer(AgentStateListener):
         """
         Resolve the port for the isolated HealthProbeServer.
 
-        Reads the AGENT_HEALTH_PROBE_PORT env var. Non-numeric values fall
-        back to the default (8081), and a value of 0 (or negative) disables
-        the separate probe server, in which case k8s / LB probes should hit
-        the main port's registered health handlers.
+        Reads the AGENT_HEALTH_PROBE_PORT env var. When it is unset or non-numeric,
+        the port comes from the supplied HttpServerConfig.http_probe_port, and a
+        value of 0 (or negative) disables the separate probe server, in which case
+        k8s / LB probes should hit the main port's registered health handlers.
 
         :return: A non-negative int. 0 disables the probe server.
         """
-        raw: str = os.environ.get(ENV_HEALTH_PROBE_PORT, str(self.server_config.http_probe_port))
+        raw: str = NeuroSanConfig.get("service.http.AGENT_HEALTH_PROBE_PORT")
+        if raw is None:
+            # No override configured, so use the port from the supplied server config.
+            raw = str(self.server_config.http_probe_port)
         try:
             value: int = int(raw)
         except ValueError:
@@ -467,7 +467,7 @@ class HttpServer(AgentStateListener):
         handlers.append(("/resources_utilization", SnapshotHandler, {"http_port": self.http_port}))
 
         # Setup handler for on-demand asyncio-task dump across used AsyncioExecutors.
-        # Gated behind ENABLE_RUN_TIME_STATISTICS (same as /profiler and /resources_utilization).
+        # Gated behind AGENT_ENABLE_RUN_TIME_STATISTICS (same as /profiler and /resources_utilization).
         handlers.append(("/debug/tasks", DebugTasksHandler, {"server_context": self.server_context}))
 
         # Setup handler for on-demand full Python garbage collection.

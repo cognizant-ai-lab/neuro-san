@@ -34,6 +34,7 @@ from neuro_san.internals.graph.filters.resolved_network_config_filter import Res
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class LocalReservationsStorage(AbstractReservationsStorage):
@@ -102,7 +103,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
                          check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.logger: logging.Logger = logging.getLogger(self.__class__.__name__)
 
-        env_path: str = os.getenv("AGENT_RESERVATIONS_LOCAL_PATH", "")
+        env_path: str = NeuroSanConfig.get("service.reservations.AGENT_RESERVATIONS_LOCAL_PATH")
         self.base_path = base_path.strip() if isinstance(base_path, str) else ""
 
         if not self.base_path:

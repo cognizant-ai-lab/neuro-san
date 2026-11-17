@@ -99,7 +99,8 @@ class McpRootHandler(BaseRequestHandler):
                     McpErrorsUtil.get_protocol_error(request_id, McpError.InvalidRequest, extra_error)
                 self.set_status(HTTPStatus.BAD_REQUEST)
                 self.write(error_msg)
-                self.logger.error(self.get_metadata(), f"Error: Invalid MCP request: {extra_error}")
+                self.logger.error(self.get_metadata(), "[%d] Error: Invalid MCP request: %s",
+                                  self.worker_id, extra_error)
                 self.do_finish()
                 return
         except json.JSONDecodeError as exc:
@@ -110,7 +111,8 @@ class McpRootHandler(BaseRequestHandler):
                     "Invalid JSON format")
             self.set_status(HTTPStatus.BAD_REQUEST)
             self.write(error_msg)
-            self.logger.error(self.get_metadata(), "error: Invalid JSON format: %s", str(exc))
+            self.logger.error(self.get_metadata(), "[%d] error: Invalid JSON format: %s",
+                              self.worker_id, str(exc))
             self.do_finish()
             return
 
@@ -141,7 +143,7 @@ class McpRootHandler(BaseRequestHandler):
                 McpErrorsUtil.get_protocol_error(request_id, McpError.InvalidProtocolVersion, extra_error)
             self.set_status(HTTPStatus.BAD_REQUEST)
             self.write(error_msg)
-            self.logger.error(self.get_metadata(), f"error: {extra_error}")
+            self.logger.error(self.get_metadata(), "[%d] error: %s", self.worker_id, extra_error)
             self.do_finish()
             return
         session_policy: ClientSessionPolicy = self.mcp_context.get_session_policy()
@@ -152,7 +154,7 @@ class McpRootHandler(BaseRequestHandler):
                 McpErrorsUtil.get_protocol_error(request_id, McpError.InvalidSession, extra_error)
             self.set_status(HTTPStatus.UNAUTHORIZED)
             self.write(error_msg)
-            self.logger.error(self.get_metadata(), f"error: {extra_error}")
+            self.logger.error(self.get_metadata(), "[%d] error: %s", self.worker_id, extra_error)
             self.do_finish()
             return
 
@@ -185,7 +187,8 @@ class McpRootHandler(BaseRequestHandler):
                         McpErrorsUtil.get_protocol_error(request_id, McpError.InvalidRequest)
                     self.set_status(HTTPStatus.BAD_REQUEST)
                     self.write(error_msg)
-                    self.logger.error(self.get_metadata(), f"Error: Invalid tool call request: {extra_error}")
+                    self.logger.error(self.get_metadata(), "[%d] Error: Invalid tool call request: %s",
+                                      self.worker_id, extra_error)
                     return
 
                 prompt: Dict[str, Any] = call_args.get("user_message", {})
@@ -219,7 +222,8 @@ class McpRootHandler(BaseRequestHandler):
                     McpErrorsUtil.get_protocol_error(request_id, McpError.NoMethod, extra_error)
                 self.set_status(HTTPStatus.BAD_REQUEST)
                 self.write(error_msg)
-                self.logger.error(self.get_metadata(), f"error: Method {method} not found")
+                self.logger.error(self.get_metadata(), "[%d] error: Method %s not found",
+                                  self.worker_id, method)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             error_msg: Dict[str, Any] =\
                 McpErrorsUtil.get_protocol_error(
@@ -228,7 +232,8 @@ class McpRootHandler(BaseRequestHandler):
                     f"exception during {method} handling")
             self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
             self.write(error_msg)
-            self.logger.error(self.get_metadata(), "error: Server error %s: %s", method, str(exc))
+            self.logger.error(self.get_metadata(), "[%d] error: Server error %s: %s",
+                              self.worker_id, method, str(exc))
         finally:
             # We are done with response stream:
             self.do_finish()
@@ -292,7 +297,8 @@ class McpRootHandler(BaseRequestHandler):
                     f"exception during {method} handling")
             self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
             self.write(error_msg)
-            self.logger.error(self.get_metadata(), "error: Server error %s: %s", method, str(exc))
+            self.logger.error(self.get_metadata(), "[%d] error: Server error %s: %s",
+                              self.worker_id, method, str(exc))
             return None, True
         return None, False
 
@@ -312,14 +318,15 @@ class McpRootHandler(BaseRequestHandler):
             session_policy: ClientSessionPolicy = self.mcp_context.get_session_policy()
             deleted: bool = session_policy.delete_session(session_id)
             if deleted:
-                self.logger.info(metadata, "Session %s deleted by client", session_id)
+                self.logger.info(metadata, "[%d] Session %s deleted by client",
+                                 self.worker_id, session_id)
             else:
                 extra_error: str = "Session id not found"
                 error_msg: Dict[str, Any] =\
                     McpErrorsUtil.get_protocol_error(request_id, McpError.InvalidSession, extra_error)
                 self.set_status(HTTPStatus.NOT_FOUND)
                 self.write(error_msg)
-                self.logger.error(metadata, f"Error: {extra_error}")
+                self.logger.error(metadata, "[%d] Error: %s", self.worker_id, extra_error)
         else:
             # No session id is provided in this request:
             # report bad request

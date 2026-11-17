@@ -21,18 +21,22 @@ from typing import Dict
 from threading import Event
 from threading import Thread
 
+from unittest import TestCase
+
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
+from tests.neuro_san.session.close_contract.streaming_cancel_server import StreamingCancelServer
 
-class TestHttpServiceAgentSessionCloseIntegration:
+
+class TestHttpServiceAgentSessionCloseIntegration(TestCase):
     """
     close() interrupts a data-flowing post-header streaming read from another thread.
 
     Transport-level test that HttpServiceAgentSession.close() aborts a streaming
     read in the data-flowing post-header case.
 
-    Uses a real in-process server (streaming_cancel_server fixture) in "drip" mode:
+    Uses a real in-process server (StreamingCancelServer started by setUp()) in "drip" mode:
     it flushes headers + messages continuously, so a worker thread iterating
     streaming_chat() is reading a live stream (response tracked). The main thread
     then calls the synchronous close() and asserts the generator raises
@@ -45,14 +49,27 @@ class TestHttpServiceAgentSessionCloseIntegration:
     therefore non-blocking (closes on a daemon thread) and best-effort for that case.
     """
 
-    # pylint: disable=redefined-outer-name
-    def test_close_aborts_streaming_read(self, streaming_cancel_server):
+    def setUp(self):
+        """
+        Start an in-process StreamingCancelServer for a single test.
+        A real server drives the agent session into a blocked state before cancelling it.
+        """
+        self.streaming_cancel_server: StreamingCancelServer = StreamingCancelServer()
+        self.streaming_cancel_server.start()
+
+    def tearDown(self):
+        """
+        Stop the StreamingCancelServer started by setUp().
+        """
+        self.streaming_cancel_server.stop()
+
+    def test_close_aborts_streaming_read(self):
         """
         With a live (data-flowing) stream being read, close() from another thread
         makes the streaming generator raise AgentSessionClosedError.
         """
         session = HttpServiceAgentSession(
-            host="127.0.0.1", port=streaming_cancel_server.port, agent_name="drip")
+            host="127.0.0.1", port=self.streaming_cancel_server.port, agent_name="drip")
         request: Dict[str, Any] = {"user_message": {"type": "HUMAN", "text": "go"}}
 
         got_first: Event = Event()

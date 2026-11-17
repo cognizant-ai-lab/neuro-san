@@ -457,9 +457,10 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         """
         Filtering must not leak into the caller's dictionary: reservationists and coded tools
         may keep using the spec they deployed.  The spec deliberately exercises every filter
-        that writes into a spec (defaults, commondefs substitution and stripping, and the
-        in-place name correction of a "/" agent name) as well as a metadata-injecting base
-        storage writer, and the caller's dictionary must still come out untouched.
+        that writes into a spec (defaults, commondefs substitution and stripping, the function
+        block made from a top-level description with its default parameters, and the in-place
+        name correction of a "/" agent name) as well as a metadata-injecting base storage
+        writer, and the caller's dictionary must still come out untouched.
         """
         storage: ExpiringAgentNetworkStorage = self._make_storage()
         storage.set_base_storage(RecordingReservationsStorage(inject_metadata=True))
@@ -467,6 +468,9 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         spec["commondefs"] = {"replacement_strings": {"greet": "hello"}}
         spec["tools"][0]["tools"] = ["help/er"]
         spec["tools"][1]["name"] = "help/er"
+        # Give the helper only a top-level description, so the chain makes its function block.
+        helper: Dict[str, Any] = spec.get("tools")[1]
+        helper["description"] = helper.pop("function").get("description")
         expected: Dict[str, Any] = deepcopy(spec)
         r_a: Reservation = self._make_reservation("agent_a")
         await storage.add_reservations({r_a: spec}, source="test")
@@ -478,3 +482,4 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertEqual("help_er", stored["tools"][1]["name"])
         self.assertEqual(["help_er"], stored["tools"][0]["tools"])
         self.assertIn("reservation", stored["metadata"])
+        self.assertEqual(["inquiry"], stored.get("tools")[1].get("function").get("parameters").get("required"))

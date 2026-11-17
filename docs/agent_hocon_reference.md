@@ -10,6 +10,12 @@ for its data-driven configuration elements.  Very simply put, you can think of
 .hocon files as JSON files that allow comments, but there is more to the hocon
 format than that which you can explore on your own.
 
+A [JSON Schema](./agent_network_schema.hocon) describing many of the keys in this document is also
+available for scripted validation. It is intentionally permissive and does not catch every
+mis-spelling; see [agent_hocon_schema.md](./agent_hocon_schema.md) for the exact coverage and how to
+use it. For checking an individual file by hand, also see
+[hocon_validator_cli.md](./hocon_validator_cli.md).
+
 Specifications in this document each have header changes for the depth of scope of the dictionary header they pertain to.
 Some key descriptions refer to values that are dictionaries.
 Sub-keys to those dictionaries will be described in the next-level down heading scope from their parent.
@@ -58,6 +64,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [http_headers](#http_headers)
         - [sly_data_output_schema](#sly_data_output_schema)
         - [invocation](#invocation)
+    - [description - a shorter way to give the function description](#description-2)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
@@ -93,6 +100,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [middleware](#middleware)
         - [class](#class-2)
         - [args](#args-1)
+            - [activation_capsule](#activation_capsule)
             - [chat_history](#chat_history)
             - [origin](#origin)
             - [origin_str](#origin_str)
@@ -236,8 +244,8 @@ to expose secrets by checking them in.
 If your favorite model, or new hotness is not listed in `default_llm_info.hocon`,
 you can still use it by specifying the [class](#class) key directly, or by extending the list in one of two ways:
 
-(1) Set the absolute path to your extension HOCON file using the or
-[llm_info_file](#llm_info_file) keys in the agent network HOCON file.
+(1) Set the absolute path to your extension HOCON file using the [llm_info_file](#llm_info_file)
+key in the agent network HOCON file.
 
 (2) Set the extension HOCON file to the environment variable
 [AGENT_LLM_INFO_FILE](./llm_info_hocon_reference.md#AGENT_LLM_INFO_FILE-environment-variable).
@@ -533,10 +541,13 @@ and we also do not require redefining the `type` as this is always the same for 
 
 What is defined in this dictionary is what is returned for the agent's Function() neuro-san web API call.
 
+An agent can also give its description at its top level, as a [description](#description-2).
+
 <!--- pyml disable-next-line no-duplicate-heading -->
 #### description
 
-Every agent _must_ have its function description filled out.
+Every agent other than a [toolbox](#toolbox) agent _must_ have its function description filled out, here or as a
+top-level [description](#description-2).
 This is a single string value which informs anything upstream as to what _this_ agent can do for it.
 
 For a user-facing front-man, what is contained in this description often suffices as a prompt for the user.
@@ -547,9 +558,32 @@ Parameters contains an optional [JSON Schema](https://json-schema.org) dictionar
 specific information the agent needs as input arguments when it is called.
 Only the `type: object` + `properties` form described below is supported.
 JSON Schema constructs outside this form (such as `additionalProperties`,
-`anyOf`, or `$ref`) are not honored: a schema without a `properties` dictionary
-is rejected as invalid when the agent is called as a tool, and unsupported
-constructs appearing alongside a `properties` dictionary are ignored.
+`anyOf`, or `$ref`) are not honored: a schema that uses them without a
+`properties` dictionary is rejected as invalid when the agent is called as a
+tool, and unsupported constructs appearing alongside a `properties` dictionary
+are ignored.
+
+An LLM-enabled agent other than the front-man whose function has no `parameters`, or a null one, gets one
+required `inquiry` string parameter, because its input prompt is built from the arguments of the call. This is
+the same as declaring these parameters:
+
+```json
+{
+    "type": "object",
+    "properties": {
+        "inquiry": {
+            "type": "string",
+            "description": "The request to send to this agent."
+        }
+    },
+    "required": ["inquiry"]
+}
+```
+
+An LLM sub-agent with these default parameters gets only `inquiry`, so a [coded tool](#class-1) that calls one
+sends `inquiry`. Coded tools and [toolbox](#toolbox) agents get no default parameters. A `parameters` key outside
+the function dictionary is a misconfiguration: it is not used when the agent is called, and a sub-agent with one
+gets no default parameters.
 
 A front-man typically does not need parameters defined when its agent network is only
 ever talked to directly by a user.
@@ -684,6 +718,41 @@ the caller disconnects.  Events can also be called periodically by configuration
 See the [periodic key in the manifest documentation](./manifest_hocon_reference.md#periodic) for
 more information.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
+### description
+
+A shorter way to give the [function description](#description-1) of an agent: a single string that
+tells clients and calling agents what _this_ agent can do. It is put into the agent's [function](#function),
+which is made when the agent has none, so a function dictionary is needed only for what else it holds,
+such as [parameters](#parameters). For example, this agent:
+
+```json
+{
+    "name": "fiction_recommender",
+    "description": "Recommends fiction books based on the user's preferences.",
+    "instructions": "Recommend fiction books that match the preferences you are given."
+}
+```
+
+works the same as this one:
+
+```json
+{
+    "name": "fiction_recommender",
+    "function": {
+        "description": "Recommends fiction books based on the user's preferences."
+    },
+    "instructions": "Recommend fiction books that match the preferences you are given."
+}
+```
+
+Neither form declares parameters, so when this agent is a sub-agent, it gets the default `inquiry` parameter
+described under [parameters](#parameters).
+
+The description is not used when the function has a description of its own, for a [toolbox](#toolbox)
+agent, which gets its function from the toolbox, or for an agent that gives `parameters` outside its
+function dictionary. Parameters only work inside the function dictionary.
+
 ### instructions
 
 When included, the single (often very long) string value here tells an LLM-enabled agent
@@ -717,8 +786,9 @@ and the context of its query.
 
 #### External Agents
 
-A `/name` entry or a URL entry refers to an agent network outside this one, on the same server or on another
-neuro-san server. See [External Agents](./external_agents.md) for the reference forms, ports and the https rule.
+A `/name` entry or a URL entry refers to an agent network outside this one: on the same server, on another
+neuro-san server, or in an agent network file fetched by URL. See [External Agents](./external_agents.md) for the
+reference forms, ports and the https rule.
 
 #### MCP Servers
 
@@ -843,8 +913,12 @@ and called in multiple contexts. It can also be used to supply or override argum
 
 #### tools (args)
 
-CodedTools are allowed to call out to other tools programmatically when they also derive from the BranchActivation
-class within neuro-san. In order to allow for discovery of these connections to other agents by validation processes
+CodedTools are allowed to call out to other tools/agents in the graph programmatically via the
+[ActivationCapsule](../neuro_san/interfaces/activation_capsule.py) instance passed to them in the `activation_capsule` key
+of their args. Its `use_tool()` method calls a tool or agent by name, and its `use_reservation()` method calls a
+temporary agent network created through a Reservation
+(see [copyist.py](../neuro_san/coded_tools/copy_cat/copyist.py) for a `use_reservation()` example).
+In order to allow for discovery of these connections to other agents by validation processes
 and Connectivity() calls, by convention we expect a tools dictionary to be specified in the args for the tool that
 defines which agents _might_ be called.  The keys can be any string you want, and the values are tools that
 can be called as a result of the CodedTool being invoked.
@@ -1066,10 +1140,10 @@ parsing of that structure is removed from the ChatMessage text field.
 
 Supported values are:
 
-- `json`    Looks for JSON in the messages from the LLM and extracts
+- `json`    Looks for a JSON dictionary in the messages from the LLM and extracts it.
 
-Currently, the front-man is the only agent node that ever needs to specify this aspect of the [function](#function)
-definition.
+Only the front-man's `structure_formats` is used. It is an agent key, like `tools`, not part of the
+[function](#function).
 
 Example networks that parse their structure_formats:
 
@@ -1082,7 +1156,7 @@ Note that the order of appearance in the list can matter.
 
 For an overview of middleware, see the [Overview](https://docs.langchain.com/oss/python/langchain/middleware/overview).
 
-Example networks that parse their structure_formats:
+Example networks that use middleware:
 
 - [pii_middleware.hocon](../neuro_san/registries/pii_middleware.hocon)
 
@@ -1096,7 +1170,7 @@ The fully-qualified class name of the langchain AgentMiddleware class to be inst
 
 AgentMiddleware allows for calling code to be executed in the following situations:
 - before the agent execution starts (abefore_agent())
-- after the agent execution starts (aafter_agent())
+- after the agent execution completes (aafter_agent())
 - before the LLM is called (abefore_model())
 - after the LLM is called (aafter_model())
 - intercept and control async model execution (awrap_model_call())
@@ -1119,6 +1193,12 @@ These will depend on the constructor signature of the class you are trying to in
 
 There are some special args that will be populated with information provided by the agent framework
 if they are specified in both the middleware dictionary and the class constructor signature:
+
+##### activation_capsule
+
+An [ActivationCapsule](../neuro_san/interfaces/activation_capsule.py) instance that the middleware can use
+to call other tools/agents in the graph, call temporary agent networks created through Reservations,
+or create LLM model instances. See [tools (args)](#tools-args).
 
 ##### chat_history
 

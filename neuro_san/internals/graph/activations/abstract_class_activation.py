@@ -25,7 +25,6 @@ from asyncio import AbstractEventLoop
 from copy import deepcopy
 from logging import getLogger
 from logging import Logger
-from os import environ
 from os import pathsep
 from time import perf_counter
 import traceback
@@ -34,13 +33,11 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
-from leaf_common.config.config_util import ConfigUtil
 from leaf_common.logging.log_once import LogOnce
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver import Resolver
 from leaf_common.resolution.resolver_util import ResolverUtil
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
 
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist
@@ -56,6 +53,7 @@ from neuro_san.internals.reservations.accumulating_agent_reservationist import A
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.types.agent_message import AgentMessage
 
 
@@ -138,6 +136,10 @@ class AbstractClassActivation(AbstractCallableActivation):
             # We specifically give the CodedTools the accumulating version so they
             # do not have any access to service internals.
             self.arguments["reservationist"] = self.reservationist
+        if self.arguments.get("activation_capsule") is None:
+            # The RunContext owns this ActivationCapsule and releases what it
+            # accumulates in its own close_of_work().
+            self.arguments["activation_capsule"] = self.run_context.get_activation_capsule()
 
     def get_full_class_ref(self) -> str:
         """
@@ -186,7 +188,7 @@ class AbstractClassActivation(AbstractCallableActivation):
         stop: float = perf_counter()
         duration: float = stop - start
 
-        threshold_str: str = Env.getenv("AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS", "0")
+        threshold_str: str = NeuroSanConfig.get("internals.tools.AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS")
         threshold: float = 0.0
         try:
             threshold = float(threshold_str)
@@ -397,11 +399,8 @@ Check these things:
                 Defaults to False for backwards compatibility, where fully-qualified
                 references can resolve to any class on the server's PYTHONPATH.
         """
-        # ConfigUtil.get_bool accepts the boolean-like spellings used elsewhere for
-        # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
-        # operator setting this security flag the way other flags are set gets the
-        # behavior they expect rather than a silent fail-open.
-        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", False)
+        only_value: bool = NeuroSanConfig.get_bool("internals.tools.AGENT_TOOL_PATH_ONLY")
+        return only_value
 
     def _log_unrestricted_resolution_notice_once(self):
         """

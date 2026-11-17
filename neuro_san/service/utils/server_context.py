@@ -17,10 +17,10 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 
 from threading import Lock
-from os import environ
 
 from janus import Queue
 
@@ -32,6 +32,8 @@ from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSour
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.fetched_agent_network_storage import FetchedAgentNetworkStorage
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.service.utils.server_status import ServerStatus
@@ -75,6 +77,10 @@ class ServerContext(ServerContextLite):
         for storage_class in StorageClass.ALL_PERMANENT:
             self.network_storage_dict[storage_class] = AgentNetworkStorage()
         self.network_storage_dict[StorageClass.TEMP] = ExpiringAgentNetworkStorage()
+        # Fetched storage is left out entirely when AGENT_FETCHABLE_TOOL_SCHEMES enables no scheme.
+        fetchable_schemes: List[str] = FetchedAgentNetworkStorage.get_fetchable_schemes()
+        if len(fetchable_schemes) > 0:
+            self.network_storage_dict[StorageClass.FETCHED] = FetchedAgentNetworkStorage(fetchable_schemes)
 
         self.periodic_configs: Dict[str, Dict[str, Any]] = {}
         self.agent_authorizer: AgentAuthorizer = None
@@ -107,7 +113,7 @@ class ServerContext(ServerContextLite):
         if self.executor_pool is None:
             # Default of None reverts to ThreadPoolExecutor default of (num_cpus + 4).
             max_workers: int = None
-            max_workers_str: str = environ.get("AGENT_MAX_WORKERS_PER_REQUEST", None)
+            max_workers_str: str = NeuroSanConfig.get("service.limits.AGENT_MAX_WORKERS_PER_REQUEST")
             if max_workers_str is not None:
                 try:
                     max_workers = int(max_workers_str)

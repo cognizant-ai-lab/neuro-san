@@ -7,7 +7,8 @@ langchain-anthropic>=1.4.3,<2.0
 # the "anthropic-bedrock" class (ChatAnthropicBedrock). It is a superset of plain
 # langchain-aws, so the boto3-based "bedrock" class (ChatBedrock) keeps working.
 langchain-aws[anthropic]>=1.0.0,<2.0
-langchain-google-genai>=4.1.2,<5.0
+# 4.3.0 is the first release that accepts temperature=None, the gemini class default.
+langchain-google-genai>=4.3.0,<5.0
 langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0
 # langchain-openrouter depends on the openrouter SDK, which pins pydantic<2.13

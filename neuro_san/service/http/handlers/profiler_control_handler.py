@@ -15,8 +15,10 @@
 #
 # END COPYRIGHT
 
-from typing import Any, Dict, Optional
-import os
+from typing import Any
+from typing import Dict
+from typing import Optional
+
 import json
 from json.decoder import JSONDecodeError
 import logging
@@ -26,6 +28,7 @@ from tornado.web import RequestHandler
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.utils.request_util import RequestUtil
 
 try:
@@ -44,13 +47,13 @@ class ProfilerControlHandler(RequestHandler):
         """
         Implementation of POST request handler for profiler control.
         """
-        is_enabled: bool = os.getenv("ENABLE_RUN_TIME_STATISTICS", "false").lower() == "true"
+        is_enabled: bool = NeuroSanConfig.get_bool("service.diagnostics.AGENT_ENABLE_RUN_TIME_STATISTICS")
         logger = logging.getLogger(self.__class__.__name__)
 
         if not is_enabled:
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write("Run-time profiler is disabled. "
-                       "To enable it, set environment variable ENABLE_RUN_TIME_STATISTICS to 'true'.")
+                       "To enable it, set environment variable AGENT_ENABLE_RUN_TIME_STATISTICS to 'true'.")
             logger.info("Run-time profiler is disabled.")
             return
 

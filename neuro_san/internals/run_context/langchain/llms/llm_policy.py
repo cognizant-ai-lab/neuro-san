@@ -31,8 +31,9 @@ from neuro_san.internals.interfaces.environment_configuration import Environment
 class LlmPolicy(EnvironmentConfiguration):
     """
     Policy interface to manage the lifecycles of web clients that talk to LLM services.
-    This inherits from EnvironmentConfiguration in order to support easy access to the
-    get_value_or_env() method.
+    This inherits from EnvironmentConfiguration so that subclasses outside this package
+    can still call self.get_value_or_env(). Policies in this package call the static
+    EnvironmentConfiguration.get_value_or_env() directly.
 
     There are really two styles of implementation encompassed by this one interface.
 

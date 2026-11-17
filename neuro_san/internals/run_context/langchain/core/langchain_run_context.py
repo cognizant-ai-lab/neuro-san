@@ -32,23 +32,24 @@ from pydantic_core import ValidationError
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from langchain.agents.factory import create_agent
-from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
 from langchain_core.runnables.base import Runnable
+from langchain_core.runnables.base import RunnableSerializable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
+from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.origination import Origination
-from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
@@ -57,7 +58,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
-from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
+from neuro_san.internals.run_context.utils.agent_activation_capsule import AgentActivationCapsule
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.message.utils.tool_pairing import ToolPairing
@@ -120,7 +121,7 @@ class LangChainRunContext(RunContext):
         # A Placeholder for observabilty-specific tracing objects
         self.tracing_context: TracingContext = tracing_context
 
-        self.capsule: ActivationCapsule = None
+        self.capsule: AgentActivationCapsule = None
 
         # If you add more members here, be sure to clear them out in close_of_work() below.
 
@@ -140,19 +141,18 @@ class LangChainRunContext(RunContext):
 
     def create_capsule(self):
         """
-        Create the ActivationCapsule
+        Create the AgentActivationCapsule
         """
         if self.tool_caller is not None:
             agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
-            # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
-            factory: AgentNetworkInspector = self.tool_caller.get_inspector()
-            self.capsule = ActivationCapsule(self, agent_spec, factory)
+            factory: AgentToolFactory = self.tool_caller.get_tool_factory()
+            self.capsule = AgentActivationCapsule(self, agent_spec, factory)
         else:
             # DEF: It's likely that this current arrangement might impede middleware on the front-man
             # to not be able to dynamically call out to other agents in the graph.
             # Need a good example here. Also ConnectifiyReporter would need to be enhanced
             # to look for tools specified in the middleware.
-            self.capsule = ActivationCapsule(self)
+            self.capsule = AgentActivationCapsule(self)
 
     def update_from_parent_run_context(self, parent_run_context: RunContext):
         """
@@ -323,15 +323,15 @@ class LangChainRunContext(RunContext):
             raise ValueError(error)
 
         self.llm_resources = main_llm_resources
-        agent: Runnable = self.create_agent(instructions, main_llm_resources.get_model())
+        agent: Runnable = self.create_agent(instructions, self.llm_resources.get_model())
 
         return agent
 
-    def create_agent(self, instructions: str, llm: BaseLanguageModel) -> Runnable:
+    def create_agent(self, instructions: str, llm: RunnableSerializable) -> Runnable:
         """
         Creates an agent.
         :param instructions: The instructions to use for the agent
-        :param llm: The BaseLanguageModel to use for the agent
+        :param llm: The RunnableSerializable model to use for the agent
         :return: An Agent (Runnable)
         """
 
@@ -486,7 +486,7 @@ class LangChainRunContext(RunContext):
             tool_chat_list_string = tool_chat_list_string[0]
 
         tool_message: BaseMessage = None
-        output_origin: str = tool_output.get("origin")
+        output_origin: List[Dict[str, Any]] = tool_output.get("origin")
         handled: bool = False
         if isinstance(tool_chat_list_string, str):
             # Sometimes output comes back as a list.
@@ -523,7 +523,7 @@ class LangChainRunContext(RunContext):
 
         return tool_message
 
-    def parse_tool_chat_list_string(self, tool_chat_list_string: str, origin: str) -> BaseMessage:
+    def parse_tool_chat_list_string(self, tool_chat_list_string: str, origin: List[Dict[str, Any]]) -> BaseMessage:
         """
         Parse a tool output string into a list of messages
         :param tool_chat_list_string: The string to parse
@@ -566,6 +566,15 @@ class LangChainRunContext(RunContext):
                                                            tool_result_origin=origin)
 
         return tool_message
+
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        # Nothing to release here: everything this context owns is released in close_of_work().
 
     async def close_of_work(self, parent_resource: RunContext = None):
         """
@@ -669,3 +678,9 @@ class LangChainRunContext(RunContext):
         :return: The TracingContext associated with the instance
         """
         return self.tracing_context
+
+    def get_activation_capsule(self) -> AgentActivationCapsule:
+        """
+        :return: The AgentActivationCapsule associated with the instance
+        """
+        return self.capsule

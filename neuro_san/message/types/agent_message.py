@@ -23,6 +23,8 @@ from typing import Literal
 from typing import Optional
 from typing import Union
 
+from typing_extensions import override
+
 from neuro_san.message.types.traced_message import TracedMessage
 
 
@@ -50,10 +52,10 @@ class AgentMessage(TracedMessage):
         super().__init__(content=content, trace_source=trace_source, **kwargs)
         self.structure: Dict[str, Any] = structure
 
-    @property
-    def lc_kwargs(self) -> Dict[str, Any]:
+    @override
+    def trace_kwargs(self) -> Dict[str, Any]:
         """
-        :return: the keyword arguments for serialization.
+        :return: the keyword arguments for minimal_additional_kwargs().
         """
         return {
             "content": self.content,

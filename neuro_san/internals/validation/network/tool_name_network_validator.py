@@ -56,8 +56,8 @@ class ToolNameNetworkValidator(AbstractNetworkValidator):
         for agent_name, agent in name_to_spec.items():
             spec_name: str = agent.get("name")
             if not re.match(ToolNameNetworkValidator.TOOL_NAME_PATTERN, agent_name) or \
-                    not re.match(self.TOOL_NAME_PATTERN, spec_name):
-                error_msg = f"{agent_name} must match the regex '{self.TOOL_NAME_PATTERN}'"
+                    not re.match(ToolNameNetworkValidator.TOOL_NAME_PATTERN, spec_name):
+                error_msg = f"{agent_name} must match the regex '{ToolNameNetworkValidator.TOOL_NAME_PATTERN}'"
                 errors.append(error_msg)
 
         # Only warn if there is a problem

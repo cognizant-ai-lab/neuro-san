@@ -29,17 +29,17 @@
         ]
     },
     "llm_config": {
-        "model_name": "gemini-3-flash",
+        # Some models, such as gemini-3-flash-preview, are not served on the Gemini API "v1" that
+        # google-genai 3.0.0 and later use by default. Set "api_version": "v1beta" for them.
+        "model_name": "gemini-3.5-flash-lite",
 
-        # For Gemini 3.0+ models, it is recommended to set the temperature parameter at 1.0 as setting it to 0.7 can cause infinite loops,
-        # degraded reasoning performance, and failure on complex tasks.
-        # See https://ai.google.dev/gemini-api/docs/gemini-3#temperature
-        "temperature": 1.0,
+        # No "temperature": gemini-3.5-flash-lite uses fixed sampling, and langchain drops a
+        # temperature for it and warns when one is set.
 
         # Gemini 3 series models use dynamic thinking by default to reason through prompts.
         # Set "thinking_level" to "minimal" to match the “no thinking” setting for most queries.
-        # Note that "minimal" is only valid for Gemini 3.0 Flash but not Pro models.
-        # See https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level
+        # Gemini 3.5 Flash-Lite accepts "minimal", but not every model does.
+        # See https://aistudio.google.com/docs/thinking#thinking-levels for the levels each model supports.
         "thinking_level": "minimal"
     },
     "tools": [

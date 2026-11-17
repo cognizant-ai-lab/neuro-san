@@ -169,7 +169,7 @@ Example:
 "class": "get_current_date_time.GetCurrentDateTime"
 ```
 
-#### [`description`](./agent_hocon_reference.md#description)
+#### [`description`](./agent_hocon_reference.md#description-1)
 
 A plain-language explanation of the tool’s behavior. This is essential for agents to understand how and when to use the tool.
 

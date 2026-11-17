@@ -28,6 +28,7 @@ from typing import Union
 from copy import copy
 
 from pydantic import ConfigDict
+from typing_extensions import override
 
 from neuro_san.message.types.traced_message import TracedMessage
 from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
@@ -85,10 +86,10 @@ class AgentFrameworkMessage(TracedMessage):
         self.structure: Dict[str, Any] = structure
         self.redactor: SlyDataRedactor = redactor
 
-    @property
-    def lc_kwargs(self) -> Dict[str, Any]:
+    @override
+    def trace_kwargs(self) -> Dict[str, Any]:
         """
-        :return: the keyword arguments for serialization.
+        :return: the keyword arguments for minimal_additional_kwargs().
         """
         return {
             "content": self.content,

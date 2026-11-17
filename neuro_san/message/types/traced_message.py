@@ -63,17 +63,12 @@ class TracedMessage(BaseMessage):
         else:
             super().__init__(content=content, **kwargs)
 
-    @property
-    def lc_serializable(self) -> bool:
-        """
-        Indicates if the object can be serialized by LangChain.
-        """
-        return True
+    # LangChain serializability comes from the inherited BaseMessage.is_lc_serializable() classmethod.
+    # Do not define an lc_serializable attribute: Serializable.to_json() rejects it as deprecated.
 
-    @property
-    def lc_kwargs(self) -> Dict[str, Any]:
+    def trace_kwargs(self) -> Dict[str, Any]:
         """
-        :return: the dictionary of keyword arguments for serialization.
+        :return: the dictionary of keyword arguments for minimal_additional_kwargs().
         """
         raise NotImplementedError
 
@@ -87,7 +82,7 @@ class TracedMessage(BaseMessage):
 
         key: str = None
         value: Any = None
-        for key, value in self.lc_kwargs.items():
+        for key, value in self.trace_kwargs().items():
             new_key: str = None
             new_value: Any = None
             new_key, new_value = self.translate_for_trace(key, value)

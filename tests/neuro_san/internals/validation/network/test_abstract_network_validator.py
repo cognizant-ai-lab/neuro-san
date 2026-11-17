@@ -97,6 +97,10 @@ class TestAbstractNetworkValidator(TestCase):
         """HTTPS URLs should be recognized as well."""
         self.assertTrue(AbstractNetworkValidator.is_url_or_path("https://example.com/api"))
 
+    def test_is_url_or_path_file_url(self):
+        """File URLs should be recognized as well."""
+        self.assertTrue(AbstractNetworkValidator.is_url_or_path("file:///local_path/my.hocon"))
+
     def test_is_url_or_path_agent_name(self):
         """Agent names should not be recognized as URLs or paths."""
         self.assertFalse(AbstractNetworkValidator.is_url_or_path("synonymizer"))

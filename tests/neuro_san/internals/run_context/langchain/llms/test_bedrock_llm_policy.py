@@ -31,6 +31,7 @@ from leaf_common.resolution.resolver import Resolver
 from neuro_san.internals.run_context.langchain.llms.bedrock_llm_policy import BedrockLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class TestBedrockLlmPolicy(TestCase):
@@ -58,6 +59,8 @@ class TestBedrockLlmPolicy(TestCase):
         set so that boto3 never searches for real credentials.
         """
         # patch.dict restores the whole environment on stop(), including the variables removed below.
+        # Cleanups run last-in first-out, so this reload sees the restored environment.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
@@ -69,6 +72,7 @@ class TestBedrockLlmPolicy(TestCase):
                 os.environ.pop(name)
         os.environ["AWS_ACCESS_KEY_ID"] = "test-access-key-id"
         os.environ["AWS_SECRET_ACCESS_KEY"] = "test-secret-access-key"
+        NeuroSanConfig.reset_for_testing()
 
         # Loaded after the environment is pinned so the stock hocon is what gets read.
         self.factory: DefaultLlmFactory = DefaultLlmFactory()

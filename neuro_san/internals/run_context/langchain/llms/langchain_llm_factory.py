@@ -31,8 +31,8 @@ from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources impo
 class LangChainLlmFactory:
     """
     Interface for Factory classes creating LLM BaseLanguageModels.
-    Implementations typically also derive from EnvironmentConfiguration in order to support easy access to
-    the get_value_or_env() method.
+    Implementations can read config values with environment fallbacks through the static
+    EnvironmentConfiguration.get_value_or_env() method.
 
     Most methods take a config dictionary which consists of the following keys:
 

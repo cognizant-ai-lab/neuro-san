@@ -58,7 +58,7 @@ class MessageJournal(Journal):
         """
         self.message_processor = message_processor
 
-    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]]):
+    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]] = None):
         """
         Writes a BaseMessage entry into the journal
         :param message: The BaseMessage instance to write to the journal
@@ -68,6 +68,7 @@ class MessageJournal(Journal):
                     "tool"                  The string name of the tool in the spec
                     "instantiation_index"   An integer indicating which incarnation
                                             of the tool is being dealt with.
+                Can be None, in which case the message dictionary has no "origin" key.
         """
         converter = BaseMessageDictionaryConverter(origin=origin)
         message_dict: Dict[str, Any] = converter.to_dict(message)

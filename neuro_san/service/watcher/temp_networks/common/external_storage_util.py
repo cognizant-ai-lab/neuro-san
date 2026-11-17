@@ -38,6 +38,9 @@ class ExternalStorageUtil:
 
         # Check if expiration interval is set by environment variable,
         # and adjust it if so (overriding the constructor parameter)
+        # Read os.environ directly, not NeuroSanConfig: set_check_interval_seconds() communicates
+        # a per-worker override by writing this env var at run time, and NeuroSanConfig caches
+        # the environment at import time, so it would not see that write.
         envvar_name: str = ExternalStorageUtil.EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS_ENV_VAR
         envvar_value: str = getenv(envvar_name, "0")
         try:

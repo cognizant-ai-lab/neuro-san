@@ -59,8 +59,8 @@ class ArgumentValidator:
         args_set: Set[str] = set(args.keys())
 
         # Identify which arguments are not accepted by the method/class
-        invalid_args: Set[str] = args_set - class_args_set
-        if invalid_args:
+        invalid_args: Set[str] = args_set.difference(class_args_set)
+        if len(invalid_args) > 0:
             raise ValueError(
                 f"Arguments {invalid_args} for '{method_class.__name__}' do not match any attributes "
                 "of the class or any arguments of the method."

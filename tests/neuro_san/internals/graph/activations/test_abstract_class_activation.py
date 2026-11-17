@@ -31,6 +31,7 @@ from unittest.mock import patch
 from langchain_core.messages.ai import AIMessage
 from typing_extensions import override
 
+from neuro_san.interfaces.activation_capsule import ActivationCapsule
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
@@ -92,6 +93,13 @@ class TestAbstractClassActivation(IsolatedAsyncioTestCase):
         self.assertIsNotNone(origin)
         self.assertEqual(origin_str, "test_full_name")
         self.assertIsNotNone(progress_reporter)
+
+    def test_initialization_activation_capsule(self) -> None:
+        """
+        Test that the activation passes its RunContext's ActivationCapsule to the CodedTool in its arguments.
+        """
+        activation_capsule: ActivationCapsule = self.activation_instance.arguments.get("activation_capsule")
+        self.assertIs(activation_capsule, self.mock_run_context.get_activation_capsule.return_value)
 
     def test_get_full_class_ref(self) -> None:
         """

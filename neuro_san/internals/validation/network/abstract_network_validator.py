@@ -37,9 +37,8 @@ class AbstractNetworkValidator(DictionaryValidator):
         """
         Validate the agent network.
 
-        Expects a fully-resolved config (commondefs substitution, defaults
-        injection, and name correction already applied). Production callers
-        get this from the restorer's filter chain; the parameter validators
+        Expects a config that NetworkConfigFilterChain has fully resolved. Production
+        callers get this from the restorer's filter chain; the parameter validators
         get it from ParametersSchemaNetworkValidator, which filters once for
         both of its phases rather than once per validator.
 
@@ -100,7 +99,8 @@ class AbstractNetworkValidator(DictionaryValidator):
         """
         return (tool.startswith("/") or
                 tool.startswith("http://") or
-                tool.startswith("https://"))
+                tool.startswith("https://") or
+                tool.startswith("file://"))
 
     @staticmethod
     def remove_dictionary_tools(down_chains: List[Any]) -> List[str]:

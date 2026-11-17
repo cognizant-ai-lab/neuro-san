@@ -600,18 +600,37 @@ ENV LEAF_LOG_SENSITIVE="false"
 # Note this does not restrict other class references an agent network can make
 # (llm_config.class, middleware classes, langchain toolbox tool classes).  See
 # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#class-1
-# The coded tools shipped with neuro-san resolve fine under this restriction,
-# so this sample container turns the hardening on.  If your own agent networks
-# use fully-qualified CodedTool class references, migrate them to the
-# "<module>.<ClassName>" form relative to your AGENT_TOOL_PATH, or set this to
-# "false" to restore unrestricted resolution (the server logs a one-time notice
-# when unrestricted).
+# The coded tools shipped with neuro-san resolve fine under this restriction
+# when referenced from the registries, so this sample container turns the
+# hardening on.  If your own agent networks use fully-qualified CodedTool class
+# references, migrate them to the "<module>.<ClassName>" form relative to your
+# AGENT_TOOL_PATH, or set this to "false" to restore unrestricted resolution
+# (the server logs a one-time notice when unrestricted).
+#
+# Caution: an agent network file fetched by URL or path from a tool reference
+# must use fully-qualified CodedTool class references, and those do not resolve
+# while this is "true".  Such a network passes validation and starts, but fails
+# with 'Could not find class' when the CodedTool is called.  See
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/external_agents.md#agent-network-file-references
+# To use fetched agent networks with CodedTools, set this to "false".
 ENV AGENT_TOOL_PATH_ONLY="true"
+
+# Url schemes for which an agent network file named by a tool reference may be fetched,
+# separated by commas or whitespace.  Supported schemes are "http", "https" and "file"
+# (a bare url path with no scheme counts as "file").  Empty (the default) turns fetching off entirely.  See
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/external_agents.md#agent-network-file-references
+ENV AGENT_FETCHABLE_TOOL_SCHEMES=""
 
 # Limits the number of agents considered from external servers' listings
 # to avoid exorbitantly long loops in handling them.  Negative values or
 # 0 (the default) means the number of agents listed is unlimited.
-ENV MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
+ENV AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
+
+# With the default value of "false", any AGENT_* configuration can be read as an override
+# to default policy at runtime from the environment.  When this is "true", the environment
+# is only read once at startup, and AGENT_* configuration values will not
+# be read from the environment henceforth.
+ENV AGENT_LOCKDOWN_ENV="false"
 
 #
 # Authorization
@@ -655,7 +674,7 @@ ENV AGENT_AUTHORIZER_ALLOW_RELATION="read"
 # Whether to enable run-time statistics endpoints for neuro-san server as a whole.
 # These endpoints can be used to get information about the server's current resource usage
 # and also to control run-time service profiler.
-ENV ENABLE_RUN_TIME_STATISTICS="false"
+ENV AGENT_ENABLE_RUN_TIME_STATISTICS="false"
 
 # Below: Env vars specific to OpenFgaAuthorizer
 

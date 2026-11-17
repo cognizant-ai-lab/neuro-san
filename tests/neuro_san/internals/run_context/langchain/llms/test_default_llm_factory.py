@@ -35,6 +35,7 @@ from typing_extensions import override
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class TestDefaultLlmFactory(TestCase):
@@ -119,9 +120,12 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
                 environment[name] = value
         environment["OPENAI_API_KEY"] = "sk-test"
 
+        # Cleanups run last-in first-out, so this reload sees the restored environment.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         env_patcher: Any = patch.dict(os.environ, environment, clear=True)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
+        NeuroSanConfig.reset_for_testing()
 
         # Loaded after the environment is pinned so the stock hocon is what gets read.
         self.factory: DefaultLlmFactory = DefaultLlmFactory()

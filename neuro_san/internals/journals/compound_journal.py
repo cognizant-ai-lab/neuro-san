@@ -45,7 +45,7 @@ class CompoundJournal(Journal):
         """
         self.journals.append(journal)
 
-    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]]):
+    async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]] = None):
         """
         Writes a BaseMessage entry into the journal
         :param message: The BaseMessage instance to write to the journal
@@ -55,6 +55,7 @@ class CompoundJournal(Journal):
                     "tool"                  The string name of the tool in the spec
                     "instantiation_index"   An integer indicating which incarnation
                                             of the tool is being dealt with.
+                Can be None, in which case None is passed on to each journal.
         """
         for journal in self.journals:
             await journal.write_message(message, origin)

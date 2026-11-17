@@ -86,14 +86,14 @@ class MissingNodesNetworkValidator(AbstractNetworkValidator):
             # coerce_tools treats a malformed `tools` (non-list) as empty so this
             # validator does not iterate the characters of a string. The shape
             # error itself is reported separately by ToolsShapeValidator.
-            tools: List[Any] = self.coerce_tools(agent_data)
-            safe_tools: List[str] = self.remove_dictionary_tools(tools)
+            tools: List[Any] = AbstractNetworkValidator.coerce_tools(agent_data)
+            safe_tools: List[str] = AbstractNetworkValidator.remove_dictionary_tools(tools)
 
             # Check each tool in the agent's tools list
             tool: str = None
             for tool in safe_tools:
                 # Skip URL/path tools - they're not agents and don't need nodes
-                if self.is_url_or_path(tool):
+                if AbstractNetworkValidator.is_url_or_path(tool):
                     continue
 
                 # If tool is an agent reference but has no node in network, it's invalid

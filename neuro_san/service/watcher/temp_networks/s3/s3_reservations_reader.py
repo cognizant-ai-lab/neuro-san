@@ -124,10 +124,10 @@ class S3ReservationsReader:
             # and reservation ID - which is our agent name in this design.
             #
             # ExpiringAgentNetworkStorage runs specs through ResolvedNetworkConfigFilter before
-            # they are written, so for objects it wrote this second pass is a no-op.  It still
-            # matters for objects written by instances predating that behavior (rolling
-            # upgrades) or by other writers, which would otherwise be served without their
-            # top-level defaults applied (e.g. the front man's sly_data_schema).
+            # they are written, so for objects written by this version this second pass is a
+            # no-op.  It still matters for objects written by older instances (rolling upgrades)
+            # or by other writers, which would otherwise be served without the current filters
+            # applied (e.g. the front man's sly_data_schema).
             #
             # Those foreign objects never went through the reservationist's validators, so
             # the filter (or AgentNetwork itself) can raise on a malformed shape.  Treat that

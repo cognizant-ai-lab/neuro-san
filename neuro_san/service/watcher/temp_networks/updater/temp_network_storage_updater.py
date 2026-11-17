@@ -18,8 +18,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from os import environ
-
 from asyncio import AbstractEventLoop
 from asyncio import Event
 from asyncio import run_coroutine_threadsafe
@@ -43,6 +41,7 @@ from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.internals.reservations.abstract_agent_reservationist import AbstractAgentReservationist
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.watcher.temp_networks.common.external_storage_util import ExternalStorageUtil
 
@@ -66,7 +65,7 @@ class TempNetworkStorageUpdater(Startable):
 
         # Default when not set is None (or <= 0) so as to fall back to ThreadPoolExecutor default of (num_cpus + 4)
         self.max_workers: int = None
-        max_workers_str: str = environ.get("AGENT_MAX_CONCURRENT_REQUESTS", None)
+        max_workers_str: str = NeuroSanConfig.get("service.limits.AGENT_MAX_CONCURRENT_REQUESTS")
         if max_workers_str is not None:
             try:
                 self.max_workers = int(max_workers_str)
@@ -85,7 +84,7 @@ class TempNetworkStorageUpdater(Startable):
                 raise ValueError("Temp reservations storage must be an instance of ExpiringAgentNetworkStorage")
 
             # Potentially create a "base" reservations storage class
-            storage_class_name: str = environ.get("AGENT_EXTERNAL_RESERVATIONS_STORAGE", "")
+            storage_class_name: str = NeuroSanConfig.get("service.reservations.AGENT_EXTERNAL_RESERVATIONS_STORAGE")
             external_storage: ReservationsStorage = ResolverUtil.create_instance(
                     storage_class_name,
                     "AGENT_EXTERNAL_RESERVATIONS_STORAGE env var",

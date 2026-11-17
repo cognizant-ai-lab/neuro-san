@@ -442,7 +442,7 @@ Similarly, the "not_gist" test passes when the response does not match the "gist
 
 ## Use with the Assessor
 
-The [Assessor](../neuro_san/test/assesor/assessor.py) is a tool which uses these data-driven test cases
+The [Assessor](../neuro_san/test/assessor/assessor.py) is a tool which uses these data-driven test cases
 as a basis for gathering repeated test samples so as to assess how often the test case will pass.
 You give the assessor a test case hocon file, it looks at the [success_ratio](#success_ratio) denominator
 to see how many test samples it should run.  As it gathers its output for each test sample, it

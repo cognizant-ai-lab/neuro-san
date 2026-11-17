@@ -29,13 +29,14 @@ from unittest.mock import patch
 from requests import ConnectionError as RequestsConnectionError
 from typing_extensions import override
 
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.session.http_concierge_session import HttpConciergeSession
 from neuro_san.session.session_util import SessionUtil
 
 
 class TestHttpConciergeSession(TestCase):
     """
-    Unit tests for HttpConciergeSession.list(): the MAX_AGENTS_FROM_EXTERNAL_SERVER cap,
+    Unit tests for HttpConciergeSession.list(): the AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER cap,
     the "agents" key always being present in the result, and failures raised as ValueError.
     """
 
@@ -58,11 +59,13 @@ class TestHttpConciergeSession(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Unsets MAX_AGENTS_FROM_EXTERNAL_SERVER so the shell cannot change the listing, and sets
+        Unsets AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER so the shell cannot change the listing, and sets
         AGENT_SESSION_REQUIRE_HTTPS=false so the http URL built here is accepted.
         """
         # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
         # removed or set freely here and in each test.
+        # Cleanups run last-in first-out, so this reload sees the restored environment.
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
@@ -115,7 +118,7 @@ class TestHttpConciergeSession(TestCase):
 
     def test_list_applies_max_agents_limit(self) -> None:
         """
-        With MAX_AGENTS_FROM_EXTERNAL_SERVER set, only the first N agents the server listed come back.
+        With AGENT_MAX_AGENTS_FROM_EXTERNAL_SERVER set, only the first N agents the server listed come back.
         """
         os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "2"
         session: HttpConciergeSession = self.make_session()

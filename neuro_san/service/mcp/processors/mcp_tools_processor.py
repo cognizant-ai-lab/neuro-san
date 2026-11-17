@@ -74,7 +74,7 @@ class McpToolsProcessor:
             if agent_name not in authorized_agents:
                 continue
 
-            provider: AgentNetworkProvider = public_storage.get_agent_network_provider(agent_name)
+            provider: AgentNetworkProvider = await public_storage.async_get_agent_network_provider(agent_name)
             if provider is not None:
                 agent_network: AgentNetwork = provider.get_agent_network()
                 if agent_network.is_mcp_tool():
@@ -116,7 +116,7 @@ class McpToolsProcessor:
         # Clients address the tool by its advertised name (e.g. "deep__math_guy"),
         # but the authorizer and the service table are keyed by network name
         # ("deep/math_guy"). Error strings keep the name the client used.
-        network_name: str = self._resolve_network_name(tool_name)
+        network_name: str = await self._resolve_network_name(tool_name)
 
         is_authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
@@ -257,7 +257,7 @@ class McpToolsProcessor:
             tool_dict["title"] = agent_name
         return tool_dict
 
-    def _resolve_network_name(self, tool_name: str) -> str:
+    async def _resolve_network_name(self, tool_name: str) -> str:
         """
         Map the tool name a client sent in tools/call to the network name it stands for.
 
@@ -291,11 +291,12 @@ class McpToolsProcessor:
         # network but not yet replaced a stale one still advertised under its
         # name, and then this is the answer the reservation intends: the name
         # belongs to the network so called.
-        if public_storage.get_agent_network_provider(tool_name).get_agent_network() is not None:
+        provider: AgentNetworkProvider = await public_storage.async_get_agent_network_provider(tool_name)
+        if provider is not None and provider.get_agent_network() is not None:
             return tool_name
 
         for agent_name in public_storage.get_agent_names():
-            provider: AgentNetworkProvider = public_storage.get_agent_network_provider(agent_name)
+            provider = await public_storage.async_get_agent_network_provider(agent_name)
             if provider is None:
                 continue
             agent_network: AgentNetwork = provider.get_agent_network()

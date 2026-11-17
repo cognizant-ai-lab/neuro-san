@@ -21,6 +21,7 @@ from logging import getLogger
 from logging import Logger
 from time import time
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import Optional
 from typing import Tuple
@@ -31,7 +32,6 @@ from langchain_core.callbacks.base import AsyncCallbackHandler
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import UsageMetadata
 from langchain_core.messages.base import BaseMessage
-from langchain_core.outputs.chat_generation import ChatGeneration
 from langchain_core.outputs.llm_result import LLMResult
 from langchain_core.tracers.context import register_configure_hook
 
@@ -65,13 +65,6 @@ CLASS_TABLE = {
     # The ChatOpenAI subclass the "openai" policies build; langchain serializes it under its own name.
     "ToolStrictChatOpenAI": "openai",
 }
-
-# Keys an LlmPolicy can put in a chat model's "metadata" to steer how that model's usage is booked.
-# langchain hands the metadata to on_chat_model_start(), so a policy can use a stock chat model class
-# for another provider and still say which bucket the usage belongs to and which llm_info entry prices
-# it. AzureLlmPolicy does this: Azure's response names the deployment, which has no price of its own.
-PROVIDER_METADATA_KEY = "neuro_san_provider_class"
-PRICE_MODEL_METADATA_KEY = "neuro_san_price_model_name"
 
 
 # pylint: disable=too-many-ancestors
@@ -114,6 +107,13 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     put PRICE_MODEL_METADATA_KEY in the model's metadata; PROVIDER_METADATA_KEY likewise overrides
     the provider bucket CLASS_TABLE would pick from the class name.
     """
+
+    # Keys an LlmPolicy can put in a chat model's "metadata" to steer how that model's usage is booked.
+    # langchain hands the metadata to on_chat_model_start(), so a policy can use a stock chat model class
+    # for another provider and still say which bucket the usage belongs to and which llm_info entry prices
+    # it. AzureLlmPolicy does this: Azure's response names the deployment, which has no price of its own.
+    PROVIDER_METADATA_KEY: ClassVar[str] = "neuro_san_provider_class"
+    PRICE_MODEL_METADATA_KEY: ClassVar[str] = "neuro_san_price_model_name"
 
     # Token stats
     total_tokens: int = 0
@@ -183,7 +183,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
 
         # Remember what to price this run as before the own-call check: a downstream agent's
         # cost also lands in this handler's totals, so its price model matters here too.
-        price_model_name: Optional[str] = metadata.get(PRICE_MODEL_METADATA_KEY)
+        price_model_name: Optional[str] = metadata.get(LlmTokenCallbackHandler.PRICE_MODEL_METADATA_KEY)
         run_id: Optional[UUID] = kwargs.get("run_id")
         if price_model_name and run_id is not None:
             run_id_str: str = str(run_id)
@@ -202,8 +202,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         if not self.provider_class:
             self.provider_class = chat_model_class
         # A policy can name the bucket itself when it uses a stock chat model class for another provider.
-        if metadata.get(PROVIDER_METADATA_KEY):
-            self.provider_class = metadata.get(PROVIDER_METADATA_KEY)
+        if metadata.get(LlmTokenCallbackHandler.PROVIDER_METADATA_KEY):
+            self.provider_class = metadata.get(LlmTokenCallbackHandler.PROVIDER_METADATA_KEY)
         if self.provider_class not in self.models_token_dict:
             self.models_token_dict[self.provider_class] = {}
 
@@ -229,7 +229,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         response_metadata: Dict[str, Any] = None
         model_name: str = EMPTY
         is_empty_response: bool = False
-        if isinstance(generation, ChatGeneration):
+        # Duck-type ChatGeneration: only it carries a message.
+        if hasattr(generation, "message"):
             try:
                 message: BaseMessage = generation.message
                 if isinstance(message, AIMessage):

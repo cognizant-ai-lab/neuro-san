@@ -21,6 +21,7 @@ from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -76,10 +77,10 @@ class NvidiaLlmPolicy(LlmPolicy):
             # To prevent this, we explicitly set verbose=False here (which matches the default
             # global verbose value) so that the warning is never triggered.
             verbose=False,
-            nvidia_api_key=self.get_value_or_env(config, "nvidia_api_key",
-                                                 "NVIDIA_API_KEY"),
-            nvidia_base_url=self.get_value_or_env(config, "nvidia_base_url",
-                                                  "NVIDIA_BASE_URL"),
+            nvidia_api_key=EnvironmentConfiguration.get_value_or_env(config, "nvidia_api_key",
+                                                                     "NVIDIA_API_KEY"),
+            nvidia_base_url=EnvironmentConfiguration.get_value_or_env(config, "nvidia_base_url",
+                                                                      "NVIDIA_BASE_URL"),
         )
         return llm
 

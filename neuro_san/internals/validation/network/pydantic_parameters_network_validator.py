@@ -38,7 +38,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
 
     Expects a fully-resolved config: ParametersSchemaNetworkValidator,
     the composite that owns this validator, applies NetworkConfigFilterChain
-    (commondefs, defaults, name-correction) once before running both phases.
+    once before running both phases.
     """
 
     def __init__(self, network_name: str = None):
@@ -63,9 +63,9 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s parameters via pydantic...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
-            params: Any = self._locate_parameters(agent_spec)
+            params: Any = AbstractNetworkValidator._locate_parameters(agent_spec)
 
-            if params is self._PARAMS_NOT_FOUND:
+            if params is AbstractNetworkValidator._PARAMS_NOT_FOUND:
                 # No parameters block at all - nothing to validate.
                 continue
             if params is None:

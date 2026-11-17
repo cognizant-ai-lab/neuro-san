@@ -22,7 +22,6 @@ from typing import Optional
 from typing import Set
 from typing import Union
 
-from langchain_core.agents import AgentFinish
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
@@ -52,7 +51,7 @@ class ToolExchangeRecorder:
         self.chat_history: Optional[List[BaseMessage]] = chat_history
 
     def record_tool_exchange(self, inputs: Dict[str, Any],
-                             chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) -> None:
+                             chain_result: Optional[Union[Dict[str, Any], AIMessage]]) -> None:
         """
         Appends the new complete tool rounds of one chain state to the chat history,
         ahead of the answer that is journaled next.
@@ -69,7 +68,7 @@ class ToolExchangeRecorder:
             self.chat_history.append(message)
 
     def find_tool_exchange(self, inputs: Dict[str, Any],
-                           chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) \
+                           chain_result: Optional[Union[Dict[str, Any], AIMessage]]) \
             -> List[BaseMessage]:
         """
         Picks the new complete tool rounds out of one chain state.

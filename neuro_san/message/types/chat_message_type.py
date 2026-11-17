@@ -18,18 +18,6 @@ from __future__ import annotations
 
 from enum import IntEnum
 from typing import Dict
-from typing import Type
-
-from langchain_core.messages.ai import AIMessage
-from langchain_core.messages.base import BaseMessage
-from langchain_core.messages.human import HumanMessage
-from langchain_core.messages.system import SystemMessage
-from langchain_core.messages.tool import ToolMessage
-
-from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
-from neuro_san.message.types.agent_message import AgentMessage
-from neuro_san.message.types.agent_progress_message import AgentProgressMessage
-from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 
 
 class ChatMessageType(IntEnum):
@@ -47,24 +35,9 @@ class ChatMessageType(IntEnum):
     AGENT_TOOL_RESULT = 103
     AGENT_PROGRESS = 104
 
-    # Adding something? Don't forget to update the maps below.
+    # Adding something? Don't forget to update the map below
+    # and ChatMessageTypeUtil.from_message().
 
-
-# Convenience mappings going between constants and class types
-MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
-    # Needs to match chat.proto
-    SystemMessage: ChatMessageType.SYSTEM,
-    HumanMessage: ChatMessageType.HUMAN,
-    AIMessage: ChatMessageType.AI,
-    # A tool's answer to a tool call made by an AI message. On the wire its tool_call_info
-    # carries the id of that call, which is what tells it apart from an AgentToolResultMessage.
-    ToolMessage: ChatMessageType.AGENT_TOOL_RESULT,
-
-    AgentMessage: ChatMessageType.AGENT,
-    AgentFrameworkMessage: ChatMessageType.AGENT_FRAMEWORK,
-    AgentToolResultMessage: ChatMessageType.AGENT_TOOL_RESULT,
-    AgentProgressMessage: ChatMessageType.AGENT_PROGRESS,
-}
 
 CHAT_MESSAGE_TYPE_TO_STRING: Dict[ChatMessageType, str] = {
 

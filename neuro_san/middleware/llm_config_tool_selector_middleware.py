@@ -38,7 +38,7 @@ from langchain_core.runnables.base import RunnableSerializable
 from langchain_core.runnables.fallbacks import RunnableWithFallbacks
 from langgraph.types import Command
 
-from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
+from neuro_san.interfaces.activation_capsule import ActivationCapsule
 
 # Key under which advertised-tools bookkeeping is recorded in sly_data.
 # The value is a dictionary keyed by a per-middleware-instance namespace,

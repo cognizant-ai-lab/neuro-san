@@ -25,6 +25,7 @@ class StorageClass:
 
     PUBLIC: str = "public"          # The default - listed in Concierge
     PROTECTED: str = "protected"    # Not listed in Concierge, but still accessible by web API
+    FETCHED: str = "fetched"        # Not listed in Concierge, might age out
 
     # Reserved for temporary networks that expire
     TEMP: str = "temp"              # Not listed in Concierge, accessible by web API

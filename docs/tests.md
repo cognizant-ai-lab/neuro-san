@@ -5,7 +5,7 @@
 To run a specifc unit test
 
     pytest -v PathToPythonTestFile::TestClassName::TestMethodName
-    pytest -v ./tests/neuro_san/internals/graph/test_sly_data_redactor.py::TestSlyDataRedactor::test_assumptions
+    pytest -v ./tests/neuro_san/message/utils/test_sly_data_redactor.py::TestSlyDataRedactor::test_assumptions
 
 ## Different kinds of tests
 
@@ -14,13 +14,11 @@ The markers we use come in a few different flavors for different purposes.
 
 ### Pre-requisites
 
-Many (but not absolutely all) tests will require an active OPENAI_API_KEY or other equivalent key
-from another LLM provider in order to run successfully.  Please be sure you have a basic
-agent network running in your environment as described in the top-level README.md to this repo.
+Most unit tests are fully mocked and run without any LLM, AWS, or external service keys.
 
-Some unit tests (for example, the S3 reservations storage suite under
-`tests/neuro_san/service/watcher/temp_networks/`) are fully mocked and run without any
-LLM, AWS, or external service keys.
+Tests that talk to a real LLM provider need an active OPENAI_API_KEY or an equivalent key
+from another LLM provider. Please be sure you have a basic agent network running in your
+environment as described in the top-level README.md to this repo.
 
 ### Basic unit tests
 
@@ -52,8 +50,6 @@ Layout:
 - `_test_base.py` — `FakeS3Client` (in-memory stand-in for boto3 S3
   client) and `S3ReservationsStorageTestBase` (shared scaffolding,
   patches `boto3_client` to inject the fake).
-- `conftest.py` — scoped override of the `OPENAI_API_KEY` autouse
-  fixture for this subtree only.
 - `test_*.py` — one file per scenario (round-trip, retries, batch
   semantics, custom prefix, etc.). One test per file keeps failure
   diagnostics clean.
@@ -149,7 +145,7 @@ Set a trace to stop the debugger on the next line
 
 Run pytest with '--pdb' flag
 
-    pytest -v --pdb ./tests/neuro_san/internals/graph/test_sly_data_redactor.py
+    pytest -v --pdb ./tests/neuro_san/message/utils/test_sly_data_redactor.py
 
 ## Writing unit tests
 

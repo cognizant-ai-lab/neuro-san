@@ -40,6 +40,7 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class ActivationFactory(AgentToolFactory):
@@ -84,7 +85,7 @@ class ActivationFactory(AgentToolFactory):
                             root is not under the PYTHONPATH.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = Env.getenv("AGENT_TOOL_PATH")
+        agent_tool_path: str = NeuroSanConfig.get_non_empty("internals.tools.AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
@@ -187,7 +188,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         external_preppers: List[ActivationPrepper] = []
 
         prepper_class_name: str = None
-        agent_prepper_classes: str = Env.getenv("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        agent_prepper_classes: str = NeuroSanConfig.get("internals.registry.AGENT_ACTIVATION_PREPPER_CLASSES")
         for prepper_class_name in agent_prepper_classes.split():
             use_prepper_class_name = prepper_class_name.strip()
             prepper: ActivationPrepper = ResolverUtil.create_instance(use_prepper_class_name,
@@ -321,9 +322,10 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
     def find_front_man(self) -> str:
         """
-        :return: A single tool name to use as the root of the chat agent.
-                 This guy will be user facing.  If there are none or > 1,
-                 an exception will be raised.
+        Finds the front man: the first agent in the "tools" list of the agent network.
+
+        :return: The name of the front man, the user-facing root of the chat agent
+        :raises ValueError: When the network has no agents, or its first agent has a "class" or "toolbox" key
         """
         return self.agent_network.find_front_man()
 

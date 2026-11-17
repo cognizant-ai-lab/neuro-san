@@ -18,8 +18,6 @@
 from typing import Any
 from typing import Dict
 
-from os import environ
-
 from leaf_common.persistence.interface.restorer import Restorer
 from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
@@ -27,6 +25,7 @@ from leaf_common.persistence.easy.easy_yaml_persistence import EasyYamlPersisten
 
 from neuro_san import DEPLOY_DIR
 from neuro_san.internals.persistence.hocon_parse_lock import HoconParseLock
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class LoggingConfigRestorer(Restorer):
@@ -43,8 +42,8 @@ class LoggingConfigRestorer(Restorer):
         super().__init__()
         self.default_file_reference: str = default_file_reference
         if self.default_file_reference is None:
-            self.default_file_reference = environ.get("AGENT_SERVICE_LOG_JSON",
-                                                      DEPLOY_DIR.get_file_in_basis("logging.hocon"))
+            self.default_file_reference = NeuroSanConfig.get("service.logging.AGENT_SERVICE_LOG_JSON") \
+                or DEPLOY_DIR.get_file_in_basis("logging.hocon")
 
     def restore(self, file_reference: str = None) -> Dict[str, Any]:
         """

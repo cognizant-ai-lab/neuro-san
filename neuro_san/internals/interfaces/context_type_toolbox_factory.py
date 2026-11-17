@@ -56,12 +56,15 @@ class ContextTypeToolboxFactory:
     def create_tool_from_toolbox(
             self,
             tool_name: str,
-            user_args: Dict[str, Any]
+            user_args: Dict[str, Any] = None,
+            agent_name: str = None
     ) -> Union[BaseTool, Dict[str, Any], List[BaseTool]]:
         """
         Create a tool instance from the fully-specified tool config.
         :param tool_name: The name of the tool to instantiate.
-        :param user_args: Arguments provided by the user, which override the args in config file.
+        :param user_args: Arguments provided by the user, which override the args in config file. Can be None.
+        :param agent_name: The name of the agent to prefix each BaseTool's name in BaseToolkit with,
+            ensuring tool names are unique and traceable to their agent. Can be None.
         :return: A tool instance native to the context type.
                 Can raise a ValueError if the config's class or tool_name value is
                 unknown to this method.

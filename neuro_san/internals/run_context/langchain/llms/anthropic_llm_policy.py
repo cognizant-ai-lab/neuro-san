@@ -25,6 +25,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
 
+from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 from neuro_san.internals.run_context.langchain.llms.closeable_client import CloseableClient
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
@@ -64,10 +65,10 @@ class AnthropicLlmPolicy(LlmPolicy):
             default_request_timeout=config.get("default_request_timeout"),
             max_retries=config.get("max_retries"),
             stop_sequences=config.get("stop_sequences"),
-            anthropic_api_url=self.get_value_or_env(config, "anthropic_api_url",
-                                                    "ANTHROPIC_API_URL"),
-            anthropic_api_key=self.get_value_or_env(config, "anthropic_api_key",
-                                                    "ANTHROPIC_API_KEY"),
+            anthropic_api_url=EnvironmentConfiguration.get_value_or_env(config, "anthropic_api_url",
+                                                                        "ANTHROPIC_API_URL"),
+            anthropic_api_key=EnvironmentConfiguration.get_value_or_env(config, "anthropic_api_key",
+                                                                        "ANTHROPIC_API_KEY"),
             default_headers=config.get("default_headers"),
             betas=config.get("betas"),
             # Streaming is configurable via the "streaming" key in llm_config; defaults

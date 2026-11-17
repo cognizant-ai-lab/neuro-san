@@ -22,8 +22,11 @@ from typing import Dict
 from unittest import TestCase
 from unittest.mock import patch
 
+from typing_extensions import override
+
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class TestAgentToolRegistry(TestCase):
@@ -33,6 +36,13 @@ class TestAgentToolRegistry(TestCase):
     """
 
     NETWORK_NAME: str = "deep/math_guy"
+
+    @override
+    def setUp(self) -> None:
+        """
+        Reloads NeuroSanConfig after each test, once the environment the test changed is restored.
+        """
+        self.addCleanup(NeuroSanConfig.reset_for_testing)
 
     def make_registry(self) -> AgentToolRegistry:
         """

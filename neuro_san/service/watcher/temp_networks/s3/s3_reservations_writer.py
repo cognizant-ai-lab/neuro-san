@@ -20,7 +20,6 @@ from typing import Callable
 from typing import Dict
 from typing import Type
 
-from os import getenv
 from time import time
 from functools import partial
 
@@ -38,6 +37,7 @@ AioBaseClient: Type[Any] = ResolverUtil.create_type("aiobotocore.client.AioBaseC
 from neuro_san.interfaces.reservation import Reservation                                                # noqa: E402
 from neuro_san.internals.reservations.reservation_dictionary_converter \
     import ReservationDictionaryConverter                                                               # noqa: E402
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig                                  # noqa: E402
 from neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker import AwsAsyncClientWorker     # noqa: E402
 from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util                                   # noqa: E402
 
@@ -71,7 +71,7 @@ class S3ReservationsWriter:
         self.logger: Logger = getLogger(self.__class__.__name__)
 
         # Configure bucket name from parameter or environment variable
-        env_bucket: str = getenv("AGENT_RESERVATIONS_S3_BUCKET", "")
+        env_bucket: str = NeuroSanConfig.get("service.reservations.AGENT_RESERVATIONS_S3_BUCKET")
         self.bucket_name: str = bucket_name or env_bucket
         if not self.bucket_name:
             raise ValueError(

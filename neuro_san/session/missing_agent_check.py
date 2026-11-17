@@ -15,9 +15,8 @@
 #
 # END COPYRIGHT
 
-from leaf_common.utils.environment_util import EnvironmentUtil as Env
-
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
 class MissingAgentCheck:
@@ -34,7 +33,7 @@ class MissingAgentCheck:
         """
 
         if agent_network is None:
-            manifest_file: str = Env.getenv("AGENT_MANIFEST_FILE")
+            manifest_file: str = NeuroSanConfig.get_non_empty("internals.registry.AGENT_MANIFEST_FILE")
             message = f"""
 Agent named "{agent_name}" not found in manifest file: {manifest_file}.
 

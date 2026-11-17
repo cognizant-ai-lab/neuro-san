@@ -47,8 +47,9 @@ class ExternalToolAdapter:
         if self.function_json is None:
 
             # Lazily get the information about the service
-            session: AsyncAgentSession = self.session_factory.create_session(self.agent_url,
-                                                                             invocation_context=invocation_context)
+            session: AsyncAgentSession = await self.session_factory.async_create_session(
+                self.agent_url,
+                invocation_context=invocation_context)
 
             # Set up the request. Turns out we don't need much.
             request_dict: Dict[str, Any] = {}
@@ -79,11 +80,12 @@ an agent network by that name. Try these hints:
        does not mean the server is serving that agent up separately.
     b. Every agent that is externally referenceable needs its own hocon file
        which must also have an entry in the manifest.hocon file for the server.
-    c. There is one and only one "front man" agent note in each network described
+    c. There is one and only one "front man" agent node in each network described
        by a hocon file that receives input on behalf of the network.
     d. In order to be called by external agents, that front man must have a
-       "function" definition which includes a description. Declaring at least
-       one parameter is recommended, as parameters are how calling agents know
+       description, either in its "function" definition or as a top-level
+       "description". Declaring at least one parameter in its "function"
+       definition is recommended, as parameters are how calling agents know
        what to pass; when none are declared, a single "inquiry" string parameter
        is synthesized on the calling side so the caller's request still gets through.
 """

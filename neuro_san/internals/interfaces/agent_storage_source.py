@@ -40,6 +40,16 @@ class AgentStorageSource:
         raise NotImplementedError
 
     @abstractmethod
+    async def async_get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
+        """
+        Get AgentNetworkProvider for a specific agent asynchronously.
+        Prefer this when you are tool-building in the middle of agent graph activations.
+
+        :param agent_name: name of an agent
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def get_agent_names(self) -> List[str]:
         """
         :return: The list of agent names being managed by the implementation.
