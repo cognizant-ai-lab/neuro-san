@@ -63,15 +63,9 @@ class TracedMessage(BaseMessage):
         else:
             super().__init__(content=content, **kwargs)
 
-    @property
-    def lc_serializable(self) -> bool:
-        """
-        Indicates if the object can be serialized by LangChain.
-        """
-        return True
+    # LangChain serializability comes from the inherited BaseMessage.is_lc_serializable() classmethod.
+    # Do not define an lc_serializable attribute: Serializable.to_json() rejects it as deprecated.
 
-    # DEF - This used to be lc_kwargs(), but TypeScript didn't like that.
-    #       It's possible lc_kwargs needs to be reinstated, but if so only here, calling trace_kwargs().
     @property
     def trace_kwargs(self) -> Dict[str, Any]:
         """
