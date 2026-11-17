@@ -24,6 +24,7 @@ from typing import Optional
 from typing import Union
 
 from langchain_core.messages.ai import AIMessage
+from typing_extensions import override
 
 from neuro_san.message.types.traced_message import TracedMessage
 
@@ -55,6 +56,7 @@ class AgentToolResultMessage(AIMessage, TracedMessage):
         super().__init__(content=content, trace_source=trace_source, **kwargs)
         self.tool_result_origin: List[Dict[str, Any]] = tool_result_origin
 
+    @override
     def trace_kwargs(self) -> Dict[str, Any]:
         """
         :return: the keyword arguments for serialization.
