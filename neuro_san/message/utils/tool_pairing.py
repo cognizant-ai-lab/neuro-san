@@ -37,16 +37,18 @@ class ToolPairing:
     result is missing. A history restored from a chat_context can hold either:
     a client may have cut it, or a call may have been dropped as malformed on
     the way in. Each tool-calling AI message keeps only the calls that the tool
-    results right after it answer, and only those results are kept. Each call
-    or result that is dropped is logged at info level, by its id.
+    results right after it answer, and only those results are kept. An entry
+    that was dropped on the way in ends the round before it. Each call or result
+    that is dropped is logged at info level, by its id.
     """
 
     @staticmethod
-    def complete_pairs(messages: List[BaseMessage]) -> List[BaseMessage]:
+    def complete_pairs(messages: List[Optional[BaseMessage]]) -> List[BaseMessage]:
         """
         Drops the tool calls and tool results that have no partner.
 
-        :param messages: The messages of a chat history, in order
+        :param messages: The messages of a chat history, in order. A None marks an
+                entry that was dropped on the way in.
         :return: The same messages with every tool call answered by a tool result
                  right after its message, and no tool result without its call
         """
@@ -54,7 +56,11 @@ class ToolPairing:
         index: int = 0
         # A tool-calling message and the results right after it are handled together.
         while index < len(messages):
-            message: BaseMessage = messages[index]
+            message: Optional[BaseMessage] = messages[index]
+            if message is None:
+                # The results after a dropped entry answer none of the calls before it.
+                index += 1
+                continue
             if isinstance(message, ToolMessage):
                 # A result with no call before it.
                 ToolPairing.log_dropped_result(message)
@@ -88,19 +94,19 @@ class ToolPairing:
         return call_count > 0
 
     @staticmethod
-    def results_after(messages: List[BaseMessage], start: int) -> List[ToolMessage]:
+    def results_after(messages: List[Optional[BaseMessage]], start: int) -> List[ToolMessage]:
         """
         Collects the tool results that directly follow a tool-calling message.
 
-        :param messages: The messages of a chat history
+        :param messages: The messages of a chat history, with None for a dropped entry
         :param start: The index right after a tool-calling message
         :return: The run of ToolMessages that starts there, possibly empty
         """
         results: List[ToolMessage] = []
         index: int = start
-        # Results follow their call with nothing in between.
+        # Results follow their call with nothing in between, not even a dropped entry.
         while index < len(messages):
-            message: BaseMessage = messages[index]
+            message: Optional[BaseMessage] = messages[index]
             if not isinstance(message, ToolMessage):
                 break
             results.append(message)
@@ -113,7 +119,7 @@ class ToolPairing:
         Pairs a tool-calling message with the results that follow it.
 
         Each result answers one call. When two results answer the same call, the
-        later one is kept. A call that repeats an id already answered finds no
+        first one is kept. A call that repeats an id already answered finds no
         result left and is treated as unanswered.
 
         :param message: An AIMessage with tool calls
@@ -123,12 +129,14 @@ class ToolPairing:
                  the message has no text of its own.
         """
         by_id: Dict[str, ToolMessage] = {}
-        # Index the results by the call they answer. A later result for the same call replaces the earlier one.
+        # Index the results by the call they answer. Results follow the order of their calls,
+        # so the first result for a call is the one that answers its first call.
         result: ToolMessage = None
         for result in results:
-            replaced: Optional[ToolMessage] = by_id.get(result.tool_call_id, None)
-            if replaced is not None:
-                ToolPairing.log_dropped_result(replaced)
+            earlier: Optional[ToolMessage] = by_id.get(result.tool_call_id, None)
+            if earlier is not None:
+                ToolPairing.log_dropped_result(result)
+                continue
             by_id[result.tool_call_id] = result
 
         answered_calls: List[Dict[str, Any]] = []
@@ -197,7 +205,7 @@ class ToolPairing:
     def log_dropped_result(result: ToolMessage) -> None:
         """
         Logs a tool result that is dropped because it is not paired with a call:
-        no call before it asked for it, or a later result answers the same call.
+        no call before it asked for it, or an earlier result answers the same call.
 
         :param result: The dropped tool result
         """

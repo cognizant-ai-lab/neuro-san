@@ -173,3 +173,75 @@ class TestLangChainRunContext(TestCase):
         self.assertIsInstance(history[2], ToolMessage)
         self.assertEqual(history[2].tool_call_id, "c2")
         self.assertEqual(history[3].content, "answer")
+
+    def test_update_from_chat_context_keeps_rounds_apart_when_a_call_id_repeats(self) -> None:
+        """
+        A later round that reuses a call id, and whose only call is malformed, is
+        dropped with its result. The earlier round keeps its own result.
+        """
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_call_info": {
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "name": "Accountant",
+                            "args": {"running_cost": 0.0},
+                        },
+                    ],
+                },
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "{'running_cost': 3.0}",
+                "tool_call_info": {"tool_call_id": "c1"},
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_call_info": {
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "name": "",
+                            "args": {},
+                        },
+                    ],
+                },
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "from the dropped round",
+                "tool_call_info": {"tool_call_id": "c1"},
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "answer",
+            },
+        ]
+        chat_context: Dict[str, Any] = {
+            "chat_histories": [
+                {
+                    "origin": self.ORIGIN,
+                    "messages": messages,
+                },
+            ],
+        }
+        run_context: LangChainRunContext = self.make_run_context()
+
+        with self.assertLogs("BaseMessageDictionaryConverter", level="INFO"):
+            run_context.update_from_chat_context(chat_context)
+
+        history: List[BaseMessage] = run_context.chat_history
+        self.assertEqual(len(history), 4)
+        self.assertIsInstance(history[0], HumanMessage)
+        self.assertEqual(history[1].tool_calls[0].get("id"), "c1")
+        self.assertIsInstance(history[2], ToolMessage)
+        self.assertEqual(history[2].content, "{'running_cost': 3.0}")
+        self.assertEqual(history[3].content, "answer")

@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Union
 
 from json import loads
@@ -206,16 +207,16 @@ class LangChainRunContext(RunContext):
                 break
 
             converter = BaseMessageDictionaryConverter()
-            self.chat_history = []
+            restored: List[Optional[BaseMessage]] = []
             chat_message: Dict[str, Any] = None
+            # An entry that cannot be restored stays as None, so a tool round ends there.
             for chat_message in one_messages:
-                base_message: BaseMessage = converter.from_dict(chat_message)
-                if base_message is not None:
-                    self.chat_history.append(base_message)
+                base_message: Optional[BaseMessage] = converter.from_dict(chat_message)
+                restored.append(base_message)
 
             # A client can send the history back with a tool call or a tool result
             # missing. Only complete pairs go to the model.
-            self.chat_history = ToolPairing.complete_pairs(self.chat_history)
+            self.chat_history = ToolPairing.complete_pairs(restored)
 
             # Nothing left to search for
             break

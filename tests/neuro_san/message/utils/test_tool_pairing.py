@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from unittest import TestCase
 
@@ -130,9 +131,9 @@ class TestToolPairing(TestCase):
         self.assertEqual(kept[0].tool_calls, [self.tool_call("c1")])
         self.assertEqual(kept[1].tool_call_id, "c1")
 
-    def test_complete_pairs_keeps_the_later_of_two_results_for_one_call(self) -> None:
+    def test_complete_pairs_keeps_the_first_of_two_results_for_one_call(self) -> None:
         """
-        Two equal results for one call keep the later one, and the earlier one is
+        Two equal results for one call keep the first one, and the later one is
         logged as dropped even though it compares equal to the kept one.
         """
         first: ToolMessage = ToolMessage(content="3.0", tool_call_id="c1")
@@ -147,9 +148,59 @@ class TestToolPairing(TestCase):
             kept: List[BaseMessage] = ToolPairing.complete_pairs(messages)
 
         self.assertEqual(len(kept), 2)
-        self.assertIs(kept[1], second)
+        self.assertIs(kept[1], first)
         self.assertEqual(len(logs.output), 1)
         self.assertIn("'c1'", logs.output[0])
+
+    def test_complete_pairs_gives_a_repeated_call_id_the_first_result(self) -> None:
+        """
+        When one message makes two calls with the same id, the first call keeps
+        the first result, and the repeated call and the later result are dropped.
+        """
+        first_call: Dict[str, Any] = self.tool_call("c1")
+        repeated_call: Dict[str, Any] = {
+            "name": "Auditor",
+            "args": {},
+            "id": "c1",
+            "type": "tool_call",
+        }
+        first: ToolMessage = ToolMessage(content="3.0", tool_call_id="c1")
+        messages: List[BaseMessage] = [
+            AIMessage(content="", tool_calls=[first_call, repeated_call]),
+            first,
+            ToolMessage(content="audited", tool_call_id="c1"),
+        ]
+
+        kept: List[BaseMessage] = ToolPairing.complete_pairs(messages)
+
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(kept[0].tool_calls, [first_call])
+        self.assertIs(kept[1], first)
+
+    def test_complete_pairs_ends_a_round_at_a_dropped_entry(self) -> None:
+        """
+        A None marks an entry dropped on the way in. A result after it does not
+        answer a call made before it, even when the ids match.
+        """
+        messages: List[Optional[BaseMessage]] = [
+            HumanMessage(content="question"),
+            AIMessage(content="", tool_calls=[self.tool_call("c1"), self.tool_call("c2")]),
+            ToolMessage(content="3.0", tool_call_id="c1"),
+            None,
+            ToolMessage(content="from a dropped round", tool_call_id="c2"),
+            AIMessage(content="answer"),
+        ]
+
+        with self.assertLogs("ToolPairing", level="INFO") as logs:
+            kept: List[BaseMessage] = ToolPairing.complete_pairs(messages)
+
+        self.assertEqual(len(kept), 4)
+        self.assertIsInstance(kept[0], HumanMessage)
+        self.assertEqual(kept[1].tool_calls, [self.tool_call("c1")])
+        self.assertEqual(kept[2].content, "3.0")
+        self.assertEqual(kept[3].content, "answer")
+        # The unanswered call c2 and the result after the dropped entry.
+        self.assertEqual(len(logs.output), 2)
 
     def test_complete_pairs_drops_an_empty_message_whose_calls_are_all_unanswered(self) -> None:
         """
