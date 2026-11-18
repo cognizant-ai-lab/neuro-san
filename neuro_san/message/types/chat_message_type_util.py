@@ -23,6 +23,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
+from langchain_core.messages.tool import ToolMessage
 
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.agent_message import AgentMessage
@@ -53,6 +54,10 @@ class ChatMessageTypeUtil:
             chat_message_type = ChatMessageType.HUMAN
         elif base_message_type is AIMessage:
             chat_message_type = ChatMessageType.AI
+        elif base_message_type is ToolMessage:
+            # A tool's answer to a tool call made by an AI message. On the wire its tool_call_info
+            # carries the id of that call, which is what tells it apart from an AgentToolResultMessage.
+            chat_message_type = ChatMessageType.AGENT_TOOL_RESULT
         elif base_message_type is AgentMessage:
             chat_message_type = ChatMessageType.AGENT
         elif base_message_type is AgentFrameworkMessage:

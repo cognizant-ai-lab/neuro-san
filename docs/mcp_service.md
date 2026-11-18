@@ -181,6 +181,9 @@ replicated from neuro-san OpenAPI specification:
                         },
                         "content_blocks": {
                           "$ref": "#/components/schemas/ContentBlocks"
+                        },
+                        "tool_call_info": {
+                          "$ref": "#/components/schemas/ToolCallInfo"
                         }
                       },
                       "description": "Structure describing a single chat message."
@@ -224,6 +227,45 @@ replicated from neuro-san OpenAPI specification:
                         }
                       },
                       "description": "Optional structured content of a ChatMessage, tagged with the schema its blocks follow so the format can evolve without breaking clients."
+                    },
+                    "ToolCall": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "The id the model gave the call."
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "The name of the tool that was called."
+                        },
+                        "args": {
+                          "type": "object",
+                          "description": "The arguments the call was made with."
+                        }
+                      },
+                      "description": "A tool call made by an AI message. Its result is the AGENT_TOOL_RESULT message whose tool_call_info.tool_call_id equals this id."
+                    },
+                    "ToolCallInfo": {
+                      "type": "object",
+                      "properties": {
+                        "tool_calls": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ToolCall"
+                          },
+                          "description": "AI messages only: the tool calls the message made."
+                        },
+                        "tool_call_id": {
+                          "type": "string",
+                          "description": "AGENT_TOOL_RESULT messages only: the id of the tool call the message answers."
+                        },
+                        "tool_status": {
+                          "type": "string",
+                          "description": "AGENT_TOOL_RESULT messages only: \"error\" when the tool failed. Absent when the tool succeeded."
+                        }
+                      },
+                      "description": "The part a ChatMessage plays in a tool call. Only AI and AGENT_TOOL_RESULT messages carry it, and each sets its own fields: an AI message lists the calls it made, and the AGENT_TOOL_RESULT message that answers a call names that call. A chat history keeps both, so the next turn sees where a value came from."
                     },
                     "MimeData": {
                       "type": "object",

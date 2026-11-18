@@ -212,7 +212,8 @@ context with which it will proces input, essentially telling it what to do.
         :param component_tool_call: A ToolCall instance to get the function
                             arguments from
         :return: A dictionary with keys:
-                "tool_call_id" a string id representing the call to the tool itself
+                "tool_call_id" neuro-san's own string id for this call, not the id the model
+                        gave it. The chat history pairs calls and results by the model's id.
                 "output" a JSON string representing the output of the tool's function
         """
         # Get the essentials

@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from asyncio import TimeoutError as AsyncTimeout
 from typing import Any
+from typing import AsyncIterator
 from typing import ClassVar
 from typing import Dict
 from typing import List
@@ -27,6 +28,7 @@ from typing import Union
 import traceback
 
 from pydantic import ConfigDict
+from pydantic import SkipValidation
 
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages.ai import AIMessage
@@ -45,6 +47,7 @@ from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
+from neuro_san.internals.run_context.langchain.core.tool_exchange_recorder import ToolExchangeRecorder
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
@@ -100,6 +103,11 @@ class RunContextRunnable(NeuroSanRunnable):
     error_detector: ErrorDetector
 
     session_id: str
+
+    # The RunContext's own chat history, which ToolExchangeRecorder appends to.
+    # SkipValidation makes pydantic keep this list instead of a copy.
+    # None when no history is kept.
+    chat_history: SkipValidation[List[BaseMessage]]
 
     # This guy needs to be a pydantic class and in order to have
     # a non-pydantic Journal as a member, we need to do this.
@@ -232,7 +240,8 @@ class RunContextRunnable(NeuroSanRunnable):
             # ended it (not every branch below captures a backtrace).
             backtrace = None
             try:
-                chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
+                # A step that fails raises here, as it would from ainvoke().
+                chain_result: Optional[Dict[str, Any]] = await self.run_chain(inputs, runnable_config)
             except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
@@ -304,8 +313,42 @@ class RunContextRunnable(NeuroSanRunnable):
         output: str = self.parse_chain_result(chain_result, exception)
         return_message: BaseMessage = self.build_return_message(chain_result, output)
 
+        # The turn's tool calls and results went into the chat history as the
+        # chain ran (see run_chain); the answer follows them.
         # Chat history is updated in write_message
         await self.journal.write_message(return_message)
+
+    async def run_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Runs the agent chain and returns its final state.
+
+        The chain runs through astream() rather than ainvoke() because the model's tool
+        calls exist only in the chain state, and ainvoke() returns only the last state,
+        or nothing when a step raises. Each streamed state goes to a ToolExchangeRecorder,
+        so a tool round enters the chat history as soon as it completes, before a later
+        step can fail or a summarization middleware can remove it from the state.
+
+        With stream_mode="values" the items are whole states, not tokens, and the last
+        one is the value ainvoke() returns. See
+        https://docs.langchain.com/oss/python/langgraph/streaming
+
+        :param inputs: The inputs to the agent chain
+        :param runnable_config: The runnable_config to send to the agent chain
+        :return: The final state, as ainvoke() would return it, or None when the chain
+                 yields no state
+        """
+        final_state: Optional[Dict[str, Any]] = None
+        # The recorder appends to the RunContext's own chat history list.
+        recorder: ToolExchangeRecorder = ToolExchangeRecorder(self.chat_history)
+        states: AsyncIterator[Dict[str, Any]] = self.agent_chain.astream(input=inputs,
+                                                                         config=runnable_config,
+                                                                         stream_mode="values")
+        state: Dict[str, Any] = None
+        # Record the finished tool rounds of each state as it arrives.
+        async for state in states:
+            final_state = state
+            recorder.record_tool_exchange(inputs, state)
+        return final_state
 
     async def journal_retry_reason(self, error: Exception, reason: str):
         """

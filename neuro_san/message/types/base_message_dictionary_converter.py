@@ -156,7 +156,58 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if content_blocks is not None:
             chat_message["content_blocks"] = content_blocks
 
+        # A tool call and its result are linked by the call's id, so a chat history
+        # that carries both can be put back together on the next turn.
+        tool_call_info: Optional[Dict[str, Any]] = BaseMessageDictionaryConverter.tool_call_info_for(message)
+        if tool_call_info is not None:
+            chat_message["tool_call_info"] = tool_call_info
+
         return chat_message
+
+    @staticmethod
+    def tool_call_info_for(message: BaseMessage) -> Optional[Dict[str, Any]]:
+        """
+        Builds the tool_call_info of a message: the calls an AI message made,
+        or the id and status of the call a ToolMessage answers.
+
+        :param message: The BaseMessage to convert
+        :return: The tool_call_info dictionary, or None when the message takes no part in a tool call
+        """
+        if isinstance(message, ToolMessage):
+            result_info: Dict[str, Any] = {"tool_call_id": message.tool_call_id}
+            if message.status == "error":
+                # Success is the default and is not sent.
+                result_info["tool_status"] = message.status
+            return result_info
+        if not isinstance(message, AIMessage):
+            return None
+        if len(message.tool_calls) == 0:
+            return None
+        wire_calls: List[Dict[str, Any]] = BaseMessageDictionaryConverter.wire_tool_calls(message.tool_calls)
+        return {"tool_calls": wire_calls}
+
+    @staticmethod
+    def wire_tool_calls(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Puts an AIMessage's tool calls in their wire form: id, name and args only.
+
+        :param tool_calls: The tool_calls of an AIMessage
+        :return: One dictionary per call with the keys id, name and args
+        """
+        wire: List[Dict[str, Any]] = []
+        # Keep only the keys a client needs to send the call back.
+        tool_call: Dict[str, Any] = None
+        for tool_call in tool_calls:
+            call_id: Any = tool_call.get("id")
+            name: Any = tool_call.get("name")
+            args: Any = tool_call.get("args")
+            wire_call: Dict[str, Any] = {
+                "id": call_id,
+                "name": name,
+                "args": args,
+            }
+            wire.append(wire_call)
+        return wire
 
     def content_blocks_for(self, message: BaseMessage) -> Optional[Dict[str, Any]]:
         """
@@ -251,10 +302,9 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         elif chat_message_type == ChatMessageType.HUMAN:
             base_message = HumanMessage(content=content)
         elif chat_message_type == ChatMessageType.AI:
-            base_message = AIMessage(content=content)
+            base_message = self.ai_message_from_dict(content, chat_message)
         elif chat_message_type == ChatMessageType.AGENT_TOOL_RESULT:
-            tool_result_origin: List[Dict[str, Any]] = chat_message.get("tool_result_origin")
-            base_message = AgentToolResultMessage(content=content, tool_result_origin=tool_result_origin)
+            base_message = self.tool_result_from_dict(content, chat_message)
 
         if base_message is None and not self.langchain_only:
             # convert_to_base_message() is primarily for populating langchain chat history.
@@ -299,6 +349,185 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             base_message = AgentProgressMessage(content=use_content, structure=structure)
         return base_message
 
+    def ai_message_from_dict(self, content: Union[str, List[Any]],
+                             chat_message: Dict[str, Any]) -> Optional[AIMessage]:
+        """
+        Restores an AI message, with the tool calls it made when the dictionary carries any.
+
+        The content is taken as given, so a caller that has rebuilt block content from
+        the dictionary can pass that instead of the text. The tool calls ride in their
+        own field of the message, not in its content.
+
+        :param content: The content of the message, its text or a list of content blocks
+        :param chat_message: The ChatMessage dictionary
+        :return: The AIMessage, or None when every call the dictionary carried was
+                 malformed and no text is left: providers reject an empty assistant message
+        """
+        tool_call_info: Dict[str, Any] = BaseMessageDictionaryConverter.tool_call_info_of(chat_message)
+        tool_calls: List[Dict[str, Any]] = self.restore_tool_calls(tool_call_info)
+        if len(tool_calls) > 0:
+            return AIMessage(content=content, tool_calls=tool_calls)
+        raw_calls: Any = tool_call_info.get("tool_calls", None)
+        if raw_calls is None:
+            return AIMessage(content=content)
+        if isinstance(raw_calls, list):
+            call_count: int = len(raw_calls)
+            if call_count == 0:
+                # An empty list carries no calls, the same as a missing one: the wire does not tell them apart.
+                return AIMessage(content=content)
+        # The message carried calls, but none was well formed. Without text it would be empty.
+        text: str = ContentUtils.flatten_to_text(content)
+        if text == "":
+            return None
+        return AIMessage(content=content)
+
+    @staticmethod
+    def tool_call_info_of(chat_message: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Reads the tool_call_info of a ChatMessage dictionary without assuming its shape.
+
+        :param chat_message: The ChatMessage dictionary
+        :return: Its tool_call_info, or an empty dictionary when it has none or it is not a dictionary
+        """
+        tool_call_info: Any = chat_message.get("tool_call_info")
+        if not isinstance(tool_call_info, dict):
+            return {}
+        return tool_call_info
+
+    def restore_tool_calls(self, tool_call_info: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Restores the tool calls of a ChatMessage's tool_call_info, in langchain's form.
+
+        A call that is not well formed is left out and logged, and so are tool_calls
+        that are not a list. Anything can arrive in a chat_context, and a bad call
+        would only fail later at the provider.
+
+        :param tool_call_info: The tool_call_info of a ChatMessage dictionary
+        :return: The well-formed tool calls, in order. Empty when it carries none.
+        """
+        tool_calls: List[Dict[str, Any]] = []
+        raw_calls: Any = tool_call_info.get("tool_calls", None)
+        if raw_calls is None:
+            return tool_calls
+        logger: Logger = getLogger(self.__class__.__name__)
+        if not isinstance(raw_calls, list):
+            # Logged at info: the client sent this, and no one running the server can act on it.
+            logger.info("Ignoring the tool_calls of a message in chat_context: they are not a list")
+            return tool_calls
+        # Check each call on its own so one bad call does not drop the others.
+        raw_call: Any = None
+        for raw_call in raw_calls:
+            tool_call: Optional[Dict[str, Any]] = BaseMessageDictionaryConverter.restore_tool_call(raw_call)
+            if tool_call is not None:
+                tool_calls.append(tool_call)
+            else:
+                # Logged at info for the same reason.
+                # The arguments are not logged: a client's call can carry secrets.
+                call_id: Any = BaseMessageDictionaryConverter.call_field(raw_call, "id")
+                name: Any = BaseMessageDictionaryConverter.call_field(raw_call, "name")
+                logger.info("Ignoring a tool call in chat_context (id %r, name %r): a call needs a string id "
+                            "and name and a dictionary of args", call_id, name)
+        return tool_calls
+
+    @staticmethod
+    def call_field(raw_call: Any, key: str) -> Any:
+        """
+        Reads one field of a tool call from the wire without assuming its shape.
+
+        :param raw_call: One entry of the tool_calls list of a ChatMessage's tool_call_info
+        :param key: The field to read
+        :return: The field's value when the entry is a dictionary, else None
+        """
+        if not isinstance(raw_call, dict):
+            return None
+        return raw_call.get(key)
+
+    @staticmethod
+    def restore_tool_call(raw_call: Any) -> Optional[Dict[str, Any]]:
+        """
+        Checks one tool call from the wire and returns it in langchain's form.
+
+        :param raw_call: One entry of the tool_calls list of a ChatMessage's tool_call_info
+        :return: A dictionary with the keys name, args, id and type, or None when
+                 the id or name is not a non-empty string or the args are not a dictionary
+        """
+        if not isinstance(raw_call, dict):
+            return None
+        call_id: Any = raw_call.get("id")
+        name: Any = raw_call.get("name")
+        args: Any = raw_call.get("args", None)
+        has_id: bool = BaseMessageDictionaryConverter.is_non_empty_string(call_id)
+        if not has_id:
+            return None
+        has_name: bool = BaseMessageDictionaryConverter.is_non_empty_string(name)
+        if not has_name:
+            return None
+        if args is None:
+            args = {}
+        if not isinstance(args, dict):
+            return None
+        return {
+            "name": name,
+            "args": args,
+            "id": call_id,
+            "type": "tool_call",
+        }
+
+    @staticmethod
+    def is_non_empty_string(value: Any) -> bool:
+        """
+        Tells whether a value from the wire is a string with at least one character.
+
+        :param value: The value to check
+        :return: True for a non-empty string
+        """
+        if not isinstance(value, str):
+            return False
+        length: int = len(value)
+        return length > 0
+
+    def tool_result_from_dict(self, content: Union[str, List[Any]],
+                              chat_message: Dict[str, Any]) -> Optional[BaseMessage]:
+        """
+        Restores a tool result.
+
+        With a tool_call_id in its tool_call_info it is the ToolMessage that answers a
+        tool call of the AI message before it. Without one it is the stand-alone
+        AgentToolResultMessage form, which some models reject, so on the chat-history
+        leg it is left out and logged.
+
+        :param content: The content of the message, its text or a list of content blocks
+        :param chat_message: The ChatMessage dictionary
+        :return: The ToolMessage, the AgentToolResultMessage when not converting for a
+                 chat history, or None for a stand-alone result bound for one
+        """
+        tool_call_info: Dict[str, Any] = BaseMessageDictionaryConverter.tool_call_info_of(chat_message)
+        tool_call_id: Any = tool_call_info.get("tool_call_id")
+        has_id: bool = BaseMessageDictionaryConverter.is_non_empty_string(tool_call_id)
+        if has_id:
+            status: str = BaseMessageDictionaryConverter.tool_status_of(tool_call_info)
+            return ToolMessage(content=content, tool_call_id=tool_call_id, status=status)
+        if self.langchain_only:
+            # Logged at info: the client sent this result, and no one running the server can act on it.
+            logger: Logger = getLogger(self.__class__.__name__)
+            logger.info("Ignoring a tool result in chat_context that has no tool_call_id")
+            return None
+        tool_result_origin: List[Dict[str, Any]] = chat_message.get("tool_result_origin")
+        return AgentToolResultMessage(content=content, tool_result_origin=tool_result_origin)
+
+    @staticmethod
+    def tool_status_of(tool_call_info: Dict[str, Any]) -> str:
+        """
+        Reads the status of the tool call that a tool result answers.
+
+        :param tool_call_info: The tool_call_info of an AGENT_TOOL_RESULT dictionary
+        :return: "error" when the wire says so, else "success": only an error is ever sent
+        """
+        tool_status: Any = tool_call_info.get("tool_status", None)
+        if tool_status == "error":
+            return "error"
+        return "success"
+
     @staticmethod
     def is_relevant_to_chat_history(base_message: BaseMessage) -> bool:
         """
@@ -306,7 +535,12 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         :return: True if the BaseMessage type is relevant to chat history (include).
                  False otherwise (do not include).
         """
-        if isinstance(base_message, (AgentMessage, AgentFrameworkMessage, ToolMessage, AgentProgressMessage)):
+        if isinstance(base_message, (AgentMessage, AgentFrameworkMessage, AgentProgressMessage)):
             # These guys cannot be in chat history as langchain will not recognize them.
+            return False
+        if isinstance(base_message, (ToolMessage, AgentToolResultMessage)):
+            # Tool results do not enter the chat history on their own. After each step
+            # of the agent graph, they go in next to the tool call that asked for them
+            # (see ToolExchangeRecorder.record_tool_exchange).
             return False
         return True

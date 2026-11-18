@@ -1,0 +1,62 @@
+
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+# The schema specifications for this file are documented here:
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
+
+{
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": "Testing neuro-san infrastructure by using a mock llm that calls a tool.",
+        "tags": ["test"],
+    },
+    "llm_config": {
+        "class": "neuro_san.test.llms.chat_mock_llm.ChatMockLlm",
+        # The model name can be anything; the mock decides what to do from the input text.
+        "model_name": "tool-caller",
+    },
+    "tools": [
+        # The front man. An input starting with "call accountant:" makes the mock
+        # call the Accountant tool with the number that follows, then answer with
+        # the tool's result and a count of the tool results in its history.
+        {
+            "name": "caller",
+            "function": {
+                "description": "This is a mock llm that calls the Accountant tool when asked to.",
+            },
+            "instructions": "System prompt for the mock llm",
+            "tools": ["Accountant"]
+        },
+        {
+            "name": "Accountant",
+            "function": {
+                "description": "Keeps the running cost. Pass the current running cost to get the updated one.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "running_cost": {
+                            "type": "float",
+                            "description": "The current running total of the service cost."
+                        },
+                    },
+                    "required": ["running_cost"]
+                }
+            },
+            "class": "accountant.Accountant"
+        },
+    ]
+}
