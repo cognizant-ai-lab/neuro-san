@@ -57,12 +57,12 @@ from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.base_tool_factory import BaseToolFactory
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
+from neuro_san.internals.run_context.langchain.core.tool_pairing import ToolPairing
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
 from neuro_san.internals.run_context.utils.agent_activation_capsule import AgentActivationCapsule
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
-from neuro_san.message.utils.tool_pairing import ToolPairing
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods

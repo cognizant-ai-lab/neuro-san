@@ -58,7 +58,9 @@ class ToolPairing:
         while index < len(messages):
             message: Optional[BaseMessage] = messages[index]
             if message is None:
-                # The results after a dropped entry answer none of the calls before it.
+                # A None is a chat_context entry that could not be restored. It ends the tool round
+                # before it, so the results of a dropped call message cannot answer a call there
+                # that reuses the same id.
                 index += 1
                 continue
             if isinstance(message, ToolMessage):

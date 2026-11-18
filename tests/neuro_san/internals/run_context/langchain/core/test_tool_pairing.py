@@ -27,7 +27,7 @@ from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.tool import ToolMessage
 
-from neuro_san.message.utils.tool_pairing import ToolPairing
+from neuro_san.internals.run_context.langchain.core.tool_pairing import ToolPairing
 
 
 class TestToolPairing(TestCase):
