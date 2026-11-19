@@ -43,6 +43,7 @@ from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import Llm
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
+from neuro_san.internals.run_context.utils.sly_data_llm_config_util import SlyDataLlmConfigUtil
 from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
@@ -244,7 +245,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
             # Full langchain class paths are deliberately left alone: with those the user
             # brings both the model and its arguments and nothing from llm_info applies.
             #
-            # This has to happen before replace_any_required_api_keys(), which can turn
+            # This has to happen before SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(), which can turn
             # full_config into a set of missing sly_data keys that cannot be indexed.
             if self.is_llm_info_class(class_from_llm_config):
                 alias_model_name: Any = full_config.get("model_name")
@@ -254,7 +255,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                     full_config["model_name"] = self.resolve_model_name_alias(alias_model_name)
 
             # Get any required api keys into the full config.
-            full_config = self.replace_any_required_api_keys(full_config, sly_data, llm_config_schema)
+            full_config = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(full_config, sly_data,
+                                                                                llm_config_schema)
             return full_config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
@@ -285,7 +287,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
         # Get any required api keys into the full config.
-        full_config = self.replace_any_required_api_keys(full_config, sly_data, llm_config_schema)
+        full_config = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(full_config, sly_data, llm_config_schema)
         if full_config is not None and not isinstance(full_config, set):
             # Attempt to get a max_tokens through calculation
             full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
@@ -412,57 +414,6 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
             args = self.overlayer.overlay(extends_args, args)
 
         return args
-
-    def replace_any_required_api_keys(
-                self,
-                config: Dict[str, Any],
-                sly_data: Dict[str, Any],
-                # Accepted so the front man's declared sly_data is available here; not consulted yet.
-                llm_config_schema: Dict[str, Any] = None  # pylint: disable=unused-argument
-            ) -> Dict[str, Any] | Set[str]:
-        """
-        Get any required api keys into the config.
-        :param config: The fully specified llm config which is a product of
-                    _create_full_llm_config() above.
-        :param sly_data: A user-provided dictionary of private data,
-                from which we might extract API keys to use for user billing.
-                Can be None indicating no API keys are provided at all and the system defaults will be used.
-        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
-                describing the sly_data.llm_config keys clients are expected to send. Can be None.
-        :return: The config with any required api keys replaced, or a set of missing
-            required config field names if any required api keys were not provided.
-        """
-        use_api_keys: Dict[str, str] = {}
-        if sly_data is not None and isinstance(sly_data, dict):
-            use_api_keys = sly_data.get("llm_config", use_api_keys)
-
-        # Loop through each of the config values and replace any "sly_data" values
-        # with their corresponding values from the llm_config dictionary.
-        required_set: Set[str] = set()
-        key: str = None
-        value: Any = None
-        for key, value in config.items():
-            # If any value is "sly_data", replace it with the same value from the llm_config dictionary
-            small_value: str = str(value).lower()
-            if small_value == "sly_data":
-                # If we have a value in the sly_data.llm_config dictionary, use it,
-                new_value: Any = use_api_keys.get(key)
-                if new_value is not None:
-                    if isinstance(new_value, str):
-                        # Remove leading and trailing whitespace because often these values
-                        # are going into http headers which don't like the extra whitespace.
-                        new_value = new_value.strip()
-                    config[key] = new_value
-                else:
-                    # Add to the list of complaints about what is missing.
-                    required_set.add(key)
-
-        if len(required_set) > 0:
-            # We have complaints about what is missing. Return that.
-            return required_set
-
-        # We have a nice complete config. Return that.
-        return config
 
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """

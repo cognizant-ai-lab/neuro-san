@@ -35,6 +35,7 @@ from typing_extensions import override
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
+from neuro_san.internals.run_context.utils.sly_data_llm_config_util import SlyDataLlmConfigUtil
 from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
@@ -269,7 +270,8 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
 
     def test_create_llm_with_fallbacks_passes_llm_config_schema_down(self) -> None:
         """
-        The llm_config_schema given to create_llm_with_fallbacks() reaches replace_any_required_api_keys().
+        The llm_config_schema given to create_llm_with_fallbacks() reaches the
+        SlyDataLlmConfigUtil.replace_llm_config_with_sly_data() call.
         """
         config: Dict[str, Any] = {
             "class": "openai",
@@ -278,8 +280,8 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
         }
         llm_config_schema: Dict[str, Any] = {"type": "object"}
 
-        with patch.object(self.factory, "replace_any_required_api_keys",
-                          wraps=self.factory.replace_any_required_api_keys) as replace:
+        with patch.object(SlyDataLlmConfigUtil, "replace_llm_config_with_sly_data",
+                          wraps=SlyDataLlmConfigUtil.replace_llm_config_with_sly_data) as replace:
             result: Dict[str, Any] = self.factory.create_llm_with_fallbacks(config, None,
                                                                             llm_config_schema=llm_config_schema)
 
