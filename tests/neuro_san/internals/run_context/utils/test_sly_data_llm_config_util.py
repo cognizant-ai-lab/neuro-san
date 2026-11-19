@@ -29,7 +29,7 @@ from neuro_san.internals.run_context.utils.sly_data_llm_config_util import SlyDa
 
 class TestSlyDataLlmConfigUtil(TestCase):
     """
-    Test cases for SlyDataLlmConfigUtil.replace_llm_config_with_sly_data().
+    Test cases for SlyDataLlmConfigUtil.
     """
 
     def test_replaces_sly_data_value_and_strips_whitespace(self) -> None:
@@ -97,6 +97,24 @@ class TestSlyDataLlmConfigUtil(TestCase):
         result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, None)
 
         self.assertEqual({"openai_api_key"}, result)
+
+    def test_non_dict_llm_config_reports_every_marked_key(self) -> None:
+        """
+        A sly_data.llm_config that is null or not a dictionary counts as no keys provided.
+        """
+        # Loop through each malformed llm_config value.
+        bad_value: Any = None
+        for bad_value in (None, "sk-test", ["openai_api_key"]):
+            # The label is a string so that the subtest stays picklable under xdist.
+            with self.subTest(llm_config=str(bad_value)):
+                config: Dict[str, Any] = {"openai_api_key": "sly_data"}
+
+                util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+                result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(
+                    config, {"llm_config": bad_value})
+
+                self.assertEqual({"openai_api_key"}, result)
 
     def test_config_without_markers_is_returned_unchanged(self) -> None:
         """

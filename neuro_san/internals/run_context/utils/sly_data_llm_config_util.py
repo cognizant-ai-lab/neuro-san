@@ -56,8 +56,11 @@ class SlyDataLlmConfigUtil:
         optional_set: Set[str] = self.get_optional_keys()
 
         use_api_keys: Dict[str, str] = {}
-        if sly_data is not None and isinstance(sly_data, dict):
-            use_api_keys = sly_data.get("llm_config", use_api_keys)
+        if isinstance(sly_data, dict):
+            # A null or non-dictionary llm_config counts as no keys provided.
+            llm_config: Any = sly_data.get("llm_config")
+            if isinstance(llm_config, dict):
+                use_api_keys = llm_config
 
         excused_set: Set[str] = self.get_excused_keys(use_api_keys)
         has_excused: bool = False
