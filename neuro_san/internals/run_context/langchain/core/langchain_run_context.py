@@ -212,9 +212,14 @@ class LangChainRunContext(RunContext):
             converter = BaseMessageDictionaryConverter()
             restored: List[Optional[BaseMessage]] = []
             chat_message: Dict[str, Any] = None
-            # An entry that cannot be restored stays as None, so a tool round ends there.
+            # An entry that cannot be restored or is dropped stays as None, so a tool round ends there.
             for chat_message in one_messages:
                 base_message: Optional[BaseMessage] = converter.from_dict(chat_message)
+                if isinstance(base_message, SystemMessage):
+                    # The agent's instructions are its only system message, and the agent adds
+                    # them itself. A system entry in a chat_context is dropped without a log,
+                    # since nobody who runs the server can act on it.
+                    base_message = None
                 restored.append(base_message)
 
             # A client can send the history back with a tool call or a tool result
