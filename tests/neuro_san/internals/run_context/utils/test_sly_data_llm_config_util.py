@@ -14,10 +14,15 @@
 #
 # END COPYRIGHT
 
+from io import BytesIO
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Set
+from typing import Tuple
 from unittest import TestCase
+
+from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
 
 from neuro_san.internals.run_context.utils.sly_data_llm_config_util import SlyDataLlmConfigUtil
 
@@ -95,27 +100,97 @@ class TestSlyDataLlmConfigUtil(TestCase):
         self.assertIs(config, result)
         self.assertEqual(expected, result)
 
+    # The BYOK llm_config example from the sly_data_schema design discussion, kept verbatim as HOCON.
+    BYOK_LLM_CONFIG_HOCON: str = """
+            # A BYOK llm_config_property to be inserted in an already existing sly_data_schema.
+            # Note that with hocon we can only define values to be used later in substitution.
+            "llm_config": {
+                "type": "object",
+                "properties": {
+                    "openai_api_key": {
+                        "type": "string",
+                        "description": "The user's OpenAI API key"
+                    },
+                    "openai_api_base": {
+                        "type": "string",
+                        "description": "An optional OpenAI endpoint URL"
+                    },
+                    "anthropic_api_key": {
+                        "type": "string",
+                        "description": "The user's Anthropic API key"
+                    },
+                    "google_api_key": {
+                        "type": "string",
+                        "description": "The user's Google API key for use with Gemini models"
+                    },
+                },
+                # Note that none of these properties are strictly required, as all are individually optional,
+                # but at least one of these properties must be present, hence the "anyOf" below.
+                # However, in a BYOK situation, we do always expect the llm_config property itself to be required
+                # with at least one of these values present.
+                "anyOf": [
+                    { "required": ["openai_api_key"] },
+                    { "required": ["anthropic_api_key"] },
+                    { "required": ["google_api_key"] }
+                ]
+            }
+"""
+
     @staticmethod
     def get_byok_schema() -> Dict[str, Any]:
         """
-        Get an llm_config schema where any one of three API keys is required and the API base is optional.
+        Parse the BYOK example, where any one of three API keys is required and the API base is optional.
 
-        :return: The llm_config schema dictionary
+        :return: A fresh copy of the llm_config schema dictionary
         """
-        return {
-            "type": "object",
-            "properties": {
-                "openai_api_key": {"type": "string"},
-                "openai_api_base": {"type": "string"},
-                "anthropic_api_key": {"type": "string"},
-                "google_api_key": {"type": "string"},
-            },
-            "anyOf": [
-                {"required": ["openai_api_key"]},
-                {"required": ["anthropic_api_key"]},
-                {"required": ["google_api_key"]},
-            ]
-        }
+        hocon_format: HoconSerializationFormat = HoconSerializationFormat()
+        parsed: Dict[str, Any] = hocon_format.to_object(BytesIO(TestSlyDataLlmConfigUtil.BYOK_LLM_CONFIG_HOCON
+                                                                .encode("utf-8")))
+        return parsed.get("llm_config")
+
+    def test_byok_example_requires_any_one_key_and_never_the_base(self) -> None:
+        """
+        With the BYOK example schema, any one provider key is enough, openai_api_base is never
+        reported, and a provider key is only reported when the client sent none of the three.
+        """
+        # Each case: the LLM's key, the sly_data.llm_config sent, and the expected result,
+        # where None means the config is usable.
+        cases: List[Tuple[str, Dict[str, Any], Set[str]]] = [
+            ("openai_api_key", {"openai_api_key": "sk-openai"}, None),
+            ("anthropic_api_key", {"anthropic_api_key": "sk-ant"}, None),
+            ("google_api_key", {"google_api_key": "g-key"}, None),
+            ("openai_api_key", {"openai_api_key": "sk-openai", "openai_api_base": "https://gw"}, None),
+            ("openai_api_key", {"anthropic_api_key": "sk-ant"}, set()),
+            ("google_api_key", {"openai_api_key": "sk-openai"}, set()),
+            ("openai_api_key", {}, {"openai_api_key"}),
+            ("openai_api_key", {"openai_api_base": "https://gw"}, {"openai_api_key"}),
+            ("anthropic_api_key", {}, {"anthropic_api_key"}),
+        ]
+
+        # Loop through each case, with every LLM also asking for the optional API base.
+        case: Tuple[str, Dict[str, Any], Set[str]] = None
+        for case in cases:
+            api_key: str = case[0]
+            llm_config: Dict[str, Any] = case[1]
+            expected: Set[str] = case[2]
+            # The label is a string so that the subtest stays picklable under xdist.
+            with self.subTest(case=str(case)):
+                config: Dict[str, Any] = {api_key: "sly_data", "openai_api_base": "sly_data"}
+
+                result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(
+                    config, {"llm_config": llm_config}, self.get_byok_schema())
+
+                if expected is not None:
+                    self.assertEqual(expected, result)
+                    continue
+                self.assertIs(config, result)
+                self.assertEqual(llm_config.get(api_key), result.get(api_key))
+                self.assertEqual(llm_config.get("openai_api_base"), result.get("openai_api_base"))
+
+        message: str = SlyDataLlmConfigUtil.describe_missing_keys(
+            ["google_api_key", "anthropic_api_key", "openai_api_key"], self.get_byok_schema())
+        self.assertEqual("LLM operation for this agent requires the following set in sly_data.llm_config:\n"
+                         "    one of: openai_api_key, anthropic_api_key, google_api_key\n", message)
 
     def test_missing_optional_key_is_set_to_none(self) -> None:
         """
