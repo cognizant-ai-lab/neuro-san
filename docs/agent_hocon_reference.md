@@ -677,8 +677,8 @@ The front man's `sly_data_schema` tells a client how these keys will be accepted
   The cannoncical example here is the keys themselves: openai_api_key, anthropoc_api_key, google_api_key.
 - **Optional** (under `llm_config.properties` but in no `required` list): when omitted, the server's own
   key or default is used. For this reason, network authors should not declare API keys as optional.
-  The cannoncical example here pertain to configuration like optional endpoints: openai_api_base, anthropoc_base_url
-  or model.
+  The canonical examples here are optional endpoints: openai_api_base, anthropic_api_url.
+  A `model_name` from sly_data also needs a `class` in the llm_config, and it cannot be optional.
 
 If no LLM can be used, the error lists the keys that are always required and the alternatives to choose from.
 
