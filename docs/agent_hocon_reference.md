@@ -668,26 +668,19 @@ containing per-user API keys to be filled in when an agent's llm_config has cert
 specified as "sly_data" for its values.
 
 This enables any or all agent networks to potentially offload the costs operation onto the user
-by having the user fill in their own API keys.
+by having the user fill in their own API keys. We call this "Bring Your Own Key" or BYOK.
 
-Any key in this dictionary will be specific to a particular LLM (i.e. "openai_api_key" or "anthropic_api_key").
+The front man's `sly_data_schema` tells a client how these keys will be accepted by any node's `llm_config`:
 
-A "sly_data" value missing from this dictionary is reported as a required sly_data error, unless the
-front man's `sly_data_schema` declares it under `llm_config.properties` and no `required` list names it
-(neither the top-level one nor one inside an `anyOf`, `oneOf` or `allOf` branch). Such an optional key is
-set to null instead, so the LLM falls back to its environment variable or default.
+- **Alternatives** (`anyOf`/`oneOf`): send every key of at least one alternative. LLMs that need keys
+  you did not send are skipped in favor of their fallbacks. Sending more than one alternative is fine.
+  The cannoncical example here is the keys themselves: openai_api_key, anthropoc_api_key, google_api_key.
+- **Optional** (under `llm_config.properties` but in no `required` list): when omitted, the server's own
+  key or default is used. For this reason, network authors should not declare API keys as optional.
+  The cannoncical example here pertain to configuration like optional endpoints: openai_api_base, anthropoc_base_url
+  or model.
 
-A missing key that is one alternative of an `anyOf` or `oneOf` list is not reported when the client
-provided every key of another alternative in that list, unless another `anyOf` or `oneOf` list that the
-client did not satisfy also names it. The LLM that needs the missing key is skipped
-instead, and another fallback is used. Do not declare an API key as optional to get this effect: an optional
-key set to null makes the LLM use the server's own API key from the environment.
-
-The `llm_config` schema is not used to validate the sly_data a client sends, and `oneOf` is treated like
-`anyOf`: a client that provides more than one alternative of a `oneOf` list is not rejected.
-
-When no LLM can be created, the error describes the keys the schema always requires and the
-`anyOf`/`oneOf` alternatives the client can choose from.
+If no LLM can be used, the error lists the keys that are always required and the alternatives to choose from.
 
 Example networks that advertise that their sly_data_schema needs external API keys:
 
