@@ -674,7 +674,7 @@ The front man's `sly_data_schema` tells a client how these keys will be accepted
 
 - **Alternatives** (`anyOf`/`oneOf`): send every key of at least one alternative. LLMs that need keys
   you did not send are skipped in favor of their fallbacks. Sending more than one alternative is fine.
-  The cannoncical example here is the keys themselves: openai_api_key, anthropoc_api_key, google_api_key.
+  The canonical example here is the keys themselves: openai_api_key, anthropic_api_key, google_api_key.
 - **Optional** (under `llm_config.properties` but in no `required` list): when omitted, the server's own
   key or default is used. For this reason, network authors should not declare API keys as optional.
   The canonical examples here are optional endpoints: openai_api_base, anthropic_api_url.
