@@ -131,7 +131,7 @@ users when trying out newly released models.
 
 Some newer OpenAI models are trained to use tools but only do so through the Responses API
 (for example `gpt-6-astra`), or need `reasoning_effort` set to `"none"` to use tools on Chat Completions
-(the `gpt-5.6-*` models). Which OpenAI endpoint a model uses is controlled by `use_responses_api` in the
+(for example `gpt-6-sol`). Which OpenAI endpoint a model uses is controlled by `use_responses_api` in the
 `llm_config`, or by the `openai` class default in this file. See
 [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
 for the per-model details.
@@ -447,17 +447,16 @@ A Chat Completions request from a `gpt-5.6-*` model that carries tools is reject
 > Function tools with reasoning_effort are not supported for gpt-5.6-sol in /v1/chat/completions.
 > To use function tools, use /v1/responses or set reasoning_effort to 'none'.
 
-With the Responses API as the default endpoint both model families work out of the box. They differ in how far
+With the Responses API as the default endpoint both groups of models work out of the box. They differ in how far
 you can move away from the defaults:
 
-- `gpt-5.6-*` (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`): the defaults keep reasoning and tool calling.
+- `gpt-6.1-terra`, `gpt-6-sol`, `gpt-6-luna` and `gpt-5.6-*`: the defaults keep reasoning and tool calling.
   If you must stay on Chat Completions, set `"use_responses_api": false` together with
   `"reasoning_effort": "none"`, which makes tool calls work but without any reasoning.
-- `gpt-6-astra`: the Responses API is the only option, so never set `"use_responses_api": false` for it. The
-  [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) states that
-  "Chat Completions does not support function calling with GPT-6 Astra" and that GPT-6 Astra
-  "does not support none reasoning effort" (the API answers HTTP 400), so the `"none"` workaround does not exist
-  for it.
+- `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6.1-sol` and `gpt-6-astra`: the Responses API is the only option, so
+  never set `"use_responses_api": false` for them. They reject `"reasoning_effort": "none"` (the API answers
+  HTTP 400), so the `"none"` workaround does not exist for them. See the
+  [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning).
 
 The minimal configuration is just the model name. The model's default reasoning effort applies; add
 `reasoning_effort` only when you want a different level.
