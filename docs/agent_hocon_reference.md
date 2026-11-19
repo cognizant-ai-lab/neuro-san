@@ -678,9 +678,13 @@ front man's `sly_data_schema` declares it under `llm_config.properties` and no `
 set to null instead, so the LLM falls back to its environment variable or default.
 
 A missing key that is one alternative of an `anyOf` or `oneOf` list is not reported when the client
-provided every key of another alternative in that list. The LLM that needs the missing key is skipped
+provided every key of another alternative in that list, unless another `anyOf` or `oneOf` list that the
+client did not satisfy also names it. The LLM that needs the missing key is skipped
 instead, and another fallback is used. Do not declare an API key as optional to get this effect: an optional
 key set to null makes the LLM use the server's own API key from the environment.
+
+The `llm_config` schema is not used to validate the sly_data a client sends, and `oneOf` is treated like
+`anyOf`: a client that provides more than one alternative of a `oneOf` list is not rejected.
 
 When no LLM can be created, the error describes the keys the schema always requires and the
 `anyOf`/`oneOf` alternatives the client can choose from.

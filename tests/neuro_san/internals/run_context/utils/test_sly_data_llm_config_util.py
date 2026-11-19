@@ -86,33 +86,28 @@ class TestSlyDataLlmConfigUtil(TestCase):
 
         self.assertEqual({"openai_api_key"}, result)
 
-    def test_none_sly_data_reports_every_marked_key(self) -> None:
+    def test_absent_or_non_dict_llm_config_reports_every_marked_key(self) -> None:
         """
-        With no sly_data at all, every "sly_data" key is reported missing.
+        With no sly_data at all, or a sly_data.llm_config that is null or not a dictionary,
+        every "sly_data" key is reported missing.
         """
-        config: Dict[str, Any] = {"openai_api_key": "sly_data", "model_name": "gpt-4o"}
+        sly_datas: List[Dict[str, Any]] = [
+            None,
+            {"llm_config": None},
+            {"llm_config": "sk-test"},
+            {"llm_config": ["openai_api_key"]},
+        ]
 
-        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
-
-        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, None)
-
-        self.assertEqual({"openai_api_key"}, result)
-
-    def test_non_dict_llm_config_reports_every_marked_key(self) -> None:
-        """
-        A sly_data.llm_config that is null or not a dictionary counts as no keys provided.
-        """
-        # Loop through each malformed llm_config value.
-        bad_value: Any = None
-        for bad_value in (None, "sk-test", ["openai_api_key"]):
+        # Loop through each sly_data that provides no usable llm_config.
+        sly_data: Dict[str, Any] = None
+        for sly_data in sly_datas:
             # The label is a string so that the subtest stays picklable under xdist.
-            with self.subTest(llm_config=str(bad_value)):
-                config: Dict[str, Any] = {"openai_api_key": "sly_data"}
+            with self.subTest(sly_data=str(sly_data)):
+                config: Dict[str, Any] = {"openai_api_key": "sly_data", "model_name": "gpt-4o"}
 
                 util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
 
-                result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(
-                    config, {"llm_config": bad_value})
+                result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
                 self.assertEqual({"openai_api_key"}, result)
 
@@ -372,6 +367,25 @@ class TestSlyDataLlmConfigUtil(TestCase):
         self.assertEqual(set(), util.get_excused_keys({"openai_api_base": "b"}))
         self.assertEqual(set(), no_schema_util.get_excused_keys({"google_api_key": "g"}))
         self.assertEqual(set(), util.get_excused_keys({"google_api_key": "  "}))
+
+    def test_key_named_by_unsatisfied_group_is_not_excused(self) -> None:
+        """
+        A key stays reportable when another anyOf group that names it is not satisfied.
+        """
+        schema: Dict[str, Any] = {
+            "type": "object",
+            "allOf": [
+                {"anyOf": [{"required": ["a_key"]}, {"required": ["b_key"]}]},
+                {"anyOf": [{"required": ["a_key"]}, {"required": ["c_key"]}]},
+            ],
+        }
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(schema)
+
+        self.assertEqual({"b_key"}, util.get_excused_keys({"b_key": "b"}))
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data({"a_key": "sly_data"},
+                                                                                  {"llm_config": {"b_key": "b"}})
+        self.assertEqual({"a_key"}, result)
 
     def test_get_provided_value(self) -> None:
         """

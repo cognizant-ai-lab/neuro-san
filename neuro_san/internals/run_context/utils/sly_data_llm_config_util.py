@@ -25,6 +25,8 @@ class SlyDataLlmConfigUtil:
     Utility class for handling the llm_config portion of a client's sly_data,
     which carries per-request llm settings such as API keys for user billing,
     as described by the llm_config portion of an agent network's sly_data_schema.
+    This class does not validate sly_data against the schema, and it treats "oneOf" like "anyOf":
+    a client that provides more than one alternative of a "oneOf" list is not rejected.
     """
 
     def __init__(self, llm_config_schema: Dict[str, Any] = None):
@@ -107,10 +109,12 @@ class SlyDataLlmConfigUtil:
 
         :param provided: The sly_data.llm_config dictionary the client sent.
         :return: The set of keys from every alternative of each satisfied group, less any key
-                the schema always requires. This is empty when there is no usable schema.
+                the schema always requires and any key that an unsatisfied group names.
+                This is empty when there is no usable schema.
         """
         llm_config_schema: Dict[str, Any] = self.llm_config_schema
         excused_set: Set[str] = set()
+        unsatisfied_set: Set[str] = set()
         if not isinstance(llm_config_schema, dict) or not isinstance(provided, dict):
             return excused_set
 
@@ -127,16 +131,19 @@ class SlyDataLlmConfigUtil:
                 if SlyDataLlmConfigUtil.is_branch_provided(branch, provided):
                     satisfied = True
                     break
-            if not satisfied:
-                continue
 
-            # Loop through each alternative again to excuse all of its keys.
+            # Loop through each alternative again to excuse its keys or keep them reportable.
             for branch in group:
-                excused_set.update(branch)
+                if satisfied:
+                    excused_set.update(branch)
+                else:
+                    unsatisfied_set.update(branch)
 
         always_set: Set[str] = set()
         SlyDataLlmConfigUtil.collect_always_required_keys(llm_config_schema, always_set)
         excused_set.difference_update(always_set)
+        # A key that an unsatisfied group still names can still be required, so it stays reportable.
+        excused_set.difference_update(unsatisfied_set)
         return excused_set
 
     @staticmethod
