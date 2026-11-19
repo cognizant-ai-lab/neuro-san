@@ -35,6 +35,7 @@ from typing_extensions import override
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.llms.tool_strict_chat_openai import ToolStrictChatOpenAI
+from neuro_san.internals.run_context.utils.sly_data_llm_config_util import SlyDataLlmConfigUtil
 from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 
 
@@ -266,6 +267,58 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
 
         self.assertIsInstance(result, set)
         self.assertEqual({"openai_api_key"}, result)
+
+    def test_create_llm_with_fallbacks_passes_llm_config_schema_down(self) -> None:
+        """
+        The llm_config_schema given to create_llm_with_fallbacks() reaches the
+        SlyDataLlmConfigUtil constructor.
+        """
+        config: Dict[str, Any] = {
+            "class": "openai",
+            "model_name": self.OPENAI_ALIAS,
+            "openai_api_key": "sly_data",
+        }
+        llm_config_schema: Dict[str, Any] = {"type": "object"}
+
+        # autospec binds the patched constructor, so the call args start with the instance.
+        with patch.object(SlyDataLlmConfigUtil, "__init__", autospec=True,
+                          side_effect=SlyDataLlmConfigUtil.__init__) as init:
+            result: Dict[str, Any] = self.factory.create_llm_with_fallbacks(config, None,
+                                                                            llm_config_schema=llm_config_schema)
+
+        self.assertEqual(["openai_api_key"], result.get("required_sly_data_errors"))
+        self.assertEqual(1, init.call_count)
+        self.assertIs(llm_config_schema, init.call_args.args[1])
+
+    def test_create_llm_with_fallbacks_skips_key_satisfied_by_another_alternative(self) -> None:
+        """
+        When the client satisfied the schema's anyOf with a different provider's key,
+        the OpenAI config is skipped without reporting openai_api_key as missing.
+        """
+        config: Dict[str, Any] = {
+            "class": "openai",
+            "model_name": self.OPENAI_ALIAS,
+            "openai_api_key": "sly_data",
+        }
+        llm_config_schema: Dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "openai_api_key": {"type": "string"},
+                "anthropic_api_key": {"type": "string"},
+            },
+            "anyOf": [
+                {"required": ["openai_api_key"]},
+                {"required": ["anthropic_api_key"]},
+            ]
+        }
+        sly_data: Dict[str, Any] = {"llm_config": {"anthropic_api_key": "sk-ant"}}
+
+        result: Dict[str, Any] = self.factory.create_llm_with_fallbacks(config, sly_data,
+                                                                        llm_config_schema=llm_config_schema)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual([], result.get("required_sly_data_errors"))
+        self.assertEqual("sly_data", config.get("openai_api_key"))
 
     def test_class_with_dangling_alias_passes_target_through(self) -> None:
         """
