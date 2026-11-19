@@ -668,9 +668,19 @@ containing per-user API keys to be filled in when an agent's llm_config has cert
 specified as "sly_data" for its values.
 
 This enables any or all agent networks to potentially offload the costs operation onto the user
-by having the user fill in their own API keys.
+by having the user fill in their own API keys. We call this "Bring Your Own Key" or BYOK.
 
-Any key in this dictionary will be specific to a particular LLM (i.e. "openai_api_key" or "anthropic_api_key").
+The front man's `sly_data_schema` tells a client how these keys will be accepted by any node's `llm_config`:
+
+- **Alternatives** (`anyOf`/`oneOf`): send every key of at least one alternative. LLMs that need keys
+  you did not send are skipped in favor of their fallbacks. Sending more than one alternative is fine.
+  The canonical example here is the keys themselves: openai_api_key, anthropic_api_key, google_api_key.
+- **Optional** (under `llm_config.properties` but in no `required` list): when omitted, the server's own
+  key or default is used. For this reason, network authors should not declare API keys as optional.
+  The canonical examples here are optional endpoints: openai_api_base, anthropic_api_url.
+  A `model_name` from sly_data also needs a `class` in the llm_config, and it cannot be optional.
+
+If no LLM can be used, the error lists the keys that are always required and the alternatives to choose from.
 
 Example networks that advertise that their sly_data_schema needs external API keys:
 
