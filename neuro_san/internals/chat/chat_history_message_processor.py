@@ -132,9 +132,9 @@ class ChatHistoryMessageProcessor(MessageProcessor):
 
         transformed_message_dict: Dict[str, Any] = chat_message_dict
         if not self.saw_first_system and message_type == ChatMessageType.SYSTEM:
-            # Redact the first SYSTEM message we see. This has the front-man prompt in it,
-            # and when read in, we replace it with what the agent has anyway to prevent
-            # a prompting takeover.
+            # Redact the first SYSTEM message we see, since it can hold an agent's instructions.
+            # A SYSTEM entry that comes back in a chat_context is dropped when it is read in,
+            # so it never reaches the model.
             transformed_message_dict = self.redact_instructions(chat_message_dict)
             self.saw_first_system = True
         else:

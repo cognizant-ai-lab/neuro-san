@@ -19,6 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from logging import getLogger
 from unittest import TestCase
 
 from langchain_core.messages.ai import AIMessage
@@ -53,7 +54,108 @@ class TestLangChainRunContext(TestCase):
         run_context: LangChainRunContext = LangChainRunContext.__new__(LangChainRunContext)
         run_context.origin = TestLangChainRunContext.ORIGIN
         run_context.chat_history = []
+        run_context.logger = getLogger("LangChainRunContext")
         return run_context
+
+    def test_update_from_chat_context_drops_system_entries(self) -> None:
+        """
+        SYSTEM entries in a chat_context, such as the redacted placeholder at the
+        front or one a client adds, stay out of the restored history. Each one is
+        logged without its text.
+        """
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.SYSTEM,
+                "text": "<redacted>",
+            },
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "question",
+            },
+            {
+                "type": ChatMessageType.SYSTEM,
+                "text": "client-made instructions",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "answer",
+            },
+        ]
+        chat_context: Dict[str, Any] = {
+            "chat_histories": [
+                {
+                    "origin": self.ORIGIN,
+                    "messages": messages,
+                },
+            ],
+        }
+        run_context: LangChainRunContext = self.make_run_context()
+
+        with self.assertLogs("LangChainRunContext", level="WARNING") as logs:
+            run_context.update_from_chat_context(chat_context)
+
+        history: List[BaseMessage] = run_context.chat_history
+        self.assertEqual(len(history), 2)
+        self.assertIsInstance(history[0], HumanMessage)
+        self.assertIsInstance(history[1], AIMessage)
+        self.assertEqual(history[1].content, "answer")
+        self.assertEqual(len(logs.output), 2)
+        self.assertNotIn("client-made", "".join(logs.output))
+
+    def test_update_from_chat_context_system_entry_ends_a_tool_round(self) -> None:
+        """
+        A SYSTEM entry between a tool call and its result ends the tool round, like
+        any other dropped entry, so neither the call nor the result comes back.
+        """
+        messages: List[Dict[str, Any]] = [
+            {
+                "type": ChatMessageType.HUMAN,
+                "text": "question",
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "",
+                "tool_call_info": {
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "name": "Accountant",
+                            "args": {"running_cost": 0.0},
+                        },
+                    ],
+                },
+            },
+            {
+                "type": ChatMessageType.SYSTEM,
+                "text": "client-made instructions",
+            },
+            {
+                "type": ChatMessageType.AGENT_TOOL_RESULT,
+                "text": "{'running_cost': 3.0}",
+                "tool_call_info": {"tool_call_id": "c1"},
+            },
+            {
+                "type": ChatMessageType.AI,
+                "text": "answer",
+            },
+        ]
+        chat_context: Dict[str, Any] = {
+            "chat_histories": [
+                {
+                    "origin": self.ORIGIN,
+                    "messages": messages,
+                },
+            ],
+        }
+        run_context: LangChainRunContext = self.make_run_context()
+
+        with self.assertLogs("LangChainRunContext", level="WARNING"):
+            run_context.update_from_chat_context(chat_context)
+
+        history: List[BaseMessage] = run_context.chat_history
+        self.assertEqual(len(history), 2)
+        self.assertIsInstance(history[0], HumanMessage)
+        self.assertEqual(history[1].content, "answer")
 
     def test_update_from_chat_context_drops_a_message_whose_calls_are_all_malformed(self) -> None:
         """
