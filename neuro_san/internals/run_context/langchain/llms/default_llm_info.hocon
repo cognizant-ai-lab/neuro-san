@@ -28,18 +28,61 @@
     # Retirement dates come from OpenAI's deprecations page:
     # https://platform.openai.com/docs/deprecations
     # For models with no announced retirement, "model_retirement_date" is null.
+    #
+    # Tool calling: the "openai" class sends every request to the Responses API by default (see
+    # "use_responses_api" in classes.openai.args). On Chat Completions ("use_responses_api": false), the newest
+    # models reject tools combined with reasoning:
+    # - gpt-6.2-astra, gpt-6.2-sol, gpt-6.1-sol and gpt-6-astra call tools only on the Responses API. They also
+    #   reject "reasoning_effort": "none", so never set "use_responses_api": false for them.
+    # - gpt-6.1-terra, gpt-6-sol, gpt-6-luna and gpt-5.6-* call tools on Chat Completions only with
+    #   "reasoning_effort": "none", which turns reasoning off.
+    # Details are in the llm_info reference:
+    # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
 
     "gpt-luna": {
         "use_model_name": "gpt-6-luna"
     },
     "gpt-terra": {
-        "use_model_name": "gpt-5.6-terra"
+        "use_model_name": "gpt-6.1-terra"
     },
     "gpt-sol": {
-        "use_model_name": "gpt-6.1-sol"
+        "use_model_name": "gpt-6.2-sol"
     },
     "gpt-astra": {
-        "use_model_name": "gpt-6-astra"
+        "use_model_name": "gpt-6.2-astra"
+    },
+
+    "gpt-6.2-astra": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "05/18/2026",
+        "price_per_1k_input_tokens": 0.008,
+        "price_per_1k_output_tokens": 0.040,
+        "model_launch_date": "2026-11-17",
+        "model_retirement_date": null,
+    },
+    "gpt-6.2-sol": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/01/2026",
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.010,
+        "model_launch_date": "2026-11-17",
+        "model_retirement_date": null,
     },
 
     "gpt-6.1-sol": {
@@ -50,16 +93,28 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling works with the class defaults (the Responses API is the default endpoint). Do not set
-        # "use_responses_api": false for this model: Chat Completions rejects tools combined with reasoning and the
-        # model rejects reasoning_effort "none", so there is no Chat Completions path. See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "04/30/2026",
         "price_per_1k_input_tokens": 0.002,
         "price_per_1k_output_tokens": 0.010,
         "model_launch_date": "2026-09-29",
+        "model_retirement_date": null,
+    },
+    "gpt-6.1-terra": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/01/2026",
+        "price_per_1k_input_tokens": 0.001,
+        "price_per_1k_output_tokens": 0.005,
+        "model_launch_date": "2026-10-26",
         "model_retirement_date": null,
     },
 
@@ -71,10 +126,6 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling works with the class defaults (the Responses API is the default endpoint). Do not set
-        # "use_responses_api": false for this model: Chat Completions rejects tools combined with reasoning and the
-        # model rejects reasoning_effort "none", so there is no Chat Completions path. See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "04/30/2026",
@@ -91,9 +142,6 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
-        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "04/20/2026",
@@ -110,9 +158,6 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
-        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "05/18/2026",
@@ -130,10 +175,6 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
-        # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
-        # Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -150,10 +191,6 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
-        # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
-        # Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -172,10 +209,6 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
-        # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
-        # Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
