@@ -672,6 +672,19 @@ by having the user fill in their own API keys.
 
 Any key in this dictionary will be specific to a particular LLM (i.e. "openai_api_key" or "anthropic_api_key").
 
+A "sly_data" value missing from this dictionary is reported as a required sly_data error, unless the
+front man's `sly_data_schema` declares it under `llm_config.properties` and no `required` list names it
+(neither the top-level one nor one inside an `anyOf`, `oneOf` or `allOf` branch). Such an optional key is
+set to null instead, so the LLM falls back to its environment variable or default.
+
+A missing key that is one alternative of an `anyOf` or `oneOf` list is not reported when the client
+provided every key of another alternative in that list. The LLM that needs the missing key is skipped
+instead, and another fallback is used. Do not declare an API key as optional to get this effect: an optional
+key set to null makes the LLM use the server's own API key from the environment.
+
+When no LLM can be created, the error describes the keys the schema always requires and the
+`anyOf`/`oneOf` alternatives the client can choose from.
+
 Example networks that advertise that their sly_data_schema needs external API keys:
 
 - [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)

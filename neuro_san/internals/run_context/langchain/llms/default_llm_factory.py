@@ -189,6 +189,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
                 Can also return a set of strings describing any required sly_data API keys that are not provided.
+                An empty set means the config is skipped because the client provided keys for another LLM instead.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
@@ -211,6 +212,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 describing the sly_data.llm_config keys clients are expected to send. Can be None.
         :return: The fully specified config with defaults filled in.
                 Can also return a set of strings describing any required sly_data API keys that are not provided.
+                An empty set means the config is skipped because the client provided keys for another LLM instead.
         """
         full_config: Dict[str, Any] | Set[str] = None
 

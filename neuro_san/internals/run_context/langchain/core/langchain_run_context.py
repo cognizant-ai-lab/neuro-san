@@ -63,6 +63,7 @@ from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources impo
 from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
 from neuro_san.internals.run_context.utils.agent_activation_capsule import AgentActivationCapsule
 from neuro_san.internals.run_context.utils.agent_inspector_util import AgentInspectorUtil
+from neuro_san.internals.run_context.utils.sly_data_llm_config_util import SlyDataLlmConfigUtil
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 
@@ -302,9 +303,7 @@ class LangChainRunContext(RunContext):
 
             required_sly_data: List[str] = error_dict.get("required_sly_data_errors", [])
             if len(required_sly_data) > 0:
-                error += "\nLLM operation for this agent requires at least one "
-                error += "of the following set in sly_data.llm_config:\n"
-                error += "\n    ".join(sorted(required_sly_data)) + "\n"
+                error += "\n" + SlyDataLlmConfigUtil.describe_missing_keys(required_sly_data, llm_config_schema)
 
             construction_errors: List[str] = error_dict.get("construction_errors", [])
             if len(construction_errors) > 0:

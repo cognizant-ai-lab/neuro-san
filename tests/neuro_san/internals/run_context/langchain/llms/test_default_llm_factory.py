@@ -289,6 +289,36 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
         self.assertEqual(1, replace.call_count)
         self.assertIs(llm_config_schema, replace.call_args.args[2])
 
+    def test_create_llm_with_fallbacks_skips_key_satisfied_by_another_alternative(self) -> None:
+        """
+        When the client satisfied the schema's anyOf with a different provider's key,
+        the OpenAI config is skipped without reporting openai_api_key as missing.
+        """
+        config: Dict[str, Any] = {
+            "class": "openai",
+            "model_name": self.OPENAI_ALIAS,
+            "openai_api_key": "sly_data",
+        }
+        llm_config_schema: Dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "openai_api_key": {"type": "string"},
+                "anthropic_api_key": {"type": "string"},
+            },
+            "anyOf": [
+                {"required": ["openai_api_key"]},
+                {"required": ["anthropic_api_key"]},
+            ]
+        }
+        sly_data: Dict[str, Any] = {"llm_config": {"anthropic_api_key": "sk-ant"}}
+
+        result: Dict[str, Any] = self.factory.create_llm_with_fallbacks(config, sly_data,
+                                                                        llm_config_schema=llm_config_schema)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual([], result.get("required_sly_data_errors"))
+        self.assertEqual("sly_data", config.get("openai_api_key"))
+
     def test_class_with_dangling_alias_passes_target_through(self) -> None:
         """
         With a class, an alias whose target has no entry resolves to the target name

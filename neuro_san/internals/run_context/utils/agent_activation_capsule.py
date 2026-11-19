@@ -44,6 +44,7 @@ from neuro_san.internals.run_context.interfaces.agent_network_inspector import A
 from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.utils.agent_inspector_util import AgentInspectorUtil
+from neuro_san.internals.run_context.utils.sly_data_llm_config_util import SlyDataLlmConfigUtil
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -237,11 +238,10 @@ flag to your invocation.
             # For now, do not worry about the "construction_errors" or "api_key_errors" keys.
             # These are very likely to already be handled by the front man.
             required_sly_data: List[str] = llm_resources_dict.get("required_sly_data_errors", [])
-            required: str = "\n".join(sorted(required_sly_data))
-            raise ValueError(
-                "LLM operation for this agent requires at least one of the following set in sly_data.llm_config:\n"
-                f"{required}\n"
-            )
+            if len(required_sly_data) == 0:
+                # Every config was skipped or failed for reasons other than missing sly_data.
+                raise ValueError("Unable to create LLM from llm_config (no usable LLM for the sly_data provided).")
+            raise ValueError(SlyDataLlmConfigUtil.describe_missing_keys(required_sly_data, llm_config_schema))
 
         typed_llm_resources: LlmResources = llm_resources
         self.lingerers.append(typed_llm_resources)
