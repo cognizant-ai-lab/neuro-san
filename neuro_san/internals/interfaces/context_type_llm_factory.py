@@ -60,7 +60,8 @@ class ContextTypeLlmFactory:
         raise NotImplementedError
 
     @abstractmethod
-    def create_llm(self, config: Dict[str, Any], sly_data: Dict[str, Any] = None) -> Any:
+    def create_llm(self, config: Dict[str, Any], sly_data: Dict[str, Any] = None,
+                   llm_config_schema: Dict[str, Any] = None) -> Any:
         """
         Create an llm instance BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config from which the LLM instance
@@ -68,6 +69,8 @@ class ContextTypeLlmFactory:
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
+                describing the sly_data.llm_config keys clients are expected to send. Can be None.
         :return: An llm instance native to the context type.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
@@ -78,13 +81,16 @@ class ContextTypeLlmFactory:
     @abstractmethod
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
                                   sly_data: Dict[str, Any] = None,
-                                  num_fallbacks: int = None) -> Any:
+                                  num_fallbacks: int = None,
+                                  llm_config_schema: Dict[str, Any] = None) -> Any:
         """
         :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
         :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
+        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
+                describing the sly_data.llm_config keys clients are expected to send. Can be None.
         :return: An LLM instance native to the context type that deals with fallback specifications.
         """
         raise NotImplementedError

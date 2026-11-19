@@ -40,8 +40,10 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.llm_resources import LlmResources
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.internals.run_context.utils.agent_inspector_util import AgentInspectorUtil
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -220,7 +222,14 @@ flag to your invocation.
         invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
         llm_factory: ContextTypeLlmFactory = invocation_context.get_llm_factory()
 
-        llm_resources: Any = llm_factory.create_llm_with_fallbacks(llm_config, sly_data, num_fallbacks)
+        # The capsule of a run context without a tool caller has no factory to ask.
+        inspector: AgentNetworkInspector = None
+        if self.factory is not None:
+            inspector = self.factory.get_agent_network()
+        llm_config_schema: Dict[str, Any] = AgentInspectorUtil.get_llm_config_sly_data_schema(inspector)
+
+        llm_resources: Any = llm_factory.create_llm_with_fallbacks(llm_config, sly_data, num_fallbacks,
+                                                                   llm_config_schema=llm_config_schema)
         if llm_resources is None:
             raise ValueError("Unable to create LLM from llm_config (missing required configuration and/or sly_data).")
         if isinstance(llm_resources, dict):

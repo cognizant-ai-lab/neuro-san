@@ -171,7 +171,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
 
         return llm_factory
 
-    def create_llm(self, config: Dict[str, Any], sly_data: Dict[str, Any] = None) -> LangChainLlmResources | Set[str]:
+    def create_llm(self, config: Dict[str, Any], sly_data: Dict[str, Any] = None,
+                   llm_config_schema: Dict[str, Any] = None) -> LangChainLlmResources | Set[str]:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
@@ -181,6 +182,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
+                describing the sly_data.llm_config keys clients are expected to send. Can be None.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
@@ -188,19 +191,23 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
-        full_config: Dict[str, Any] | Set[str] = self.create_full_llm_config(config, sly_data)
+        full_config: Dict[str, Any] | Set[str] = self.create_full_llm_config(config, sly_data, llm_config_schema)
         if full_config is None or isinstance(full_config, set):
             return full_config
 
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
-    def create_full_llm_config(self, config: Dict[str, Any], sly_data: Dict[str, Any]) -> Dict[str, Any] | Set[str]:
+    # pylint: disable=too-many-locals
+    def create_full_llm_config(self, config: Dict[str, Any], sly_data: Dict[str, Any],
+                               llm_config_schema: Dict[str, Any] = None) -> Dict[str, Any] | Set[str]:
         """
         :param config: The llm_config from the user
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
+                describing the sly_data.llm_config keys clients are expected to send. Can be None.
         :return: The fully specified config with defaults filled in.
                 Can also return a set of strings describing any required sly_data API keys that are not provided.
         """
@@ -247,7 +254,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                     full_config["model_name"] = self.resolve_model_name_alias(alias_model_name)
 
             # Get any required api keys into the full config.
-            full_config = self.replace_any_required_api_keys(full_config, sly_data)
+            full_config = self.replace_any_required_api_keys(full_config, sly_data, llm_config_schema)
             return full_config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
@@ -278,7 +285,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
         # Get any required api keys into the full config.
-        full_config = self.replace_any_required_api_keys(full_config, sly_data)
+        full_config = self.replace_any_required_api_keys(full_config, sly_data, llm_config_schema)
         if full_config is not None and not isinstance(full_config, set):
             # Attempt to get a max_tokens through calculation
             full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
@@ -409,7 +416,9 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
     def replace_any_required_api_keys(
                 self,
                 config: Dict[str, Any],
-                sly_data: Dict[str, Any]
+                sly_data: Dict[str, Any],
+                # Accepted so the front man's declared sly_data is available here; not consulted yet.
+                llm_config_schema: Dict[str, Any] = None  # pylint: disable=unused-argument
             ) -> Dict[str, Any] | Set[str]:
         """
         Get any required api keys into the config.
@@ -418,6 +427,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
+                describing the sly_data.llm_config keys clients are expected to send. Can be None.
         :return: The config with any required api keys replaced, or a set of missing
             required config field names if any required api keys were not provided.
         """
@@ -676,6 +687,7 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
                                   sly_data: Dict[str, Any] = None,
                                   num_fallbacks: int = None,
+                                  llm_config_schema: Dict[str, Any] = None,
                                   randomize_peers: bool = False) -> LangChainLlmResources | Dict[str, Any]:
         """
         :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
@@ -683,6 +695,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
         :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
+        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
+                describing the sly_data.llm_config keys clients are expected to send. Can be None.
         :param randomize_peers: If True, randomize the order of the fallbacks within the group.
         :return: A LangChainLlmResources instance or if no valid llm was found or
                 a dictionary whose keys are error types and whose values are lists of error strings
@@ -730,11 +744,12 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                     "provider_tools": provider_tools,
                 }
                 one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data=sly_data, num_fallbacks=None,
-                                                                   randomize_peers=True)
+                                                                   randomize_peers=True,
+                                                                   llm_config_schema=llm_config_schema)
 
             try:
                 if one_llm_resources is None:
-                    one_llm_resources = self.create_llm(fallback, sly_data)
+                    one_llm_resources = self.create_llm(fallback, sly_data, llm_config_schema)
             except ValueError as exception:
                 # API Key errors get thrown as ValueErrors but have their
                 # "from" __cause__ set as the original exception.

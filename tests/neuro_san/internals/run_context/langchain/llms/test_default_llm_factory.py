@@ -267,6 +267,26 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
         self.assertIsInstance(result, set)
         self.assertEqual({"openai_api_key"}, result)
 
+    def test_create_llm_with_fallbacks_passes_llm_config_schema_down(self) -> None:
+        """
+        The llm_config_schema given to create_llm_with_fallbacks() reaches replace_any_required_api_keys().
+        """
+        config: Dict[str, Any] = {
+            "class": "openai",
+            "model_name": self.OPENAI_ALIAS,
+            "openai_api_key": "sly_data",
+        }
+        llm_config_schema: Dict[str, Any] = {"type": "object"}
+
+        with patch.object(self.factory, "replace_any_required_api_keys",
+                          wraps=self.factory.replace_any_required_api_keys) as replace:
+            result: Dict[str, Any] = self.factory.create_llm_with_fallbacks(config, None,
+                                                                            llm_config_schema=llm_config_schema)
+
+        self.assertEqual(["openai_api_key"], result.get("required_sly_data_errors"))
+        self.assertEqual(1, replace.call_count)
+        self.assertIs(llm_config_schema, replace.call_args.args[2])
+
     def test_class_with_dangling_alias_passes_target_through(self) -> None:
         """
         With a class, an alias whose target has no entry resolves to the target name
