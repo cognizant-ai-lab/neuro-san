@@ -271,7 +271,7 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
     def test_create_llm_with_fallbacks_passes_llm_config_schema_down(self) -> None:
         """
         The llm_config_schema given to create_llm_with_fallbacks() reaches the
-        SlyDataLlmConfigUtil.replace_llm_config_with_sly_data() call.
+        SlyDataLlmConfigUtil constructor.
         """
         config: Dict[str, Any] = {
             "class": "openai",
@@ -280,14 +280,15 @@ print("FACTORY_IMPORTED_WITHOUT_OPENAI")
         }
         llm_config_schema: Dict[str, Any] = {"type": "object"}
 
-        with patch.object(SlyDataLlmConfigUtil, "replace_llm_config_with_sly_data",
-                          wraps=SlyDataLlmConfigUtil.replace_llm_config_with_sly_data) as replace:
+        # autospec binds the patched constructor, so the call args start with the instance.
+        with patch.object(SlyDataLlmConfigUtil, "__init__", autospec=True,
+                          side_effect=SlyDataLlmConfigUtil.__init__) as init:
             result: Dict[str, Any] = self.factory.create_llm_with_fallbacks(config, None,
                                                                             llm_config_schema=llm_config_schema)
 
         self.assertEqual(["openai_api_key"], result.get("required_sly_data_errors"))
-        self.assertEqual(1, replace.call_count)
-        self.assertIs(llm_config_schema, replace.call_args.args[2])
+        self.assertEqual(1, init.call_count)
+        self.assertIs(llm_config_schema, init.call_args.args[1])
 
     def test_create_llm_with_fallbacks_skips_key_satisfied_by_another_alternative(self) -> None:
         """

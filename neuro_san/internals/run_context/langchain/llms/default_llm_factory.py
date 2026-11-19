@@ -257,8 +257,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
                     full_config["model_name"] = self.resolve_model_name_alias(alias_model_name)
 
             # Get any required api keys into the full config.
-            full_config = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(full_config, sly_data,
-                                                                                llm_config_schema)
+            llm_config_util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(llm_config_schema)
+            full_config = llm_config_util.replace_llm_config_with_sly_data(full_config, sly_data)
             return full_config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
@@ -289,7 +289,8 @@ class DefaultLlmFactory(EnvironmentConfiguration, ContextTypeLlmFactory, LangCha
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
         # Get any required api keys into the full config.
-        full_config = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(full_config, sly_data, llm_config_schema)
+        llm_config_util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(llm_config_schema)
+        full_config = llm_config_util.replace_llm_config_with_sly_data(full_config, sly_data)
         if full_config is not None and not isinstance(full_config, set):
             # Attempt to get a max_tokens through calculation
             full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)

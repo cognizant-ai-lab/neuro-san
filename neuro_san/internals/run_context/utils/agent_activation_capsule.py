@@ -241,7 +241,8 @@ flag to your invocation.
             if len(required_sly_data) == 0:
                 # Every config was skipped or failed for reasons other than missing sly_data.
                 raise ValueError("Unable to create LLM from llm_config (no usable LLM for the sly_data provided).")
-            raise ValueError(SlyDataLlmConfigUtil.describe_missing_keys(required_sly_data, llm_config_schema))
+            llm_config_util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(llm_config_schema)
+            raise ValueError(llm_config_util.describe_missing_keys(required_sly_data))
 
         typed_llm_resources: LlmResources = llm_resources
         self.lingerers.append(typed_llm_resources)

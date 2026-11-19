@@ -22,16 +22,25 @@ from typing import Set
 
 class SlyDataLlmConfigUtil:
     """
-    Static utility class for handling the llm_config portion of a client's sly_data,
-    which carries per-request llm settings such as API keys for user billing.
+    Utility class for handling the llm_config portion of a client's sly_data,
+    which carries per-request llm settings such as API keys for user billing,
+    as described by the llm_config portion of an agent network's sly_data_schema.
     """
 
-    @staticmethod
-    def replace_llm_config_with_sly_data(
-                config: Dict[str, Any],
-                sly_data: Dict[str, Any],
-                llm_config_schema: Dict[str, Any] = None
-            ) -> Dict[str, Any] | Set[str]:
+    def __init__(self, llm_config_schema: Dict[str, Any] = None):
+        """
+        Constructor
+
+        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
+                describing the sly_data.llm_config keys clients are expected to send. Can be None.
+                A missing key that this schema declares as optional is set to None instead of being reported.
+                A missing key whose "anyOf" or "oneOf" list another provided alternative satisfies
+                is not reported either, but the config cannot be used.
+        """
+        self.llm_config_schema: Dict[str, Any] = llm_config_schema
+
+    def replace_llm_config_with_sly_data(self, config: Dict[str, Any],
+                                         sly_data: Dict[str, Any]) -> Dict[str, Any] | Set[str]:
         """
         Get any required api keys into the config.
         :param config: The fully specified llm config which is a product of
@@ -39,23 +48,18 @@ class SlyDataLlmConfigUtil:
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
-        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema,
-                describing the sly_data.llm_config keys clients are expected to send. Can be None.
-                A missing key that this schema declares as optional is set to None instead of being reported.
-                A missing key whose "anyOf" or "oneOf" list another provided alternative satisfies
-                is not reported either, but the config cannot be used.
         :return: The config with any required api keys replaced, or a set of missing
             required config field names if any required api keys were not provided.
             The set is empty when the only missing keys are alternatives the client satisfied otherwise,
             so the caller skips this config without reporting anything about it.
         """
-        optional_set: Set[str] = SlyDataLlmConfigUtil.get_optional_keys(llm_config_schema)
+        optional_set: Set[str] = self.get_optional_keys()
 
         use_api_keys: Dict[str, str] = {}
         if sly_data is not None and isinstance(sly_data, dict):
             use_api_keys = sly_data.get("llm_config", use_api_keys)
 
-        excused_set: Set[str] = SlyDataLlmConfigUtil.get_excused_keys(llm_config_schema, use_api_keys)
+        excused_set: Set[str] = self.get_excused_keys(use_api_keys)
         has_excused: bool = False
 
         # Loop through each of the config values and replace any "sly_data" values
@@ -93,18 +97,16 @@ class SlyDataLlmConfigUtil:
         # We have a nice complete config. Return that.
         return config
 
-    @staticmethod
-    def get_excused_keys(llm_config_schema: Dict[str, Any], provided: Dict[str, Any]) -> Set[str]:
+    def get_excused_keys(self, provided: Dict[str, Any]) -> Set[str]:
         """
         Get the keys that the client no longer needs to send because it fully provided another
         alternative of the same "anyOf" or "oneOf" list.
 
-        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema.
-                Can be None.
         :param provided: The sly_data.llm_config dictionary the client sent.
         :return: The set of keys from every alternative of each satisfied group, less any key
                 the schema always requires. This is empty when there is no usable schema.
         """
+        llm_config_schema: Dict[str, Any] = self.llm_config_schema
         excused_set: Set[str] = set()
         if not isinstance(llm_config_schema, dict) or not isinstance(provided, dict):
             return excused_set
@@ -169,18 +171,16 @@ class SlyDataLlmConfigUtil:
                 return None
         return value
 
-    @staticmethod
-    def get_optional_keys(llm_config_schema: Dict[str, Any]) -> Set[str]:
+    def get_optional_keys(self) -> Set[str]:
         """
         Get the keys that the llm_config schema declares but never requires.
         A key named in any "required" list, including those inside "anyOf", "oneOf" or "allOf"
         branches, can be required and so is not optional.
 
-        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema.
-                Can be None.
         :return: The set of keys in the schema's properties that no "required" list names.
                 This is empty when there is no usable schema.
         """
+        llm_config_schema: Dict[str, Any] = self.llm_config_schema
         optional_set: Set[str] = set()
         if not isinstance(llm_config_schema, dict):
             return optional_set
@@ -226,8 +226,7 @@ class SlyDataLlmConfigUtil:
                 if isinstance(branch, dict):
                     SlyDataLlmConfigUtil.collect_required_keys(branch, required_set)
 
-    @staticmethod
-    def describe_missing_keys(missing_keys: List[str], llm_config_schema: Dict[str, Any] = None) -> str:
+    def describe_missing_keys(self, missing_keys: List[str]) -> str:
         """
         Describe the sly_data.llm_config keys a client needs to send when no LLM could be created.
         Keys the schema always requires and the alternatives of its "anyOf" and "oneOf" lists
@@ -235,17 +234,15 @@ class SlyDataLlmConfigUtil:
 
         :param missing_keys: The keys reported missing by replace_llm_config_with_sly_data()
                 across all of the fallbacks that were tried.
-        :param llm_config_schema: The llm_config portion of the agent network front man's sly_data_schema.
-                Can be None.
         :return: A multi-line message for the client.
         """
         missing_set: Set[str] = set(missing_keys)
 
         always_set: Set[str] = set()
         groups: List[List[List[str]]] = []
-        if isinstance(llm_config_schema, dict):
-            SlyDataLlmConfigUtil.collect_always_required_keys(llm_config_schema, always_set)
-            SlyDataLlmConfigUtil.collect_alternative_groups(llm_config_schema, groups)
+        if isinstance(self.llm_config_schema, dict):
+            SlyDataLlmConfigUtil.collect_always_required_keys(self.llm_config_schema, always_set)
+            SlyDataLlmConfigUtil.collect_alternative_groups(self.llm_config_schema, groups)
         always_set.intersection_update(missing_set)
 
         # Only describe the alternatives that a missing key could fulfill.

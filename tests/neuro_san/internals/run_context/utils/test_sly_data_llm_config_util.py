@@ -39,7 +39,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"model_name": "gpt-4o", "openai_api_key": "sly_data"}
         sly_data: Dict[str, Any] = {"llm_config": {"openai_api_key": "  sk-test \n"}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(config, sly_data)
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertIs(config, result)
         self.assertEqual("sk-test", result.get("openai_api_key"))
@@ -52,7 +54,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"openai_api_key": "SLY_DATA"}
         sly_data: Dict[str, Any] = {"llm_config": {"openai_api_key": "sk-test"}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(config, sly_data)
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertEqual("sk-test", result.get("openai_api_key"))
 
@@ -63,7 +67,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"temperature": "sly_data"}
         sly_data: Dict[str, Any] = {"llm_config": {"temperature": 0.5}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(config, sly_data)
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertEqual(0.5, result.get("temperature"))
 
@@ -74,7 +80,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"openai_api_key": "sly_data", "openai_organization": "sly_data"}
         sly_data: Dict[str, Any] = {"llm_config": {"openai_organization": "org"}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(config, sly_data)
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertEqual({"openai_api_key"}, result)
 
@@ -84,7 +92,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         """
         config: Dict[str, Any] = {"openai_api_key": "sly_data", "model_name": "gpt-4o"}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(config, None)
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, None)
 
         self.assertEqual({"openai_api_key"}, result)
 
@@ -95,7 +105,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"model_name": "gpt-4o", "temperature": 0.1}
         expected: Dict[str, Any] = dict(config)
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(config, {})
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, {})
 
         self.assertIs(config, result)
         self.assertEqual(expected, result)
@@ -183,8 +195,10 @@ class TestSlyDataLlmConfigUtil(TestCase):
             with self.subTest(case=str(case)):
                 config: Dict[str, Any] = {api_key: "sly_data", "openai_api_base": "sly_data"}
 
-                result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(
-                    config, {"llm_config": llm_config}, self.get_byok_schema())
+                util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+                result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config,
+                                                                                          {"llm_config": llm_config})
 
                 if expected is not None:
                     self.assertEqual(expected, result)
@@ -195,8 +209,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
                 expected_base: str = llm_config.get("openai_api_base") or None
                 self.assertEqual(expected_base, result.get("openai_api_base"))
 
-        message: str = SlyDataLlmConfigUtil.describe_missing_keys(
-            ["google_api_key", "anthropic_api_key", "openai_api_key"], self.get_byok_schema())
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+        message: str = util.describe_missing_keys(["google_api_key", "anthropic_api_key", "openai_api_key"])
         self.assertEqual("LLM operation for this agent requires the following set in sly_data.llm_config:\n"
                          "    one of: openai_api_key, anthropic_api_key, google_api_key\n", message)
 
@@ -207,8 +222,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"openai_api_key": "sly_data", "openai_api_base": "sly_data"}
         sly_data: Dict[str, Any] = {"llm_config": {"openai_api_key": "sk-test"}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(
-            config, sly_data, self.get_byok_schema())
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertIs(config, result)
         self.assertEqual("sk-test", result.get("openai_api_key"))
@@ -221,8 +237,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"openai_api_key": "sly_data", "openai_api_base": "sly_data"}
         sly_data: Dict[str, Any] = {"llm_config": {"openai_api_base": "https://gateway"}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(
-            config, sly_data, self.get_byok_schema())
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertEqual({"openai_api_key"}, result)
 
@@ -232,8 +249,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         """
         config: Dict[str, Any] = {"openai_organization": "sly_data"}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(
-            config, {}, self.get_byok_schema())
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, {})
 
         self.assertEqual({"openai_organization"}, result)
 
@@ -245,14 +263,19 @@ class TestSlyDataLlmConfigUtil(TestCase):
         schema["properties"]["openai_organization"] = {"type": "string"}
         schema["required"] = ["openai_organization"]
 
-        self.assertEqual({"openai_api_base"}, SlyDataLlmConfigUtil.get_optional_keys(schema))
-        self.assertEqual(set(), SlyDataLlmConfigUtil.get_optional_keys(None))
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(schema)
+        no_schema_util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        self.assertEqual({"openai_api_base"}, util.get_optional_keys())
+        self.assertEqual(set(), no_schema_util.get_optional_keys())
 
     def test_describe_missing_keys_without_schema(self) -> None:
         """
         Without a schema, every missing key is listed as an alternative on its own line.
         """
-        message: str = SlyDataLlmConfigUtil.describe_missing_keys(["openai_api_key", "anthropic_api_key"])
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        message: str = util.describe_missing_keys(["openai_api_key", "anthropic_api_key"])
 
         self.assertEqual("LLM operation for this agent requires at least one of the following set in "
                          "sly_data.llm_config:\n"
@@ -263,8 +286,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         """
         Missing keys from anyOf alternatives are described as one group, in schema order.
         """
-        message: str = SlyDataLlmConfigUtil.describe_missing_keys(["anthropic_api_key", "openai_api_key"],
-                                                                  self.get_byok_schema())
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+        message: str = util.describe_missing_keys(["anthropic_api_key", "openai_api_key"])
 
         self.assertEqual("LLM operation for this agent requires the following set in sly_data.llm_config:\n"
                          "    one of: openai_api_key, anthropic_api_key\n", message)
@@ -276,8 +300,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         schema: Dict[str, Any] = self.get_byok_schema()
         schema["allOf"] = [{"required": ["openai_organization"]}]
 
-        message: str = SlyDataLlmConfigUtil.describe_missing_keys(
-            ["openai_organization", "google_api_key", "azure_openai_api_key"], schema)
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(schema)
+
+        message: str = util.describe_missing_keys(["openai_organization", "google_api_key", "azure_openai_api_key"])
 
         self.assertEqual("LLM operation for this agent requires the following set in sly_data.llm_config:\n"
                          "    all of: openai_organization\n"
@@ -292,8 +317,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"openai_api_key": "sly_data", "openai_api_base": "sly_data"}
         sly_data: Dict[str, Any] = {"llm_config": {"anthropic_api_key": "sk-ant"}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(
-            config, sly_data, self.get_byok_schema())
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(self.get_byok_schema())
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertEqual(set(), result)
         self.assertEqual("sly_data", config.get("openai_api_key"))
@@ -308,8 +334,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
         config: Dict[str, Any] = {"openai_api_key": "sly_data", "openai_organization": "sly_data"}
         sly_data: Dict[str, Any] = {"llm_config": {"anthropic_api_key": "sk-ant"}}
 
-        result: Dict[str, Any] | Set[str] = SlyDataLlmConfigUtil.replace_llm_config_with_sly_data(
-            config, sly_data, schema)
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(schema)
+
+        result: Dict[str, Any] | Set[str] = util.replace_llm_config_with_sly_data(config, sly_data)
 
         self.assertEqual({"openai_organization"}, result)
 
@@ -319,11 +346,14 @@ class TestSlyDataLlmConfigUtil(TestCase):
         """
         schema: Dict[str, Any] = self.get_byok_schema()
 
-        excused: Set[str] = SlyDataLlmConfigUtil.get_excused_keys(schema, {"google_api_key": "g"})
+        util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(schema)
+        no_schema_util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil()
+
+        excused: Set[str] = util.get_excused_keys({"google_api_key": "g"})
         self.assertEqual({"openai_api_key", "anthropic_api_key", "google_api_key"}, excused)
-        self.assertEqual(set(), SlyDataLlmConfigUtil.get_excused_keys(schema, {"openai_api_base": "b"}))
-        self.assertEqual(set(), SlyDataLlmConfigUtil.get_excused_keys(None, {"google_api_key": "g"}))
-        self.assertEqual(set(), SlyDataLlmConfigUtil.get_excused_keys(schema, {"google_api_key": "  "}))
+        self.assertEqual(set(), util.get_excused_keys({"openai_api_base": "b"}))
+        self.assertEqual(set(), no_schema_util.get_excused_keys({"google_api_key": "g"}))
+        self.assertEqual(set(), util.get_excused_keys({"google_api_key": "  "}))
 
     def test_get_provided_value(self) -> None:
         """

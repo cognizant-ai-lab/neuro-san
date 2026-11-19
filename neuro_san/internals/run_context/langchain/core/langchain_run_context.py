@@ -282,6 +282,7 @@ class LangChainRunContext(RunContext):
         self.agent_chain = self.create_agent_with_fallbacks(instructions)
         self.resources_created = True
 
+    # pylint: disable=too-many-locals
     def create_agent_with_fallbacks(self, instructions: str) -> Runnable:
         """
         Creates an agent with potential fallback llms to use.
@@ -303,7 +304,8 @@ class LangChainRunContext(RunContext):
 
             required_sly_data: List[str] = error_dict.get("required_sly_data_errors", [])
             if len(required_sly_data) > 0:
-                error += "\n" + SlyDataLlmConfigUtil.describe_missing_keys(required_sly_data, llm_config_schema)
+                llm_config_util: SlyDataLlmConfigUtil = SlyDataLlmConfigUtil(llm_config_schema)
+                error += "\n" + llm_config_util.describe_missing_keys(required_sly_data)
 
             construction_errors: List[str] = error_dict.get("construction_errors", [])
             if len(construction_errors) > 0:
