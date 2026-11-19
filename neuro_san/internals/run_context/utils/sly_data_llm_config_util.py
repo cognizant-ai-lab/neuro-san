@@ -68,12 +68,8 @@ class SlyDataLlmConfigUtil:
             small_value: str = str(value).lower()
             if small_value == "sly_data":
                 # If we have a value in the sly_data.llm_config dictionary, use it,
-                new_value: Any = use_api_keys.get(key)
+                new_value: Any = SlyDataLlmConfigUtil.get_provided_value(use_api_keys, key)
                 if new_value is not None:
-                    if isinstance(new_value, str):
-                        # Remove leading and trailing whitespace because often these values
-                        # are going into http headers which don't like the extra whitespace.
-                        new_value = new_value.strip()
                     config[key] = new_value
                 elif key in optional_set:
                     # Let the llm policy fall back to its environment variable or default.
@@ -150,9 +146,28 @@ class SlyDataLlmConfigUtil:
         # Loop through each key the alternative requires.
         key: str = None
         for key in branch:
-            if provided.get(key) is None:
+            if SlyDataLlmConfigUtil.get_provided_value(provided, key) is None:
                 return False
         return True
+
+    @staticmethod
+    def get_provided_value(provided: Dict[str, Any], key: str) -> Any:
+        """
+        Get the value the client sent for a key, treating a blank string as not set.
+
+        :param provided: The sly_data.llm_config dictionary the client sent.
+        :param key: The key to look up.
+        :return: The value with any string stripped of leading and trailing whitespace,
+                or None if the key is absent, None, or a string that is empty after stripping.
+        """
+        value: Any = provided.get(key)
+        if isinstance(value, str):
+            # Remove leading and trailing whitespace because often these values
+            # are going into http headers which don't like the extra whitespace.
+            value = value.strip()
+            if len(value) == 0:
+                return None
+        return value
 
     @staticmethod
     def get_optional_keys(llm_config_schema: Dict[str, Any]) -> Set[str]:

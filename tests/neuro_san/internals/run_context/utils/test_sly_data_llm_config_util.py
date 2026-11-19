@@ -165,6 +165,12 @@ class TestSlyDataLlmConfigUtil(TestCase):
             ("openai_api_key", {}, {"openai_api_key"}),
             ("openai_api_key", {"openai_api_base": "https://gw"}, {"openai_api_key"}),
             ("anthropic_api_key", {}, {"anthropic_api_key"}),
+            # Blank strings count as not set, both for the LLM's own key and for the other alternatives.
+            ("openai_api_key", {"openai_api_key": ""}, {"openai_api_key"}),
+            ("openai_api_key", {"openai_api_key": "  \n"}, {"openai_api_key"}),
+            ("openai_api_key", {"openai_api_key": "", "anthropic_api_key": "sk-ant"}, set()),
+            ("openai_api_key", {"anthropic_api_key": " "}, {"openai_api_key"}),
+            ("openai_api_key", {"openai_api_key": "sk-openai", "openai_api_base": ""}, None),
         ]
 
         # Loop through each case, with every LLM also asking for the optional API base.
@@ -185,7 +191,9 @@ class TestSlyDataLlmConfigUtil(TestCase):
                     continue
                 self.assertIs(config, result)
                 self.assertEqual(llm_config.get(api_key), result.get(api_key))
-                self.assertEqual(llm_config.get("openai_api_base"), result.get("openai_api_base"))
+                # A blank API base is not set, so it becomes None like a missing one.
+                expected_base: str = llm_config.get("openai_api_base") or None
+                self.assertEqual(expected_base, result.get("openai_api_base"))
 
         message: str = SlyDataLlmConfigUtil.describe_missing_keys(
             ["google_api_key", "anthropic_api_key", "openai_api_key"], self.get_byok_schema())
@@ -315,3 +323,18 @@ class TestSlyDataLlmConfigUtil(TestCase):
         self.assertEqual({"openai_api_key", "anthropic_api_key", "google_api_key"}, excused)
         self.assertEqual(set(), SlyDataLlmConfigUtil.get_excused_keys(schema, {"openai_api_base": "b"}))
         self.assertEqual(set(), SlyDataLlmConfigUtil.get_excused_keys(None, {"google_api_key": "g"}))
+        self.assertEqual(set(), SlyDataLlmConfigUtil.get_excused_keys(schema, {"google_api_key": "  "}))
+
+    def test_get_provided_value(self) -> None:
+        """
+        Strings come back stripped, blank strings and missing keys come back as None,
+        and other values come back unchanged.
+        """
+        provided: Dict[str, Any] = {"key": " sk-test\t", "empty": "", "blank": " \n ", "number": 0, "none": None}
+
+        self.assertEqual("sk-test", SlyDataLlmConfigUtil.get_provided_value(provided, "key"))
+        self.assertIsNone(SlyDataLlmConfigUtil.get_provided_value(provided, "empty"))
+        self.assertIsNone(SlyDataLlmConfigUtil.get_provided_value(provided, "blank"))
+        self.assertEqual(0, SlyDataLlmConfigUtil.get_provided_value(provided, "number"))
+        self.assertIsNone(SlyDataLlmConfigUtil.get_provided_value(provided, "none"))
+        self.assertIsNone(SlyDataLlmConfigUtil.get_provided_value(provided, "absent"))
