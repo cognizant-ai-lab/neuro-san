@@ -180,9 +180,9 @@ class StreamingChatHandler(BaseRequestHandler):
 
         except tornado.iostream.StreamClosedError:
             if self._is_client_close_a_problem(is_event, flushed_first_result):
+                # The client went away, for example because the user pressed stop. That is not a server error,
+                # so log it at INFO and do not re-raise: Tornado would log the exception as an ERROR.
                 self.logger.info(metadata, "[%d] Request handler stream closed.", self.worker_id)
-                # Re-raise as recommended
-                raise
 
             # Swallow. For event agents, it's ok if the client goes away before processing is done.
 
