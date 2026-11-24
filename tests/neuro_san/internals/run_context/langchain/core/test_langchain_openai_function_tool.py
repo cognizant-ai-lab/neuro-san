@@ -130,6 +130,45 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         self.assertIsNotNone(tool.args_schema)
         self.assertTrue(issubclass(tool.args_schema, BaseModel))
 
+    def test_empty_properties_builds_explicit_empty_args_schema(self):
+        """
+        An explicit "parameters": {"type": "object", "properties": {}} block
+        representing a zero-argument tool must build an explicit, empty args_schema
+        rather than raising a ToolSpecError.
+        """
+        function_json = {
+            "name": "zero_arg_tool",
+            "description": "A tool that takes no arguments.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        }
+        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
+        self.assertIsNotNone(tool.args_schema)
+        self.assertEqual(len(tool.args_schema.model_fields), 0)
+
+    def test_empty_properties_with_empty_required_builds_explicit_empty_args_schema(self):
+        """
+        An explicit parameters block with empty properties and empty required list
+        builds an empty args_schema that can be instantiated with no arguments.
+        """
+        function_json = {
+            "name": "zero_arg_tool_with_required",
+            "description": "Zero argument tool with empty required list.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        }
+        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
+        self.assertIsNotNone(tool.args_schema)
+        self.assertEqual(len(tool.args_schema.model_fields), 0)
+        # Verify schema can be instantiated with no arguments
+        instance = tool.args_schema()
+        self.assertIsNotNone(instance)
+
     def test_non_dict_parameters_raises_tool_spec_error(self):
         """
         A non-dict "parameters" value follows the invalid-spec error path

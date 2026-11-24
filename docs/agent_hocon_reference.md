@@ -429,6 +429,10 @@ and other temporary failures.  Failures which are known to be non-retryable are 
 These include API_KEY errors, ValueErrors from tools, and other unexpected exceptions; the idea
 being: these errors would just happen again anyway so why waste the tokens?
 
+Between retry attempts, the runtime applies exponential backoff with full jitter, honoring any server-provided
+retry hints (such as `retryDelay` or `Retry-After`). Tunable via `AGENT_LLM_RETRY_BASE_DELAY_SECONDS`,
+`AGENT_LLM_RETRY_MAX_DELAY_SECONDS`, and `AGENT_LLM_RETRY_QUOTA_CAP_SECONDS`.
+
 The default setting is to use 3 attempts.
 
 ### request_timeout_seconds

@@ -122,6 +122,27 @@ class TestNeuroSanConfig(TestCase):
         self.set_env("AGENT_PROTECT_ORIGINAL_COPY", "")
         self.assertTrue(NeuroSanConfig.get_bool(TestNeuroSanConfig.DEFAULTED_KEY))
 
+    def test_get_float(self) -> None:
+        """
+        get_float() converts the value to float, and handles default, empty, and invalid values.
+        """
+        delay_key: str = "internals.llms.AGENT_LLM_RETRY_BASE_DELAY_SECONDS"
+        self.unset_env("AGENT_LLM_RETRY_BASE_DELAY_SECONDS")
+        self.assertEqual(1.0, NeuroSanConfig.get_float(delay_key))
+
+        self.set_env("AGENT_LLM_RETRY_BASE_DELAY_SECONDS", "2.5")
+        self.assertEqual(2.5, NeuroSanConfig.get_float(delay_key))
+
+        self.set_env("AGENT_LLM_RETRY_BASE_DELAY_SECONDS", "")
+        self.assertEqual(1.0, NeuroSanConfig.get_float(delay_key))
+
+        self.set_env("AGENT_LLM_RETRY_BASE_DELAY_SECONDS", "not_a_float")
+        self.assertEqual(5.0, NeuroSanConfig.get_float(delay_key, default=5.0))
+
+        unset_key: str = "internals.llms.NONEXISTENT_KEY"
+        self.assertEqual(0.0, NeuroSanConfig.get_float(unset_key))
+        self.assertEqual(3.5, NeuroSanConfig.get_float(unset_key, default=3.5))
+
     def test_lockdown_ignores_later_environment_changes(self) -> None:
         """
         With AGENT_LOCKDOWN_ENV on, values come from the environment at load time only.

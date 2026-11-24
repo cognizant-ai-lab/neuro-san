@@ -24,7 +24,8 @@ from typing import Optional
 API_KEY_EXCEPTIONS: Dict[str, List[str]] = {
     "OPENAI_API_KEY": ["OPENAI_API_KEY", "Incorrect API key provided"],
     "ANTHROPIC_API_KEY": ["ANTHROPIC_API_KEY", "anthropic_api_key", "invalid x-api-key", "credit balance"],
-    "GOOGLE_API_KEY": ["Application Default Credentials", "default credentials", "Gemini: 400 API key not valid"],
+    "GOOGLE_API_KEY": ["Application Default Credentials", "default credentials", "Gemini: 400 API key not valid",
+                       "prepayment credits are depleted"],
 
     # OpenRouter surfaces a few distinct families of failures that the friendly
     # OPENROUTER_API_KEY guidance addresses (matches the

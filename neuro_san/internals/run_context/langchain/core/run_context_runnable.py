@@ -14,18 +14,21 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+import asyncio
 from asyncio import TimeoutError as AsyncTimeout
+import random
+import re
+import traceback
 from typing import Any
 from typing import AsyncIterator
 from typing import ClassVar
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Pattern
 from typing import Tuple
 from typing import Type
 from typing import Union
-
-import traceback
 
 from pydantic import ConfigDict
 from pydantic import SkipValidation
@@ -52,6 +55,7 @@ from neuro_san.internals.run_context.langchain.journaling.journaling_callback_ha
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.utils.content_utils import ContentUtils
 
@@ -85,6 +89,12 @@ class RunContextRunnable(NeuroSanRunnable):
         # `except Exception` retry.
         "openrouter.errors.OpenRouterError",
     ])
+
+    # Regex pattern to extract server retry delay hints from exception text
+    RETRY_DELAY_PATTERN: ClassVar[Pattern[str]] = re.compile(
+        r"(?:retry|wait|backoff)\s+(?:after|for|in)\s+([0-9]+(?:\.[0-9]+)?)\s*s(?:ec(?:ond)?s?)?",
+        re.IGNORECASE
+    )
 
     # Declarations of member variables here satisfy Pydantic style,
     # which is a type validator that langchain is based on which
@@ -305,6 +315,10 @@ class RunContextRunnable(NeuroSanRunnable):
                 exception = exception_error
                 backtrace = traceback.format_exc()
 
+            if chain_result is None and attempts > 0:
+                attempt_index: int = max_attempts - attempts - 1
+                await self.sleep_before_retry(attempt_index, exception)
+
         if chain_result is None and backtrace is not None:
             # Keep the full backtrace in the server logs only. Passing it
             # through as error details would return raw stack traces to clients.
@@ -371,6 +385,160 @@ class RunContextRunnable(NeuroSanRunnable):
         # LEAF_LOG_SENSITIVE env var setting as the SensitiveLogger uses.
         if self.sensitive_logger.should_log():
             await self.journal.write_message(AgentFrameworkMessage(content=text))
+
+    @staticmethod
+    def parse_duration_seconds(value: Any) -> Optional[float]:
+        """
+        Coerces a raw number or a duration string into seconds as a float.
+
+        :param value: The value to parse, e.g. 4.15, "4.15s", or "10"
+        :return: Float seconds if successfully parsed, or None
+        """
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        if isinstance(value, str):
+            clean_str: str = value.strip()
+            if clean_str.endswith("s"):
+                clean_str = clean_str[:-1]
+            try:
+                return float(clean_str)
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def _extract_details_retry_delay(cls, error: BaseException) -> Optional[float]:
+        """
+        Extract retry delay from error.details if present.
+
+        :param error: The exception to inspect
+        :return: Extracted delay in seconds, or None
+        """
+        details: Any = getattr(error, "details", None)
+        if not isinstance(details, dict):
+            return None
+        try:
+            error_dict: Any = details.get("error", {})
+            if not isinstance(error_dict, dict):
+                return None
+            detail_items: Any = error_dict.get("details", [])
+            if not isinstance(detail_items, list):
+                return None
+            # Inspect each detail item for a retryDelay specification
+            item: Any = None
+            for item in detail_items:
+                if isinstance(item, dict) and "retryDelay" in item:
+                    delay: Optional[float] = cls.parse_duration_seconds(item.get("retryDelay"))
+                    if delay is not None:
+                        return delay
+        # pylint: disable=broad-exception-caught
+        except Exception:
+            # Malformed details structure; ignore and return None
+            pass
+        return None
+
+    @classmethod
+    def _extract_headers_retry_delay(cls, error: BaseException) -> Optional[float]:
+        """
+        Extract retry delay from error.response.headers if present.
+
+        :param error: The exception to inspect
+        :return: Extracted delay in seconds, or None
+        """
+        response: Any = getattr(error, "response", None)
+        if response is None:
+            return None
+        headers: Any = getattr(response, "headers", None)
+        if not isinstance(headers, dict):
+            return None
+        retry_after: Any = headers.get("retry-after")
+        if retry_after is None:
+            retry_after = headers.get("Retry-After")
+        if retry_after is not None:
+            return cls.parse_duration_seconds(retry_after)
+        return None
+
+    @classmethod
+    def _extract_text_retry_delay(cls, error: BaseException) -> Optional[float]:
+        """
+        Extract retry delay from error text using regex pattern.
+
+        :param error: The exception to inspect
+        :return: Extracted delay in seconds, or None
+        """
+        match: Optional[re.Match[str]] = cls.RETRY_DELAY_PATTERN.search(str(error))
+        if match is not None:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def extract_server_retry_delay(cls, error: Optional[BaseException]) -> Optional[float]:
+        """
+        Extract a provider-suggested retry delay in seconds from structured error details or text.
+
+        :param error: The exception to inspect for retry delay hints
+        :return: Suggested retry delay in seconds, or None if no hint is found
+        """
+        if error is None:
+            return None
+
+        delay: Optional[float] = cls._extract_details_retry_delay(error)
+        if delay is not None:
+            return delay
+
+        delay = cls._extract_headers_retry_delay(error)
+        if delay is not None:
+            return delay
+
+        return cls._extract_text_retry_delay(error)
+
+    @classmethod
+    def calculate_backoff_delay(cls, attempt: int, error: Optional[BaseException] = None) -> float:
+        """
+        Calculate backoff delay before the next retry attempt using full jitter or server hints.
+
+        :param attempt: Zero-based retry attempt index
+        :param error: The exception that triggered the retry, if any
+        :return: Delay in seconds to sleep before retrying
+        """
+        base_delay: float = NeuroSanConfig.get_float("internals.llms.AGENT_LLM_RETRY_BASE_DELAY_SECONDS", 1.0)
+        max_delay: float = NeuroSanConfig.get_float("internals.llms.AGENT_LLM_RETRY_MAX_DELAY_SECONDS", 60.0)
+        quota_cap: float = NeuroSanConfig.get_float("internals.llms.AGENT_LLM_RETRY_QUOTA_CAP_SECONDS", 60.0)
+
+        if error is not None:
+            server_delay: Optional[float] = cls.extract_server_retry_delay(error)
+            if server_delay is not None:
+                # Honor server hint with a small jitter margin, capped at quota_cap
+                return min(server_delay + random.uniform(0.5, 2.0), quota_cap)
+
+        # Exponential backoff with full jitter: uniform(0, min(base * 2^attempt, max_delay))
+        raw_backoff: float = base_delay * (2.0 ** attempt)
+        capped_backoff: float = min(raw_backoff, max_delay)
+        return random.uniform(0.0, capped_backoff)
+
+    async def do_sleep(self, delay: float) -> None:
+        """
+        Sleep for the specified delay in seconds.
+
+        :param delay: Duration in seconds to sleep
+        """
+        await asyncio.sleep(delay)
+
+    async def sleep_before_retry(self, attempt: int, error: Optional[BaseException]) -> None:
+        """
+        Compute jittered backoff delay and sleep before retrying an LLM call.
+
+        :param attempt: Zero-based retry attempt index
+        :param error: The exception that triggered the retry
+        """
+        delay: float = self.calculate_backoff_delay(attempt, error)
+        if delay > 0.0:
+            if getattr(self, "sensitive_logger", None) is not None:
+                self.sensitive_logger.info("Backing off for %.2f seconds before retry attempt %d", delay, attempt + 1)
+            await self.do_sleep(delay)
 
     @staticmethod
     def find_ai_message(chain_result: Optional[Union[Dict[str, Any], AIMessage]]) -> Optional[AIMessage]:

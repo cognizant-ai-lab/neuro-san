@@ -48,7 +48,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         # Loading LLM info.
         "llms": {
             # None defers to the network's llm_info_file, then built-in defaults
-            "AGENT_LLM_INFO_FILE": None
+            "AGENT_LLM_INFO_FILE": None,
+            "AGENT_LLM_RETRY_BASE_DELAY_SECONDS": "1.0",
+            "AGENT_LLM_RETRY_MAX_DELAY_SECONDS": "60.0",
+            "AGENT_LLM_RETRY_QUOTA_CAP_SECONDS": "60.0"
         },
 
         # Loading networks.
@@ -269,6 +272,19 @@ class NeuroSanConfig(ConfigFilterChain):
         bool_value: bool = _INSTANCE._internal_get_bool(key)
         return bool_value
 
+    @staticmethod
+    def get_float(key: str, default: float = 0.0) -> float:
+        """
+        Retrieve a configuration value as a float, falling back to default if unset or invalid.
+
+        :param key: The fully-qualified key from the config
+        :param default: The fallback float if key is unset, empty, or not a valid float
+        :return: The float value from config or the default
+        """
+        # pylint: disable=protected-access
+        float_value: float = _INSTANCE._internal_get_float(key, default)
+        return float_value
+
     def _load(self):
         """
         Builds the configuration from DEFAULT_CONFIG, filtered through the registered filters.
@@ -318,6 +334,22 @@ class NeuroSanConfig(ConfigFilterChain):
         value: Optional[str] = self._internal_get_non_empty(key)
         bool_value: bool = ConfigUtil.is_true(value)
         return bool_value
+
+    def _internal_get_float(self, key: str, default: float) -> float:
+        """
+        Retrieve a configuration value as a float, falling back to default if unset or invalid.
+
+        :param key: The fully-qualified key from the config
+        :param default: The fallback float if key is unset, empty, or not a valid float
+        :return: The float value from config or the default
+        """
+        value: Optional[str] = self._internal_get_non_empty(key)
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
 
     def _get_fully_qualified(self, key: str) -> Optional[str]:
         """

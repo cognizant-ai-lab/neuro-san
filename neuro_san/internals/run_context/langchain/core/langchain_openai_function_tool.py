@@ -120,10 +120,8 @@ class LangChainOpenAIFunctionTool(BaseTool):
             if parameters.get("type") is None:
                 message = f"Function for {name} needs to have a parameters.type set to 'object'.\n"
             properties: Dict[str, Any] = parameters.get("properties")
-            if properties is None:
+            if properties is None or not isinstance(properties, Dict):
                 message = f"Function for {name} needs to have a properties dictionary as part of its parameters.\n"
-            elif not isinstance(properties, Dict) or len(properties.keys()) == 0:
-                message = f"Function for {name} needs to have at least one argument dictionary in its properties.\n"
 
         if len(message) > 0:
             message += """

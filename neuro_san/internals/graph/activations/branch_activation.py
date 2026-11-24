@@ -45,6 +45,8 @@ class BranchActivation(CallingActivation, CallableActivation):
     not call anyone else.
     """
 
+    DEFAULT_KICKOFF_MESSAGE: str = "Please proceed."
+
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
@@ -142,7 +144,16 @@ class BranchActivation(CallingActivation, CallableActivation):
         # If there is command, combine it with assignment to be used as HumanMessage.
         command: str = self.get_command()
         if command:
-            assignments = assignments + "\n" + command
+            if assignments:
+                assignments = f"{assignments}\n{command}"
+            else:
+                assignments = command
+
+        # When a sub-agent has neither declared parameter properties nor a command,
+        # assignments is empty. Provide a default kickoff message so providers that
+        # require non-empty user content (such as Gemini) do not reject the turn.
+        if not assignments or not assignments.strip():
+            assignments = self.DEFAULT_KICKOFF_MESSAGE
 
         run: Run = await self.run_context.submit_message(assignments)
         use_run = await self.run_context.wait_on_run(run, self.journal)
