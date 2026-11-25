@@ -238,9 +238,83 @@ class RunContextRunnable(NeuroSanRunnable):
 
         return inputs
 
+    async def _execute_single_attempt(
+        self,
+        inputs: Dict[str, Any],
+        runnable_config: Dict[str, Any]
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[Exception], Optional[str], bool]:
+        """
+        Execute a single attempt of running the chain, catching provider errors.
+
+        :param inputs: The inputs to the chain
+        :param runnable_config: The runnable configuration
+        :return: A tuple of (chain_result, exception, backtrace, is_retryable)
+        """
+        chain_result: Optional[Dict[str, Any]] = None
+        exception: Optional[Exception] = None
+        backtrace: Optional[str] = None
+        is_retryable: bool = True
+        try:
+            # A step that fails raises here, as it would from ainvoke().
+            chain_result = await self.run_chain(inputs, runnable_config)
+        except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
+            # Some providers (e.g. Gemini billing/quota exhaustion) surface a
+            # non-retryable API-key/billing problem as a rate-limit error type.
+            # Treat it the same as the API_ERROR_TYPES case below: stop retrying
+            # and return the friendly message instead of burning all attempts.
+            chain_result = self.handle_api_key_error(rate_limit_error)
+            if chain_result is not None:
+                return chain_result, None, None, False
+            await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
+            exception = rate_limit_error
+        except RunContextRunnable.API_ERROR_TYPES as api_error:
+            backtrace = traceback.format_exc()
+            if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
+                # Construct a uniform message to return to the client
+                # indicating that they likely have an API key problem,
+                # rather than retrying and hitting the same error again.
+                chain_result = self.handle_api_key_error(api_error)
+                if chain_result is not None:
+                    return chain_result, None, None, False
+            # Continue with regular retry logic:
+            await self.journal_retry_reason(api_error, "the LLM API returned an error")
+            exception = api_error
+        except KeyError as key_error:
+            await self.journal_retry_reason(key_error, "the response was missing an expected field")
+            exception = key_error
+            backtrace = traceback.format_exc()
+        except ValueError as value_error:
+            response = str(value_error)
+            find_string: str = "An output parsing error occurred. " + \
+                               "In order to pass this error back to the agent and have it try again, " + \
+                               "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
+                               "This is the error: Could not parse LLM output: `"
+            if response.startswith(find_string):
+                # Agent is returning good stuff, but langchain is erroring out over it.
+                # From: https://github.com/langchain-ai/langchain/issues/1358#issuecomment-1486132587
+                # Per thread consensus, this is hacky and there are better ways to go,
+                # but removes immediate impediments.
+                chain_result = {
+                    "output": response.removeprefix(find_string).removesuffix("`")
+                }
+            else:
+                await self.journal_retry_reason(value_error, "the model's output could not be parsed")
+                exception = value_error
+                backtrace = traceback.format_exc()
+        # pylint: disable=broad-exception-caught
+        except Exception as exception_error:
+            # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
+            self.sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
+            # These are likely real issues and non-retryable.
+            exception = exception_error
+            backtrace = traceback.format_exc()
+            is_retryable = False
+
+        return chain_result, exception, backtrace, is_retryable
+
     # pylint: disable=too-many-locals,too-many-statements
     async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any], max_attempts: int,
-                                  max_execution_seconds: Optional[float] = None):
+                                 max_execution_seconds: Optional[float] = None):
         """
         Set the agent in motion
 
@@ -257,91 +331,13 @@ class RunContextRunnable(NeuroSanRunnable):
         backtrace: str = None
         start_time: float = monotonic()
         while chain_result is None and attempts > 0:
-            # Reset any backtrace from a previous attempt so that whatever is
-            # logged after the loop always corresponds to the exception that
-            # ended it (not every branch below captures a backtrace).
-            backtrace = None
-            try:
-                # A step that fails raises here, as it would from ainvoke().
-                chain_result: Optional[Dict[str, Any]] = await self.run_chain(inputs, runnable_config)
-            except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
-                message: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(rate_limit_error)
-                if message is not None:
-                    # Some providers (e.g. Gemini billing/quota exhaustion) surface a
-                    # non-retryable API-key/billing problem as a rate-limit error type.
-                    # Treat it the same as the API_ERROR_TYPES case below: stop retrying
-                    # and return the friendly message instead of burning all attempts.
-                    exception = None
-                    backtrace = None
-                    chain_result = {
-                        "output": message
-                    }
-                    self.logger.error("API KEY error detected: %s",
-                                      ApiKeyErrorCheck.get_safe_log_message(rate_limit_error))
-                    break
-                await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
-                attempts = attempts - 1
-                exception = rate_limit_error
-            except RunContextRunnable.API_ERROR_TYPES as api_error:
-                backtrace = traceback.format_exc()
-                message: str = None
-                if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
-                    # Does not look like internal LLM stack error:
-                    message = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
-                if message is not None:
-                    # Construct a uniform message to return to the client
-                    # indicating that they likely have an API key problem,
-                    # rather than retrying and hitting the same error again.
-                    exception = None
-                    backtrace = None
-                    chain_result = {
-                        "output": message
-                    }
-                    # Log the error with technical details for debugging purposes,
-                    # but we are returning a more user-friendly message to the client.
-                    # get_safe_log_message() redacts pydantic ValidationError input values
-                    # so user-supplied API key material can't leak into server logs.
-                    self.logger.error("API KEY error detected: %s",
-                                      ApiKeyErrorCheck.get_safe_log_message(api_error))
-                    break
-                # Continue with regular retry logic:
-                await self.journal_retry_reason(api_error, "the LLM API returned an error")
-                attempts = attempts - 1
-                exception = api_error
-            except KeyError as key_error:
-                await self.journal_retry_reason(key_error, "the response was missing an expected field")
-                attempts = attempts - 1
-                exception = key_error
-                backtrace = traceback.format_exc()
-            except ValueError as value_error:
-                response = str(value_error)
-                find_string: str = "An output parsing error occurred. " + \
-                                   "In order to pass this error back to the agent and have it try again, " + \
-                                   "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
-                                   "This is the error: Could not parse LLM output: `"
-                if response.startswith(find_string):
-                    # Agent is returning good stuff, but langchain is erroring out over it.
-                    # From: https://github.com/langchain-ai/langchain/issues/1358#issuecomment-1486132587
-                    # Per thread consensus, this is hacky and there are better ways to go,
-                    # but removes immediate impediments.
-                    chain_result = {
-                        "output": response.removeprefix(find_string).removesuffix("`")
-                    }
-                else:
-                    await self.journal_retry_reason(value_error, "the model's output could not be parsed")
-                    attempts = attempts - 1
-                    exception = value_error
-                    backtrace = traceback.format_exc()
-            # pylint: disable=broad-exception-caught
-            except Exception as exception_error:
-                # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
-                self.sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
-                # These are likely real issues and non-retryable.
-                attempts = 0
-                exception = exception_error
-                backtrace = traceback.format_exc()
-
-            if chain_result is None and attempts > 0:
+            chain_result, exception, backtrace, is_retryable = await self._execute_single_attempt(
+                inputs, runnable_config
+            )
+            if not is_retryable or chain_result is not None:
+                break
+            attempts = attempts - 1
+            if attempts > 0:
                 attempt_index: int = max_attempts - attempts - 1
                 remaining_seconds: Optional[float] = None
                 if max_execution_seconds is not None:
@@ -392,6 +388,22 @@ class RunContextRunnable(NeuroSanRunnable):
             final_state = state
             recorder.record_tool_exchange(inputs, state)
         return final_state
+
+    def handle_api_key_error(self, error: Exception) -> Optional[Dict[str, Any]]:
+        """
+        Check if an error relates to an API key or billing issue, logging and returning uniform output.
+
+        :param error: The exception to check
+        :return: A dict with "output" if an API key error was detected, None otherwise
+        """
+        message: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(error)
+        if message is not None:
+            self.logger.error("API KEY error detected: %s",
+                              ApiKeyErrorCheck.get_safe_log_message(error))
+            return {
+                "output": message
+            }
+        return None
 
     async def journal_retry_reason(self, error: Exception, reason: str):
         """
@@ -561,7 +573,7 @@ class RunContextRunnable(NeuroSanRunnable):
         await asyncio.sleep(delay)
 
     async def sleep_before_retry(self, attempt: int, error: Optional[BaseException],
-                                  max_delay_seconds: Optional[float] = None) -> None:
+                                 max_delay_seconds: Optional[float] = None) -> None:
         """
         Compute jittered backoff delay and sleep before retrying an LLM call.
 

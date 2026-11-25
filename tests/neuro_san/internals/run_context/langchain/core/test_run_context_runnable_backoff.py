@@ -262,6 +262,38 @@ class TestRunContextRunnableBackoff(IsolatedAsyncioTestCase):
         written_message: Any = journal.write_message.await_args.args[0]
         self.assertIn("GOOGLE_API_KEY", written_message.content)
 
+    async def test_rate_limit_error_with_openai_insufficient_quota_stops_retrying(self) -> None:
+        """
+        An OpenAI 429 rate limit error caused by insufficient_quota must stop retrying
+        immediately and output the OPENAI_API_KEY guidance message.
+        """
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock()
+        sensitive_logger: MagicMock = MagicMock()
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal,
+            logger=MagicMock(),
+            sensitive_logger=sensitive_logger,
+            error_detector=MagicMock(handle_error=RunContextRunnableTestHelpers.passthrough),
+            chat_history=None
+        )
+        billing_error: RateLimitError = RateLimitError(
+            message=("Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check "
+                     "your plan and billing details.', 'type': 'insufficient_quota', 'code': 'insufficient_quota'}}"),
+            response=MagicMock(status_code=429, headers={}),
+            body=None
+        )
+        run_chain_mock: AsyncMock = AsyncMock(side_effect=billing_error)
+
+        with patch.object(RunContextRunnable, "run_chain", new=run_chain_mock):
+            with patch.object(RunContextRunnable, "sleep_before_retry", new_callable=AsyncMock) as mock_sleep:
+                await runnable.invoke_agent_chain(inputs={"input": "test"}, runnable_config={}, max_attempts=3)
+                mock_sleep.assert_not_awaited()
+
+        run_chain_mock.assert_awaited_once()
+        written_message: Any = journal.write_message.await_args.args[0]
+        self.assertIn("OPENAI_API_KEY", written_message.content)
+
     async def test_do_sleep_awaits_asyncio_sleep(self) -> None:
         """
         do_sleep calls asyncio.sleep with the provided delay.

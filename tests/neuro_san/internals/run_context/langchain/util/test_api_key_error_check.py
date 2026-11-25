@@ -83,3 +83,14 @@ class TestApiKeyErrorCheck(TestCase):
 
         self.assertIsNotNone(hint)
         self.assertIn("GOOGLE_API_KEY", hint)
+
+    def test_openai_insufficient_quota_maps_to_openai_api_key(self) -> None:
+        """
+        OpenAI 429 with insufficient_quota error code produces OPENAI_API_KEY guidance.
+        """
+        message: str = ("Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check "
+                        "your plan and billing details.', 'type': 'insufficient_quota', 'code': 'insufficient_quota'}}")
+        hint: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(Exception(message))
+
+        self.assertIsNotNone(hint)
+        self.assertIn("OPENAI_API_KEY", hint)
