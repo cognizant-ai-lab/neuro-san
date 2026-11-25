@@ -18,6 +18,8 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from collections.abc import Mapping
+
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -56,6 +58,15 @@ class TestRunContextRunnableBackoff(IsolatedAsyncioTestCase):
         self.assertIsNone(RunContextRunnable.parse_duration_seconds(True))
         self.assertIsNone(RunContextRunnable.parse_duration_seconds("invalid"))
         self.assertIsNone(RunContextRunnable.parse_duration_seconds(None))
+
+    def test_parse_duration_seconds_rejects_negative_values(self) -> None:
+        """
+        A negative duration (malformed hint or regex mismatch) must not be
+        treated as a valid delay.
+        """
+        self.assertIsNone(RunContextRunnable.parse_duration_seconds(-5.0))
+        self.assertIsNone(RunContextRunnable.parse_duration_seconds("-5s"))
+        self.assertEqual(0.0, RunContextRunnable.parse_duration_seconds(0))
 
     def test_extract_server_retry_delay_from_structured_details(self) -> None:
         """
@@ -103,6 +114,48 @@ class TestRunContextRunnableBackoff(IsolatedAsyncioTestCase):
         unrelated_error: Exception = Exception("Network connection lost")
         self.assertIsNone(RunContextRunnable.extract_server_retry_delay(unrelated_error))
         self.assertIsNone(RunContextRunnable.extract_server_retry_delay(None))
+
+    def test_extract_server_retry_delay_matches_openai_try_again_wording(self) -> None:
+        """
+        OpenAI's actual rate-limit wording ("Please try again in 20s.") must be
+        recognized, not just the "retry"/"wait"/"backoff" phrasings.
+        """
+        error: Exception = Exception(
+            "Rate limit reached for gpt-4 in organization org-x on requests per min. "
+            "Limit: 3 / min. Please try again in 20s."
+        )
+        self.assertEqual(20.0, RunContextRunnable.extract_server_retry_delay(error))
+
+    def test_extract_server_retry_delay_from_mapping_headers(self) -> None:
+        """
+        Real provider SDK errors carry httpx.Headers (a Mapping, not a dict
+        subclass) as response.headers. The header must still be read.
+        """
+        class FakeHttpxHeaders(Mapping):
+            """A minimal Mapping stand-in for httpx.Headers."""
+
+            def __init__(self, data: Dict[str, str]) -> None:
+                self._data: Dict[str, str] = data
+
+            def __getitem__(self, key: str) -> str:
+                return self._data[key]
+
+            def __iter__(self):
+                return iter(self._data)
+
+            def __len__(self) -> int:
+                return len(self._data)
+
+            def get(self, key: str, default: Any = None) -> Any:
+                return self._data.get(key, default)
+
+        error: Exception = Exception("Too Many Requests")
+        mock_response: MagicMock = MagicMock()
+        mock_response.headers = FakeHttpxHeaders({"retry-after": "12.0"})
+        error.response = mock_response
+
+        delay: Optional[float] = RunContextRunnable.extract_server_retry_delay(error)
+        self.assertEqual(12.0, delay)
 
     def test_calculate_backoff_delay_with_server_hint(self) -> None:
         """
@@ -173,7 +226,41 @@ class TestRunContextRunnableBackoff(IsolatedAsyncioTestCase):
         with patch.object(RunContextRunnable, "run_chain", new=run_chain_mock):
             with patch.object(RunContextRunnable, "sleep_before_retry", new_callable=AsyncMock) as mock_sleep:
                 await runnable.invoke_agent_chain(inputs={"input": "test"}, runnable_config={}, max_attempts=2)
-                mock_sleep.assert_awaited_once_with(0, rate_error)
+                mock_sleep.assert_awaited_once_with(0, rate_error, None)
+
+    async def test_rate_limit_error_with_api_key_message_stops_retrying(self) -> None:
+        """
+        A rate-limit-typed error whose message is actually an API-key/billing
+        problem (e.g. Gemini's "prepayment credits are depleted") must be
+        reported as such immediately rather than retried to exhaustion: the
+        ApiKeyErrorCheck guidance was previously only consulted from the
+        API_ERROR_TYPES branch, which a RateLimitError never reaches.
+        """
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock()
+        sensitive_logger: MagicMock = MagicMock()
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal,
+            logger=MagicMock(),
+            sensitive_logger=sensitive_logger,
+            error_detector=MagicMock(handle_error=RunContextRunnableTestHelpers.passthrough),
+            chat_history=None
+        )
+        billing_error: RateLimitError = RateLimitError(
+            message="400 Your prepayment credits are depleted. Please top up your balance.",
+            response=MagicMock(status_code=429, headers={}),
+            body=None
+        )
+        run_chain_mock: AsyncMock = AsyncMock(side_effect=billing_error)
+
+        with patch.object(RunContextRunnable, "run_chain", new=run_chain_mock):
+            with patch.object(RunContextRunnable, "sleep_before_retry", new_callable=AsyncMock) as mock_sleep:
+                await runnable.invoke_agent_chain(inputs={"input": "test"}, runnable_config={}, max_attempts=3)
+                mock_sleep.assert_not_awaited()
+
+        run_chain_mock.assert_awaited_once()
+        written_message: Any = journal.write_message.await_args.args[0]
+        self.assertIn("GOOGLE_API_KEY", written_message.content)
 
     async def test_do_sleep_awaits_asyncio_sleep(self) -> None:
         """
@@ -223,6 +310,17 @@ class TestRunContextRunnableBackoff(IsolatedAsyncioTestCase):
 
         delay: Optional[float] = RunContextRunnable.extract_server_retry_delay(error)
         self.assertEqual(18.5, delay)
+
+    async def test_sleep_before_retry_caps_delay_to_remaining_budget(self) -> None:
+        """
+        sleep_before_retry must not sleep longer than the caller's remaining
+        max_execution_seconds budget, so backoff alone cannot push a call past
+        its overall timeout.
+        """
+        runnable: RunContextRunnable = RunContextRunnableTestHelpers.make_runnable()
+        with patch.object(RunContextRunnable, "calculate_backoff_delay", return_value=50.0):
+            await runnable.sleep_before_retry(0, None, max_delay_seconds=5.0)
+            self.mock_do_sleep.assert_awaited_once_with(5.0)
 
     async def test_sleep_before_retry_skips_when_delay_is_zero(self) -> None:
         """

@@ -160,11 +160,18 @@ class ExternalAgentToolCreator(ToolCreator):
 
         # A parameters block carrying anything beyond an empty properties
         # declaration is a declared schema in an unsupported dialect
-        # (e.g. additionalProperties, anyOf, $ref). Let verify_function_json()
-        # report it rather than silently replacing the declared contract
-        # with the synthesized one.
+        # (e.g. additionalProperties, anyOf, $ref). verify_function_json()
+        # accepts empty properties outright (to support genuine zero-argument
+        # tools), so it won't catch this case: raise here instead of silently
+        # replacing the declared contract with the synthesized one, or letting
+        # it through as a zero-argument tool that drops the caller's request
+        # (issue #1228).
         if parameters and not {"type", "properties", "required"}.issuperset(parameters.keys()):
-            return function_json
+            raise ValueError(
+                f"The front-man of external agent {name} declares a parameters block with an "
+                "unsupported schema dialect (keys beyond type/properties/required) and no "
+                "declared properties. Declare at least one property in its function definition."
+            )
 
         log_once: LogOnce = LogOnce(self.logger)
         message: str = (

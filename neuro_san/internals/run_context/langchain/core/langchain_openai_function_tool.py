@@ -96,7 +96,7 @@ class LangChainOpenAIFunctionTool(BaseTool):
                 * A name
                 * A description
             A parameters dictionary is optional. A non-empty one needs a type
-            and at least one entry in its properties dict.
+            and a properties dictionary, which may be empty for a zero-argument tool.
         :raises ToolSpecError: When the name or the description is missing,
             or the parameters are malformed
         """

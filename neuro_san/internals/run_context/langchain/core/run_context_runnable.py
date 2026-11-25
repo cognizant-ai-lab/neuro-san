@@ -16,8 +16,11 @@
 # END COPYRIGHT
 import asyncio
 from asyncio import TimeoutError as AsyncTimeout
+from collections.abc import Mapping
+from logging import getLogger
 import random
 import re
+from time import monotonic
 import traceback
 from typing import Any
 from typing import AsyncIterator
@@ -61,6 +64,8 @@ from neuro_san.message.utils.content_utils import ContentUtils
 
 MINUTES: float = 60.0
 
+_LOGGER = getLogger(__name__)
+
 
 class RunContextRunnable(NeuroSanRunnable):
     """
@@ -90,9 +95,10 @@ class RunContextRunnable(NeuroSanRunnable):
         "openrouter.errors.OpenRouterError",
     ])
 
-    # Regex pattern to extract server retry delay hints from exception text
+    # Regex pattern to extract server retry delay hints from exception text.
+    # "try again" covers OpenAI's actual rate-limit wording ("Please try again in 20s.").
     RETRY_DELAY_PATTERN: ClassVar[Pattern[str]] = re.compile(
-        r"(?:retry|wait|backoff)\s+(?:after|for|in)\s+([0-9]+(?:\.[0-9]+)?)\s*s(?:ec(?:ond)?s?)?",
+        r"(?:retry|try again|wait|backoff)\s+(?:after|for|in)\s+([0-9]+(?:\.[0-9]+)?)\s*s(?:ec(?:ond)?s?)?",
         re.IGNORECASE
     )
 
@@ -217,8 +223,9 @@ class RunContextRunnable(NeuroSanRunnable):
             # into the agent-chain task. This is what propagates the owning handler to
             # every descendant run while retaining it as the nearest active scope.
             with journaling_callback.scope():
-                await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
-                                                 max_execution_seconds)
+                await token_counter.count_tokens(
+                    self.invoke_agent_chain(inputs, runnable_config, max_attempts, max_execution_seconds),
+                    max_execution_seconds)
         except AsyncTimeout:
             # The token counter already wrote the final AIMessage to the journal
             # (before its token-accounting messages, to preserve message order).
@@ -232,18 +239,23 @@ class RunContextRunnable(NeuroSanRunnable):
         return inputs
 
     # pylint: disable=too-many-locals,too-many-statements
-    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any], max_attempts: int):
+    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any], max_attempts: int,
+                                  max_execution_seconds: Optional[float] = None):
         """
         Set the agent in motion
 
         :param inputs: The inputs to the agent_executor
         :param runnable_config: The runnable_config to send to the agent_executor
         :param max_attempts: The maximum number of attempts to make allowing for errors of any kind.
+        :param max_execution_seconds: The overall time budget for this call, if any. Retry backoff
+                    sleeps are capped to whatever remains of this budget so backoff alone cannot
+                    push the call past the timeout that wraps it.
         """
         chain_result: Union[Dict[str, Any], AIMessage] = None
         attempts: int = max_attempts
         exception: Exception = None
         backtrace: str = None
+        start_time: float = monotonic()
         while chain_result is None and attempts > 0:
             # Reset any backtrace from a previous attempt so that whatever is
             # logged after the loop always corresponds to the exception that
@@ -253,6 +265,20 @@ class RunContextRunnable(NeuroSanRunnable):
                 # A step that fails raises here, as it would from ainvoke().
                 chain_result: Optional[Dict[str, Any]] = await self.run_chain(inputs, runnable_config)
             except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
+                message: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(rate_limit_error)
+                if message is not None:
+                    # Some providers (e.g. Gemini billing/quota exhaustion) surface a
+                    # non-retryable API-key/billing problem as a rate-limit error type.
+                    # Treat it the same as the API_ERROR_TYPES case below: stop retrying
+                    # and return the friendly message instead of burning all attempts.
+                    exception = None
+                    backtrace = None
+                    chain_result = {
+                        "output": message
+                    }
+                    self.logger.error("API KEY error detected: %s",
+                                      ApiKeyErrorCheck.get_safe_log_message(rate_limit_error))
+                    break
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
                 exception = rate_limit_error
@@ -317,7 +343,10 @@ class RunContextRunnable(NeuroSanRunnable):
 
             if chain_result is None and attempts > 0:
                 attempt_index: int = max_attempts - attempts - 1
-                await self.sleep_before_retry(attempt_index, exception)
+                remaining_seconds: Optional[float] = None
+                if max_execution_seconds is not None:
+                    remaining_seconds = max(0.0, max_execution_seconds - (monotonic() - start_time))
+                await self.sleep_before_retry(attempt_index, exception, remaining_seconds)
 
         if chain_result is None and backtrace is not None:
             # Keep the full backtrace in the server logs only. Passing it
@@ -395,13 +424,15 @@ class RunContextRunnable(NeuroSanRunnable):
         :return: Float seconds if successfully parsed, or None
         """
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return float(value)
+            parsed: float = float(value)
+            return parsed if parsed >= 0.0 else None
         if isinstance(value, str):
             clean_str: str = value.strip()
             if clean_str.endswith("s"):
                 clean_str = clean_str[:-1]
             try:
-                return float(clean_str)
+                parsed = float(clean_str)
+                return parsed if parsed >= 0.0 else None
             except ValueError:
                 return None
         return None
@@ -432,9 +463,10 @@ class RunContextRunnable(NeuroSanRunnable):
                     if delay is not None:
                         return delay
         # pylint: disable=broad-exception-caught
-        except Exception:
-            # Malformed details structure; ignore and return None
-            pass
+        except Exception as malformed_details_error:
+            # Malformed details structure; log and return None so the caller falls
+            # back to the next extraction strategy instead of failing the retry.
+            _LOGGER.warning("Could not parse retryDelay from error.details: %s", malformed_details_error)
         return None
 
     @classmethod
@@ -449,7 +481,8 @@ class RunContextRunnable(NeuroSanRunnable):
         if response is None:
             return None
         headers: Any = getattr(response, "headers", None)
-        if not isinstance(headers, dict):
+        # Real SDK errors carry httpx.Headers (a Mapping, not a dict subclass) here.
+        if not isinstance(headers, Mapping):
             return None
         retry_after: Any = headers.get("retry-after")
         if retry_after is None:
@@ -527,14 +560,20 @@ class RunContextRunnable(NeuroSanRunnable):
         """
         await asyncio.sleep(delay)
 
-    async def sleep_before_retry(self, attempt: int, error: Optional[BaseException]) -> None:
+    async def sleep_before_retry(self, attempt: int, error: Optional[BaseException],
+                                  max_delay_seconds: Optional[float] = None) -> None:
         """
         Compute jittered backoff delay and sleep before retrying an LLM call.
 
         :param attempt: Zero-based retry attempt index
         :param error: The exception that triggered the retry
+        :param max_delay_seconds: The remaining time budget for the overall call, if any.
+                    The computed delay is capped to this value so backoff cannot by itself
+                    exhaust the caller's max_execution_seconds.
         """
         delay: float = self.calculate_backoff_delay(attempt, error)
+        if max_delay_seconds is not None:
+            delay = min(delay, max_delay_seconds)
         if delay > 0.0:
             if getattr(self, "sensitive_logger", None) is not None:
                 self.sensitive_logger.info("Backing off for %.2f seconds before retry attempt %d", delay, attempt + 1)
