@@ -79,6 +79,14 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
     own tests cover how the rounds are found and paired.
     """
 
+    def setUp(self) -> None:
+        """
+        Isolate tests from real backoff sleep delays.
+        """
+        sleep_patcher = patch.object(RunContextRunnable, "do_sleep", new_callable=AsyncMock)
+        sleep_patcher.start()
+        self.addCleanup(sleep_patcher.stop)
+
     @staticmethod
     def _record(written: List[BaseMessage], message: BaseMessage, *_args: Any, **_kwargs: Any) -> None:
         """

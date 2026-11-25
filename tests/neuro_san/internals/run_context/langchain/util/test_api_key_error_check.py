@@ -73,3 +73,24 @@ class TestApiKeyErrorCheck(TestCase):
         hint: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(RuntimeError("connection reset by peer"))
 
         self.assertIsNone(hint)
+
+    def test_google_prepayment_credits_depleted_maps_to_google_api_key(self) -> None:
+        """
+        Gemini 400 with prepayment credits depleted produces GOOGLE_API_KEY guidance.
+        """
+        message: str = "400 Your prepayment credits are depleted. Please top up your balance."
+        hint: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(Exception(message))
+
+        self.assertIsNotNone(hint)
+        self.assertIn("GOOGLE_API_KEY", hint)
+
+    def test_openai_insufficient_quota_maps_to_openai_api_key(self) -> None:
+        """
+        OpenAI 429 with insufficient_quota error code produces OPENAI_API_KEY guidance.
+        """
+        message: str = ("Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check "
+                        "your plan and billing details.', 'type': 'insufficient_quota', 'code': 'insufficient_quota'}}")
+        hint: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(Exception(message))
+
+        self.assertIsNotNone(hint)
+        self.assertIn("OPENAI_API_KEY", hint)

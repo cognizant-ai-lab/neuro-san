@@ -141,3 +141,120 @@ class TestBranchActivation(IsolatedAsyncioTestCase):
                 }
 
                 self.assertEqual(activation.get_assignments(), "The inquiry is 'I loved Dune.'.")
+
+    async def test_build_submits_default_kickoff_when_no_assignments_or_command(self) -> None:
+        """
+        When a sub-agent has no arguments passed and no command field, build()
+        must submit the default kickoff message rather than an empty string.
+        """
+        activation: BranchActivation = BranchActivation.__new__(BranchActivation)
+        activation.agent_tool_spec = {"name": "stage_agent", "instructions": "Run analysis."}
+        activation.arguments = {}
+        activation.journal = MagicMock()
+        activation.create_resources = AsyncMock()
+        activation.factory = MagicMock()
+        activation.factory.get_name_from_spec = MagicMock(return_value="stage_agent")
+
+        run_context: MagicMock = MagicMock()
+        mock_run: MagicMock = MagicMock()
+        mock_run.requires_action = MagicMock(return_value=False)
+        run_context.submit_message = AsyncMock(return_value=mock_run)
+        run_context.wait_on_run = AsyncMock(return_value=mock_run)
+        run_context.get_response = AsyncMock(return_value=[AIMessage(content="complete")])
+        activation.run_context = run_context
+
+        result: BaseMessage = await activation.build()
+
+        run_context.submit_message.assert_awaited_once_with(BranchActivation.DEFAULT_KICKOFF_MESSAGE)
+        self.assertEqual(result.content, "complete")
+
+    async def test_build_submits_command_when_no_assignments(self) -> None:
+        """
+        When a sub-agent has no arguments but declares a command field, build()
+        must submit the command string.
+        """
+        activation: BranchActivation = BranchActivation.__new__(BranchActivation)
+        activation.agent_tool_spec = {
+            "name": "stage_agent",
+            "instructions": "Run analysis.",
+            "command": "Execute stage 1 analysis.",
+        }
+        activation.arguments = {}
+        activation.journal = MagicMock()
+        activation.create_resources = AsyncMock()
+        activation.factory = MagicMock()
+        activation.factory.get_name_from_spec = MagicMock(return_value="stage_agent")
+
+        run_context: MagicMock = MagicMock()
+        mock_run: MagicMock = MagicMock()
+        mock_run.requires_action = MagicMock(return_value=False)
+        run_context.submit_message = AsyncMock(return_value=mock_run)
+        run_context.wait_on_run = AsyncMock(return_value=mock_run)
+        run_context.get_response = AsyncMock(return_value=[AIMessage(content="complete")])
+        activation.run_context = run_context
+
+        result: BaseMessage = await activation.build()
+
+        run_context.submit_message.assert_awaited_once_with("Execute stage 1 analysis.")
+        self.assertEqual(result.content, "complete")
+
+    async def test_build_submits_default_kickoff_when_assignments_and_command_are_whitespace(self) -> None:
+        """
+        When assignments and command are whitespace strings, build() must submit the default kickoff message.
+        """
+        activation: BranchActivation = BranchActivation.__new__(BranchActivation)
+        activation.agent_tool_spec = {
+            "name": "stage_agent",
+            "instructions": "Run analysis.",
+            "command": "   ",
+        }
+        activation.arguments = {}
+        activation.get_assignments = MagicMock(return_value="   ")
+        activation.journal = MagicMock()
+        activation.create_resources = AsyncMock()
+        activation.factory = MagicMock()
+        activation.factory.get_name_from_spec = MagicMock(return_value="stage_agent")
+
+        run_context: MagicMock = MagicMock()
+        mock_run: MagicMock = MagicMock()
+        mock_run.requires_action = MagicMock(return_value=False)
+        run_context.submit_message = AsyncMock(return_value=mock_run)
+        run_context.wait_on_run = AsyncMock(return_value=mock_run)
+        run_context.get_response = AsyncMock(return_value=[AIMessage(content="complete")])
+        activation.run_context = run_context
+
+        result: BaseMessage = await activation.build()
+
+        run_context.submit_message.assert_awaited_once_with(BranchActivation.DEFAULT_KICKOFF_MESSAGE)
+        self.assertEqual(result.content, "complete")
+
+    async def test_build_combines_assignments_and_command_when_both_present(self) -> None:
+        """
+        When both assignments and command are provided, build() combines them separated by newline.
+        """
+        activation: BranchActivation = BranchActivation.__new__(BranchActivation)
+        activation.agent_tool_spec = {
+            "name": "stage_agent",
+            "instructions": "Run analysis.",
+            "command": "Execute step 1.",
+        }
+        activation.arguments = {}
+        activation.get_assignments = MagicMock(return_value="The input data is ready.")
+        activation.journal = MagicMock()
+        activation.create_resources = AsyncMock()
+        activation.factory = MagicMock()
+        activation.factory.get_name_from_spec = MagicMock(return_value="stage_agent")
+
+        run_context: MagicMock = MagicMock()
+        mock_run: MagicMock = MagicMock()
+        mock_run.requires_action = MagicMock(return_value=False)
+        run_context.submit_message = AsyncMock(return_value=mock_run)
+        run_context.wait_on_run = AsyncMock(return_value=mock_run)
+        run_context.get_response = AsyncMock(return_value=[AIMessage(content="complete")])
+        activation.run_context = run_context
+
+        result: BaseMessage = await activation.build()
+
+        expected_message: str = "The input data is ready.\nExecute step 1."
+        run_context.submit_message.assert_awaited_once_with(expected_message)
+        self.assertEqual(result.content, "complete")

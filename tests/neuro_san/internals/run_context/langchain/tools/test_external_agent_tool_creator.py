@@ -244,6 +244,33 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         self.assertIn("invalid function definition", str(reported.content))
         self.assertNotIn("synthesized", str(reported.content))
 
+    async def test_unsupported_schema_dialect_with_empty_properties_is_not_replaced(self) -> None:
+        """
+        A declared parameters schema with an explicit empty properties dict
+        plus an unsupported dialect key (e.g. additionalProperties) is still
+        a declared contract. Since verify_function_json() now accepts empty
+        properties outright (to support genuine zero-argument tools), it can
+        no longer be relied on to reject this case: it must be rejected here
+        instead - never silently synthesized or built as a zero-argument tool
+        that drops the caller's request (issue #1228).
+        """
+        creator: ExternalAgentToolCreator = self.make_creator({
+            "description": "Answers music questions.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": {"type": "string"}
+            }
+        })
+
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
+
+        self.assertIsNone(tool)
+        creator.journal.write_message.assert_awaited_once()
+        reported: AgentMessage = creator.journal.write_message.await_args.args[0]
+        self.assertIn("invalid function definition", str(reported.content))
+        self.assertNotIn("synthesized", str(reported.content))
+
     async def test_non_dict_parameters_reported_as_invalid(self) -> None:
         """
         A malformed spec whose "parameters" is not a dictionary - truthy or

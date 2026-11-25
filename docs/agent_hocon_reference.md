@@ -429,6 +429,11 @@ and other temporary failures.  Failures which are known to be non-retryable are 
 These include API_KEY errors, ValueErrors from tools, and other unexpected exceptions; the idea
 being: these errors would just happen again anyway so why waste the tokens?
 
+Between retry attempts, the runtime applies exponential backoff with full jitter, honoring any server-provided
+retry hints (such as `retryDelay` or `Retry-After`). Tunable via `AGENT_LLM_RETRY_BASE_DELAY_SECONDS`,
+`AGENT_LLM_RETRY_MAX_DELAY_SECONDS`, and `AGENT_LLM_RETRY_QUOTA_CAP_SECONDS`. When `max_execution_seconds`
+is set, backoff sleeps are capped so retries do not exceed the remaining execution budget.
+
 The default setting is to use 3 attempts.
 
 ### request_timeout_seconds
@@ -607,6 +612,7 @@ This lets the parsing system know that the [properties](#properties) will be des
 ##### properties
 
 A dictionary whose keys each describe the name of a single argument to be used as input to an agent.
+For zero-argument tools or sub-agents, this dictionary may be empty (`{}`).
 Each key's value is a dictionary describing the single argument value itself.
 This dictionary has the following keys:
 
@@ -773,7 +779,9 @@ But if you expect an agent to use an LLM, this instructions field is a must.
 
 ### command
 
-An optional string to set an LLM-enabled agent in motion.
+An optional string to set an LLM-enabled agent in motion. When an LLM sub-agent has neither declared
+parameter properties nor a `command`, neuro-san provides a default kickoff message (`"Please proceed."`)
+so that downstream providers requiring non-empty user turns (such as Gemini) do not reject the invocation.
 
 ### tools (agents)
 

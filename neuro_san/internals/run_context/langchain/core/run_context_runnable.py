@@ -14,18 +14,24 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+import asyncio
 from asyncio import TimeoutError as AsyncTimeout
+from collections.abc import Mapping
+from logging import getLogger
+import random
+import re
+from time import monotonic
+import traceback
 from typing import Any
 from typing import AsyncIterator
 from typing import ClassVar
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Pattern
 from typing import Tuple
 from typing import Type
 from typing import Union
-
-import traceback
 
 from pydantic import ConfigDict
 from pydantic import SkipValidation
@@ -52,10 +58,13 @@ from neuro_san.internals.run_context.langchain.journaling.journaling_callback_ha
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
+from neuro_san.internals.utils.neuro_san_config import NeuroSanConfig
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.utils.content_utils import ContentUtils
 
 MINUTES: float = 60.0
+
+_LOGGER = getLogger(__name__)
 
 
 class RunContextRunnable(NeuroSanRunnable):
@@ -85,6 +94,13 @@ class RunContextRunnable(NeuroSanRunnable):
         # `except Exception` retry.
         "openrouter.errors.OpenRouterError",
     ])
+
+    # Regex pattern to extract server retry delay hints from exception text.
+    # "try again" covers OpenAI's actual rate-limit wording ("Please try again in 20s.").
+    RETRY_DELAY_PATTERN: ClassVar[Pattern[str]] = re.compile(
+        r"(?:retry|try again|wait|backoff)\s+(?:after|for|in)\s+([0-9]+(?:\.[0-9]+)?)\s*s(?:ec(?:ond)?s?)?",
+        re.IGNORECASE
+    )
 
     # Declarations of member variables here satisfy Pydantic style,
     # which is a type validator that langchain is based on which
@@ -207,8 +223,9 @@ class RunContextRunnable(NeuroSanRunnable):
             # into the agent-chain task. This is what propagates the owning handler to
             # every descendant run while retaining it as the nearest active scope.
             with journaling_callback.scope():
-                await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
-                                                 max_execution_seconds)
+                await token_counter.count_tokens(
+                    self.invoke_agent_chain(inputs, runnable_config, max_attempts, max_execution_seconds),
+                    max_execution_seconds)
         except AsyncTimeout:
             # The token counter already wrote the final AIMessage to the journal
             # (before its token-accounting messages, to preserve message order).
@@ -221,89 +238,111 @@ class RunContextRunnable(NeuroSanRunnable):
 
         return inputs
 
+    async def _execute_single_attempt(
+        self,
+        inputs: Dict[str, Any],
+        runnable_config: Dict[str, Any]
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[Exception], Optional[str], bool]:
+        """
+        Execute a single attempt of running the chain, catching provider errors.
+
+        :param inputs: The inputs to the chain
+        :param runnable_config: The runnable configuration
+        :return: A tuple of (chain_result, exception, backtrace, is_retryable)
+        """
+        chain_result: Optional[Dict[str, Any]] = None
+        exception: Optional[Exception] = None
+        backtrace: Optional[str] = None
+        is_retryable: bool = True
+        try:
+            # A step that fails raises here, as it would from ainvoke().
+            chain_result = await self.run_chain(inputs, runnable_config)
+        except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
+            # Some providers (e.g. Gemini billing/quota exhaustion) surface a
+            # non-retryable API-key/billing problem as a rate-limit error type.
+            # Treat it the same as the API_ERROR_TYPES case below: stop retrying
+            # and return the friendly message instead of burning all attempts.
+            chain_result = self.handle_api_key_error(rate_limit_error)
+            if chain_result is not None:
+                return chain_result, None, None, False
+            await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
+            exception = rate_limit_error
+        except RunContextRunnable.API_ERROR_TYPES as api_error:
+            backtrace = traceback.format_exc()
+            if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
+                # Construct a uniform message to return to the client
+                # indicating that they likely have an API key problem,
+                # rather than retrying and hitting the same error again.
+                chain_result = self.handle_api_key_error(api_error)
+                if chain_result is not None:
+                    return chain_result, None, None, False
+            # Continue with regular retry logic:
+            await self.journal_retry_reason(api_error, "the LLM API returned an error")
+            exception = api_error
+        except KeyError as key_error:
+            await self.journal_retry_reason(key_error, "the response was missing an expected field")
+            exception = key_error
+            backtrace = traceback.format_exc()
+        except ValueError as value_error:
+            response = str(value_error)
+            find_string: str = "An output parsing error occurred. " + \
+                               "In order to pass this error back to the agent and have it try again, " + \
+                               "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
+                               "This is the error: Could not parse LLM output: `"
+            if response.startswith(find_string):
+                # Agent is returning good stuff, but langchain is erroring out over it.
+                # From: https://github.com/langchain-ai/langchain/issues/1358#issuecomment-1486132587
+                # Per thread consensus, this is hacky and there are better ways to go,
+                # but removes immediate impediments.
+                chain_result = {
+                    "output": response.removeprefix(find_string).removesuffix("`")
+                }
+            else:
+                await self.journal_retry_reason(value_error, "the model's output could not be parsed")
+                exception = value_error
+                backtrace = traceback.format_exc()
+        # pylint: disable=broad-exception-caught
+        except Exception as exception_error:
+            # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
+            self.sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
+            # These are likely real issues and non-retryable.
+            exception = exception_error
+            backtrace = traceback.format_exc()
+            is_retryable = False
+
+        return chain_result, exception, backtrace, is_retryable
+
     # pylint: disable=too-many-locals,too-many-statements
-    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any], max_attempts: int):
+    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any], max_attempts: int,
+                                 max_execution_seconds: Optional[float] = None):
         """
         Set the agent in motion
 
         :param inputs: The inputs to the agent_executor
         :param runnable_config: The runnable_config to send to the agent_executor
         :param max_attempts: The maximum number of attempts to make allowing for errors of any kind.
+        :param max_execution_seconds: The overall time budget for this call, if any. Retry backoff
+                    sleeps are capped to whatever remains of this budget so backoff alone cannot
+                    push the call past the timeout that wraps it.
         """
         chain_result: Union[Dict[str, Any], AIMessage] = None
         attempts: int = max_attempts
         exception: Exception = None
         backtrace: str = None
+        start_time: float = monotonic()
         while chain_result is None and attempts > 0:
-            # Reset any backtrace from a previous attempt so that whatever is
-            # logged after the loop always corresponds to the exception that
-            # ended it (not every branch below captures a backtrace).
-            backtrace = None
-            try:
-                # A step that fails raises here, as it would from ainvoke().
-                chain_result: Optional[Dict[str, Any]] = await self.run_chain(inputs, runnable_config)
-            except RunContextRunnable.RATE_LIMIT_ERROR_TYPES as rate_limit_error:
-                await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
-                attempts = attempts - 1
-                exception = rate_limit_error
-            except RunContextRunnable.API_ERROR_TYPES as api_error:
-                backtrace = traceback.format_exc()
-                message: str = None
-                if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
-                    # Does not look like internal LLM stack error:
-                    message = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
-                if message is not None:
-                    # Construct a uniform message to return to the client
-                    # indicating that they likely have an API key problem,
-                    # rather than retrying and hitting the same error again.
-                    exception = None
-                    backtrace = None
-                    chain_result = {
-                        "output": message
-                    }
-                    # Log the error with technical details for debugging purposes,
-                    # but we are returning a more user-friendly message to the client.
-                    # get_safe_log_message() redacts pydantic ValidationError input values
-                    # so user-supplied API key material can't leak into server logs.
-                    self.logger.error("API KEY error detected: %s",
-                                      ApiKeyErrorCheck.get_safe_log_message(api_error))
-                    break
-                # Continue with regular retry logic:
-                await self.journal_retry_reason(api_error, "the LLM API returned an error")
-                attempts = attempts - 1
-                exception = api_error
-            except KeyError as key_error:
-                await self.journal_retry_reason(key_error, "the response was missing an expected field")
-                attempts = attempts - 1
-                exception = key_error
-                backtrace = traceback.format_exc()
-            except ValueError as value_error:
-                response = str(value_error)
-                find_string: str = "An output parsing error occurred. " + \
-                                   "In order to pass this error back to the agent and have it try again, " + \
-                                   "pass `handle_parsing_errors=True` to the AgentExecutor. " + \
-                                   "This is the error: Could not parse LLM output: `"
-                if response.startswith(find_string):
-                    # Agent is returning good stuff, but langchain is erroring out over it.
-                    # From: https://github.com/langchain-ai/langchain/issues/1358#issuecomment-1486132587
-                    # Per thread consensus, this is hacky and there are better ways to go,
-                    # but removes immediate impediments.
-                    chain_result = {
-                        "output": response.removeprefix(find_string).removesuffix("`")
-                    }
-                else:
-                    await self.journal_retry_reason(value_error, "the model's output could not be parsed")
-                    attempts = attempts - 1
-                    exception = value_error
-                    backtrace = traceback.format_exc()
-            # pylint: disable=broad-exception-caught
-            except Exception as exception_error:
-                # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
-                self.sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
-                # These are likely real issues and non-retryable.
-                attempts = 0
-                exception = exception_error
-                backtrace = traceback.format_exc()
+            chain_result, exception, backtrace, is_retryable = await self._execute_single_attempt(
+                inputs, runnable_config
+            )
+            if not is_retryable or chain_result is not None:
+                break
+            attempts = attempts - 1
+            if attempts > 0:
+                attempt_index: int = max_attempts - attempts - 1
+                remaining_seconds: Optional[float] = None
+                if max_execution_seconds is not None:
+                    remaining_seconds = max(0.0, max_execution_seconds - (monotonic() - start_time))
+                await self.sleep_before_retry(attempt_index, exception, remaining_seconds)
 
         if chain_result is None and backtrace is not None:
             # Keep the full backtrace in the server logs only. Passing it
@@ -350,6 +389,22 @@ class RunContextRunnable(NeuroSanRunnable):
             recorder.record_tool_exchange(inputs, state)
         return final_state
 
+    def handle_api_key_error(self, error: Exception) -> Optional[Dict[str, Any]]:
+        """
+        Check if an error relates to an API key or billing issue, logging and returning uniform output.
+
+        :param error: The exception to check
+        :return: A dict with "output" if an API key error was detected, None otherwise
+        """
+        message: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(error)
+        if message is not None:
+            self.logger.error("API KEY error detected: %s",
+                              ApiKeyErrorCheck.get_safe_log_message(error))
+            return {
+                "output": message
+            }
+        return None
+
     async def journal_retry_reason(self, error: Exception, reason: str):
         """
         Surface the reason for a recoverable-error retry on the journal so clients
@@ -371,6 +426,170 @@ class RunContextRunnable(NeuroSanRunnable):
         # LEAF_LOG_SENSITIVE env var setting as the SensitiveLogger uses.
         if self.sensitive_logger.should_log():
             await self.journal.write_message(AgentFrameworkMessage(content=text))
+
+    @staticmethod
+    def parse_duration_seconds(value: Any) -> Optional[float]:
+        """
+        Coerces a raw number or a duration string into seconds as a float.
+
+        :param value: The value to parse, e.g. 4.15, "4.15s", or "10"
+        :return: Float seconds if successfully parsed, or None
+        """
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            parsed: float = float(value)
+            return parsed if parsed >= 0.0 else None
+        if isinstance(value, str):
+            clean_str: str = value.strip()
+            if clean_str.endswith("s"):
+                clean_str = clean_str[:-1]
+            try:
+                parsed = float(clean_str)
+                return parsed if parsed >= 0.0 else None
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def _extract_details_retry_delay(cls, error: BaseException) -> Optional[float]:
+        """
+        Extract retry delay from error.details if present.
+
+        :param error: The exception to inspect
+        :return: Extracted delay in seconds, or None
+        """
+        details: Any = getattr(error, "details", None)
+        if not isinstance(details, dict):
+            return None
+        try:
+            error_dict: Any = details.get("error", {})
+            if not isinstance(error_dict, dict):
+                return None
+            detail_items: Any = error_dict.get("details", [])
+            if not isinstance(detail_items, list):
+                return None
+            # Inspect each detail item for a retryDelay specification
+            item: Any = None
+            for item in detail_items:
+                if isinstance(item, dict) and "retryDelay" in item:
+                    delay: Optional[float] = cls.parse_duration_seconds(item.get("retryDelay"))
+                    if delay is not None:
+                        return delay
+        # pylint: disable=broad-exception-caught
+        except Exception as malformed_details_error:
+            # Malformed details structure; log and return None so the caller falls
+            # back to the next extraction strategy instead of failing the retry.
+            _LOGGER.warning("Could not parse retryDelay from error.details: %s", malformed_details_error)
+        return None
+
+    @classmethod
+    def _extract_headers_retry_delay(cls, error: BaseException) -> Optional[float]:
+        """
+        Extract retry delay from error.response.headers if present.
+
+        :param error: The exception to inspect
+        :return: Extracted delay in seconds, or None
+        """
+        response: Any = getattr(error, "response", None)
+        if response is None:
+            return None
+        headers: Any = getattr(response, "headers", None)
+        # Real SDK errors carry httpx.Headers (a Mapping, not a dict subclass) here.
+        if not isinstance(headers, Mapping):
+            return None
+        retry_after: Any = headers.get("retry-after")
+        if retry_after is None:
+            retry_after = headers.get("Retry-After")
+        if retry_after is not None:
+            return cls.parse_duration_seconds(retry_after)
+        return None
+
+    @classmethod
+    def _extract_text_retry_delay(cls, error: BaseException) -> Optional[float]:
+        """
+        Extract retry delay from error text using regex pattern.
+
+        :param error: The exception to inspect
+        :return: Extracted delay in seconds, or None
+        """
+        match: Optional[re.Match[str]] = cls.RETRY_DELAY_PATTERN.search(str(error))
+        if match is not None:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def extract_server_retry_delay(cls, error: Optional[BaseException]) -> Optional[float]:
+        """
+        Extract a provider-suggested retry delay in seconds from structured error details or text.
+
+        :param error: The exception to inspect for retry delay hints
+        :return: Suggested retry delay in seconds, or None if no hint is found
+        """
+        if error is None:
+            return None
+
+        delay: Optional[float] = cls._extract_details_retry_delay(error)
+        if delay is not None:
+            return delay
+
+        delay = cls._extract_headers_retry_delay(error)
+        if delay is not None:
+            return delay
+
+        return cls._extract_text_retry_delay(error)
+
+    @classmethod
+    def calculate_backoff_delay(cls, attempt: int, error: Optional[BaseException] = None) -> float:
+        """
+        Calculate backoff delay before the next retry attempt using full jitter or server hints.
+
+        :param attempt: Zero-based retry attempt index
+        :param error: The exception that triggered the retry, if any
+        :return: Delay in seconds to sleep before retrying
+        """
+        base_delay: float = NeuroSanConfig.get_float("internals.llms.AGENT_LLM_RETRY_BASE_DELAY_SECONDS", 1.0)
+        max_delay: float = NeuroSanConfig.get_float("internals.llms.AGENT_LLM_RETRY_MAX_DELAY_SECONDS", 60.0)
+        quota_cap: float = NeuroSanConfig.get_float("internals.llms.AGENT_LLM_RETRY_QUOTA_CAP_SECONDS", 60.0)
+
+        if error is not None:
+            server_delay: Optional[float] = cls.extract_server_retry_delay(error)
+            if server_delay is not None:
+                # Honor server hint with a small jitter margin, capped at quota_cap
+                return min(server_delay + random.uniform(0.5, 2.0), quota_cap)
+
+        # Exponential backoff with full jitter: uniform(0, min(base * 2^attempt, max_delay))
+        raw_backoff: float = base_delay * (2.0 ** attempt)
+        capped_backoff: float = min(raw_backoff, max_delay)
+        return random.uniform(0.0, capped_backoff)
+
+    async def do_sleep(self, delay: float) -> None:
+        """
+        Sleep for the specified delay in seconds.
+
+        :param delay: Duration in seconds to sleep
+        """
+        await asyncio.sleep(delay)
+
+    async def sleep_before_retry(self, attempt: int, error: Optional[BaseException],
+                                 max_delay_seconds: Optional[float] = None) -> None:
+        """
+        Compute jittered backoff delay and sleep before retrying an LLM call.
+
+        :param attempt: Zero-based retry attempt index
+        :param error: The exception that triggered the retry
+        :param max_delay_seconds: The remaining time budget for the overall call, if any.
+                    The computed delay is capped to this value so backoff cannot by itself
+                    exhaust the caller's max_execution_seconds.
+        """
+        delay: float = self.calculate_backoff_delay(attempt, error)
+        if max_delay_seconds is not None:
+            delay = min(delay, max_delay_seconds)
+        if delay > 0.0:
+            if getattr(self, "sensitive_logger", None) is not None:
+                self.sensitive_logger.info("Backing off for %.2f seconds before retry attempt %d", delay, attempt + 1)
+            await self.do_sleep(delay)
 
     @staticmethod
     def find_ai_message(chain_result: Optional[Union[Dict[str, Any], AIMessage]]) -> Optional[AIMessage]:
