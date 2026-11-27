@@ -51,6 +51,13 @@ class OllamaLlmPolicy(LlmPolicy):
             "ChatOllama",
             module_name="langchain_ollama",
             install_if_missing="langchain-ollama")
+
+        # The ollama class args declare num_predict as null, so a fallback default on
+        # config.get() never applies. Use max_tokens whenever num_predict is not set.
+        num_predict: int = config.get("num_predict")
+        if num_predict is None:
+            num_predict = config.get("max_tokens")
+
         # Higher temperature is more random
         llm: BaseLanguageModel = ChatOllama(
             model=model_name,
@@ -60,7 +67,7 @@ class OllamaLlmPolicy(LlmPolicy):
             num_ctx=config.get("num_ctx"),
             num_gpu=config.get("num_gpu"),
             num_thread=config.get("num_thread"),
-            num_predict=config.get("num_predict", config.get("max_tokens")),
+            num_predict=num_predict,
             reasoning=config.get("reasoning"),
             repeat_last_n=config.get("repeat_last_n"),
             repeat_penalty=config.get("repeat_penalty"),
